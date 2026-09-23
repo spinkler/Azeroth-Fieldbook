@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.54"
+    return "0.5.55"
 end
 
 function ns.CreateBook(journal)
@@ -327,8 +327,9 @@ function ns.CreateBook(journal)
             -- The portrait supplies the left cap. Do not paint a rectangular
             -- title background behind its transparent outer silhouette.
             book.titleBar:ClearAllPoints()
-            book.titleBar:SetPoint("TOPLEFT",60,-3)
-            book.titleBar:SetPoint("TOPRIGHT",-7,-3)
+            book.titleBar:SetPoint("TOPLEFT",60,-5)
+            book.titleBar:SetPoint("TOPRIGHT",-5,-5)
+            book.titleBar:SetHeight(27)
             local function edge(atlas, width, height, horizontal, vertical)
                 local texture = book.titleIcon:CreateTexture(nil,"OVERLAY")
                 texture:SetAtlas(atlas)
@@ -340,8 +341,8 @@ function ns.CreateBook(journal)
             -- The close button already supplies its own bevelled corner.
             -- An additional square corner here protrudes above that bevel.
             local top = edge("_UI-Frame-TitleTile",256,28,true)
-            top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-10)
-            top:SetPoint("TOPRIGHT",book,"TOPRIGHT",-10,-3)
+            top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-13)
+            top:SetPoint("TOPRIGHT",book,"TOPRIGHT",-10,-6)
             local bottomLeft = edge("UI-Frame-BotCornerLeft",14,14)
             bottomLeft:SetPoint("BOTTOMLEFT",0,0)
             local bottomRight = edge("UI-Frame-BotCornerRight",11,11)
@@ -362,7 +363,7 @@ function ns.CreateBook(journal)
         book.windowTitle:SetJustifyH("CENTER"); book.windowTitle:SetTextColor(1.00,0.82,0.14)
         book.windowTitle:SetText("The Bestiary - v" .. addonVersion())
         book.closeButton=CreateFrame("Button",nil,book.titleBar,"UIPanelCloseButton")
-        book.closeButton:SetPoint("RIGHT",4,0); book.closeButton:SetSize(24,24); book.closeButton:SetScript("OnClick",function() book:Hide() end)
+        book.closeButton:SetPoint("RIGHT",5,0); book.closeButton:SetSize(24,24); book.closeButton:SetScript("OnClick",function() book:Hide() end)
         book.helpButton=CreateFrame("Button",nil,book.titleBar,"UIPanelCloseButton")
         book.helpButton:SetSize(24,24); book.helpButton:SetPoint("RIGHT",book.closeButton,"LEFT",-2,0)
         local helpCover=book.helpButton:CreateTexture(nil,"OVERLAY")
@@ -420,10 +421,10 @@ function ns.CreateBook(journal)
             tab.letter=letter; addSelectionOutline(tab)
             book.letterButtons[i]=tab
         end
-        book.title = label(book, "", 333, -55, 365, "GameFontNormalLarge")
+        book.title = label(book, "", 336, -55, 365, "GameFontNormalLarge")
         local titlePath, titleSize, titleFlags = book.title:GetFont()
         if titlePath and titleSize then book.title:SetFont(titlePath, titleSize + 2, titleFlags) end
-        book.subTitle = label(book, "", 333, -84, 570)
+        book.subTitle = label(book, "", 336, -84, 570)
         book.empty = label(book, "Every page begins with an encounter.\n\nOnly creatures you have met appear here.\nSelect an entry from the index to review your notes.", 340, -210, 520)
         book.detail = CreateFrame("Frame", nil, book)
         book.detail:SetAllPoints()
@@ -461,7 +462,7 @@ function ns.CreateBook(journal)
         end)
         book.confirm = CreateFrame("Button", nil, detail, "BackdropTemplate")
         book.confirm:SetSize(26, 26)
-        book.confirm:SetPoint("TOPLEFT", 303, -52)
+        book.confirm:SetPoint("TOPLEFT", 306, -52)
         book.confirm:SetFrameLevel(detail:GetFrameLevel() + 5)
         book.confirm:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=5, insets={left=2,right=2,top=2,bottom=2}})
         book.confirm:SetBackdropColor(0.06, 0.04, 0.02, 0.95)
