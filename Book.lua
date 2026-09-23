@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.13"
+    return "0.6.14"
 end
 
 function ns.CreateBook(journal)
@@ -395,10 +395,9 @@ local ink = { 0.75, 0.8, 0.8 }
         helpGlyph:SetAllPoints(); helpGlyph:SetJustifyH("CENTER"); helpGlyph:SetJustifyV("MIDDLE")
         helpGlyph:SetTextColor(1.00,0.82,0.14); helpGlyph:SetText("?")
         book.helpButton:SetScript("OnClick",function() book.help:SetShown(not book.help:IsShown()) end)
-        label(book, "Filters", 36, -90, 96, "GameFontHighlightSmall")
         book.typeButtons = {}
         local function addTypeButton(name, y)
-            local typeButton = button(book, name == "All creatures" and "All" or name, 36, y, 96, function()
+            local typeButton = button(book, name == "All creatures" and "All" or name, 38, y, 96, function()
                 category = name == "All creatures" and nil or name
                 offset = 0; refresh()
             end)
@@ -407,10 +406,10 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         addTypeButton("All creatures", -110)
         for i, name in ipairs(typeOrder) do addTypeButton(name, -110-i*28) end
-        label(book, "Search the index", 124, -55, 172)
-        book.search = edit(book, 136, -78, 152, 100)
+        label(book, "Search the index", 127, -55, 172)
+        book.search = edit(book, 139, -78, 152, 100)
         book.search:SetScript("OnTextChanged", function() offset = 0; refresh() end)
-        book.review = button(book, "Pending", 36, -534, 96, function()
+        book.review = button(book, "Pending", 38, -534, 96, function()
             reviewOnly = not reviewOnly
             book.review:SetText(reviewOnly and "All entries" or "Pending")
             offset = 0; refresh()
@@ -418,7 +417,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.rows = {}
         for i = 1, 13 do
             local row = CreateFrame("Button", nil, book, "BackdropTemplate")
-            row:SetPoint("TOPLEFT", 132, -110 - (i-1)*29); row:SetSize(156, 27)
+            row:SetPoint("TOPLEFT", 135, -110 - (i-1)*29); row:SetSize(156, 27)
             row:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=8, insets={left=1,right=1,top=-3,bottom=1}})
             row:SetBackdropBorderColor(0.95, 0.70, 0.15, 0)
             row.highlight = row:CreateTexture(nil, "BACKGROUND")
@@ -432,15 +431,15 @@ local ink = { 0.75, 0.8, 0.8 }
             row:SetScript("OnMouseWheel", function(_, delta) offset=offset-delta*3; refresh() end)
             book.rows[i] = row
         end
-        button(book, "Previous", 132, -626, 72, function() cycleEntry(-1) end)
-        button(book, "Next", 214, -626, 74, function() cycleEntry(1) end)
-        book.indexCount = label(book, "", 132, -660, 156, "GameFontHighlightSmall")
+        button(book, "Previous", 135, -626, 72, function() cycleEntry(-1) end)
+        button(book, "Next", 217, -626, 74, function() cycleEntry(1) end)
+        book.indexCount = label(book, "", 135, -660, 156, "GameFontHighlightSmall")
         label(book, "Use type and A-Z tabs to filter the index.\nBind this book in Options > Keybindings.",24,-704,256,"GameFontHighlightSmall")
-        book.indexReset = button(book, "Index", 2, -54, 57, function() initial=nil; offset=0; refresh() end)
+        book.indexReset = button(book, "Index", 3, -78, 57, function() initial=nil; offset=0; refresh() end)
         book.letterButtons = {}
         for i=1,26 do
             local letter = string.char(64+i)
-            local tab = button(book, letter, 3, -83-(i-1)*23, 28, function()
+            local tab = button(book, letter, 4, -107-(i-1)*23, 28, function()
                 initial=letter; offset=0; refresh()
             end)
             tab:SetHeight(21)
