@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.56"
+    return "0.5.57"
 end
 
 function ns.CreateBook(journal)
@@ -341,8 +341,9 @@ function ns.CreateBook(journal)
             -- The close button already supplies its own bevelled corner.
             -- An additional square corner here protrudes above that bevel.
             local top = edge("_UI-Frame-TitleTile",256,28,true)
-            top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-15)
-            top:SetPoint("TOPRIGHT",book,"TOPRIGHT",-10,-8)
+            -- Keep the native top trim on the same edge as the dark title fill.
+            top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-12)
+            top:SetPoint("TOPRIGHT",book,"TOPRIGHT",-10,-5)
             local bottomLeft = edge("UI-Frame-BotCornerLeft",14,14)
             bottomLeft:SetPoint("BOTTOMLEFT",0,0)
             local bottomRight = edge("UI-Frame-BotCornerRight",11,11)
