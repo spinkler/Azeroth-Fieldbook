@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.64"
+    return "0.5.65"
 end
 
 function ns.CreateBook(journal)
@@ -20,7 +20,7 @@ function ns.CreateBook(journal)
     local noteOffset, refreshDamageNotes = 0, nil
     local category, initial, reviewOnly = nil, nil, false
     local typeOrder = { "Beast", "Humanoid", "Dragonkin", "Demon", "Elemental", "Giant", "Undead", "Mechanical", "Critter", "Totem", "Aberration", "Gas Cloud", "Not specified", "Unclassified" }
-    local ink = { 0.28, 0.29, 0.31 }
+    local ink = { 0.42, 0.43, 0.45 }
     local function label(parent, text, x, y, width, size)
         local font = parent:CreateFontString(nil, "OVERLAY", size or "GameFontHighlight")
         font:SetPoint("TOPLEFT", x, y)
