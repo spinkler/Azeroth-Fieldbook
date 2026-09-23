@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.71"
+    return "0.5.72"
 end
 
 function ns.CreateBook(journal)
@@ -254,8 +254,8 @@ local ink = { 0.75, 0.8, 0.8 }
         -- QuestBG has transparent padding. Back the entire page with opaque
         -- parchment, then stretch only an interior, non-transparent texture area.
         local paper = book:CreateTexture(nil, "BACKGROUND", nil, 1)
-        paper:SetPoint("TOPLEFT", book, "TOPLEFT", 2, -9)
-        paper:SetPoint("BOTTOMRIGHT", book, "BOTTOMRIGHT", -2, 2)
+        paper:SetPoint("TOPLEFT", book, "TOPLEFT", 6, -9)
+        paper:SetPoint("BOTTOMRIGHT", book, "BOTTOMRIGHT", -2, 6)
         paper:SetColorTexture(0.44352, 0.39312, 0.3024, 1)
         local page = book:CreateTexture(nil, "BACKGROUND", nil, 2)
         page:SetAllPoints(paper)
@@ -324,8 +324,8 @@ local ink = { 0.75, 0.8, 0.8 }
             -- texture to an atlas after cropping it produced a cropped ring.
             -- Extend the paper under the narrower native trim to prevent gaps.
             paper:ClearAllPoints()
-            paper:SetPoint("TOPLEFT",book,"TOPLEFT",2,-9)
-            paper:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-2,2)
+            paper:SetPoint("TOPLEFT",book,"TOPLEFT",6,-9)
+            paper:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-2,6)
             -- The portrait supplies the left cap. Do not paint a rectangular
             -- title background behind its transparent outer silhouette.
             book.titleBar:ClearAllPoints()
