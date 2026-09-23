@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.23"
+    return "0.6.24"
 end
 
 function ns.CreateBook(journal)
@@ -656,7 +656,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.manualNote=edit(detail,332,-620,603,300)
         label(detail,"Optional spell ID, link, or exact name (out of combat)",326,-652,575,"GameFontHighlightSmall")
         book.spellLink=edit(detail,332,-672,300,255)
-        button(detail,"Resolve",640,-672,92,function()
+        local function resolveSpellLink()
             local spellID,spellName,errorMessage=journal:ResolveSpell(book.spellLink:GetText())
             if errorMessage then message(errorMessage); return end
             if not spellID then message("No exact readable spell match. Enter an ID or paste a spell link."); return end
@@ -665,7 +665,9 @@ local ink = { 0.75, 0.8, 0.8 }
             if ok and not (issecretvalue and issecretvalue(link)) and type(link)=="string" then book.spellLink:SetText(link) else book.spellLink:SetText(tostring(spellID)) end
             if book.manualName:GetText()=="" then book.manualName:SetText(spellName) end
             message("Exact match: "..spellName.." (ID "..spellID..").")
-        end)
+        end
+        book.spellLink:SetScript("OnEnterPressed",function(self) resolveSpellLink(); self:ClearFocus() end)
+        button(detail,"Resolve",640,-672,92,resolveSpellLink)
         button(detail,"Confirm this ability",740,-672,195,function()
             local ok,msg=journal:AddManual(selected,book.manualName:GetText(),book.manualNote:GetText(),book.spellLink:GetText(),book.manualEffects)
             message(msg)
