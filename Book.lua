@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.55"
+    return "0.5.56"
 end
 
 function ns.CreateBook(journal)
@@ -341,8 +341,8 @@ function ns.CreateBook(journal)
             -- The close button already supplies its own bevelled corner.
             -- An additional square corner here protrudes above that bevel.
             local top = edge("_UI-Frame-TitleTile",256,28,true)
-            top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-13)
-            top:SetPoint("TOPRIGHT",book,"TOPRIGHT",-10,-6)
+            top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-15)
+            top:SetPoint("TOPRIGHT",book,"TOPRIGHT",-10,-8)
             local bottomLeft = edge("UI-Frame-BotCornerLeft",14,14)
             bottomLeft:SetPoint("BOTTOMLEFT",0,0)
             local bottomRight = edge("UI-Frame-BotCornerRight",11,11)
@@ -363,7 +363,7 @@ function ns.CreateBook(journal)
         book.windowTitle:SetJustifyH("CENTER"); book.windowTitle:SetTextColor(1.00,0.82,0.14)
         book.windowTitle:SetText("The Bestiary - v" .. addonVersion())
         book.closeButton=CreateFrame("Button",nil,book.titleBar,"UIPanelCloseButton")
-        book.closeButton:SetPoint("RIGHT",5,0); book.closeButton:SetSize(24,24); book.closeButton:SetScript("OnClick",function() book:Hide() end)
+        book.closeButton:SetPoint("RIGHT",4,0); book.closeButton:SetSize(24,24); book.closeButton:SetScript("OnClick",function() book:Hide() end)
         book.helpButton=CreateFrame("Button",nil,book.titleBar,"UIPanelCloseButton")
         book.helpButton:SetSize(24,24); book.helpButton:SetPoint("RIGHT",book.closeButton,"LEFT",-2,0)
         local helpCover=book.helpButton:CreateTexture(nil,"OVERLAY")
