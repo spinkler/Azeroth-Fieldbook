@@ -86,6 +86,10 @@ check(#journal:List('Humanoid','defias',false)==1,'name search and category')
 check(#journal:List(nil,'',false,'D')==1 and #journal:List(nil,'',false,'M')==0,'alphabet index filter')
 check(#journal:List(nil,'humanoid',false)==1,'type searchable')
 check(#journal:List('Beast','',false)==0,'category isolation')
+journal.entries[77]={id=77,name='Unknown Test',category='Not specified',abilities={},locations={},confirmed=false}
+journal.entries[78]={id=78,name='Unreadable Test',category='Unclassified',abilities={},locations={},confirmed=false}
+check(#journal:List('Unclassified','',false)==2,'unclassified filter includes not-specified entries')
+journal.entries[77]=nil; journal.entries[78]=nil
 check(#journal:List(nil,'',false,nil,{['Elwynn Forest']=true})==1,'location filter includes an observed location')
 check(#journal:List(nil,'',false,nil,{Westfall=true})==0,'location filter excludes other locations')
 check(#journal:List('Humanoid','',false,nil,{['Elwynn Forest']=true})==1,'location filter combines with creature type')

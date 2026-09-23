@@ -279,7 +279,9 @@ function ns.CreateJournal(db, identify)
                     if locations[location] then locationMatch = true; break end
                 end
             end
-            if (not category or entry.category == category) and (not initial or first == initial)
+            local categoryMatch = not category or entry.category == category
+                or (category == "Unclassified" and entry.category == "Not specified")
+            if categoryMatch and (not initial or first == initial)
                 and (not reviewOnly or review)
                 and locationMatch
                 and (name:lower():find(query, 1, true) or entry.category:lower():find(query, 1, true)) then

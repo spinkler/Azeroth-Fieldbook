@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.19"
+    return "0.6.20"
 end
 
 function ns.CreateBook(journal)
@@ -20,7 +20,7 @@ function ns.CreateBook(journal)
     local noteOffset, refreshDamageNotes = 0, nil
     local category, initial, reviewOnly = nil, nil, false
     local locationFilters = {}
-    local typeOrder = { "Beast", "Humanoid", "Dragonkin", "Demon", "Elemental", "Giant", "Undead", "Mechanical", "Critter", "Totem", "Aberration", "Gas Cloud", "Not specified", "Unclassified" }
+    local typeOrder = { "Beast", "Humanoid", "Dragonkin", "Demon", "Elemental", "Giant", "Undead", "Mechanical", "Critter", "Totem", "Aberration", "Gas Cloud", "Unclassified" }
 local ink = { 0.75, 0.8, 0.8 }
     local inkShadow = { 0.05, 0.05, 0.05 }
     local function label(parent, text, x, y, width, size)
@@ -120,7 +120,10 @@ local ink = { 0.75, 0.8, 0.8 }
     refresh = function()
         if not book then return end
         local available = {}
-        for _, e in pairs(journal.entries) do available[e.category] = true end
+        for _, e in pairs(journal.entries) do
+            local displayCategory = e.category == "Not specified" and "Unclassified" or e.category
+            available[displayCategory] = true
+        end
         if category and not available[category] then category = nil end
         for name, typeButton in pairs(book.typeButtons) do
             local selectedType=(name == "All creatures" and category == nil) or category == name
@@ -418,14 +421,14 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         addTypeButton("All creatures", -110)
         for i, name in ipairs(typeOrder) do addTypeButton(name, -110-i*28) end
-        book.locationsButton = button(book, "Locations", 42, -538, 88, function()
+        book.locationsButton = button(book, "Locations", 42, -510, 88, function()
             book.locationFrame:Show()
         end)
         addSelectionOutline(book.locationsButton)
         label(book, "Search the index", 127, -55, 172)
         book.search = edit(book, 139, -78, 152, 100)
         book.search:SetScript("OnTextChanged", function() offset = 0; refresh() end)
-        book.review = button(book, "Pending", 42, -570, 88, function()
+        book.review = button(book, "Pending", 42, -542, 88, function()
             reviewOnly = not reviewOnly
             book.review:SetText(reviewOnly and "All entries" or "Pending")
             offset = 0; refresh()
