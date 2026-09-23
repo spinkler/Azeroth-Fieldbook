@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.47"
+    return "0.5.48"
 end
 
 function ns.CreateBook(journal)
@@ -280,6 +280,47 @@ function ns.CreateBook(journal)
         iconBorder:SetSize(78,78); iconBorder:SetPoint("TOPLEFT",-8,7)
         iconBorder:SetTexture("Interface\\FrameGeneral\\UI-Frame")
         iconBorder:SetTexCoord(0.00781250,0.61718750,0.00781250,0.61718750)
+        -- Use one native portrait-frame art family for the surrounding edges.
+        -- Keep the old backdrop as a fallback if this client lacks the atlases.
+        local edgeAtlases = {"UI-Frame-Portrait", "UI-Frame-TopCornerRight", "_UI-Frame-TitleTile", "!UI-Frame-LeftTile", "!UI-Frame-RightTile", "UI-Frame-BotCornerLeft", "UI-Frame-BotCornerRight", "_UI-Frame-Bot"}
+        local hasFrameArt = C_Texture and type(C_Texture.GetAtlasInfo) == "function"
+        if hasFrameArt then
+            for _, atlas in ipairs(edgeAtlases) do
+                if not C_Texture.GetAtlasInfo(atlas) then hasFrameArt = false; break end
+            end
+        end
+        if hasFrameArt then
+            book:SetBackdrop(nil)
+            book.titleBar:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background-Dark",tile=true,tileSize=32})
+            book.titleBar:SetBackdropColor(0.16,0.10,0.055,0.96)
+            iconBorder:SetAtlas("UI-Frame-Portrait")
+            local function edge(atlas, width, height, horizontal, vertical)
+                local texture = book.titleIcon:CreateTexture(nil,"OVERLAY")
+                texture:SetAtlas(atlas)
+                texture:SetSize(width,height)
+                if horizontal then texture:SetHorizTile(true) end
+                if vertical then texture:SetVertTile(true) end
+                return texture
+            end
+            local topRight = edge("UI-Frame-TopCornerRight",33,33)
+            topRight:SetPoint("TOPRIGHT",0,1)
+            local top = edge("_UI-Frame-TitleTile",256,28,true)
+            top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-10)
+            top:SetPoint("TOPRIGHT",topRight,"TOPLEFT",0,0)
+            local bottomLeft = edge("UI-Frame-BotCornerLeft",14,14)
+            bottomLeft:SetPoint("BOTTOMLEFT",0,0)
+            local bottomRight = edge("UI-Frame-BotCornerRight",11,11)
+            bottomRight:SetPoint("BOTTOMRIGHT",0,0)
+            local bottom = edge("_UI-Frame-Bot",256,9,true)
+            bottom:SetPoint("BOTTOMLEFT",bottomLeft,"BOTTOMRIGHT",0,0)
+            bottom:SetPoint("BOTTOMRIGHT",bottomRight,"BOTTOMLEFT",0,0)
+            local left = edge("!UI-Frame-LeftTile",16,256,false,true)
+            left:SetPoint("TOPLEFT",iconBorder,"BOTTOMLEFT",8,0)
+            left:SetPoint("BOTTOMLEFT",bottomLeft,"TOPLEFT",0,0)
+            local right = edge("!UI-Frame-RightTile",10,256,false,true)
+            right:SetPoint("TOPRIGHT",topRight,"BOTTOMRIGHT",0,0)
+            right:SetPoint("BOTTOMRIGHT",bottomRight,"TOPRIGHT",0,0)
+        end
         book.windowTitle=book.titleBar:CreateFontString(nil,"OVERLAY","GameFontNormal")
         book.windowTitle:SetPoint("LEFT",58,0); book.windowTitle:SetPoint("RIGHT",-72,0)
         book.windowTitle:SetJustifyH("CENTER"); book.windowTitle:SetTextColor(1.00,0.82,0.14)
