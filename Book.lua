@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.60"
+    return "0.5.61"
 end
 
 function ns.CreateBook(journal)
@@ -20,7 +20,7 @@ function ns.CreateBook(journal)
     local noteOffset, refreshDamageNotes = 0, nil
     local category, initial, reviewOnly = nil, nil, false
     local typeOrder = { "Beast", "Humanoid", "Dragonkin", "Demon", "Elemental", "Giant", "Undead", "Mechanical", "Critter", "Totem", "Aberration", "Gas Cloud", "Not specified", "Unclassified" }
-    local ink = { 0.22, 0.13, 0.065 }
+    local ink = { 0.12, 0.12, 0.13 }
     local function label(parent, text, x, y, width, size)
         local font = parent:CreateFontString(nil, "OVERLAY", size or "GameFontHighlight")
         font:SetPoint("TOPLEFT", x, y)
@@ -474,6 +474,13 @@ function ns.CreateBook(journal)
         lockBody:SetColorTexture(0.20, 0.20, 0.20, 1)
         lockBody:SetPoint("BOTTOM", 0, 5)
         lockBody:SetSize(14, 11)
+        local lockCorners = {}
+        for _, point in ipairs({"TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT"}) do
+            local corner = book.confirm:CreateTexture(nil, "OVERLAY")
+            corner:SetSize(1, 1)
+            corner:SetPoint(point, lockBody, point)
+            lockCorners[#lockCorners + 1] = corner
+        end
         local lockTop = book.confirm:CreateTexture(nil, "ARTWORK")
         lockTop:SetColorTexture(0.20, 0.20, 0.20, 1)
         lockTop:SetPoint("TOP", 0, -7)
@@ -487,13 +494,18 @@ function ns.CreateBook(journal)
         lockRight:SetPoint("TOP", 4, -7)
         lockRight:SetSize(2, 8)
         book.confirm.lockParts = { lockBody, lockTop, lockLeft, lockRight }
+        book.confirm.lockCorners = lockCorners
         function book.confirm:SetLockedState(locked)
             self.locked = locked and true or false
             local r, g, b = self.locked and 0.95 or 0.22, self.locked and 0.12 or 0.22, self.locked and 0.06 or 0.22
             for _, part in ipairs(self.lockParts) do
                 part:SetColorTexture(r, g, b, 1)
             end
-            self:SetBackdropColor(self.locked and 0.22 or 0.06, 0.04, 0.02, 0.95)
+            local bgR, bgG, bgB = self.locked and 0.22 or 0.06, 0.04, 0.02
+            for _, corner in ipairs(self.lockCorners) do
+                corner:SetColorTexture(bgR, bgG, bgB, 1)
+            end
+            self:SetBackdropColor(bgR, bgG, bgB, 0.95)
         end
         book.confirm:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
@@ -662,7 +674,8 @@ function ns.CreateBook(journal)
         local formPaper=form:CreateTexture(nil,"BACKGROUND",nil,1)
         -- Run the parchment beneath the complete frame so there are no bare
         -- background strips between the paper and the ornamental border.
-        formPaper:SetAllPoints(form)
+        formPaper:SetPoint("TOPLEFT",form,"TOPLEFT",12,-12)
+        formPaper:SetPoint("BOTTOMRIGHT",form,"BOTTOMRIGHT",-12,12)
         formPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
         formPaper:SetTexCoord(0,1,0,1)
         formPaper:SetVertexColor(1.00,1.00,0.97)
@@ -753,7 +766,8 @@ function ns.CreateBook(journal)
         help:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
         help:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         local helpPaper=help:CreateTexture(nil,"BACKGROUND",nil,1)
-        helpPaper:SetAllPoints(help)
+        helpPaper:SetPoint("TOPLEFT",help,"TOPLEFT",12,-12)
+        helpPaper:SetPoint("BOTTOMRIGHT",help,"BOTTOMRIGHT",-12,12)
         helpPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
         helpPaper:SetTexCoord(0,1,0,1); helpPaper:SetVertexColor(1.00,1.00,0.97)
         label(help,"HOW TO USE THE BESTIARY",30,-30,500,"GameFontNormalLarge")
