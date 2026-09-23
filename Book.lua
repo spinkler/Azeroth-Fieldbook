@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.48"
+    return "0.5.49"
 end
 
 function ns.CreateBook(journal)
@@ -231,8 +231,20 @@ function ns.CreateBook(journal)
         book:SetMovable(true)
         book:EnableMouse(true)
         book:RegisterForDrag("LeftButton")
-        book:SetScript("OnDragStart", function(self) self:StartMoving() end)
-        book:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+        -- Keep one anchor and one cursor coordinate space throughout a drag.
+        -- Native StartMoving reanchors scaled frames to screen space.
+        local drag
+        local function stopBookDrag() drag = nil end
+        local function startBookDrag()
+            if drag then return end
+            local x,y = GetCursorPosition()
+            local scale = book:GetEffectiveScale()
+            local left,top = book:GetLeft(),book:GetTop()
+            if not left or not top or not scale or scale <= 0 then return end
+            drag = { x=x, y=y, left=left, top=top, scale=scale }
+        end
+        book:SetScript("OnDragStart", startBookDrag)
+        book:SetScript("OnDragStop", stopBookDrag)
         book:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border", tile=true, tileSize=32, edgeSize=24, insets={left=8,right=8,top=8,bottom=8}})
         -- QuestBG has transparent padding. Back the entire page with opaque
         -- parchment, then stretch only an interior, non-transparent texture area.
@@ -258,8 +270,18 @@ function ns.CreateBook(journal)
         book.titleBar:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background-Dark",edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",tile=true,tileSize=32,edgeSize=6,insets={left=2,right=2,top=2,bottom=2}})
         book.titleBar:SetBackdropColor(0.16,0.10,0.055,0.96)
         book.titleBar:EnableMouse(true); book.titleBar:RegisterForDrag("LeftButton")
-        book.titleBar:SetScript("OnDragStart",function() book:StartMoving() end)
-        book.titleBar:SetScript("OnDragStop",function() book:StopMovingOrSizing() end)
+        book.titleBar:SetScript("OnDragStart",startBookDrag)
+        book.titleBar:SetScript("OnDragStop",stopBookDrag)
+        book.titleBar:SetScript("OnHide",stopBookDrag)
+        book.titleBar:SetScript("OnUpdate",function()
+            if not drag then return end
+            if not IsMouseButtonDown("LeftButton") then stopBookDrag(); return end
+            local x,y = GetCursorPosition()
+            local left = drag.left + (x-drag.x)/drag.scale
+            local top = drag.top + (y-drag.y)/drag.scale
+            book:ClearAllPoints()
+            book:SetPoint("TOPLEFT",UIParent,"BOTTOMLEFT",left,top)
+        end)
         -- Match the native character-sheet portrait: the icon is clipped by a
         -- real circular mask and surrounded by the UI-Frame portrait ring.
         book.titleIcon=CreateFrame("Frame",nil,book)
@@ -282,7 +304,7 @@ function ns.CreateBook(journal)
         iconBorder:SetTexCoord(0.00781250,0.61718750,0.00781250,0.61718750)
         -- Use one native portrait-frame art family for the surrounding edges.
         -- Keep the old backdrop as a fallback if this client lacks the atlases.
-        local edgeAtlases = {"UI-Frame-Portrait", "UI-Frame-TopCornerRight", "_UI-Frame-TitleTile", "!UI-Frame-LeftTile", "!UI-Frame-RightTile", "UI-Frame-BotCornerLeft", "UI-Frame-BotCornerRight", "_UI-Frame-Bot"}
+        local edgeAtlases = {"UI-Frame-TopCornerRightSimple", "_UI-Frame-TitleTile", "!UI-Frame-LeftTile", "!UI-Frame-RightTile", "UI-Frame-BotCornerLeft", "UI-Frame-BotCornerRight", "_UI-Frame-Bot"}
         local hasFrameArt = C_Texture and type(C_Texture.GetAtlasInfo) == "function"
         if hasFrameArt then
             for _, atlas in ipairs(edgeAtlases) do
@@ -293,7 +315,12 @@ function ns.CreateBook(journal)
             book:SetBackdrop(nil)
             book.titleBar:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background-Dark",tile=true,tileSize=32})
             book.titleBar:SetBackdropColor(0.16,0.10,0.055,0.96)
-            iconBorder:SetAtlas("UI-Frame-Portrait")
+            -- Retain the complete portrait sheet region above. Switching this
+            -- texture to an atlas after cropping it produced a cropped ring.
+            -- Extend the paper under the narrower native trim to prevent gaps.
+            paper:ClearAllPoints()
+            paper:SetPoint("TOPLEFT",book,"TOPLEFT",2,-2)
+            paper:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-2,2)
             local function edge(atlas, width, height, horizontal, vertical)
                 local texture = book.titleIcon:CreateTexture(nil,"OVERLAY")
                 texture:SetAtlas(atlas)
@@ -302,11 +329,11 @@ function ns.CreateBook(journal)
                 if vertical then texture:SetVertTile(true) end
                 return texture
             end
-            local topRight = edge("UI-Frame-TopCornerRight",33,33)
-            topRight:SetPoint("TOPRIGHT",0,1)
+            local topRight = edge("UI-Frame-TopCornerRightSimple",11,11)
+            topRight:SetPoint("TOPRIGHT",0,-3)
             local top = edge("_UI-Frame-TitleTile",256,28,true)
             top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-10)
-            top:SetPoint("TOPRIGHT",topRight,"TOPLEFT",0,0)
+            top:SetPoint("TOPRIGHT",book,"TOPRIGHT",-10,-3)
             local bottomLeft = edge("UI-Frame-BotCornerLeft",14,14)
             bottomLeft:SetPoint("BOTTOMLEFT",0,0)
             local bottomRight = edge("UI-Frame-BotCornerRight",11,11)

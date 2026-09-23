@@ -1,4 +1,4 @@
-# Classic Bestiary - Field Journal 0.5.48 (alpha)
+# Classic Bestiary - Field Journal 0.5.49 (alpha)
 
 A personal bestiary for WoW: Forever beta 1.60.1 (Interface 16001). The book starts
 empty, records encountered NPCs and lets you confirm what you have learned. No
