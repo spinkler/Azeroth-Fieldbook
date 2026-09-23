@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.14"
+    return "0.6.15"
 end
 
 function ns.CreateBook(journal)
@@ -434,7 +434,7 @@ local ink = { 0.75, 0.8, 0.8 }
         button(book, "Previous", 135, -626, 72, function() cycleEntry(-1) end)
         button(book, "Next", 217, -626, 74, function() cycleEntry(1) end)
         book.indexCount = label(book, "", 135, -660, 156, "GameFontHighlightSmall")
-        label(book, "Use type and A-Z tabs to filter the index.\nBind this book in Options > Keybindings.",24,-704,256,"GameFontHighlightSmall")
+        label(book, "Use type and A-Z tabs to filter the index.\nBind this book in Options > Keybindings.",38,-704,256,"GameFontHighlightSmall")
         book.indexReset = button(book, "Index", 3, -78, 57, function() initial=nil; offset=0; refresh() end)
         book.letterButtons = {}
         for i=1,26 do
