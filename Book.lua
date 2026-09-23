@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.25"
+    return "0.6.26"
 end
 
 function ns.CreateBook(journal)
@@ -26,6 +26,7 @@ function ns.CreateBook(journal)
         { name="Frost", color="69ccf0" }, { name="Holy", color="fff09a" },
         { name="Nature", color="72d65b" }, { name="Shadow", color="b79cff" },
     }
+    local behaviourOrder = { "Hostile", "Neutral", "Melee", "Ranged", "Caster", "Flees at low health", "Calls allies", "Patrols", "Summons", "Heals", "Enrages", "Stealths" }
 local ink = { 0.75, 0.8, 0.8 }
     local inkShadow = { 0.05, 0.05, 0.05 }
     local function label(parent, text, x, y, width, size)
@@ -181,6 +182,7 @@ local ink = { 0.75, 0.8, 0.8 }
             book.modelCaption:SetText("")
             book.title:SetText("A field guide of your own")
             book.subTitle:SetText("Target or mouse over an enemy to begin a new entry.")
+            book.combatStatus:SetText("")
             return
         end
         book.title:SetText(e.name or ("Encountered creature #" .. selected))
@@ -191,7 +193,6 @@ local ink = { 0.75, 0.8, 0.8 }
         local status = { e.category }
         if e.rank then status[#status + 1] = e.rank end
         status[#status + 1] = levels
-        status[#status + 1] = "Kills: " .. math.max(0,math.floor(tonumber(e.kills) or 0))
         local locations = {}
         for location in pairs(e.locations or {}) do locations[#locations + 1] = location end
         table.sort(locations)
@@ -205,13 +206,20 @@ local ink = { 0.75, 0.8, 0.8 }
             end
             return names
         end
+        book.subTitle:SetText(table.concat(status, "  |  "))
+        local combat = { "Kills: " .. math.max(0,math.floor(tonumber(e.kills) or 0)) }
         local offenses = schoolSummary("offenses")
         local resistances = schoolSummary("resistances")
         local immunities = schoolSummary("immunities")
-        if #offenses > 0 then status[#status + 1] = "Casts: " .. table.concat(offenses, ", ") end
-        if #resistances > 0 then status[#status + 1] = "Resists: " .. table.concat(resistances, ", ") end
-        if #immunities > 0 then status[#status + 1] = "Immune: " .. table.concat(immunities, ", ") end
-        book.subTitle:SetText(table.concat(status, "  |  "))
+        if #offenses > 0 then combat[#combat + 1] = "Casts: " .. table.concat(offenses, ", ") end
+        if #resistances > 0 then combat[#combat + 1] = "Resists: " .. table.concat(resistances, ", ") end
+        if #immunities > 0 then combat[#combat + 1] = "Immune: " .. table.concat(immunities, ", ") end
+        local behaviours = {}
+        for _,name in ipairs(behaviourOrder) do
+            if type(e.behaviours)=="table" and e.behaviours[name] then behaviours[#behaviours+1]=name end
+        end
+        if #behaviours > 0 then combat[#combat + 1] = "Behaviour: " .. table.concat(behaviours, ", ") end
+        book.combatStatus:SetText(table.concat(combat, "  |  "))
         book.confirm:SetText(e.confirmed and "Unlock this entry" or "Lock this entry")
         book.confirm:SetLockedState(e.confirmed)
         book.confirm:SetEnabled(true)
@@ -491,17 +499,19 @@ local ink = { 0.75, 0.8, 0.8 }
         local titlePath, titleSize, titleFlags = book.title:GetFont()
         if titlePath and titleSize then book.title:SetFont(titlePath, titleSize + 2, titleFlags) end
         book.subTitle = label(book, "", 336, -84, 600)
+        book.combatStatus = label(book, "", 336, -101, 600, "GameFontHighlightSmall")
+        book.combatStatus:SetHeight(28); book.combatStatus:SetJustifyV("TOP")
         book.empty = label(book, "Every page begins with an encounter.\n\nOnly creatures you have met appear here.\nSelect an entry from the index to review your notes.", 340, -210, 520)
         book.detail = CreateFrame("Frame", nil, book)
         book.detail:SetAllPoints()
         local detail = book.detail
         book.modelBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
-        book.modelBorder:SetPoint("TOPLEFT",338,-107); book.modelBorder:SetSize(229,194)
+        book.modelBorder:SetPoint("TOPLEFT",338,-133); book.modelBorder:SetSize(229,168)
         book.modelBorder:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8,insets={left=2,right=2,top=2,bottom=2}})
         book.modelBorder:SetBackdropColor(0.045,0.032,0.018,0.88)
         book.modelBorder:SetBackdropBorderColor(0.37,0.25,0.11,0.90)
         book.model = CreateFrame("PlayerModel", nil, detail)
-        book.model:SetPoint("TOPLEFT", 340, -109); book.model:SetSize(225, 190)
+        book.model:SetPoint("TOPLEFT", 340, -135); book.model:SetSize(225, 164)
         book.model:SetPortraitZoom(0); book.model:SetCamDistanceScale(1.25)
         book.model:EnableMouse(true)
         local rotation, rotating, lastCursorX = 0, false, nil
@@ -587,7 +597,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.confirm:SetLockedState(false)
         book.confirm:Hide()
         book.damageBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
-        book.damageBorder:SetPoint("TOPLEFT",575,-109); book.damageBorder:SetSize(350,139)
+        book.damageBorder:SetPoint("TOPLEFT",575,-133); book.damageBorder:SetSize(350,115)
         book.damageBorder:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,insets={left=2,right=2,top=2,bottom=2}})
         -- Neutral translucent cream separates this panel without a coloured cast.
         book.damageBorder:SetBackdropColor(0.045,0.032,0.018,0.88)
@@ -595,9 +605,9 @@ local ink = { 0.75, 0.8, 0.8 }
         local damageHeading = label(book.damageBorder, "Equal-level damage taken", 13, -9, 315)
         damageHeading:SetTextColor(1.00, 0.82, 0.14)
         local damageScroll=CreateFrame("ScrollFrame",nil,detail,"UIPanelScrollFrameTemplate")
-        damageScroll:SetPoint("TOPLEFT",588,-139); damageScroll:SetSize(320,72)
+        damageScroll:SetPoint("TOPLEFT",588,-163); damageScroll:SetSize(320,55)
         book.damageChild=CreateFrame("Frame",nil,damageScroll)
-        book.damageChild:SetSize(315,72); damageScroll:SetScrollChild(book.damageChild)
+        book.damageChild:SetSize(315,55); damageScroll:SetScrollChild(book.damageChild)
         book.damageScroll=damageScroll
         book.damageScrollBar=damageScroll.ScrollBar
         if type(book.damageScrollBar)=="function" then book.damageScrollBar=nil end
@@ -826,7 +836,7 @@ local ink = { 0.75, 0.8, 0.8 }
         defensePicker:SetScript("OnShow",refreshDefensePicker)
         defensePicker:Hide(); book.defensePicker=defensePicker; book.refreshDefensePicker=refreshDefensePicker
 
-        local behaviourPicker=createObservationPicker("ClassicBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen from this creature.",540,390)
+        local behaviourPicker=createObservationPicker("ClassicBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen from this creature.",540,430)
         local behaviourGroups={
             { "Disposition", { "Hostile", "Neutral" } },
             { "Combat style", { "Melee", "Ranged", "Caster" } },
@@ -834,7 +844,7 @@ local ink = { 0.75, 0.8, 0.8 }
         }
         behaviourPicker.controls={}
         local refreshBehaviourPicker
-        local groupY={-88,-150,-212}
+        local groupY={-88,-150,-244}
         for groupIndex,group in ipairs(behaviourGroups) do
             label(behaviourPicker,group[1],30,groupY[groupIndex],210,"GameFontHighlightSmall")
             for i,name in ipairs(group[2]) do
