@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.69"
+    return "0.5.70"
 end
 
 function ns.CreateBook(journal)
@@ -531,7 +531,8 @@ local ink = { 0.75, 0.8, 0.8 }
         -- Neutral translucent cream separates this panel without a coloured cast.
         book.damageBorder:SetBackdropColor(0.045,0.032,0.018,0.88)
         book.damageBorder:SetBackdropBorderColor(0.36,0.23,0.10,0.48)
-        label(detail, "Equal-level damage taken", 588, -118, 285)
+        local damageHeading = label(detail, "Equal-level damage taken", 588, -118, 285)
+        damageHeading:SetTextColor(1.00, 0.82, 0.14)
         local damageScroll=CreateFrame("ScrollFrame",nil,detail,"UIPanelScrollFrameTemplate")
         damageScroll:SetPoint("TOPLEFT",588,-139); damageScroll:SetSize(290,72)
         book.damageChild=CreateFrame("Frame",nil,damageScroll)
