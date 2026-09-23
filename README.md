@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.7.0 (alpha)
+# Azeroth Fieldbook 0.7.1 (alpha)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -8,7 +8,7 @@ information from the player's own encounters. It does not ship with creature or
 spell databases.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.7.0.
+are not part of version 0.7.1.
 
 ## Installation and opening
 
@@ -74,7 +74,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.7.0 stores per-character data in `AzerothFieldbookDB`, with monster
+Version 0.7.1 stores per-character data in `AzerothFieldbookDB`, with monster
 journal data under its `bestiary` section.
 
 The previous binding action IDs remain registered behind the newly branded
