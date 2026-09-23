@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.7"
+    return "0.6.8"
 end
 
 function ns.CreateBook(journal)
@@ -420,7 +420,7 @@ local ink = { 0.75, 0.8, 0.8 }
             row:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=8, insets={left=1,right=1,top=-3,bottom=1}})
             row:SetBackdropBorderColor(0.95, 0.70, 0.15, 0)
             row.highlight = row:CreateTexture(nil, "BACKGROUND")
-            row.highlight:SetPoint("TOPLEFT", 1, 1)
+            row.highlight:SetPoint("TOPLEFT", 1, -1)
             row.highlight:SetPoint("BOTTOMRIGHT", -1, 1)
             row.highlight:SetColorTexture(0.18,0.10,0.02,0.50)
             row.text = label(row, "", 5, -6, 146)
