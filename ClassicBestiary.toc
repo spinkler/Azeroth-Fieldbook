@@ -2,7 +2,7 @@
 ## Title: Classic Bestiary - Field Journal
 ## Notes: A personal bestiary book of encountered NPCs, observations and confirmed field notes.
 ## Author: Spinkler; original ClassicBestiary by Urbit
-## Version: 0.6.16
+## Version: 0.6.17
 ## SavedVariablesPerCharacter: ClassicBestiaryObservedDB
 
 EncounterReader.lua
