@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.22"
+    return "0.6.23"
 end
 
 function ns.CreateBook(journal)
@@ -671,7 +671,7 @@ local ink = { 0.75, 0.8, 0.8 }
             message(msg)
             if ok then book.manualName:SetText(""); book.manualNote:SetText(""); book.spellLink:SetText(""); book.manualEffects={}; book.effectButton:SetText("Choose effects"); refresh() end
         end)
-        book.damageButton=button(detail,"Record equal-level hits",588,-277,347,function()
+        book.damageButton=button(detail,"Record equal-level hits",575,-277,347,function()
             book.damageForm:SetShown(not book.damageForm:IsShown())
         end)
         book.message=label(book,"",326,-704,578,"GameFontHighlightSmall")
