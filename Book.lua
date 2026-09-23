@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.8"
+    return "0.6.10"
 end
 
 function ns.CreateBook(journal)
@@ -141,8 +141,10 @@ local ink = { 0.75, 0.8, 0.8 }
             local data = rows[offset + i]
             row.id = data and data.id
             if data then
-                row.text:SetText((data.review and "* " or "") .. data.name)
+                local reviewMark = data.review and "|cffffffff* |r" or ""
+                row.text:SetText(reviewMark .. data.name)
                 local rowSelected = data.id == selected
+                row.text:SetTextColor(rowSelected and 1.00 or ink[1], rowSelected and 0.82 or ink[2], rowSelected and 0.14 or ink[3])
                 row.highlight:SetShown(rowSelected)
                 row:SetBackdropBorderColor(0.95, 0.70, 0.15, rowSelected and 1 or 0)
                 row:Show()
