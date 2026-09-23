@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.17"
+    return "0.6.18"
 end
 
 function ns.CreateBook(journal)
@@ -658,12 +658,19 @@ local ink = { 0.75, 0.8, 0.8 }
         book.message:SetHeight(25); book.message:SetJustifyV("TOP")
         local effectPicker=CreateFrame("Frame",nil,book,"BackdropTemplate")
         effectPicker:SetSize(560,455); effectPicker:SetPoint("CENTER"); effectPicker:SetFrameStrata("FULLSCREEN_DIALOG"); effectPicker:SetFrameLevel(102)
-        effectPicker:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",tile=true,tileSize=32,edgeSize=24})
-        effectPicker:SetBackdropColor(0.90,0.80,0.60,1)
+        effectPicker:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
+        effectPicker:EnableMouse(true)
+        effectPicker:SetMovable(true)
+        effectPicker:SetClampedToScreen(true)
+        effectPicker:RegisterForDrag("LeftButton")
+        effectPicker:SetScript("OnDragStart",function(self) self:StartMoving() end)
+        effectPicker:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
+        effectPicker:SetScript("OnHide",function(self) self:StopMovingOrSizing() end)
         local effectPaper=effectPicker:CreateTexture(nil,"BACKGROUND",nil,1)
-        effectPaper:SetPoint("TOPLEFT",effectPicker,"TOPLEFT",12,-12); effectPaper:SetPoint("BOTTOMRIGHT",effectPicker,"BOTTOMRIGHT",-12,12)
-        effectPaper:SetColorTexture(1,1,1,1)
-        addBackgroundLayer(effectPaper, 0.42336,0.35784,0.23688)
+        effectPaper:SetPoint("TOPLEFT",effectPicker,"TOPLEFT",6,-6); effectPaper:SetPoint("BOTTOMRIGHT",effectPicker,"BOTTOMRIGHT",-6,6)
+        effectPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+        effectPaper:SetTexCoord(0,1,0,1)
+        addBackgroundLayer(effectPaper, 0.504,0.504,0.48888)
         label(effectPicker,"Effects",25,-25,350,"GameFontNormalLarge")
         label(effectPicker,"Choose every effect you personally observed for this ability.",25,-54,470,"GameFontHighlightSmall")
         button(effectPicker,"Close",410,-20,110,function() effectPicker:Hide() end)
