@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.50"
+    return "0.5.51"
 end
 
 function ns.CreateBook(journal)
@@ -150,6 +150,7 @@ function ns.CreateBook(journal)
         book.empty:SetShown(e == nil)
         if not e then
             book.model:Hide()
+            book.confirm:Hide()
             book.modelCaption:SetText("")
             book.title:SetText("A field guide of your own")
             book.subTitle:SetText("Target or mouse over an enemy to begin a new entry.")
@@ -169,7 +170,9 @@ function ns.CreateBook(journal)
         if #locations > 0 then status[#status + 1] = "Locations: " .. table.concat(locations, ", ") end
         book.subTitle:SetText(table.concat(status, "  |  "))
         book.confirm:SetText(e.confirmed and "Unlock this entry" or "Lock this entry")
+        book.confirm:SetLockedState(e.confirmed)
         book.confirm:SetEnabled(true)
+        book.confirm:Show()
         local names = {}
         for name in pairs(e.abilities) do names[#names + 1] = name end
         table.sort(names)
@@ -319,13 +322,13 @@ function ns.CreateBook(journal)
             -- texture to an atlas after cropping it produced a cropped ring.
             -- Extend the paper under the narrower native trim to prevent gaps.
             paper:ClearAllPoints()
-            paper:SetPoint("TOPLEFT",book,"TOPLEFT",6,-27)
-            paper:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-6,7)
+            paper:SetPoint("TOPLEFT",book,"TOPLEFT",9,-9)
+            paper:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-9,9)
             -- The portrait supplies the left cap. Do not paint a rectangular
             -- title background behind its transparent outer silhouette.
             book.titleBar:ClearAllPoints()
             book.titleBar:SetPoint("TOPLEFT",60,-3)
-            book.titleBar:SetPoint("TOPRIGHT",-1,-3)
+            book.titleBar:SetPoint("TOPRIGHT",-7,-3)
             local function edge(atlas, width, height, horizontal, vertical)
                 local texture = book.titleIcon:CreateTexture(nil,"OVERLAY")
                 texture:SetAtlas(atlas)
@@ -456,7 +459,28 @@ function ns.CreateBook(journal)
         book.model:SetScript("OnModelLoaded", function()
             book.modelCaption:SetText("Creature model - drag to rotate")
         end)
-        book.confirm = button(detail, "Lock this entry", 650, -51, 194, function()
+        book.confirm = CreateFrame("Button", nil, detail)
+        book.confirm:SetSize(30, 30)
+        book.confirm:SetPoint("TOPLEFT", 700, -49)
+        local lockIcon = book.confirm:CreateTexture(nil, "ARTWORK")
+        lockIcon:SetAllPoints()
+        book.confirm.lockIcon = lockIcon
+        function book.confirm:SetLockedState(locked)
+            self.locked = locked and true or false
+            self.lockIcon:SetTexture(self.locked and "Interface\\Icons\\INV_Misc_Lock_01" or "Interface\\Icons\\INV_Misc_Lock_02")
+            if self.locked then
+                self.lockIcon:SetVertexColor(0.95, 0.18, 0.10, 1)
+            else
+                self.lockIcon:SetVertexColor(0.20, 0.20, 0.20, 1)
+            end
+        end
+        book.confirm:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+            GameTooltip:SetText(self.locked and "Unlock this entry" or "Lock this entry")
+            GameTooltip:Show()
+        end)
+        book.confirm:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        book.confirm:SetScript("OnClick", function()
             if selected then
                 local entry=journal.entries[selected]
                 journal:SetEntryConfirmed(selected,not entry.confirmed)
@@ -464,6 +488,8 @@ function ns.CreateBook(journal)
                 refresh()
             end
         end)
+        book.confirm:SetLockedState(false)
+        book.confirm:Hide()
         book.damageBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
         book.damageBorder:SetPoint("TOPLEFT",575,-109); book.damageBorder:SetSize(320,139)
         book.damageBorder:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,insets={left=2,right=2,top=2,bottom=2}})
