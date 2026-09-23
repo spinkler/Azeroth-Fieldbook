@@ -1,0 +1,11 @@
+## Interface: 16001
+## Title: Classic Bestiary - Field Journal
+## Notes: A personal bestiary book of encountered NPCs, observations and confirmed field notes.
+## Author: Spinkler; original ClassicBestiary by Urbit
+## Version: 0.5.47
+## SavedVariablesPerCharacter: ClassicBestiaryObservedDB
+
+EncounterReader.lua
+Journal.lua
+Book.lua
+ClassicBestiary.lua

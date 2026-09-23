@@ -1,0 +1,8 @@
+<Bindings>
+    <Binding name="CLASSICBESTIARY_BOOK">
+        ClassicBestiaryToggleBook();
+    </Binding>
+    <Binding name="CLASSICBESTIARY_MOUSEOVER_BOOK">
+        ClassicBestiaryOpenMouseoverBook();
+    </Binding>
+</Bindings>
