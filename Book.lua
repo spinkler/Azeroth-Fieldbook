@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.59"
+    return "0.5.60"
 end
 
 function ns.CreateBook(journal)
@@ -660,9 +660,17 @@ function ns.CreateBook(journal)
         form:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",tile=true,tileSize=32,edgeSize=24})
         form:SetBackdropColor(0.92,0.83,0.65,1)
         local formPaper=form:CreateTexture(nil,"BACKGROUND",nil,1)
-        formPaper:SetPoint("TOPLEFT",form,"TOPLEFT",12,-12); formPaper:SetPoint("BOTTOMRIGHT",form,"BOTTOMRIGHT",-12,12)
-        formPaper:SetColorTexture(0.82,0.69,0.46,1)
+        -- Run the parchment beneath the complete frame so there are no bare
+        -- background strips between the paper and the ornamental border.
+        formPaper:SetAllPoints(form)
+        formPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+        formPaper:SetTexCoord(0,1,0,1)
+        formPaper:SetVertexColor(1.00,1.00,0.97)
         form:EnableMouse(true)
+        form:SetMovable(true)
+        form:RegisterForDrag("LeftButton")
+        form:SetScript("OnDragStart",function(self) self:StartMoving() end)
+        form:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
         label(form,"Your equal-level damage observation",22,-22,515,"GameFontNormalLarge")
         label(form,"Record hits you took when you and this creature were the SAME level.\nThese are personal observations, affected by your armor and buffs.",22,-55,515)
         label(form,"Both level",28,-103,125); label(form,"Smallest hit",185,-103,140); label(form,"Largest hit",350,-103,140)
