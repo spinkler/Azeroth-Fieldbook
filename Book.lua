@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.6"
+    return "0.6.7"
 end
 
 function ns.CreateBook(journal)
@@ -145,8 +145,9 @@ local ink = { 0.75, 0.8, 0.8 }
                 local rowSelected = data.id == selected
                 row.highlight:SetShown(rowSelected)
                 row:SetBackdropBorderColor(0.95, 0.70, 0.15, rowSelected and 1 or 0)
+                row.selectionTop:SetShown(rowSelected)
                 row:Show()
-            else row:Hide() end
+            else row.selectionTop:Hide(); row:Hide() end
         end
         book.indexCount:SetText(#rows .. " entries  |  * awaiting review")
         local e = selected and journal.entries[selected]
@@ -419,6 +420,12 @@ local ink = { 0.75, 0.8, 0.8 }
             row:SetPoint("TOPLEFT", 132, -110 - (i-1)*29); row:SetSize(156, 27)
             row:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=8, insets={left=1,right=1,top=-1,bottom=1}})
             row:SetBackdropBorderColor(0.95, 0.70, 0.15, 0)
+            row.selectionTop = row:CreateTexture(nil, "OVERLAY")
+            row.selectionTop:SetColorTexture(0.95, 0.70, 0.15, 1)
+            row.selectionTop:SetPoint("TOPLEFT", 2, 1)
+            row.selectionTop:SetPoint("TOPRIGHT", -2, 1)
+            row.selectionTop:SetHeight(1)
+            row.selectionTop:Hide()
             row.highlight = row:CreateTexture(nil, "BACKGROUND")
             row.highlight:SetPoint("TOPLEFT", 1, 1)
             row.highlight:SetPoint("BOTTOMRIGHT", -1, 1)
