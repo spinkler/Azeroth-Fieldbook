@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.61"
+    return "0.5.62"
 end
 
 function ns.CreateBook(journal)
@@ -669,13 +669,12 @@ function ns.CreateBook(journal)
         effectPicker:Hide(); book.effectPicker=effectPicker
         local form=CreateFrame("Frame",nil,book,"BackdropTemplate")
         form:SetSize(560,230); form:SetPoint("CENTER"); form:SetFrameStrata("FULLSCREEN_DIALOG"); form:SetFrameLevel(100)
-        form:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",tile=true,tileSize=32,edgeSize=24})
-        form:SetBackdropColor(0.92,0.83,0.65,1)
+        form:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         local formPaper=form:CreateTexture(nil,"BACKGROUND",nil,1)
         -- Run the parchment beneath the complete frame so there are no bare
         -- background strips between the paper and the ornamental border.
-        formPaper:SetPoint("TOPLEFT",form,"TOPLEFT",12,-12)
-        formPaper:SetPoint("BOTTOMRIGHT",form,"BOTTOMRIGHT",-12,12)
+        formPaper:SetPoint("TOPLEFT",form,"TOPLEFT",6,-6)
+        formPaper:SetPoint("BOTTOMRIGHT",form,"BOTTOMRIGHT",-6,6)
         formPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
         formPaper:SetTexCoord(0,1,0,1)
         formPaper:SetVertexColor(1.00,1.00,0.97)
@@ -766,8 +765,8 @@ function ns.CreateBook(journal)
         help:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
         help:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         local helpPaper=help:CreateTexture(nil,"BACKGROUND",nil,1)
-        helpPaper:SetPoint("TOPLEFT",help,"TOPLEFT",12,-12)
-        helpPaper:SetPoint("BOTTOMRIGHT",help,"BOTTOMRIGHT",-12,12)
+        helpPaper:SetPoint("TOPLEFT",help,"TOPLEFT",6,-6)
+        helpPaper:SetPoint("BOTTOMRIGHT",help,"BOTTOMRIGHT",-6,6)
         helpPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
         helpPaper:SetTexCoord(0,1,0,1); helpPaper:SetVertexColor(1.00,1.00,0.97)
         label(help,"HOW TO USE THE BESTIARY",30,-30,500,"GameFontNormalLarge")
