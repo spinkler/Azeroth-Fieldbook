@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.49"
+    return "0.5.50"
 end
 
 function ns.CreateBook(journal)
@@ -319,8 +319,13 @@ function ns.CreateBook(journal)
             -- texture to an atlas after cropping it produced a cropped ring.
             -- Extend the paper under the narrower native trim to prevent gaps.
             paper:ClearAllPoints()
-            paper:SetPoint("TOPLEFT",book,"TOPLEFT",2,-2)
-            paper:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-2,2)
+            paper:SetPoint("TOPLEFT",book,"TOPLEFT",6,-27)
+            paper:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-6,7)
+            -- The portrait supplies the left cap. Do not paint a rectangular
+            -- title background behind its transparent outer silhouette.
+            book.titleBar:ClearAllPoints()
+            book.titleBar:SetPoint("TOPLEFT",60,-3)
+            book.titleBar:SetPoint("TOPRIGHT",-1,-3)
             local function edge(atlas, width, height, horizontal, vertical)
                 local texture = book.titleIcon:CreateTexture(nil,"OVERLAY")
                 texture:SetAtlas(atlas)
@@ -329,8 +334,8 @@ function ns.CreateBook(journal)
                 if vertical then texture:SetVertTile(true) end
                 return texture
             end
-            local topRight = edge("UI-Frame-TopCornerRightSimple",11,11)
-            topRight:SetPoint("TOPRIGHT",0,-3)
+            -- The close button already supplies its own bevelled corner.
+            -- An additional square corner here protrudes above that bevel.
             local top = edge("_UI-Frame-TitleTile",256,28,true)
             top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-10)
             top:SetPoint("TOPRIGHT",book,"TOPRIGHT",-10,-3)
@@ -345,11 +350,12 @@ function ns.CreateBook(journal)
             left:SetPoint("TOPLEFT",iconBorder,"BOTTOMLEFT",8,0)
             left:SetPoint("BOTTOMLEFT",bottomLeft,"TOPLEFT",0,0)
             local right = edge("!UI-Frame-RightTile",10,256,false,true)
-            right:SetPoint("TOPRIGHT",topRight,"BOTTOMRIGHT",0,0)
+            right:SetPoint("TOPRIGHT",book,"TOPRIGHT",0,-27)
             right:SetPoint("BOTTOMRIGHT",bottomRight,"TOPRIGHT",0,0)
         end
         book.windowTitle=book.titleBar:CreateFontString(nil,"OVERLAY","GameFontNormal")
-        book.windowTitle:SetPoint("LEFT",58,0); book.windowTitle:SetPoint("RIGHT",-72,0)
+        book.windowTitle:SetPoint("CENTER",book,"TOP",0,-15)
+        book.windowTitle:SetWidth(700)
         book.windowTitle:SetJustifyH("CENTER"); book.windowTitle:SetTextColor(1.00,0.82,0.14)
         book.windowTitle:SetText("The Bestiary - v" .. addonVersion())
         book.closeButton=CreateFrame("Button",nil,book.titleBar,"UIPanelCloseButton")
