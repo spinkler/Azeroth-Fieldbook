@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.2"
+    return "0.6.3"
 end
 
 function ns.CreateBook(journal)
@@ -480,7 +480,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.model:SetScript("OnHide", function() rotating=false; lastCursorX=nil end)
         book.modelCaption = label(detail, "", 338, -302, 255, "GameFontHighlightSmall")
         book.model:SetScript("OnModelLoaded", function()
-            book.modelCaption:SetText("Creature model - drag to rotate")
+            book.modelCaption:SetText("")
         end)
         book.confirm = CreateFrame("Button", nil, detail, "BackdropTemplate")
         book.confirm:SetSize(26, 26)

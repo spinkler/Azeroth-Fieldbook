@@ -436,7 +436,7 @@ SlashCmdList.CLASSICBESTIARYOBSERVED = function(message)
     elseif command == "scan" then
         if encounters then encounters:Scan(); encounters:Report(say) else say("Encounter module unavailable.") end
     elseif command == "debug" then
-        say("Version 0.6.2; all cast events: " .. diagnostics.events .. "; new observations: " .. diagnostics.learned
+        say("Version 0.6.3; all cast events: " .. diagnostics.events .. "; new observations: " .. diagnostics.learned
             .. "; tooltip callbacks: " .. diagnostics.tooltips)
         say("Last cast check: " .. diagnostics.last)
         say("Events matched to target/mouseover: " .. matchedEvents .. ". All-event count includes unrelated units.")
