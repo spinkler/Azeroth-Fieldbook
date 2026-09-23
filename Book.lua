@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.63"
+    return "0.5.64"
 end
 
 function ns.CreateBook(journal)
@@ -27,8 +27,6 @@ function ns.CreateBook(journal)
         font:SetWidth(width)
         font:SetJustifyH("LEFT")
         font:SetTextColor(unpack(ink))
-        font:SetShadowColor(0, 0, 0, 0)
-        font:SetShadowOffset(0, 0)
         font:SetText(text)
         return font
     end
