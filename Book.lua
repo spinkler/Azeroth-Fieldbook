@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.52"
+    return "0.5.53"
 end
 
 function ns.CreateBook(journal)
@@ -252,8 +252,8 @@ function ns.CreateBook(journal)
         -- QuestBG has transparent padding. Back the entire page with opaque
         -- parchment, then stretch only an interior, non-transparent texture area.
         local paper = book:CreateTexture(nil, "BACKGROUND", nil, 1)
-        paper:SetPoint("TOPLEFT", book, "TOPLEFT", 2, -9)
-        paper:SetPoint("BOTTOMRIGHT", book, "BOTTOMRIGHT", -9, 9)
+        paper:SetPoint("TOPLEFT", book, "TOPLEFT", 9, -9)
+        paper:SetPoint("BOTTOMRIGHT", book, "BOTTOMRIGHT", -2, 9)
         paper:SetColorTexture(0.88, 0.78, 0.60, 1)
         local page = book:CreateTexture(nil, "BACKGROUND", nil, 2)
         page:SetAllPoints(paper)
@@ -322,8 +322,8 @@ function ns.CreateBook(journal)
             -- texture to an atlas after cropping it produced a cropped ring.
             -- Extend the paper under the narrower native trim to prevent gaps.
             paper:ClearAllPoints()
-            paper:SetPoint("TOPLEFT",book,"TOPLEFT",2,-9)
-            paper:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-9,9)
+            paper:SetPoint("TOPLEFT",book,"TOPLEFT",9,-9)
+            paper:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-2,9)
             -- The portrait supplies the left cap. Do not paint a rectangular
             -- title background behind its transparent outer silhouette.
             book.titleBar:ClearAllPoints()
@@ -459,22 +459,37 @@ function ns.CreateBook(journal)
         book.model:SetScript("OnModelLoaded", function()
             book.modelCaption:SetText("Creature model - drag to rotate")
         end)
-        book.confirm = CreateFrame("Button", nil, detail)
-        book.confirm:SetSize(30, 30)
-        book.confirm:SetPoint("TOPLEFT", 294, -50)
+        book.confirm = CreateFrame("Button", nil, detail, "BackdropTemplate")
+        book.confirm:SetSize(26, 26)
+        book.confirm:SetPoint("TOPLEFT", 296, -52)
         book.confirm:SetFrameLevel(detail:GetFrameLevel() + 5)
-        local lockIcon = book.confirm:CreateTexture(nil, "ARTWORK")
-        lockIcon:SetAllPoints()
-        lockIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        book.confirm.lockIcon = lockIcon
+        book.confirm:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=5, insets={left=2,right=2,top=2,bottom=2}})
+        book.confirm:SetBackdropColor(0.06, 0.04, 0.02, 0.95)
+        book.confirm:SetBackdropBorderColor(0.55, 0.40, 0.16, 1)
+        local lockBody = book.confirm:CreateTexture(nil, "ARTWORK")
+        lockBody:SetColorTexture(0.20, 0.20, 0.20, 1)
+        lockBody:SetPoint("BOTTOM", 0, 5)
+        lockBody:SetSize(14, 11)
+        local lockTop = book.confirm:CreateTexture(nil, "ARTWORK")
+        lockTop:SetColorTexture(0.20, 0.20, 0.20, 1)
+        lockTop:SetPoint("TOP", 0, -7)
+        lockTop:SetSize(10, 2)
+        local lockLeft = book.confirm:CreateTexture(nil, "ARTWORK")
+        lockLeft:SetColorTexture(0.20, 0.20, 0.20, 1)
+        lockLeft:SetPoint("TOP", -4, -7)
+        lockLeft:SetSize(2, 8)
+        local lockRight = book.confirm:CreateTexture(nil, "ARTWORK")
+        lockRight:SetColorTexture(0.20, 0.20, 0.20, 1)
+        lockRight:SetPoint("TOP", 4, -7)
+        lockRight:SetSize(2, 8)
+        book.confirm.lockParts = { lockBody, lockTop, lockLeft, lockRight }
         function book.confirm:SetLockedState(locked)
             self.locked = locked and true or false
-            self.lockIcon:SetTexture(self.locked and "Interface\\Icons\\INV_Misc_Lock_01" or "Interface\\Icons\\INV_Misc_Lock_02")
-            if self.locked then
-                self.lockIcon:SetVertexColor(0.95, 0.18, 0.10, 1)
-            else
-                self.lockIcon:SetVertexColor(0.20, 0.20, 0.20, 1)
+            local r, g, b = self.locked and 0.95 or 0.22, self.locked and 0.12 or 0.22, self.locked and 0.06 or 0.22
+            for _, part in ipairs(self.lockParts) do
+                part:SetColorTexture(r, g, b, 1)
             end
+            self:SetBackdropColor(self.locked and 0.22 or 0.06, 0.04, 0.02, 0.95)
         end
         book.confirm:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
