@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.26"
+    return "0.7.0"
 end
 
 function ns.CreateBook(journal)
@@ -761,12 +761,26 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         effectPicker:Hide(); book.effectPicker=effectPicker
 
+        local observationPickerLevel=200
+        local function raiseObservationPicker(picker)
+            observationPickerLevel=observationPickerLevel+10
+            local function setLevel(frame,level)
+                frame:SetFrameLevel(level)
+                if type(frame.GetChildren)=="function" then
+                    for _,child in ipairs({frame:GetChildren()}) do setLevel(child,level+1) end
+                end
+            end
+            setLevel(picker,observationPickerLevel)
+        end
         local function createObservationPicker(globalName,title,description,width,height)
             local picker=CreateFrame("Frame",globalName,UIParent,"BackdropTemplate")
             picker:SetSize(width,height); picker:SetPoint("CENTER"); picker:SetFrameStrata("FULLSCREEN_DIALOG"); picker:SetClampedToScreen(true)
+            picker:SetToplevel(true)
             picker:SetMovable(true); picker:EnableMouse(true); picker:RegisterForDrag("LeftButton")
             picker:SetScript("OnDragStart",function(self) self:StartMoving() end)
             picker:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
+            picker:SetScript("OnMouseDown",raiseObservationPicker)
+            picker:SetScript("OnShow",raiseObservationPicker)
             picker:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
             local paper=picker:CreateTexture(nil,"BACKGROUND",nil,1)
             paper:SetPoint("TOPLEFT",picker,"TOPLEFT",6,-6); paper:SetPoint("BOTTOMRIGHT",picker,"BOTTOMRIGHT",-6,6)
@@ -804,7 +818,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 control:SetAlpha(enabled and 1 or 0.45); control:SetEnabled(entry ~= nil)
             end
         end
-        offensePicker:SetScript("OnShow",refreshOffensePicker)
+        offensePicker:HookScript("OnShow",refreshOffensePicker)
         offensePicker:Hide(); book.offensePicker=offensePicker; book.refreshOffensePicker=refreshOffensePicker
 
         local defensePicker=createObservationPicker("ClassicBestiaryDefenses","Observed defenses","Mark each magic school as resistant, immune, or both when personally observed.",540,335)
@@ -833,7 +847,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.resistant:SetEnabled(entry ~= nil); row.immune:SetEnabled(entry ~= nil)
             end
         end
-        defensePicker:SetScript("OnShow",refreshDefensePicker)
+        defensePicker:HookScript("OnShow",refreshDefensePicker)
         defensePicker:Hide(); book.defensePicker=defensePicker; book.refreshDefensePicker=refreshDefensePicker
 
         local behaviourPicker=createObservationPicker("ClassicBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen from this creature.",540,430)
@@ -869,7 +883,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 control:SetEnabled(entry ~= nil)
             end
         end
-        behaviourPicker:SetScript("OnShow",refreshBehaviourPicker)
+        behaviourPicker:HookScript("OnShow",refreshBehaviourPicker)
         behaviourPicker:Hide(); book.behaviourPicker=behaviourPicker; book.refreshBehaviourPicker=refreshBehaviourPicker
 
         local form=CreateFrame("Frame",nil,book,"BackdropTemplate")
