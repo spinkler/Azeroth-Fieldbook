@@ -280,25 +280,13 @@ local function addSpellIDTooltip(tooltip, tooltipData)
 end
 
 local function initialize()
-    local migratedLegacyDatabase = false
     if type(AzerothFieldbookDB) ~= "table" or AzerothFieldbookDB.version ~= 1 then
-        if type(ClassicBestiaryObservedDB) == "table" and ClassicBestiaryObservedDB.version == 1 then
-            AzerothFieldbookDB = ClassicBestiaryObservedDB
-            migratedLegacyDatabase = true
-        else
-            AzerothFieldbookDB = { version = 1, bestiary = { creatures = {}, entries = {} }, announce = false }
-        end
+        AzerothFieldbookDB = { version = 1, bestiary = { creatures = {}, entries = {} }, announce = false }
     end
     db = AzerothFieldbookDB
     db.bestiary = type(db.bestiary) == "table" and db.bestiary or {}
-    if type(db.bestiary.creatures) ~= "table" then db.bestiary.creatures = type(db.creatures) == "table" and db.creatures or {} end
-    if type(db.bestiary.entries) ~= "table" then
-        db.bestiary.entries = type(db.journal) == "table" and type(db.journal.entries) == "table" and db.journal.entries or {}
-    end
-    db.creatures, db.journal = nil, nil
-    db.migrations = type(db.migrations) == "table" and db.migrations or {}
-    if migratedLegacyDatabase then db.migrations.classicBestiaryToAzerothFieldbook = true end
-    ClassicBestiaryObservedDB = nil
+    db.bestiary.creatures = type(db.bestiary.creatures) == "table" and db.bestiary.creatures or {}
+    db.bestiary.entries = type(db.bestiary.entries) == "table" and db.bestiary.entries or {}
     if type(db.creatureAnnouncements) ~= "boolean" then db.creatureAnnouncements = true end
     if db.spellIDTooltipInitialized ~= true then
         db.showSpellIDs, db.spellIDTooltipInitialized = true, true

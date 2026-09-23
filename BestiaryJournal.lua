@@ -1,14 +1,9 @@
 local _, ns = ...
 
 function ns.CreateBestiaryJournal(db, identify)
-    local legacyJournal = type(db.journal) == "table" and db.journal or nil
-    local legacyCreatures = type(db.creatures) == "table" and db.creatures or nil
     db.bestiary = type(db.bestiary) == "table" and db.bestiary or {}
-    if type(db.bestiary.entries) ~= "table" then
-        db.bestiary.entries = legacyJournal and type(legacyJournal.entries) == "table" and legacyJournal.entries or {}
-    end
-    if type(db.bestiary.creatures) ~= "table" then db.bestiary.creatures = legacyCreatures or {} end
-    db.journal, db.creatures = nil, nil
+    db.bestiary.entries = type(db.bestiary.entries) == "table" and db.bestiary.entries or {}
+    db.bestiary.creatures = type(db.bestiary.creatures) == "table" and db.bestiary.creatures or {}
     local journal = { entries = db.bestiary.entries, revision = 0 }
     local seenGUIDs = {}
     local killedGUIDs = {}

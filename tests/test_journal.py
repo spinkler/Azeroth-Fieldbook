@@ -22,7 +22,7 @@ C_Spell = {GetSpellName=function(id) if id==123 then return 'Test Trap' elseif i
     GetSpellLink=function(id) return '|Hspell:'..id..'|h[Test Trap]|h' end,
     GetSpellIDForSpellIdentifier=function(name) if name=='Counterspell' then return 2139 end end,
     GetSpellInfo=function(name) if name=='Counterspell' then return {spellID=2139} end end}
-db = {creatures={[42]={spells={[123]={name='Test Trap'}},names={}}}}
+db = {bestiary={creatures={[42]={spells={[123]={name='Test Trap'}},names={}}},entries={}}}
 function check(v,msg) assert(v,msg) end
 ''')
 root = Path(__file__).resolve().parents[1]
@@ -30,7 +30,7 @@ lua.execute(root.joinpath('BestiaryJournal.lua').read_text(), 'AzerothFieldbook'
 lua.execute(r'''
 journal = ns.CreateBestiaryJournal(db,identify)
 check(journal.entries[42].abilities['Test Trap'].state=='pending','migration requires review')
-check(db.creatures==nil and db.bestiary.creatures[42],'legacy Bestiary storage moves into the section namespace')
+check(db.bestiary.creatures[42],'Bestiary storage uses the section namespace')
 journal:Observe('target')
 check(journal.entries[42].name=='Defias Test' and journal.entries[42].category=='Humanoid' and journal.entries[42].rank=='Elite','identity, creature type and elite rank')
 check(journal.entries[42].levelMin==9 and journal.entries[42].levelMax==9,'observed level')

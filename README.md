@@ -77,17 +77,6 @@ The legacy `/bestiary` command accepts the same arguments.
 Version 0.7.0 stores per-character data in `AzerothFieldbookDB`, with monster
 journal data under its `bestiary` section.
 
-On first load after upgrading, data from the legacy saved variable is moved into
-the new database and section namespace. Creature entries, abilities, notes,
-damage observations, settings and encounter history safeguards are retained. The
-legacy variable is then cleared so subsequent saves use the new database only.
-
-Release packages include a tiny `ClassicBestiary` compatibility bridge beside
-the primary `AzerothFieldbook` folder. WoW stores SavedVariables by addon folder,
-so this bridge makes the previous character data available for the one-time
-migration. It contains no journal UI or gameplay functionality and can be removed
-after every character using the old version has loaded Azeroth Fieldbook once.
-
 The previous binding action IDs remain registered behind the newly branded
 binding labels, preserving assigned keys across the rename.
 

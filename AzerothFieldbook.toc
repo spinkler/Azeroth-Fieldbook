@@ -3,8 +3,7 @@
 ## Notes: A personal monster journal for World of Warcraft.
 ## Author: Spinkler
 ## Version: 0.7.0
-## OptionalDeps: ClassicBestiary
-## SavedVariablesPerCharacter: AzerothFieldbookDB, ClassicBestiaryObservedDB
+## SavedVariablesPerCharacter: AzerothFieldbookDB
 
 BestiaryEncounterReader.lua
 BestiaryJournal.lua

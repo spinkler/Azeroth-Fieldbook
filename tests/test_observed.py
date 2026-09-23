@@ -157,15 +157,12 @@ SlashCmdList.AZEROTHFIELDBOOK('alerts')
 cast('target', 107)
 check(messages[#messages]:find('107'), 'optional discovery message')
 saved = AzerothFieldbookDB
-AzerothFieldbookDB = nil
-ClassicBestiaryObservedDB = saved
 ''')
-# Reload through the one-time legacy SavedVariables migration.
+# Reload through the current SavedVariables database.
 lua.execute(source, 'AzerothFieldbook')
 lua.execute(r'''
 frames[2].handler(frames[2], 'ADDON_LOADED', 'AzerothFieldbook')
-check(AzerothFieldbookDB == saved and ClassicBestiaryObservedDB == nil and count() == 8, 'legacy database migrates without data loss')
-check(AzerothFieldbookDB.migrations.classicBestiaryToAzerothFieldbook,'legacy migration recorded once')
+check(AzerothFieldbookDB == saved and count() == 8, 'current database reloads without data loss')
 SlashCmdList.AZEROTHFIELDBOOK('reset')
 check(count() == 8, 'reset requires explicit command')
 SlashCmdList.AZEROTHFIELDBOOK('wipe confirm all')
@@ -329,10 +326,8 @@ check(count() == 0, 'main reset stops queued reimport')
 toc = Path(__file__).resolve().parents[1].joinpath('AzerothFieldbook.toc').read_text()
 assert 'db.lua' not in toc
 assert '## Title: Azeroth Fieldbook' in toc
-assert '## OptionalDeps: ClassicBestiary' in toc
-assert '## SavedVariablesPerCharacter: AzerothFieldbookDB, ClassicBestiaryObservedDB' in toc
-bridge = Path(__file__).resolve().parents[1].joinpath('Compatibility', 'ClassicBestiary', 'ClassicBestiary.toc').read_text()
-assert '## SavedVariablesPerCharacter: ClassicBestiaryObservedDB' in bridge
+assert '## SavedVariablesPerCharacter: AzerothFieldbookDB' in toc
+assert 'ClassicBestiaryObservedDB' not in toc
 assert 'GetSpellDescription' not in source
 assert 'COMBAT_LOG_EVENT_UNFILTERED' not in source
 assert 'Disabled: Forever marks combat aura payloads as secret' in source
