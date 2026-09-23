@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.3"
+    return "0.6.4"
 end
 
 function ns.CreateBook(journal)
@@ -144,7 +144,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.text:SetText((data.review and "* " or "") .. data.name)
                 local rowSelected = data.id == selected
                 row.highlight:SetShown(rowSelected)
-                row:SetBackdropBorderColor(0.55, 0.36, 0.05, rowSelected and 1 or 0)
+                row:SetBackdropBorderColor(0.95, 0.70, 0.15, rowSelected and 1 or 0)
                 row:Show()
             else row:Hide() end
         end
@@ -418,9 +418,11 @@ local ink = { 0.75, 0.8, 0.8 }
             local row = CreateFrame("Button", nil, book, "BackdropTemplate")
             row:SetPoint("TOPLEFT", 132, -110 - (i-1)*29); row:SetSize(156, 27)
             row:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=8, insets={left=1,right=1,top=1,bottom=1}})
-            row:SetBackdropBorderColor(0.55, 0.36, 0.05, 0)
+            row:SetBackdropBorderColor(0.95, 0.70, 0.15, 0)
             row.highlight = row:CreateTexture(nil, "BACKGROUND")
-            row.highlight:SetAllPoints(); row.highlight:SetColorTexture(0.18,0.10,0.02,0.50)
+            row.highlight:SetPoint("TOPLEFT", 1, -1)
+            row.highlight:SetPoint("BOTTOMRIGHT", -1, 1)
+            row.highlight:SetColorTexture(0.18,0.10,0.02,0.50)
             row.text = label(row, "", 5, -6, 146)
             row.text:SetWordWrap(false)
             row:SetScript("OnClick", function(self) if self.id then choose(self.id) end end)
