@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.1"
+    return "0.6.2"
 end
 
 function ns.CreateBook(journal)
@@ -420,7 +420,7 @@ local ink = { 0.75, 0.8, 0.8 }
             row:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=8, insets={left=1,right=1,top=1,bottom=1}})
             row:SetBackdropBorderColor(0.55, 0.36, 0.05, 0)
             row.highlight = row:CreateTexture(nil, "BACKGROUND")
-            row.highlight:SetAllPoints(); row.highlight:SetColorTexture(0.4,0.23,0.06,0.18)
+            row.highlight:SetAllPoints(); row.highlight:SetColorTexture(0.18,0.10,0.02,0.50)
             row.text = label(row, "", 5, -6, 146)
             row.text:SetWordWrap(false)
             row:SetScript("OnClick", function(self) if self.id then choose(self.id) end end)
@@ -825,7 +825,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
             }
         end
-        button(help,"Reset database",30,-592,160,function()
+        button(help,"Reset database",30,-595,160,function()
             if StaticPopup_Show then StaticPopup_Show("CLASSICBESTIARY_RESET_CONFIRM") end
         end)
         help:SetScript("OnShow",function()
