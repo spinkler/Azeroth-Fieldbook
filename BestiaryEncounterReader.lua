@@ -1,7 +1,7 @@
 -- Only consumes this character's retained combat sessions. No static ability data.
 local _, ns = ...
 
-function ns.CreateEncounterReader(record)
+function ns.CreateBestiaryEncounterReader(record)
     local reader = { status = "Waiting for post-combat data.", scans = 0 }
     local delay, retries = 1, 0
     local ignoredSessions, seenSessions = {}, {}
@@ -41,7 +41,7 @@ function ns.CreateEncounterReader(record)
             ignoreNextSnapshot = true
         end
         delay, retries = nil, 0
-        self.status = "Bestiary cleared; existing meter sessions excluded from future imports."
+        self.status = "Bestiary section cleared; existing meter sessions excluded from future imports."
     end
 
     function reader:Scan()
@@ -204,7 +204,7 @@ function ns.CreateEncounterReader(record)
         end
         self.status = "Last scan: " .. stats.sessions .. " sessions; " .. added .. " new NPC/ability pairs."
         if stats.candidates == 0 then
-            self.status = self.status .. " No spell rows could be attributed safely. See /bestiary encounters."
+            self.status = self.status .. " No spell rows could be attributed safely. See /fieldbook encounters."
         end
     end
 
@@ -223,7 +223,7 @@ function ns.CreateEncounterReader(record)
             self:Schedule()
         elseif event == "DAMAGE_METER_RESET" then
             delay, retries = nil, 0
-            self.status = "Meter history cleared; learned bestiary entries retained."
+            self.status = "Meter history cleared; learned Bestiary entries retained."
         end
     end
 
@@ -239,7 +239,7 @@ function ns.CreateEncounterReader(record)
         say("Imports only readable records in your retained encounters, including attacks on party members.")
         say("Incoming NPC names must match one creature ID in the SAME encounter. Players, pets and ambiguous names are excluded.")
         say("The meter is not a full cast log: buffs, missed/interrupted casts and enemy self-heals may be absent.")
-        say("/bestiary scan retries now outside combat. Scans also retry automatically after combat ends.")
+        say("/fieldbook scan retries now outside combat. Scans also retry automatically after combat ends.")
     end
     return reader
 end

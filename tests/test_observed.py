@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / '.codex-test-deps'))
 from lupa.lua51 import LuaRuntime
 
-source = Path(__file__).resolve().parents[1].joinpath('ClassicBestiary.lua').read_text()
+source = Path(__file__).resolve().parents[1].joinpath('AzerothFieldbook.lua').read_text()
 lua = LuaRuntime(unpack_returned_tuples=True)
 lua.execute(r'''
 clock = 0
@@ -51,7 +51,7 @@ TooltipDataProcessor = {AddTooltipPostCall = function(_, fn) tooltipHook = fn en
 Enum = {TooltipDataType = {Unit = 1}}
 function count()
     local n = 0
-    for _, c in pairs(ClassicBestiaryObservedDB.creatures) do
+    for _, c in pairs(AzerothFieldbookDB.bestiary.creatures) do
         for _ in pairs(c.spells) do n=n+1 end
         for _ in pairs(c.names or {}) do n=n+1 end
     end
@@ -60,13 +60,13 @@ end
 function cast(unit, id, event) fire(event or 'UNIT_SPELLCAST_START', unit, 'cast', id) end
 function check(value, message) assert(value, message) end
 ''')
-lua.execute(source, 'ClassicBestiary')
+lua.execute(source, 'AzerothFieldbook')
 lua.execute(r'''
 -- Preloaded original data must never affect the new database.
 ClassicBestiary = {map = {[42] = {999}}, tip = {}, st = {}}
 fire('ADDON_LOADED', 'OtherAddon')
-check(ClassicBestiaryObservedDB == nil, 'unrelated load')
-fire('ADDON_LOADED', 'ClassicBestiary')
+check(AzerothFieldbookDB == nil, 'unrelated load')
+fire('ADDON_LOADED', 'AzerothFieldbook')
 check(count() == 0, 'empty start')
 tooltipHook(GameTooltip)
 check(#GameTooltip.lines == 0 and #lookups == 0, 'unknown hover leaks nothing')
@@ -153,36 +153,39 @@ check(#GameTooltip.lines == 0, 'no cross-creature leak')
 cast('target', 101)
 check(count() == 7, 'same spell needs independent creature evidence')
 check(#messages == 0, 'alerts default off')
-SlashCmdList.CLASSICBESTIARYOBSERVED('alerts')
+SlashCmdList.AZEROTHFIELDBOOK('alerts')
 cast('target', 107)
 check(messages[#messages]:find('107'), 'optional discovery message')
-saved = ClassicBestiaryObservedDB
+saved = AzerothFieldbookDB
+AzerothFieldbookDB = nil
+ClassicBestiaryObservedDB = saved
 ''')
-# Reload addon with the same character data; a different character has no variable.
-lua.execute(source, 'ClassicBestiary')
+# Reload through the one-time legacy SavedVariables migration.
+lua.execute(source, 'AzerothFieldbook')
 lua.execute(r'''
-frames[2].handler(frames[2], 'ADDON_LOADED', 'ClassicBestiary')
-check(ClassicBestiaryObservedDB == saved and count() == 8, 'reload preserves data')
-SlashCmdList.CLASSICBESTIARYOBSERVED('reset')
+frames[2].handler(frames[2], 'ADDON_LOADED', 'AzerothFieldbook')
+check(AzerothFieldbookDB == saved and ClassicBestiaryObservedDB == nil and count() == 8, 'legacy database migrates without data loss')
+check(AzerothFieldbookDB.migrations.classicBestiaryToAzerothFieldbook,'legacy migration recorded once')
+SlashCmdList.AZEROTHFIELDBOOK('reset')
 check(count() == 8, 'reset requires explicit command')
-SlashCmdList.CLASSICBESTIARYOBSERVED('wipe confirm all')
+SlashCmdList.AZEROTHFIELDBOOK('wipe confirm all')
 check(count() == 8, 'cannot skip confirmation one')
-SlashCmdList.CLASSICBESTIARYOBSERVED('wipe')
-SlashCmdList.CLASSICBESTIARYOBSERVED('wipe cancel')
-SlashCmdList.CLASSICBESTIARYOBSERVED('wipe confirm')
+SlashCmdList.AZEROTHFIELDBOOK('wipe')
+SlashCmdList.AZEROTHFIELDBOOK('wipe cancel')
+SlashCmdList.AZEROTHFIELDBOOK('wipe confirm')
 check(count() == 8, 'cancel disarms confirmation')
-SlashCmdList.CLASSICBESTIARYOBSERVED('wipe')
+SlashCmdList.AZEROTHFIELDBOOK('wipe')
 clock = 61
-SlashCmdList.CLASSICBESTIARYOBSERVED('wipe confirm')
+SlashCmdList.AZEROTHFIELDBOOK('wipe confirm')
 check(count() == 8, 'confirmation expires')
-SlashCmdList.CLASSICBESTIARYOBSERVED('wipe')
-SlashCmdList.CLASSICBESTIARYOBSERVED('  WIPE   CONFIRM  ')
+SlashCmdList.AZEROTHFIELDBOOK('wipe')
+SlashCmdList.AZEROTHFIELDBOOK('  WIPE   CONFIRM  ')
 check(messages[#messages]:find('has been wiped', 1, true), 'second command completes wipe with extra spaces')
 check(count() == 0, 'reset clears')
-ClassicBestiaryObservedDB = nil
+AzerothFieldbookDB = nil
 ''')
-lua.execute(source, 'ClassicBestiary')
-lua.execute("frames[3].handler(frames[3], 'ADDON_LOADED', 'ClassicBestiary'); check(count() == 0, 'new character empty')")
+lua.execute(source, 'AzerothFieldbook')
+lua.execute("frames[3].handler(frames[3], 'ADDON_LOADED', 'AzerothFieldbook'); check(count() == 0, 'new character empty')")
 lua.execute(r'''
 alias = 'nameplate7'
 frames[3].handler(frames[3], 'UNIT_SPELLCAST_SUCCEEDED', alias, 'cast', 201)
@@ -197,7 +200,7 @@ check(count() == 2, 'ongoing cast detected without start event')
 castName, castID = secret, secret
 frames[3].OnUpdate(frames[3], 0.2)
 check(count() == 2, 'poll cannot learn restricted cast')
-SlashCmdList.CLASSICBESTIARYOBSERVED('debug')
+SlashCmdList.AZEROTHFIELDBOOK('debug')
 local found = false
 for _, m in ipairs(messages) do if m:find('name SECRET; ID SECRET', 1, true) then found = true end end
 check(found, 'restricted cast diagnostic')
@@ -245,7 +248,7 @@ channelName, channelID = nil, nil
 local oldCasting = UnitCastingInfo
 local function debugOutput()
     messages = {}
-    SlashCmdList.CLASSICBESTIARYOBSERVED('debug')
+    SlashCmdList.AZEROTHFIELDBOOK('debug')
     return table.concat(messages, '\n')
 end
 UnitCastingInfo = function() error('DO_NOT_PRINT_UNSEEN_SPELL') end
@@ -289,11 +292,11 @@ check(count() == 4, 'diagnostic failures cannot add abilities')
 ''')
 # Exercise real TOC order and encounter -> SavedVariables -> tooltip integration.
 namespace = lua.table()
-lua.execute(Path(__file__).resolve().parents[1].joinpath('EncounterReader.lua').read_text(), 'ClassicBestiary', namespace)
-lua.execute(source, 'ClassicBestiary', namespace)
+lua.execute(Path(__file__).resolve().parents[1].joinpath('BestiaryEncounterReader.lua').read_text(), 'AzerothFieldbook', namespace)
+lua.execute(source, 'AzerothFieldbook', namespace)
 lua.execute(r'''
-ClassicBestiaryObservedDB = nil
-frames[4].handler(frames[4], 'ADDON_LOADED', 'ClassicBestiary')
+AzerothFieldbookDB = nil
+frames[4].handler(frames[4], 'ADDON_LOADED', 'AzerothFieldbook')
 function InCombatLockdown() return false end
 function UnitAffectingCombat() return false end
 Enum.DamageMeterType = {DamageDone=0, HealingDone=2, DamageTaken=7, EnemyDamageTaken=10}
@@ -313,34 +316,38 @@ C_DamageMeter = {
 castName, castID = nil, nil
 frames[4].handler(frames[4], 'PLAYER_REGEN_ENABLED')
 frames[4].OnUpdate(frames[4], 1.1)
-check(ClassicBestiaryObservedDB.creatures[42].spells[601].name == 'Test ability 601', 'encounter result persisted in main DB')
+check(AzerothFieldbookDB.bestiary.creatures[42].spells[601].name == 'Test ability 601', 'encounter result persisted in Bestiary section')
 guid = 'Creature-0-1-2-3-42-000001'
 GameTooltip.lines = {}
 tooltipHook(GameTooltip)
 check(GameTooltip.lines[2] == 'Test ability 601', 'encounter result rendered in tooltip')
-SlashCmdList.CLASSICBESTIARYOBSERVED('wipe')
-SlashCmdList.CLASSICBESTIARYOBSERVED('wipe confirm')
+SlashCmdList.AZEROTHFIELDBOOK('wipe')
+SlashCmdList.AZEROTHFIELDBOOK('wipe confirm')
 frames[4].OnUpdate(frames[4], 4)
 check(count() == 0, 'main reset stops queued reimport')
 ''')
-toc = Path(__file__).resolve().parents[1].joinpath('ClassicBestiary.toc').read_text()
+toc = Path(__file__).resolve().parents[1].joinpath('AzerothFieldbook.toc').read_text()
 assert 'db.lua' not in toc
-assert '## SavedVariablesPerCharacter: ClassicBestiaryObservedDB' in toc
+assert '## Title: Azeroth Fieldbook' in toc
+assert '## OptionalDeps: ClassicBestiary' in toc
+assert '## SavedVariablesPerCharacter: AzerothFieldbookDB, ClassicBestiaryObservedDB' in toc
+bridge = Path(__file__).resolve().parents[1].joinpath('Compatibility', 'ClassicBestiary', 'ClassicBestiary.toc').read_text()
+assert '## SavedVariablesPerCharacter: ClassicBestiaryObservedDB' in bridge
 assert 'GetSpellDescription' not in source
 assert 'COMBAT_LOG_EVENT_UNFILTERED' not in source
 assert 'Disabled: Forever marks combat aura payloads as secret' in source
 book_namespace = lua.table()
-lua.execute(Path(__file__).resolve().parents[1].joinpath('Journal.lua').read_text(), 'ClassicBestiary', book_namespace)
-lua.execute(source, 'ClassicBestiary', book_namespace)
+lua.execute(Path(__file__).resolve().parents[1].joinpath('BestiaryJournal.lua').read_text(), 'AzerothFieldbook', book_namespace)
+lua.execute(source, 'AzerothFieldbook', book_namespace)
 lua.execute(r'''
-ClassicBestiaryObservedDB = nil
+AzerothFieldbookDB = nil
 function UnitName() return 'Test humanoid' end
 function UnitCreatureType() return 'Humanoid' end
 function UnitLevel() return 9 end
-frames[5].handler(frames[5], 'ADDON_LOADED', 'ClassicBestiary')
+frames[5].handler(frames[5], 'ADDON_LOADED', 'AzerothFieldbook')
 castName, castID = 'Observed trap', nil
 frames[5].handler(frames[5], 'PLAYER_TARGET_CHANGED')
-local entry=ClassicBestiaryObservedDB.journal.entries[42]
+local entry=AzerothFieldbookDB.bestiary.entries[42]
 check(entry.category=='Humanoid' and entry.levelMin==9,'main records creature metadata')
 dead=true; frames[5].handler(frames[5], 'UNIT_HEALTH', 'target'); frames[5].handler(frames[5], 'UNIT_HEALTH', 'target')
 check(entry.kills==1,'observed creature death increments kill counter once per GUID')
@@ -348,7 +355,7 @@ dead=false
 GameTooltip.lines={}; tooltipHook(GameTooltip)
 check(#GameTooltip.lines==0,'journal review gates tooltip')
 entry.confirmed=true; entry.abilities['Observed trap'].state='confirmed'
-ClassicBestiaryObservedDB.creatures={}
+AzerothFieldbookDB.bestiary.creatures={}
 GameTooltip.lines={}; tooltipHook(GameTooltip)
 check(GameTooltip.lines[2]=='Observed trap','manual journal abilities work without automatic DB')
 guid='Player-1-42'; GameTooltip.lines={}; tooltipHook(GameTooltip)

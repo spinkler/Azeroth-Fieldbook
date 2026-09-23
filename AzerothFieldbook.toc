@@ -1,0 +1,12 @@
+## Interface: 16001
+## Title: Azeroth Fieldbook
+## Notes: A personal monster journal for World of Warcraft.
+## Author: Spinkler
+## Version: 0.7.0
+## OptionalDeps: ClassicBestiary
+## SavedVariablesPerCharacter: AzerothFieldbookDB, ClassicBestiaryObservedDB
+
+BestiaryEncounterReader.lua
+BestiaryJournal.lua
+BestiaryBook.lua
+AzerothFieldbook.lua

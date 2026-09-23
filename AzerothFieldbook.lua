@@ -1,5 +1,5 @@
--- Observation-only reimplementation of ClassicBestiary for Forever 1.60.1.
--- Original tooltip concept: Urbit @ Benediction / icheatatlan/ClassicBestiary.
+-- Azeroth Fieldbook Bestiary section for Forever 1.60.1.
+-- Original monster-tooltip concept by Urbit @ Benediction.
 -- No bundled spell list, descriptions, or shared player data.
 local addonName, ns = ...
 ns = ns or {}
@@ -90,7 +90,7 @@ end
 
 local function say(message)
     if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffBestiary:|r " .. message)
+        DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAzeroth Fieldbook:|r " .. message)
     end
 end
 
@@ -156,10 +156,10 @@ local function storeObserved(id, spellID, observedName)
     local name = hasName and observedName or spellName(spellID)
     if not name then diagnostics.last = "Observed spell name unavailable."; return end
     if journal then journal:Offer(id, name, "Automatic observation", spellID) end
-    local creature = db.creatures[id]
+    local creature = db.bestiary.creatures[id]
     if not creature then
         creature = { spells = {} }
-        db.creatures[id] = creature
+        db.bestiary.creatures[id] = creature
     end
     -- A directly observed, public cast name is sufficient evidence. Never guess
     -- a hidden ID by searching spell data. No secret values enter SavedVariables.
@@ -237,11 +237,11 @@ local function addTooltip(tooltip)
     if not publicString(unit) then tooltipStatus = "GetUnit token: " .. valueState(unit) .. "."; return end
     local id, reason = npcID(unit)
     if not id then tooltipStatus = reason; return end
-    local creature = id and db.creatures[id]
+    local creature = id and db.bestiary.creatures[id]
     if journal then
         local names = journal:ConfirmedNames(id)
-        if #names == 0 then tooltipStatus = "No confirmed abilities: review this entry in /bestiary book."; return end
-        tooltip:AddLine("Bestiary - confirmed abilities", 0.5, 0.82, 1)
+        if #names == 0 then tooltipStatus = "No confirmed abilities: review this entry in /fieldbook."; return end
+        tooltip:AddLine("Azeroth Fieldbook - Bestiary", 0.5, 0.82, 1)
         for _, name in ipairs(names) do tooltip:AddLine(name, 1, 1, 1, true) end
         tooltipStatus = "Added " .. #names .. " confirmed ability names."
         return
@@ -280,12 +280,25 @@ local function addSpellIDTooltip(tooltip, tooltipData)
 end
 
 local function initialize()
-    -- Distinct saved-variable name; never import the original scraped database.
-    if type(ClassicBestiaryObservedDB) ~= "table" or ClassicBestiaryObservedDB.version ~= 1 then
-        ClassicBestiaryObservedDB = { version = 1, creatures = {}, announce = false }
+    local migratedLegacyDatabase = false
+    if type(AzerothFieldbookDB) ~= "table" or AzerothFieldbookDB.version ~= 1 then
+        if type(ClassicBestiaryObservedDB) == "table" and ClassicBestiaryObservedDB.version == 1 then
+            AzerothFieldbookDB = ClassicBestiaryObservedDB
+            migratedLegacyDatabase = true
+        else
+            AzerothFieldbookDB = { version = 1, bestiary = { creatures = {}, entries = {} }, announce = false }
+        end
     end
-    db = ClassicBestiaryObservedDB
-    if type(db.creatures) ~= "table" then db.creatures = {} end
+    db = AzerothFieldbookDB
+    db.bestiary = type(db.bestiary) == "table" and db.bestiary or {}
+    if type(db.bestiary.creatures) ~= "table" then db.bestiary.creatures = type(db.creatures) == "table" and db.creatures or {} end
+    if type(db.bestiary.entries) ~= "table" then
+        db.bestiary.entries = type(db.journal) == "table" and type(db.journal.entries) == "table" and db.journal.entries or {}
+    end
+    db.creatures, db.journal = nil, nil
+    db.migrations = type(db.migrations) == "table" and db.migrations or {}
+    if migratedLegacyDatabase then db.migrations.classicBestiaryToAzerothFieldbook = true end
+    ClassicBestiaryObservedDB = nil
     if type(db.creatureAnnouncements) ~= "boolean" then db.creatureAnnouncements = true end
     if db.spellIDTooltipInitialized ~= true then
         db.showSpellIDs, db.spellIDTooltipInitialized = true, true
@@ -294,9 +307,9 @@ local function initialize()
         db.showSpellIDs = true
     end
     -- Discard malformed saved entries rather than trying to infer missing data.
-    for id, creature in pairs(db.creatures) do
+    for id, creature in pairs(db.bestiary.creatures) do
         if not positiveID(id) or type(creature) ~= "table" or type(creature.spells) ~= "table" then
-            db.creatures[id] = nil
+            db.bestiary.creatures[id] = nil
         elseif type(creature.names) ~= "table" then
             creature.names = {}
         end
@@ -309,7 +322,7 @@ local function initialize()
     elseif GameTooltip and GameTooltip:HasScript("OnTooltipSetUnit") then
         GameTooltip:HookScript("OnTooltipSetUnit", addTooltip)
     end
-    if ns.CreateJournal then journal = ns.CreateJournal(db, watchedEnemy) end
+    if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy) end
     if journal then
         journal:SetEntryAddedCallback(function(entry)
             if journal:GetCreatureAnnouncement() then
@@ -317,8 +330,8 @@ local function initialize()
             end
         end)
     end
-    if journal and ns.CreateBook then book = ns.CreateBook(journal) end
-    if ns.CreateEncounterReader then encounters = ns.CreateEncounterReader(storeObserved) end
+    if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal) end
+    if ns.CreateBestiaryEncounterReader then encounters = ns.CreateBestiaryEncounterReader(storeObserved) end
     if encounters and db.ignoreEncounterHistory then encounters:ForgetHistory() end
 end
 
@@ -328,15 +341,15 @@ local function remindAboutUnboundBookKey()
     bindingReminderShown = true
     local primary, secondary = GetBindingKey("CLASSICBESTIARY_BOOK")
     if not primary and not secondary then
-        say("The Bestiary book has no keybinding. Bind it in Options > Keybindings.")
+        say("The Azeroth Fieldbook Bestiary has no keybinding. Bind it in Options > Keybindings.")
     end
 end
 
-function ClassicBestiaryToggleBook()
+function AzerothFieldbookToggleBestiary()
     if book then book:Toggle() end
 end
 
-function ClassicBestiaryOpenMouseoverBook()
+function AzerothFieldbookOpenMouseoverBestiary()
     if book then book:OpenAtUnit("mouseover") end
 end
 
@@ -405,21 +418,22 @@ for _, event in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_TARGET_CHANGED"
     frame:RegisterEvent(event)
 end
 
-SLASH_CLASSICBESTIARYOBSERVED1 = "/bestiary"
-SlashCmdList.CLASSICBESTIARYOBSERVED = function(message)
+SLASH_AZEROTHFIELDBOOK1 = "/fieldbook"
+SLASH_AZEROTHFIELDBOOK2 = "/bestiary"
+SlashCmdList.AZEROTHFIELDBOOK = function(message)
     if not db then return end
     local command = message:lower():match("^%s*(.-)%s*$"):gsub("%s+", " ")
     if command == "wipe" or command == "reset" or command == "reset confirm" then
         wipeDeadline = GetTime() + 60
-        say("WARNING: wipe permanently deletes ALL of this character's bestiary entries, abilities, notes, damage records and settings.")
-        say("Command 1/2 accepted. Type /bestiary wipe confirm within 60 seconds to permanently delete it.")
+        say("WARNING: wipe permanently deletes ALL of this character's Bestiary entries, abilities, notes, damage records and settings.")
+        say("Command 1/2 accepted. Type /fieldbook wipe confirm within 60 seconds to permanently delete it.")
     elseif command == "wipe confirm" then
         if wipeDeadline == 0 or GetTime() > wipeDeadline then
-            wipeDeadline = 0; say("No active wipe request. Start with /bestiary wipe."); return
+            wipeDeadline = 0; say("No active wipe request. Start with /fieldbook wipe."); return
         end
         wipeDeadline = 0
         for key in pairs(db) do db[key] = nil end
-        db.version, db.creatures, db.announce, db.creatureAnnouncements = 1, {}, false, true
+        db.version, db.bestiary, db.announce, db.creatureAnnouncements = 1, { creatures = {}, entries = {} }, false, true
         db.showSpellIDs, db.spellIDTooltipInitialized = true, true
         if type(SetCVar) == "function" then pcall(SetCVar, "tooltipShowAuraSpellIDs", "1") end
         -- Prevent retained meter history from silently restoring wiped knowledge
@@ -429,7 +443,7 @@ SlashCmdList.CLASSICBESTIARYOBSERVED = function(message)
         if encounters then encounters:ForgetHistory() end
         if book then book:Refresh() end
         afterWipeHold = true
-        say("This character's entire bestiary has been wiped. Retarget an NPC to begin again.")
+        say("This character's Azeroth Fieldbook Bestiary has been wiped. Retarget an NPC to begin again.")
     elseif command == "wipe cancel" then
         wipeDeadline = 0
         say("Wipe cancelled. Nothing deleted.")
@@ -445,7 +459,7 @@ SlashCmdList.CLASSICBESTIARYOBSERVED = function(message)
         say("Last cast check: " .. diagnostics.last)
         say("Events matched to target/mouseover: " .. matchedEvents .. ". All-event count includes unrelated units.")
         say("Last tooltip: " .. tooltipStatus)
-        if encounters then say("Encounter learning: " .. encounters.status .. " (/bestiary encounters for details)") end
+        if encounters then say("Encounter learning: " .. encounters.status .. " (/fieldbook encounters for details)") end
         for _, unit in ipairs({ "target", "mouseover" }) do
             local id, reason = watchedEnemy(unit)
             say(unit .. ": " .. (id and "eligible NPC" or reason))
@@ -472,7 +486,7 @@ SlashCmdList.CLASSICBESTIARYOBSERVED = function(message)
         say(db.announce and "Discovery messages on." or "Discovery messages off.")
     else
         local creatures, spells = 0, 0
-        for _, creature in pairs(db.creatures) do
+        for _, creature in pairs(db.bestiary.creatures) do
             creatures = creatures + 1
             for _ in pairs(creature.spells) do spells = spells + 1 end
             for _ in pairs(creature.names or {}) do spells = spells + 1 end
@@ -481,8 +495,8 @@ SlashCmdList.CLASSICBESTIARYOBSERVED = function(message)
         say("Learns from direct NPC casts and readable post-combat records, including party encounters.")
         if encounters then say("Encounter learning: " .. encounters.status) end
         say("Unreadable spell IDs this session: " .. skipped .. " (readable active cast names can still be learned).")
-        say("/bestiary debug explains discovery checks (no hidden spell data).")
-        say("/bestiary alerts toggles discovery messages; /bestiary wipe starts the double-confirmed wipe.")
-        say("/bestiary book opens the field guide; confirm entries and add your own ability notes there.")
+        say("/fieldbook debug explains discovery checks (no hidden spell data).")
+        say("/fieldbook alerts toggles discovery messages; /fieldbook wipe starts the double-confirmed wipe.")
+        say("/fieldbook opens the Azeroth Fieldbook Bestiary; confirm entries and add your own ability notes there.")
     end
 end

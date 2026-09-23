@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Azeroth Fieldbook - Legacy Data Migration
+## Notes: Loads the previous Bestiary saved variable for one-time migration into Azeroth Fieldbook.
+## Author: Spinkler
+## Version: 0.7.0
+## SavedVariablesPerCharacter: ClassicBestiaryObservedDB
+
+MigrationBridge.lua

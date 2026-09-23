@@ -1,6 +1,6 @@
 local addonName, ns = ...
-BINDING_NAME_CLASSICBESTIARY_BOOK = "Open / close bestiary book"
-BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK = "Open bestiary at mouseover"
+BINDING_NAME_CLASSICBESTIARY_BOOK = "Open / close Azeroth Fieldbook Bestiary"
+BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK = "Open Azeroth Fieldbook Bestiary at mouseover"
 local effectGroups = {
     { "Control", { "Stun", "Root/Immobilize", "Slow/Snare", "Daze", "Fear", "Horror", "Disorient", "Sleep/Incapacitate", "Polymorph/Transform", "Charm/Possession", "Banish", "Knockback/Pull", "Disarm", "Silence" } },
     { "Combat", { "Interrupt", "School Lockout", "Damage over Time", "Heal over Time", "Shield/Absorb", "Damage Reduction", "Damage Vulnerability", "Enrage", "Immunity/Invulnerability" } },
@@ -15,7 +15,7 @@ local function addonVersion()
     return "0.7.0"
 end
 
-function ns.CreateBook(journal)
+function ns.CreateBestiaryBook(journal)
     local book, selected, offset, abilityOffset = nil, nil, 0, 0
     local noteOffset, refreshDamageNotes = 0, nil
     local category, initial, reviewOnly = nil, nil, false
@@ -277,7 +277,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.damageScroll:EnableMouseWheel(scrollable)
     end
     local function build()
-        book = CreateFrame("Frame", "ClassicBestiaryBook", UIParent, "BackdropTemplate")
+        book = CreateFrame("Frame", "AzerothFieldbookBestiary", UIParent, "BackdropTemplate")
         book:SetSize(960, 740)
         book:SetPoint("CENTER")
         book:SetFrameStrata("HIGH")
@@ -324,7 +324,7 @@ local ink = { 0.75, 0.8, 0.8 }
         page:SetTexture("Interface\\QuestFrame\\QuestBG")
         -- This high-resolution sheet matches the book's aspect closely and is
         -- downscaled slightly, avoiding both tiled seams and enlarged pixels.
-        page:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+        page:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         page:SetHorizTile(false)
         page:SetVertTile(false)
         page:SetTexCoord(0, 1, 0, 1)
@@ -428,7 +428,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.windowTitle:SetPoint("CENTER",book,"TOP",0,-15)
         book.windowTitle:SetWidth(700)
         book.windowTitle:SetJustifyH("CENTER"); book.windowTitle:SetTextColor(1.00,0.82,0.14)
-        book.windowTitle:SetText("The Bestiary - v" .. addonVersion())
+        book.windowTitle:SetText("Azeroth Fieldbook - Bestiary - v" .. addonVersion())
         book.closeButton=CreateFrame("Button",nil,book.titleBar,"UIPanelCloseButton")
         book.closeButton:SetPoint("RIGHT",4,0); book.closeButton:SetSize(24,24); book.closeButton:SetScript("OnClick",function() book:Hide() end)
         book.helpButton=CreateFrame("Button",nil,book.titleBar,"UIPanelCloseButton")
@@ -730,7 +730,7 @@ local ink = { 0.75, 0.8, 0.8 }
         effectPicker:SetScript("OnHide",function(self) self:StopMovingOrSizing() end)
         local effectPaper=effectPicker:CreateTexture(nil,"BACKGROUND",nil,1)
         effectPaper:SetPoint("TOPLEFT",effectPicker,"TOPLEFT",6,-6); effectPaper:SetPoint("BOTTOMRIGHT",effectPicker,"BOTTOMRIGHT",-6,6)
-        effectPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+        effectPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         effectPaper:SetTexCoord(0,1,0,1)
         addBackgroundLayer(effectPaper, 0.504,0.504,0.48888)
         label(effectPicker,"Effects",25,-25,350,"GameFontNormalLarge")
@@ -784,7 +784,7 @@ local ink = { 0.75, 0.8, 0.8 }
             picker:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
             local paper=picker:CreateTexture(nil,"BACKGROUND",nil,1)
             paper:SetPoint("TOPLEFT",picker,"TOPLEFT",6,-6); paper:SetPoint("BOTTOMRIGHT",picker,"BOTTOMRIGHT",-6,6)
-            paper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+            paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
             paper:SetTexCoord(0,1,0,1)
             addBackgroundLayer(paper,0.504,0.504,0.48888)
             label(picker,title,25,-25,width-155,"GameFontNormalLarge")
@@ -794,7 +794,7 @@ local ink = { 0.75, 0.8, 0.8 }
             return picker
         end
 
-        local offensePicker=createObservationPicker("ClassicBestiaryOffenses","Observed offenses","Select every magic school this creature has been observed casting.",480,250)
+        local offensePicker=createObservationPicker("AzerothFieldbookBestiaryOffenses","Observed offenses","Select every magic school this creature has been observed casting.",480,250)
         offensePicker.schoolButtons={}
         local refreshOffensePicker
         for i,school in ipairs(magicSchools) do
@@ -821,7 +821,7 @@ local ink = { 0.75, 0.8, 0.8 }
         offensePicker:HookScript("OnShow",refreshOffensePicker)
         offensePicker:Hide(); book.offensePicker=offensePicker; book.refreshOffensePicker=refreshOffensePicker
 
-        local defensePicker=createObservationPicker("ClassicBestiaryDefenses","Observed defenses","Mark each magic school as resistant, immune, or both when personally observed.",540,335)
+        local defensePicker=createObservationPicker("AzerothFieldbookBestiaryDefenses","Observed defenses","Mark each magic school as resistant, immune, or both when personally observed.",540,335)
         label(defensePicker,"Magic school",35,-88,180,"GameFontHighlightSmall")
         label(defensePicker,"Resistant",285,-88,90,"GameFontHighlightSmall")
         label(defensePicker,"Immune",415,-88,80,"GameFontHighlightSmall")
@@ -850,7 +850,7 @@ local ink = { 0.75, 0.8, 0.8 }
         defensePicker:HookScript("OnShow",refreshDefensePicker)
         defensePicker:Hide(); book.defensePicker=defensePicker; book.refreshDefensePicker=refreshDefensePicker
 
-        local behaviourPicker=createObservationPicker("ClassicBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen from this creature.",540,430)
+        local behaviourPicker=createObservationPicker("AzerothFieldbookBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen from this creature.",540,430)
         local behaviourGroups={
             { "Disposition", { "Hostile", "Neutral" } },
             { "Combat style", { "Melee", "Ranged", "Caster" } },
@@ -894,7 +894,7 @@ local ink = { 0.75, 0.8, 0.8 }
         -- background strips between the paper and the ornamental border.
         formPaper:SetPoint("TOPLEFT",form,"TOPLEFT",6,-6)
         formPaper:SetPoint("BOTTOMRIGHT",form,"BOTTOMRIGHT",-6,6)
-        formPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+        formPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         formPaper:SetTexCoord(0,1,0,1)
         addBackgroundLayer(formPaper, 0.504,0.504,0.48888)
         form:EnableMouse(true)
@@ -935,7 +935,7 @@ local ink = { 0.75, 0.8, 0.8 }
             selectedLevel=entry and entry.levelMin or nil
             if UIDropDownMenu_SetText then UIDropDownMenu_SetText(level,selectedLevel and tostring(selectedLevel) or "No observed level") end
         end)
-        local notesForm=CreateFrame("Frame","ClassicBestiaryDamageNotes",book,"BackdropTemplate")
+        local notesForm=CreateFrame("Frame","AzerothFieldbookBestiaryDamageNotes",book,"BackdropTemplate")
         notesForm:SetSize(500,330); notesForm:SetPoint("CENTER"); notesForm:SetFrameStrata("FULLSCREEN_DIALOG"); notesForm:SetFrameLevel(101)
         notesForm:SetClampedToScreen(true)
         notesForm:SetMovable(true); notesForm:EnableMouse(true); notesForm:RegisterForDrag("LeftButton")
@@ -944,7 +944,7 @@ local ink = { 0.75, 0.8, 0.8 }
         notesForm:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         local notesPaper=notesForm:CreateTexture(nil,"BACKGROUND",nil,1)
         notesPaper:SetPoint("TOPLEFT",notesForm,"TOPLEFT",6,-6); notesPaper:SetPoint("BOTTOMRIGHT",notesForm,"BOTTOMRIGHT",-6,6)
-        notesPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+        notesPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         notesPaper:SetTexCoord(0,1,0,1)
         addBackgroundLayer(notesPaper, 0.504,0.504,0.48888)
         notesForm.title=label(notesForm,"Damage observations",24,-25,400,"GameFontNormalLarge")
@@ -984,7 +984,7 @@ local ink = { 0.75, 0.8, 0.8 }
         notesForm:SetScript("OnHide",function(self) self:StopMovingOrSizing() end)
         notesForm:Hide(); book.notesForm=notesForm
 
-        local locationFrame=CreateFrame("Frame","ClassicBestiaryLocations",UIParent,"BackdropTemplate")
+        local locationFrame=CreateFrame("Frame","AzerothFieldbookBestiaryLocations",UIParent,"BackdropTemplate")
         locationFrame:SetSize(440,460); locationFrame:SetPoint("CENTER"); locationFrame:SetFrameStrata("FULLSCREEN_DIALOG"); locationFrame:SetClampedToScreen(true)
         locationFrame:SetMovable(true); locationFrame:EnableMouse(true); locationFrame:RegisterForDrag("LeftButton")
         locationFrame:SetScript("OnDragStart",function(self) self:StartMoving() end)
@@ -993,7 +993,7 @@ local ink = { 0.75, 0.8, 0.8 }
         local locationPaper=locationFrame:CreateTexture(nil,"BACKGROUND",nil,1)
         locationPaper:SetPoint("TOPLEFT",locationFrame,"TOPLEFT",6,-6)
         locationPaper:SetPoint("BOTTOMRIGHT",locationFrame,"BOTTOMRIGHT",-6,6)
-        locationPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+        locationPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         locationPaper:SetTexCoord(0,1,0,1)
         addBackgroundLayer(locationPaper,0.504,0.504,0.48888)
         label(locationFrame,"FILTER BY LOCATIONS",28,-28,360,"GameFontNormalLarge")
@@ -1044,8 +1044,8 @@ local ink = { 0.75, 0.8, 0.8 }
         locationFrame:SetScript("OnHide",function(self) self:StopMovingOrSizing() end)
         locationFrame:Hide(); book.locationFrame=locationFrame
 
-        local help=CreateFrame("Frame","ClassicBestiaryHelp",UIParent,"BackdropTemplate")
-        help:SetSize(610,640); help:SetPoint("CENTER"); help:SetFrameStrata("FULLSCREEN_DIALOG"); help:SetClampedToScreen(true)
+        local help=CreateFrame("Frame","AzerothFieldbookHelp",UIParent,"BackdropTemplate")
+        help:SetSize(610,735); help:SetPoint("CENTER"); help:SetFrameStrata("FULLSCREEN_DIALOG"); help:SetClampedToScreen(true)
         help:SetMovable(true); help:EnableMouse(true); help:RegisterForDrag("LeftButton")
         help:SetScript("OnDragStart",function(self) self:StartMoving() end)
         help:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
@@ -1053,21 +1053,23 @@ local ink = { 0.75, 0.8, 0.8 }
         local helpPaper=help:CreateTexture(nil,"BACKGROUND",nil,1)
         helpPaper:SetPoint("TOPLEFT",help,"TOPLEFT",6,-6)
         helpPaper:SetPoint("BOTTOMRIGHT",help,"BOTTOMRIGHT",-6,6)
-        helpPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+        helpPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         helpPaper:SetTexCoord(0,1,0,1); addBackgroundLayer(helpPaper, 0.504,0.504,0.48888)
-        label(help,"HOW TO USE THE BESTIARY",30,-30,500,"GameFontNormalLarge")
-        label(help,"1. Encounter\nTarget or mouse over an attackable NPC. Its name, creature type and observed level range are added without revealing unseen abilities.\n\n2. Record\nReadable casts and safe post-combat records become pending field notes. Add hidden traps or other missing abilities manually only after experiencing them. Equal-level hit ranges are manual observations because Forever blocks per-hit combat-log data.\n\n3. Review\nOpen the book, select the creature and review each ability. Confirm accurate observations, reject doubtful ones, or remove rejected notes.\n\n4. Lock in\nLock the creature entry when you are satisfied. Only confirmed abilities from locked entries appear in NPC tooltips. Unlocking hides them again without deleting your notes.\n\n5. Browse\nUse creature-type buttons, search, A-Z tabs and the Index reset to navigate a large journal. All knowledge remains per character and comes from your own encounters.\n\n6. Reset\nTo permanently erase the Bestiary, type /bestiary wipe, then /bestiary wipe confirm within 60 seconds.",35,-75,535)
+        label(help,"AZEROTH FIELDBOOK - BESTIARY",30,-30,500,"GameFontNormalLarge")
+        label(help,"1. Encounter\nTarget or mouse over an attackable NPC. Its name, creature type and observed level range are added without revealing unseen abilities.\n\n2. Record\nReadable casts and safe post-combat records become pending field notes. Add hidden traps or other missing abilities manually only after experiencing them. Equal-level hit ranges are manual observations because Forever blocks per-hit combat-log data.\n\n3. Review\nOpen the Bestiary, select the creature and review each ability. Confirm accurate observations, reject doubtful ones, or remove rejected notes.\n\n4. Lock in\nLock the creature entry when you are satisfied. Only confirmed abilities from locked entries appear in NPC tooltips. Unlocking hides them again without deleting your notes.\n\n5. Browse\nUse creature-type buttons, search, A-Z tabs and the Index reset to navigate the Bestiary. All knowledge remains per character and comes from your own encounters.\n\n6. Reset\nTo permanently erase the Bestiary section, type /fieldbook wipe, then /fieldbook wipe confirm within 60 seconds.",35,-75,535)
+        label(help,"ABOUT",35,-472,120,"GameFontNormal")
+        label(help,"Created by Spinkler\n\nDeveloped with AI-assisted coding tools.\nDesign, direction, testing and final development decisions by the author.",35,-494,535,"GameFontHighlightSmall")
         help.creatureAnnouncement=CreateFrame("CheckButton",nil,help,"UICheckButtonTemplate")
-        help.creatureAnnouncement:SetPoint("TOPLEFT",30,-478); help.creatureAnnouncement:SetSize(24,24)
-        label(help,"Show a chat message when a new creature entry is added",58,-484,460,"GameFontHighlightSmall")
+        help.creatureAnnouncement:SetPoint("TOPLEFT",30,-565); help.creatureAnnouncement:SetSize(24,24)
+        label(help,"Show a chat message when a new creature entry is added",58,-571,460,"GameFontHighlightSmall")
         help.creatureAnnouncement:SetScript("OnClick",function(self) journal:SetCreatureAnnouncement(self:GetChecked() == true) end)
         help.spellIDTooltips=CreateFrame("CheckButton",nil,help,"UICheckButtonTemplate")
-        help.spellIDTooltips:SetPoint("TOPLEFT",30,-510); help.spellIDTooltips:SetSize(24,24)
-        label(help,"Show aura spell IDs on tooltips",58,-516,460,"GameFontHighlightSmall")
+        help.spellIDTooltips:SetPoint("TOPLEFT",30,-597); help.spellIDTooltips:SetSize(24,24)
+        label(help,"Show aura spell IDs on tooltips",58,-603,460,"GameFontHighlightSmall")
         help.spellIDTooltips:SetScript("OnClick",function(self) journal:SetSpellIDTooltips(self:GetChecked() == true) end)
-        label(help,"Background brightness",58,-543,170,"GameFontHighlightSmall")
+        label(help,"Background brightness",58,-630,170,"GameFontHighlightSmall")
         help.backgroundBrightness=CreateFrame("Slider",nil,help,"OptionsSliderTemplate")
-        help.backgroundBrightness:SetPoint("TOPLEFT",30,-558)
+        help.backgroundBrightness:SetPoint("TOPLEFT",30,-645)
         help.backgroundBrightness:SetSize(180,16)
         local brightnessTrack=help.backgroundBrightness:CreateTexture(nil,"BACKGROUND")
         brightnessTrack:SetPoint("TOPLEFT",2,-4)
@@ -1081,28 +1083,28 @@ local ink = { 0.75, 0.8, 0.8 }
             book:SetBackgroundBrightness(value)
         end)
         if type(StaticPopupDialogs) == "table" then
-            StaticPopupDialogs.CLASSICBESTIARY_RESET_CONFIRM = {
-                text = "Reset the Bestiary database? This permanently deletes all entries, notes, abilities, damage records and settings.",
+            StaticPopupDialogs.AZEROTHFIELDBOOK_BESTIARY_RESET_CONFIRM = {
+                text = "Reset the Azeroth Fieldbook Bestiary? This permanently deletes all creature entries, notes, abilities, damage records and Bestiary settings.",
                 button1 = YES, button2 = NO,
                 OnAccept = function()
                     journal:ResetDatabase()
                     for location in pairs(locationFilters) do locationFilters[location] = nil end
                     book:SetBackgroundBrightness(journal:GetBackgroundBrightness())
                     refresh()
-                    message("The Bestiary database was reset.")
+                    message("The Azeroth Fieldbook Bestiary was reset.")
                 end,
                 timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
             }
         end
-        button(help,"Reset database",30,-595,160,function()
-            if StaticPopup_Show then StaticPopup_Show("CLASSICBESTIARY_RESET_CONFIRM") end
+        button(help,"Reset Bestiary",30,-690,160,function()
+            if StaticPopup_Show then StaticPopup_Show("AZEROTHFIELDBOOK_BESTIARY_RESET_CONFIRM") end
         end)
         help:SetScript("OnShow",function()
             help.creatureAnnouncement:SetChecked(journal:GetCreatureAnnouncement())
             help.spellIDTooltips:SetChecked(journal:GetSpellIDTooltips())
             help.backgroundBrightness:SetValue(journal:GetBackgroundBrightness())
         end)
-        button(help,"Close",225,-595,160,function() help:Hide() end)
+        button(help,"Close",225,-690,160,function() help:Hide() end)
         help:Hide(); book.help=help
         book:SetScript("OnHide",function() book.search:ClearFocus(); book.manualName:ClearFocus(); book.manualNote:ClearFocus(); book.spellLink:ClearFocus(); form:Hide(); notesForm:Hide(); effectPicker:Hide(); locationFrame:Hide(); offensePicker:Hide(); defensePicker:Hide(); behaviourPicker:Hide() end)
         local elapsed, revision = 0, -1
@@ -1110,7 +1112,7 @@ local ink = { 0.75, 0.8, 0.8 }
             elapsed=elapsed+dt
             if elapsed>=0.5 then elapsed=0; if revision~=journal.revision then revision=journal.revision; refresh() end end
         end)
-        if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryBook"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryHelp"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryDamageNotes"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryLocations"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryOffenses"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryDefenses"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryBehaviour" end
+        if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiary"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookHelp"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryDamageNotes"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryLocations"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryOffenses"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryDefenses"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryBehaviour" end
         if UIParent.GetWidth and UIParent.GetHeight then
             book:SetScale(math.min(1, (UIParent:GetWidth()-30)/960, (UIParent:GetHeight()-30)/740))
         end

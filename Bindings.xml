@@ -1,8 +1,8 @@
 <Bindings>
     <Binding name="CLASSICBESTIARY_BOOK">
-        ClassicBestiaryToggleBook();
+        AzerothFieldbookToggleBestiary();
     </Binding>
     <Binding name="CLASSICBESTIARY_MOUSEOVER_BOOK">
-        ClassicBestiaryOpenMouseoverBook();
+        AzerothFieldbookOpenMouseoverBestiary();
     </Binding>
 </Bindings>

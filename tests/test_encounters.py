@@ -70,10 +70,10 @@ function count()
 end
 function check(v, msg) assert(v, msg) end
 ''')
-source = Path(__file__).resolve().parents[1].joinpath('EncounterReader.lua').read_text()
-lua.execute(source, 'ClassicBestiary', lua.globals().ns)
+source = Path(__file__).resolve().parents[1].joinpath('BestiaryEncounterReader.lua').read_text()
+lua.execute(source, 'AzerothFieldbook', lua.globals().ns)
 lua.execute(r'''
-reader = ns.CreateEncounterReader(record)
+reader = ns.CreateBestiaryEncounterReader(record)
 combat = true
 reader:Scan()
 check(calls == 0 and count() == 0, 'no API queries during combat')

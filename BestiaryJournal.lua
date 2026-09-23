@@ -1,9 +1,15 @@
 local _, ns = ...
 
-function ns.CreateJournal(db, identify)
-    db.journal = type(db.journal) == "table" and db.journal or { entries = {} }
-    db.journal.entries = type(db.journal.entries) == "table" and db.journal.entries or {}
-    local journal = { entries = db.journal.entries, revision = 0 }
+function ns.CreateBestiaryJournal(db, identify)
+    local legacyJournal = type(db.journal) == "table" and db.journal or nil
+    local legacyCreatures = type(db.creatures) == "table" and db.creatures or nil
+    db.bestiary = type(db.bestiary) == "table" and db.bestiary or {}
+    if type(db.bestiary.entries) ~= "table" then
+        db.bestiary.entries = legacyJournal and type(legacyJournal.entries) == "table" and legacyJournal.entries or {}
+    end
+    if type(db.bestiary.creatures) ~= "table" then db.bestiary.creatures = legacyCreatures or {} end
+    db.journal, db.creatures = nil, nil
+    local journal = { entries = db.bestiary.entries, revision = 0 }
     local seenGUIDs = {}
     local killedGUIDs = {}
     local onEntryAdded
@@ -346,22 +352,22 @@ function ns.CreateJournal(db, identify)
         return rows
     end
     function journal:Reset()
-        db.journal = { entries = {} }
-        self.entries = db.journal.entries
+        db.bestiary = { entries = {}, creatures = {} }
+        self.entries = db.bestiary.entries
         seenGUIDs = {}
         killedGUIDs = {}
         self:Touch()
     end
     function journal:ResetDatabase()
         for key in pairs(db) do db[key] = nil end
-        db.version, db.creatures, db.announce, db.creatureAnnouncements = 1, {}, false, true
+        db.version, db.bestiary, db.announce, db.creatureAnnouncements = 1, { entries = {}, creatures = {} }, false, true
         db.showSpellIDs, db.spellIDTooltipInitialized = true, true
         db.backgroundBrightness = 1
         db.ignoreEncounterHistory = true
         self:Reset()
     end
     -- Preserve old observations but ask for review; never invent names/levels.
-    for id, creature in pairs(db.creatures) do
+    for id, creature in pairs(db.bestiary.creatures) do
         for spellID, spell in pairs(creature.spells or {}) do
             if type(spell) == "table" then journal:Offer(id, spell.name, "Previous observations", spellID) end
         end
