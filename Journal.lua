@@ -46,6 +46,17 @@ function ns.CreateJournal(db, identify)
             pcall(SetCVar, "tooltipShowAuraSpellIDs", enabled and "1" or "0")
         end
     end
+    function journal:GetBackgroundBrightness()
+        local value = tonumber(db.backgroundBrightness)
+        if not value then return 1 end
+        return math.max(0.5, math.min(1.5, value))
+    end
+    function journal:SetBackgroundBrightness(value)
+        value = tonumber(value)
+        if not value then return end
+        db.backgroundBrightness = math.max(0.5, math.min(1.5, value))
+        self:Touch()
+    end
     -- Debuff chat reporting is intentionally unavailable: Forever exposes
     -- combat aura details as secret values that addons cannot inspect.
     function journal:Ensure(id)
@@ -275,6 +286,14 @@ function ns.CreateJournal(db, identify)
         self.entries = db.journal.entries
         seenGUIDs = {}
         self:Touch()
+    end
+    function journal:ResetDatabase()
+        for key in pairs(db) do db[key] = nil end
+        db.version, db.creatures, db.announce, db.creatureAnnouncements = 1, {}, false, true
+        db.showSpellIDs, db.spellIDTooltipInitialized = true, true
+        db.backgroundBrightness = 1
+        db.ignoreEncounterHistory = true
+        self:Reset()
     end
     -- Preserve old observations but ask for review; never invent names/levels.
     for id, creature in pairs(db.creatures) do

@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.0"
+    return "0.6.1"
 end
 
 function ns.CreateBook(journal)
@@ -142,7 +142,9 @@ local ink = { 0.75, 0.8, 0.8 }
             row.id = data and data.id
             if data then
                 row.text:SetText((data.review and "* " or "") .. data.name)
-                row.highlight:SetShown(data.id == selected)
+                local rowSelected = data.id == selected
+                row.highlight:SetShown(rowSelected)
+                row:SetBackdropBorderColor(0.55, 0.36, 0.05, rowSelected and 1 or 0)
                 row:Show()
             else row:Hide() end
         end
@@ -250,13 +252,26 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         book:SetScript("OnDragStart", startBookDrag)
         book:SetScript("OnDragStop", stopBookDrag)
+        local backgroundBrightness = journal:GetBackgroundBrightness()
+        local backgroundLayers = {}
+        local function addBackgroundLayer(texture, red, green, blue)
+            backgroundLayers[#backgroundLayers + 1] = { texture = texture, red = red, green = green, blue = blue }
+            texture:SetVertexColor(red * backgroundBrightness, green * backgroundBrightness, blue * backgroundBrightness)
+        end
+        function book:SetBackgroundBrightness(value)
+            backgroundBrightness = math.max(0.5, math.min(1.5, tonumber(value) or 1))
+            for _, layer in ipairs(backgroundLayers) do
+                layer.texture:SetVertexColor(layer.red * backgroundBrightness, layer.green * backgroundBrightness, layer.blue * backgroundBrightness)
+            end
+        end
         book:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border", tile=true, tileSize=32, edgeSize=24, insets={left=8,right=8,top=8,bottom=8}})
         -- QuestBG has transparent padding. Back the entire page with opaque
         -- parchment, then stretch only an interior, non-transparent texture area.
         local paper = book:CreateTexture(nil, "BACKGROUND", nil, 1)
         paper:SetPoint("TOPLEFT", book, "TOPLEFT", 6, -9)
         paper:SetPoint("BOTTOMRIGHT", book, "BOTTOMRIGHT", -2, 6)
-        paper:SetColorTexture(0.44352, 0.39312, 0.3024, 1)
+        paper:SetColorTexture(1, 1, 1, 1)
+        addBackgroundLayer(paper, 0.44352, 0.39312, 0.3024)
         local page = book:CreateTexture(nil, "BACKGROUND", nil, 2)
         page:SetAllPoints(paper)
         page:SetTexture("Interface\\QuestFrame\\QuestBG")
@@ -266,7 +281,7 @@ local ink = { 0.75, 0.8, 0.8 }
         page:SetHorizTile(false)
         page:SetVertTile(false)
         page:SetTexCoord(0, 1, 0, 1)
-        page:SetVertexColor(0.504, 0.504, 0.48888)
+        addBackgroundLayer(page, 0.504, 0.504, 0.48888)
         local spine = book:CreateTexture(nil, "ARTWORK")
         spine:SetColorTexture(0.25, 0.13, 0.055, 0.35)
         spine:SetPoint("TOPLEFT", 300, -53); spine:SetSize(3, 661)
@@ -400,8 +415,10 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         book.rows = {}
         for i = 1, 13 do
-            local row = CreateFrame("Button", nil, book)
+            local row = CreateFrame("Button", nil, book, "BackdropTemplate")
             row:SetPoint("TOPLEFT", 132, -110 - (i-1)*29); row:SetSize(156, 27)
+            row:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=8, insets={left=1,right=1,top=1,bottom=1}})
+            row:SetBackdropBorderColor(0.55, 0.36, 0.05, 0)
             row.highlight = row:CreateTexture(nil, "BACKGROUND")
             row.highlight:SetAllPoints(); row.highlight:SetColorTexture(0.4,0.23,0.06,0.18)
             row.text = label(row, "", 5, -6, 146)
@@ -642,7 +659,8 @@ local ink = { 0.75, 0.8, 0.8 }
         effectPicker:SetBackdropColor(0.90,0.80,0.60,1)
         local effectPaper=effectPicker:CreateTexture(nil,"BACKGROUND",nil,1)
         effectPaper:SetPoint("TOPLEFT",effectPicker,"TOPLEFT",12,-12); effectPaper:SetPoint("BOTTOMRIGHT",effectPicker,"BOTTOMRIGHT",-12,12)
-        effectPaper:SetColorTexture(0.42336,0.35784,0.23688,1)
+        effectPaper:SetColorTexture(1,1,1,1)
+        addBackgroundLayer(effectPaper, 0.42336,0.35784,0.23688)
         label(effectPicker,"Effects",25,-25,350,"GameFontNormalLarge")
         label(effectPicker,"Choose every effect you personally observed for this ability.",25,-54,470,"GameFontHighlightSmall")
         button(effectPicker,"Close",410,-20,110,function() effectPicker:Hide() end)
@@ -680,7 +698,7 @@ local ink = { 0.75, 0.8, 0.8 }
         formPaper:SetPoint("BOTTOMRIGHT",form,"BOTTOMRIGHT",-6,6)
         formPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
         formPaper:SetTexCoord(0,1,0,1)
-        formPaper:SetVertexColor(0.504,0.504,0.48888)
+        addBackgroundLayer(formPaper, 0.504,0.504,0.48888)
         form:EnableMouse(true)
         form:SetMovable(true)
         form:RegisterForDrag("LeftButton")
@@ -724,7 +742,8 @@ local ink = { 0.75, 0.8, 0.8 }
         notesForm:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         local notesPaper=notesForm:CreateTexture(nil,"BACKGROUND",nil,1)
         notesPaper:SetPoint("TOPLEFT",notesForm,"TOPLEFT",12,-12); notesPaper:SetPoint("BOTTOMRIGHT",notesForm,"BOTTOMRIGHT",-12,12)
-        notesPaper:SetColorTexture(0.41328,0.34776,0.23184,1)
+        notesPaper:SetColorTexture(1,1,1,1)
+        addBackgroundLayer(notesPaper, 0.41328,0.34776,0.23184)
         notesForm.title=label(notesForm,"Damage observations",24,-25,400,"GameFontNormalLarge")
         label(notesForm,"Each row is one observation. Removing it recalculates the displayed range.",24,-57,440,"GameFontHighlightSmall")
         button(notesForm,"X",451,-19,25,function() notesForm:Hide() end)
@@ -771,7 +790,7 @@ local ink = { 0.75, 0.8, 0.8 }
         helpPaper:SetPoint("TOPLEFT",help,"TOPLEFT",6,-6)
         helpPaper:SetPoint("BOTTOMRIGHT",help,"BOTTOMRIGHT",-6,6)
         helpPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
-        helpPaper:SetTexCoord(0,1,0,1); helpPaper:SetVertexColor(0.504,0.504,0.48888)
+        helpPaper:SetTexCoord(0,1,0,1); addBackgroundLayer(helpPaper, 0.504,0.504,0.48888)
         label(help,"HOW TO USE THE BESTIARY",30,-30,500,"GameFontNormalLarge")
         label(help,"1. Encounter\nTarget or mouse over an attackable NPC. Its name, creature type and observed level range are added without revealing unseen abilities.\n\n2. Record\nReadable casts and safe post-combat records become pending field notes. Add hidden traps or other missing abilities manually only after experiencing them. Equal-level hit ranges are manual observations because Forever blocks per-hit combat-log data.\n\n3. Review\nOpen the book, select the creature and review each ability. Confirm accurate observations, reject doubtful ones, or remove rejected notes.\n\n4. Lock in\nLock the creature entry when you are satisfied. Only confirmed abilities from locked entries appear in NPC tooltips. Unlocking hides them again without deleting your notes.\n\n5. Browse\nUse creature-type buttons, search, A-Z tabs and the Index reset to navigate a large journal. All knowledge remains per character and comes from your own encounters.\n\n6. Reset\nTo permanently erase the Bestiary, type /bestiary wipe, then /bestiary wipe confirm within 60 seconds.",35,-75,535)
         help.creatureAnnouncement=CreateFrame("CheckButton",nil,help,"UICheckButtonTemplate")
@@ -782,9 +801,37 @@ local ink = { 0.75, 0.8, 0.8 }
         help.spellIDTooltips:SetPoint("TOPLEFT",30,-510); help.spellIDTooltips:SetSize(24,24)
         label(help,"Show aura spell IDs on tooltips",58,-516,460,"GameFontHighlightSmall")
         help.spellIDTooltips:SetScript("OnClick",function(self) journal:SetSpellIDTooltips(self:GetChecked() == true) end)
+        label(help,"Background brightness",58,-543,170,"GameFontHighlightSmall")
+        help.backgroundBrightness=CreateFrame("Slider",nil,help,"OptionsSliderTemplate")
+        help.backgroundBrightness:SetPoint("TOPLEFT",30,-558)
+        help.backgroundBrightness:SetSize(180,16)
+        help.backgroundBrightness:SetMinMaxValues(0.5,1.5)
+        help.backgroundBrightness:SetValueStep(0.05)
+        help.backgroundBrightness:SetObeyStepOnDrag(true)
+        help.backgroundBrightness:SetScript("OnValueChanged",function(_,value)
+            journal:SetBackgroundBrightness(value)
+            book:SetBackgroundBrightness(value)
+        end)
+        if type(StaticPopupDialogs) == "table" then
+            StaticPopupDialogs.CLASSICBESTIARY_RESET_CONFIRM = {
+                text = "Reset the Bestiary database? This permanently deletes all entries, notes, abilities, damage records and settings.",
+                button1 = YES, button2 = NO,
+                OnAccept = function()
+                    journal:ResetDatabase()
+                    book:SetBackgroundBrightness(journal:GetBackgroundBrightness())
+                    refresh()
+                    message("The Bestiary database was reset.")
+                end,
+                timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+            }
+        end
+        button(help,"Reset database",30,-592,160,function()
+            if StaticPopup_Show then StaticPopup_Show("CLASSICBESTIARY_RESET_CONFIRM") end
+        end)
         help:SetScript("OnShow",function()
             help.creatureAnnouncement:SetChecked(journal:GetCreatureAnnouncement())
             help.spellIDTooltips:SetChecked(journal:GetSpellIDTooltips())
+            help.backgroundBrightness:SetValue(journal:GetBackgroundBrightness())
         end)
         button(help,"Close",225,-595,160,function() help:Hide() end)
         help:Hide(); book.help=help
