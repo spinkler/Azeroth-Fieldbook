@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.20"
+    return "0.6.21"
 end
 
 function ns.CreateBook(journal)
@@ -47,7 +47,8 @@ local ink = { 0.75, 0.8, 0.8 }
             local edge={}
             for i=1,4 do
                 edge[i]=control:CreateTexture(nil,"OVERLAY")
-                edge[i]:SetColorTexture(1.00,0.76,0.20,alpha)
+                edge[i]:SetColorTexture(1.00,0.70,0.10,alpha)
+                edge[i]:SetBlendMode("ADD")
                 lines[#lines+1]=edge[i]
             end
             edge[1]:SetPoint("TOPLEFT",inset,-inset); edge[1]:SetPoint("TOPRIGHT",-inset,-inset); edge[1]:SetHeight(1)
@@ -55,9 +56,9 @@ local ink = { 0.75, 0.8, 0.8 }
             edge[3]:SetPoint("TOPLEFT",inset,-inset); edge[3]:SetPoint("BOTTOMLEFT",inset,inset); edge[3]:SetWidth(1)
             edge[4]:SetPoint("TOPRIGHT",-inset,-inset); edge[4]:SetPoint("BOTTOMRIGHT",-inset,inset); edge[4]:SetWidth(1)
         end
-        -- Three fading one-pixel edges make a glow contained inside the
-        -- native button border at every aspect ratio.
-        addEdge(3,0.18); addEdge(4,0.48); addEdge(5,0.95)
+        -- A faint halo and a restrained additive core keep the selection
+        -- visible without painting a thick, opaque rectangle over the button.
+        addEdge(4,0.12); addEdge(5,0.52)
         control.selectionOutline=lines
         control.SetSelected=function(self,selected)
             for _,line in ipairs(self.selectionOutline) do line:SetShown(selected) end
