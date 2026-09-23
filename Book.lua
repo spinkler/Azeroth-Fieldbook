@@ -12,13 +12,14 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.18"
+    return "0.6.19"
 end
 
 function ns.CreateBook(journal)
     local book, selected, offset, abilityOffset = nil, nil, 0, 0
     local noteOffset, refreshDamageNotes = 0, nil
     local category, initial, reviewOnly = nil, nil, false
+    local locationFilters = {}
     local typeOrder = { "Beast", "Humanoid", "Dragonkin", "Demon", "Elemental", "Giant", "Undead", "Mechanical", "Critter", "Totem", "Aberration", "Gas Cloud", "Not specified", "Unclassified" }
 local ink = { 0.75, 0.8, 0.8 }
     local inkShadow = { 0.05, 0.05, 0.05 }
@@ -107,7 +108,7 @@ local ink = { 0.75, 0.8, 0.8 }
         refresh()
     end
     local function cycleEntry(direction)
-        local rows=journal:List(category,book.search:GetText(),reviewOnly,initial)
+        local rows=journal:List(category,book.search:GetText(),reviewOnly,initial,locationFilters)
         if #rows==0 then return end
         local current
         for i,row in ipairs(rows) do if row.id==selected then current=i; break end end
@@ -128,14 +129,25 @@ local ink = { 0.75, 0.8, 0.8 }
             typeButton:SetSelected(selectedType)
         end
         book.indexReset:SetEnabled(initial ~= nil)
-        local unletteredRows=journal:List(category,book.search:GetText(),reviewOnly,nil)
+        local observedLocations = {}
+        for _, entry in pairs(journal.entries) do
+            for location in pairs(entry.locations or {}) do observedLocations[location] = true end
+        end
+        for location in pairs(locationFilters) do
+            if not observedLocations[location] then locationFilters[location] = nil end
+        end
+        local locationCount = 0
+        for _ in pairs(locationFilters) do locationCount = locationCount + 1 end
+        book.locationsButton:SetText(locationCount > 0 and ("Locations (" .. locationCount .. ")") or "Locations")
+        book.locationsButton:SetSelected(locationCount > 0)
+        local unletteredRows=journal:List(category,book.search:GetText(),reviewOnly,nil,locationFilters)
         local availableLetters={}
         for _,row in ipairs(unletteredRows) do availableLetters[row.name:sub(1,1):upper()]=true end
         for _,letterButton in ipairs(book.letterButtons) do
             letterButton:SetEnabled(availableLetters[letterButton.letter] == true)
             letterButton:SetSelected(initial == letterButton.letter)
         end
-        local rows = initial and journal:List(category, book.search:GetText(), reviewOnly, initial) or unletteredRows
+        local rows = initial and journal:List(category, book.search:GetText(), reviewOnly, initial, locationFilters) or unletteredRows
         offset = math.max(0, math.min(offset, math.max(0, #rows - 13)))
         for i, row in ipairs(book.rows) do
             local data = rows[offset + i]
@@ -397,7 +409,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.helpButton:SetScript("OnClick",function() book.help:SetShown(not book.help:IsShown()) end)
         book.typeButtons = {}
         local function addTypeButton(name, y)
-            local typeButton = button(book, name == "All creatures" and "All" or name, 38, y, 96, function()
+            local typeButton = button(book, name == "All creatures" and "All" or name, 42, y, 88, function()
                 category = name == "All creatures" and nil or name
                 offset = 0; refresh()
             end)
@@ -406,10 +418,14 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         addTypeButton("All creatures", -110)
         for i, name in ipairs(typeOrder) do addTypeButton(name, -110-i*28) end
+        book.locationsButton = button(book, "Locations", 42, -538, 88, function()
+            book.locationFrame:Show()
+        end)
+        addSelectionOutline(book.locationsButton)
         label(book, "Search the index", 127, -55, 172)
         book.search = edit(book, 139, -78, 152, 100)
         book.search:SetScript("OnTextChanged", function() offset = 0; refresh() end)
-        book.review = button(book, "Pending", 38, -534, 96, function()
+        book.review = button(book, "Pending", 42, -570, 88, function()
             reviewOnly = not reviewOnly
             book.review:SetText(reviewOnly and "All entries" or "Pending")
             offset = 0; refresh()
@@ -790,6 +806,66 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         notesForm:Hide(); book.notesForm=notesForm
 
+        local locationFrame=CreateFrame("Frame","ClassicBestiaryLocations",UIParent,"BackdropTemplate")
+        locationFrame:SetSize(440,460); locationFrame:SetPoint("CENTER"); locationFrame:SetFrameStrata("FULLSCREEN_DIALOG"); locationFrame:SetClampedToScreen(true)
+        locationFrame:SetMovable(true); locationFrame:EnableMouse(true); locationFrame:RegisterForDrag("LeftButton")
+        locationFrame:SetScript("OnDragStart",function(self) self:StartMoving() end)
+        locationFrame:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
+        locationFrame:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
+        local locationPaper=locationFrame:CreateTexture(nil,"BACKGROUND",nil,1)
+        locationPaper:SetPoint("TOPLEFT",locationFrame,"TOPLEFT",6,-6)
+        locationPaper:SetPoint("BOTTOMRIGHT",locationFrame,"BOTTOMRIGHT",-6,6)
+        locationPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+        locationPaper:SetTexCoord(0,1,0,1)
+        addBackgroundLayer(locationPaper,0.504,0.504,0.48888)
+        label(locationFrame,"FILTER BY LOCATIONS",28,-28,360,"GameFontNormalLarge")
+        label(locationFrame,"Show creatures observed in any checked location.",28,-58,370,"GameFontHighlightSmall")
+        local locationScroll=CreateFrame("ScrollFrame",nil,locationFrame,"UIPanelScrollFrameTemplate")
+        locationScroll:SetPoint("TOPLEFT",28,-88); locationScroll:SetSize(370,280)
+        local locationChild=CreateFrame("Frame",nil,locationScroll)
+        locationChild:SetSize(350,280); locationScroll:SetScrollChild(locationChild)
+        local locationRows={}
+        local noLocations=label(locationChild,"No locations have been observed yet.",4,-6,330,"GameFontHighlightSmall")
+        local refreshLocationPicker
+        refreshLocationPicker=function()
+            local names={}
+            local seen={}
+            for _,entry in pairs(journal.entries) do
+                for location in pairs(entry.locations or {}) do
+                    if not seen[location] then seen[location]=true; names[#names+1]=location end
+                end
+            end
+            table.sort(names)
+            for i,location in ipairs(names) do
+                local row=locationRows[i]
+                if not row then
+                    row=CreateFrame("CheckButton",nil,locationChild,"UICheckButtonTemplate")
+                    row:SetSize(24,24); row:SetPoint("TOPLEFT",0,-(i-1)*28)
+                    row.text=label(locationChild,"",30,-5-(i-1)*28,300,"GameFontHighlightSmall")
+                    row:SetScript("OnClick",function(self)
+                        locationFilters[self.location]=self:GetChecked() == true and true or nil
+                        offset=0; refresh(); refreshLocationPicker()
+                    end)
+                    locationRows[i]=row
+                end
+                row.location=location
+                row:SetChecked(locationFilters[location] == true)
+                row.text:SetText(location)
+                row:Show(); row.text:Show()
+            end
+            for i=#names+1,#locationRows do locationRows[i]:Hide(); locationRows[i].text:Hide() end
+            noLocations:SetShown(#names==0)
+            locationChild:SetHeight(math.max(280,#names*28))
+        end
+        button(locationFrame,"Clear all",28,-405,170,function()
+            for location in pairs(locationFilters) do locationFilters[location]=nil end
+            offset=0; refresh(); refreshLocationPicker()
+        end)
+        button(locationFrame,"Close",242,-405,170,function() locationFrame:Hide() end)
+        locationFrame:SetScript("OnShow",refreshLocationPicker)
+        locationFrame:SetScript("OnHide",function(self) self:StopMovingOrSizing() end)
+        locationFrame:Hide(); book.locationFrame=locationFrame
+
         local help=CreateFrame("Frame","ClassicBestiaryHelp",UIParent,"BackdropTemplate")
         help:SetSize(610,640); help:SetPoint("CENTER"); help:SetFrameStrata("FULLSCREEN_DIALOG"); help:SetClampedToScreen(true)
         help:SetMovable(true); help:EnableMouse(true); help:RegisterForDrag("LeftButton")
@@ -832,6 +908,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 button1 = YES, button2 = NO,
                 OnAccept = function()
                     journal:ResetDatabase()
+                    for location in pairs(locationFilters) do locationFilters[location] = nil end
                     book:SetBackgroundBrightness(journal:GetBackgroundBrightness())
                     refresh()
                     message("The Bestiary database was reset.")
@@ -849,13 +926,13 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         button(help,"Close",225,-595,160,function() help:Hide() end)
         help:Hide(); book.help=help
-        book:SetScript("OnHide",function() book.search:ClearFocus(); book.manualName:ClearFocus(); book.manualNote:ClearFocus(); book.spellLink:ClearFocus(); form:Hide(); notesForm:Hide(); effectPicker:Hide() end)
+        book:SetScript("OnHide",function() book.search:ClearFocus(); book.manualName:ClearFocus(); book.manualNote:ClearFocus(); book.spellLink:ClearFocus(); form:Hide(); notesForm:Hide(); effectPicker:Hide(); locationFrame:Hide() end)
         local elapsed, revision = 0, -1
         book:SetScript("OnUpdate",function(_,dt)
             elapsed=elapsed+dt
             if elapsed>=0.5 then elapsed=0; if revision~=journal.revision then revision=journal.revision; refresh() end end
         end)
-        if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryBook"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryHelp"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryDamageNotes" end
+        if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryBook"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryHelp"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryDamageNotes"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryLocations" end
         if UIParent.GetWidth and UIParent.GetHeight then
             book:SetScale(math.min(1, (UIParent:GetWidth()-30)/960, (UIParent:GetHeight()-30)/740))
         end

@@ -264,16 +264,24 @@ function ns.CreateJournal(db, identify)
         table.sort(names)
         return names
     end
-    function journal:List(category, query, reviewOnly, initial)
+    function journal:List(category, query, reviewOnly, initial, locations)
         query = (query or ""):lower()
+        local locationFilterActive = type(locations) == "table" and next(locations) ~= nil
         local rows = {}
         for id, entry in pairs(self.entries) do
             local name = entry.name or ("Encountered creature #" .. id)
             local review = not entry.confirmed
             for _, ability in pairs(entry.abilities) do if ability.state == "pending" then review = true end end
             local first = name:sub(1, 1):upper()
+            local locationMatch = not locationFilterActive
+            if locationFilterActive then
+                for location in pairs(entry.locations or {}) do
+                    if locations[location] then locationMatch = true; break end
+                end
+            end
             if (not category or entry.category == category) and (not initial or first == initial)
                 and (not reviewOnly or review)
+                and locationMatch
                 and (name:lower():find(query, 1, true) or entry.category:lower():find(query, 1, true)) then
                 rows[#rows + 1] = { id = id, name = name, review = review }
             end
