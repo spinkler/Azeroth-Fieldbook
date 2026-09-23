@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.15"
+    return "0.6.16"
 end
 
 function ns.CreateBook(journal)
@@ -808,6 +808,10 @@ local ink = { 0.75, 0.8, 0.8 }
         help.backgroundBrightness=CreateFrame("Slider",nil,help,"OptionsSliderTemplate")
         help.backgroundBrightness:SetPoint("TOPLEFT",30,-558)
         help.backgroundBrightness:SetSize(180,16)
+        local brightnessTrack=help.backgroundBrightness:CreateTexture(nil,"BACKGROUND")
+        brightnessTrack:SetPoint("TOPLEFT",2,-2)
+        brightnessTrack:SetPoint("BOTTOMRIGHT",-2,2)
+        brightnessTrack:SetColorTexture(0.045,0.032,0.018,1)
         help.backgroundBrightness:SetMinMaxValues(0.5,1.5)
         help.backgroundBrightness:SetValueStep(0.05)
         help.backgroundBrightness:SetObeyStepOnDrag(true)
