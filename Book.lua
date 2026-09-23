@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.51"
+    return "0.5.52"
 end
 
 function ns.CreateBook(journal)
@@ -252,7 +252,7 @@ function ns.CreateBook(journal)
         -- QuestBG has transparent padding. Back the entire page with opaque
         -- parchment, then stretch only an interior, non-transparent texture area.
         local paper = book:CreateTexture(nil, "BACKGROUND", nil, 1)
-        paper:SetPoint("TOPLEFT", book, "TOPLEFT", 9, -9)
+        paper:SetPoint("TOPLEFT", book, "TOPLEFT", 2, -9)
         paper:SetPoint("BOTTOMRIGHT", book, "BOTTOMRIGHT", -9, 9)
         paper:SetColorTexture(0.88, 0.78, 0.60, 1)
         local page = book:CreateTexture(nil, "BACKGROUND", nil, 2)
@@ -322,7 +322,7 @@ function ns.CreateBook(journal)
             -- texture to an atlas after cropping it produced a cropped ring.
             -- Extend the paper under the narrower native trim to prevent gaps.
             paper:ClearAllPoints()
-            paper:SetPoint("TOPLEFT",book,"TOPLEFT",9,-9)
+            paper:SetPoint("TOPLEFT",book,"TOPLEFT",2,-9)
             paper:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-9,9)
             -- The portrait supplies the left cap. Do not paint a rectangular
             -- title background behind its transparent outer silhouette.
@@ -461,9 +461,11 @@ function ns.CreateBook(journal)
         end)
         book.confirm = CreateFrame("Button", nil, detail)
         book.confirm:SetSize(30, 30)
-        book.confirm:SetPoint("TOPLEFT", 700, -49)
+        book.confirm:SetPoint("TOPLEFT", 294, -50)
+        book.confirm:SetFrameLevel(detail:GetFrameLevel() + 5)
         local lockIcon = book.confirm:CreateTexture(nil, "ARTWORK")
         lockIcon:SetAllPoints()
+        lockIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         book.confirm.lockIcon = lockIcon
         function book.confirm:SetLockedState(locked)
             self.locked = locked and true or false
