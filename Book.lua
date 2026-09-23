@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.24"
+    return "0.6.25"
 end
 
 function ns.CreateBook(journal)
@@ -21,6 +21,11 @@ function ns.CreateBook(journal)
     local category, initial, reviewOnly = nil, nil, false
     local locationFilters = {}
     local typeOrder = { "Beast", "Humanoid", "Dragonkin", "Demon", "Elemental", "Giant", "Undead", "Mechanical", "Critter", "Totem", "Aberration", "Gas Cloud", "Unclassified" }
+    local magicSchools = {
+        { name="Arcane", color="d884ff" }, { name="Fire", color="ff7043" },
+        { name="Frost", color="69ccf0" }, { name="Holy", color="fff09a" },
+        { name="Nature", color="72d65b" }, { name="Shadow", color="b79cff" },
+    }
 local ink = { 0.75, 0.8, 0.8 }
     local inkShadow = { 0.05, 0.05, 0.05 }
     local function label(parent, text, x, y, width, size)
@@ -186,10 +191,26 @@ local ink = { 0.75, 0.8, 0.8 }
         local status = { e.category }
         if e.rank then status[#status + 1] = e.rank end
         status[#status + 1] = levels
+        status[#status + 1] = "Kills: " .. math.max(0,math.floor(tonumber(e.kills) or 0))
         local locations = {}
         for location in pairs(e.locations or {}) do locations[#locations + 1] = location end
         table.sort(locations)
         if #locations > 0 then status[#status + 1] = "Locations: " .. table.concat(locations, ", ") end
+        local function schoolSummary(field)
+            local names = {}
+            for _, school in ipairs(magicSchools) do
+                if type(e[field]) == "table" and e[field][school.name] then
+                    names[#names + 1] = "|cff" .. school.color .. school.name .. "|r"
+                end
+            end
+            return names
+        end
+        local offenses = schoolSummary("offenses")
+        local resistances = schoolSummary("resistances")
+        local immunities = schoolSummary("immunities")
+        if #offenses > 0 then status[#status + 1] = "Casts: " .. table.concat(offenses, ", ") end
+        if #resistances > 0 then status[#status + 1] = "Resists: " .. table.concat(resistances, ", ") end
+        if #immunities > 0 then status[#status + 1] = "Immune: " .. table.concat(immunities, ", ") end
         book.subTitle:SetText(table.concat(status, "  |  "))
         book.confirm:SetText(e.confirmed and "Unlock this entry" or "Lock this entry")
         book.confirm:SetLockedState(e.confirmed)
@@ -209,8 +230,8 @@ local ink = { 0.75, 0.8, 0.8 }
                 local linkMissing = type(ability.spellID) ~= "number" or ability.spellID <= 0
                 row.text:SetText(name .. (linkMissing and "  [?]" or "") .. (ability.state == "confirmed" and "" or "  [" .. ability.state .. "]"))
                 local effects=effectsText(ability.effects)
-                local note=ability.note or ability.origin or "Observed"
-                row.note:SetText(effects and (effects.." — "..note) or note)
+                local note=ability.note or (ability.origin ~= "Your note" and ability.origin or nil)
+                row.note:SetText(effects and note and (effects.." — "..note) or effects or note or "")
                 row.accept:SetEnabled(ability.state ~= "confirmed")
                 row.link:SetEnabled(true)
                 row.reject:SetText(ability.state == "rejected" and "Remove" or "Reject")
@@ -673,8 +694,17 @@ local ink = { 0.75, 0.8, 0.8 }
             message(msg)
             if ok then book.manualName:SetText(""); book.manualNote:SetText(""); book.spellLink:SetText(""); book.manualEffects={}; book.effectButton:SetText("Choose effects"); refresh() end
         end)
-        book.damageButton=button(detail,"Record equal-level hits",575,-277,347,function()
+        book.damageButton=button(detail,"Record equal-level hits",575,-248,347,function()
             book.damageForm:SetShown(not book.damageForm:IsShown())
+        end)
+        book.offenseButton=button(detail,"Offenses",575,-277,111,function()
+            book.offensePicker:Show()
+        end)
+        book.defenseButton=button(detail,"Defenses",693,-277,111,function()
+            book.defensePicker:Show()
+        end)
+        book.behaviourButton=button(detail,"Behaviour",811,-277,111,function()
+            book.behaviourPicker:Show()
         end)
         book.message=label(book,"",326,-704,578,"GameFontHighlightSmall")
         book.message:SetHeight(25); book.message:SetJustifyV("TOP")
@@ -720,6 +750,118 @@ local ink = { 0.75, 0.8, 0.8 }
             book.effectButton:SetText(effectButtonText(book.manualEffects))
         end
         effectPicker:Hide(); book.effectPicker=effectPicker
+
+        local function createObservationPicker(globalName,title,description,width,height)
+            local picker=CreateFrame("Frame",globalName,UIParent,"BackdropTemplate")
+            picker:SetSize(width,height); picker:SetPoint("CENTER"); picker:SetFrameStrata("FULLSCREEN_DIALOG"); picker:SetClampedToScreen(true)
+            picker:SetMovable(true); picker:EnableMouse(true); picker:RegisterForDrag("LeftButton")
+            picker:SetScript("OnDragStart",function(self) self:StartMoving() end)
+            picker:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
+            picker:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
+            local paper=picker:CreateTexture(nil,"BACKGROUND",nil,1)
+            paper:SetPoint("TOPLEFT",picker,"TOPLEFT",6,-6); paper:SetPoint("BOTTOMRIGHT",picker,"BOTTOMRIGHT",-6,6)
+            paper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+            paper:SetTexCoord(0,1,0,1)
+            addBackgroundLayer(paper,0.504,0.504,0.48888)
+            label(picker,title,25,-25,width-155,"GameFontNormalLarge")
+            label(picker,description,25,-54,width-50,"GameFontHighlightSmall")
+            button(picker,"Close",width-140,-20,110,function() picker:Hide() end)
+            picker:SetScript("OnHide",function(self) self:StopMovingOrSizing() end)
+            return picker
+        end
+
+        local offensePicker=createObservationPicker("ClassicBestiaryOffenses","Observed offenses","Select every magic school this creature has been observed casting.",480,250)
+        offensePicker.schoolButtons={}
+        local refreshOffensePicker
+        for i,school in ipairs(magicSchools) do
+            local schoolName,schoolColor=school.name,school.color
+            local column=(i-1)%2
+            local row=math.floor((i-1)/2)
+            local control=button(offensePicker,"",25+column*220,-91-row*40,200,function()
+                local entry=selected and journal.entries[selected]
+                local enabled=entry and type(entry.offenses)=="table" and entry.offenses[schoolName] == true
+                journal:SetOffense(selected,schoolName,not enabled)
+                refresh(); refreshOffensePicker()
+            end)
+            control.schoolName=schoolName; control.schoolColor=schoolColor
+            offensePicker.schoolButtons[#offensePicker.schoolButtons+1]=control
+        end
+        refreshOffensePicker=function()
+            local entry=selected and journal.entries[selected]
+            for _,control in ipairs(offensePicker.schoolButtons) do
+                local enabled=entry and type(entry.offenses)=="table" and entry.offenses[control.schoolName] == true
+                control:SetText("|cff"..control.schoolColor..control.schoolName.."|r")
+                control:SetAlpha(enabled and 1 or 0.45); control:SetEnabled(entry ~= nil)
+            end
+        end
+        offensePicker:SetScript("OnShow",refreshOffensePicker)
+        offensePicker:Hide(); book.offensePicker=offensePicker; book.refreshOffensePicker=refreshOffensePicker
+
+        local defensePicker=createObservationPicker("ClassicBestiaryDefenses","Observed defenses","Mark each magic school as resistant, immune, or both when personally observed.",540,335)
+        label(defensePicker,"Magic school",35,-88,180,"GameFontHighlightSmall")
+        label(defensePicker,"Resistant",285,-88,90,"GameFontHighlightSmall")
+        label(defensePicker,"Immune",415,-88,80,"GameFontHighlightSmall")
+        defensePicker.rows={}
+        local refreshDefensePicker
+        for i,school in ipairs(magicSchools) do
+            local schoolName,schoolColor=school.name,school.color
+            local y=-112-(i-1)*34
+            local schoolLabel=label(defensePicker,"|cff"..schoolColor..schoolName.."|r",40,y-5,190)
+            local resistant=CreateFrame("CheckButton",nil,defensePicker,"UICheckButtonTemplate")
+            resistant:SetPoint("TOPLEFT",305,y); resistant:SetSize(24,24)
+            local immune=CreateFrame("CheckButton",nil,defensePicker,"UICheckButtonTemplate")
+            immune:SetPoint("TOPLEFT",430,y); immune:SetSize(24,24)
+            resistant:SetScript("OnClick",function(self) journal:SetResistance(selected,schoolName,self:GetChecked()==true); refresh(); refreshDefensePicker() end)
+            immune:SetScript("OnClick",function(self) journal:SetImmunity(selected,schoolName,self:GetChecked()==true); refresh(); refreshDefensePicker() end)
+            defensePicker.rows[#defensePicker.rows+1]={ schoolName=schoolName, label=schoolLabel, resistant=resistant, immune=immune }
+        end
+        refreshDefensePicker=function()
+            local entry=selected and journal.entries[selected]
+            for _,row in ipairs(defensePicker.rows) do
+                row.resistant:SetChecked(entry and type(entry.resistances)=="table" and entry.resistances[row.schoolName] == true)
+                row.immune:SetChecked(entry and type(entry.immunities)=="table" and entry.immunities[row.schoolName] == true)
+                row.resistant:SetEnabled(entry ~= nil); row.immune:SetEnabled(entry ~= nil)
+            end
+        end
+        defensePicker:SetScript("OnShow",refreshDefensePicker)
+        defensePicker:Hide(); book.defensePicker=defensePicker; book.refreshDefensePicker=refreshDefensePicker
+
+        local behaviourPicker=createObservationPicker("ClassicBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen from this creature.",540,390)
+        local behaviourGroups={
+            { "Disposition", { "Hostile", "Neutral" } },
+            { "Combat style", { "Melee", "Ranged", "Caster" } },
+            { "Traits", { "Flees at low health", "Calls allies", "Patrols", "Summons", "Heals", "Enrages", "Stealths" } },
+        }
+        behaviourPicker.controls={}
+        local refreshBehaviourPicker
+        local groupY={-88,-150,-212}
+        for groupIndex,group in ipairs(behaviourGroups) do
+            label(behaviourPicker,group[1],30,groupY[groupIndex],210,"GameFontHighlightSmall")
+            for i,name in ipairs(group[2]) do
+                local column=(i-1)%2
+                local row=math.floor((i-1)/2)
+                local y=groupY[groupIndex]-25-row*32
+                local control=CreateFrame("CheckButton",nil,behaviourPicker,"UICheckButtonTemplate")
+                control:SetPoint("TOPLEFT",30+column*250,y); control:SetSize(24,24)
+                control.behaviourName=name
+                control.text=label(behaviourPicker,name,60+column*250,y-5,190,"GameFontHighlightSmall")
+                control:SetScript("OnClick",function(self)
+                    journal:SetBehaviour(selected,self.behaviourName,self:GetChecked()==true)
+                    refresh(); refreshBehaviourPicker()
+                end)
+                behaviourPicker.controls[#behaviourPicker.controls+1]=control
+            end
+        end
+        refreshBehaviourPicker=function()
+            local entry=selected and journal.entries[selected]
+            for _,control in ipairs(behaviourPicker.controls) do
+                control:SetChecked(entry and type(entry.behaviours)=="table" and entry.behaviours[control.behaviourName] == true)
+                control:SetEnabled(entry ~= nil)
+            end
+        end
+        behaviourPicker:SetScript("OnShow",refreshBehaviourPicker)
+        behaviourPicker:Hide(); book.behaviourPicker=behaviourPicker; book.refreshBehaviourPicker=refreshBehaviourPicker
+
         local form=CreateFrame("Frame",nil,book,"BackdropTemplate")
         form:SetSize(560,230); form:SetPoint("CENTER"); form:SetFrameStrata("FULLSCREEN_DIALOG"); form:SetFrameLevel(100)
         form:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
@@ -938,13 +1080,13 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         button(help,"Close",225,-595,160,function() help:Hide() end)
         help:Hide(); book.help=help
-        book:SetScript("OnHide",function() book.search:ClearFocus(); book.manualName:ClearFocus(); book.manualNote:ClearFocus(); book.spellLink:ClearFocus(); form:Hide(); notesForm:Hide(); effectPicker:Hide(); locationFrame:Hide() end)
+        book:SetScript("OnHide",function() book.search:ClearFocus(); book.manualName:ClearFocus(); book.manualNote:ClearFocus(); book.spellLink:ClearFocus(); form:Hide(); notesForm:Hide(); effectPicker:Hide(); locationFrame:Hide(); offensePicker:Hide(); defensePicker:Hide(); behaviourPicker:Hide() end)
         local elapsed, revision = 0, -1
         book:SetScript("OnUpdate",function(_,dt)
             elapsed=elapsed+dt
             if elapsed>=0.5 then elapsed=0; if revision~=journal.revision then revision=journal.revision; refresh() end end
         end)
-        if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryBook"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryHelp"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryDamageNotes"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryLocations" end
+        if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryBook"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryHelp"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryDamageNotes"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryLocations"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryOffenses"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryDefenses"; UISpecialFrames[#UISpecialFrames+1]="ClassicBestiaryBehaviour" end
         if UIParent.GetWidth and UIParent.GetHeight then
             book:SetScale(math.min(1, (UIParent:GetWidth()-30)/960, (UIParent:GetHeight()-30)/740))
         end

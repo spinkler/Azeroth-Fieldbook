@@ -5,9 +5,16 @@ function ns.CreateJournal(db, identify)
     db.journal.entries = type(db.journal.entries) == "table" and db.journal.entries or {}
     local journal = { entries = db.journal.entries, revision = 0 }
     local seenGUIDs = {}
+    local killedGUIDs = {}
     local onEntryAdded
     local rankLabels = { elite = "Elite", rare = "Rare", rareelite = "Rare Elite", worldboss = "World Boss" }
     local rankPriority = { ["Rare"] = 1, ["Elite"] = 2, ["Rare Elite"] = 3, ["World Boss"] = 4 }
+    local magicSchools = { Arcane=true, Fire=true, Frost=true, Holy=true, Nature=true, Shadow=true }
+    local behaviourNames = {
+        Hostile=true, Neutral=true, Melee=true, Ranged=true, Caster=true,
+        ["Flees at low health"]=true, ["Calls allies"]=true, Patrols=true,
+        Summons=true, Heals=true, Enrages=true, Stealths=true,
+    }
     local function public(v) return not (issecretvalue and issecretvalue(v)) end
     local function str(v) return public(v) and type(v) == "string" and v ~= "" end
     local function number(v) return public(v) and type(v) == "number" and v > 0 and v < math.huge and v == math.floor(v) end
@@ -63,7 +70,7 @@ function ns.CreateJournal(db, identify)
         if not number(id) then return end
         local entry = self.entries[id]
         if not entry then
-            entry = { id = id, category = "Unclassified", abilities = {}, damage = {}, locations = {}, confirmed = false }
+            entry = { id = id, category = "Unclassified", abilities = {}, damage = {}, locations = {}, offenses = {}, resistances = {}, immunities = {}, behaviours = {}, kills = 0, confirmed = false }
             self.entries[id] = entry
             self:Touch()
         end
@@ -86,6 +93,11 @@ function ns.CreateJournal(db, identify)
             changed = true
         end
         entry.locations = type(entry.locations) == "table" and entry.locations or {}
+        entry.offenses = type(entry.offenses) == "table" and entry.offenses or {}
+        entry.resistances = type(entry.resistances) == "table" and entry.resistances or {}
+        entry.immunities = type(entry.immunities) == "table" and entry.immunities or {}
+        entry.behaviours = type(entry.behaviours) == "table" and entry.behaviours or {}
+        entry.kills = tonumber(entry.kills) or 0
         local location = read(GetRealZoneText) or read(GetZoneText)
         if str(location) and not entry.locations[location] then
             entry.locations[location] = true
@@ -106,6 +118,48 @@ function ns.CreateJournal(db, identify)
         if not wasNamed and onEntryAdded then onEntryAdded(entry) end
         if changed then self:Touch() end
         return id
+    end
+    local function setSchoolObservation(self, id, field, school, enabled)
+        local entry = self.entries[id]
+        if not entry or not magicSchools[school] then return false end
+        entry[field] = type(entry[field]) == "table" and entry[field] or {}
+        local value = enabled == true and true or nil
+        if entry[field][school] == value then return true end
+        entry[field][school] = value
+        self:Touch()
+        return true
+    end
+    function journal:SetResistance(id, school, enabled)
+        return setSchoolObservation(self, id, "resistances", school, enabled)
+    end
+    function journal:SetImmunity(id, school, enabled)
+        return setSchoolObservation(self, id, "immunities", school, enabled)
+    end
+    function journal:SetOffense(id, school, enabled)
+        return setSchoolObservation(self, id, "offenses", school, enabled)
+    end
+    function journal:SetBehaviour(id, name, enabled)
+        local entry = self.entries[id]
+        if not entry or not behaviourNames[name] then return false end
+        entry.behaviours = type(entry.behaviours) == "table" and entry.behaviours or {}
+        local value = enabled == true and true or nil
+        if value and name == "Hostile" then entry.behaviours.Neutral = nil end
+        if value and name == "Neutral" then entry.behaviours.Hostile = nil end
+        if entry.behaviours[name] == value then return true end
+        entry.behaviours[name] = value
+        self:Touch()
+        return true
+    end
+    function journal:RecordKill(unit)
+        if read(UnitIsDead, unit) ~= true then return false end
+        local id = identify(unit)
+        local entry = id and self.entries[id]
+        local guid = read(UnitGUID, unit)
+        if not entry or not str(guid) or killedGUIDs[guid] then return false end
+        killedGUIDs[guid] = true
+        entry.kills = math.max(0, tonumber(entry.kills) or 0) + 1
+        self:Touch()
+        return true
     end
     function journal:Offer(id, name, origin, spellID)
         name = clean(name, 100)
@@ -295,6 +349,7 @@ function ns.CreateJournal(db, identify)
         db.journal = { entries = {} }
         self.entries = db.journal.entries
         seenGUIDs = {}
+        killedGUIDs = {}
         self:Touch()
     end
     function journal:ResetDatabase()

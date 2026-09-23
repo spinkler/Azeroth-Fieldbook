@@ -29,11 +29,13 @@ function fire(e, ...) frames[1].handler(frames[1], e, ...) end
 guid = 'Creature-0-1-2-3-42-000001'
 playerGUID = 'Player-0-1-2-3-999-000001'
 visible, exists, hostile, controlled = true, true, true, false
+dead = false
 function UnitGUID(unit) return unit == 'player' and playerGUID or guid end
 function UnitExists() return exists end
 function UnitIsVisible() return visible end
 function UnitCanAttack() return hostile end
 function UnitPlayerControlled() return controlled end
+function UnitIsDead() return dead end
 function UnitIsUnit(a, b) return a == alias and b == 'target' end
 function UnitCastingInfo() return castName, nil, nil, nil, nil, nil, nil, nil, castID end
 function UnitChannelInfo() return channelName, nil, nil, nil, nil, nil, nil, channelID end
@@ -340,6 +342,9 @@ castName, castID = 'Observed trap', nil
 frames[5].handler(frames[5], 'PLAYER_TARGET_CHANGED')
 local entry=ClassicBestiaryObservedDB.journal.entries[42]
 check(entry.category=='Humanoid' and entry.levelMin==9,'main records creature metadata')
+dead=true; frames[5].handler(frames[5], 'UNIT_HEALTH', 'target'); frames[5].handler(frames[5], 'UNIT_HEALTH', 'target')
+check(entry.kills==1,'observed creature death increments kill counter once per GUID')
+dead=false
 GameTooltip.lines={}; tooltipHook(GameTooltip)
 check(#GameTooltip.lines==0,'journal review gates tooltip')
 entry.confirmed=true; entry.abilities['Observed trap'].state='confirmed'

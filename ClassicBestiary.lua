@@ -362,6 +362,9 @@ frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
         afterWipeHold = false
         observeCurrent("mouseover")
+    elseif event == "UNIT_HEALTH" then
+        local watched = watchedAlias(unit)
+        if watched and journal then journal:RecordKill(watched) end
     elseif event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START"
         or event == "UNIT_SPELLCAST_EMPOWER_START" or event == "UNIT_SPELLCAST_SUCCEEDED" then
         -- START counts even if interrupted later: the enemy was seen attempting it.
@@ -395,6 +398,7 @@ frame:SetScript("OnUpdate", function(_, elapsed)
 end)
 
 for _, event in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT",
+    "UNIT_HEALTH",
     "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_EMPOWER_START",
     "UNIT_SPELLCAST_SUCCEEDED", "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD",
     "DAMAGE_METER_COMBAT_SESSION_UPDATED", "DAMAGE_METER_CURRENT_SESSION_UPDATED", "DAMAGE_METER_RESET" }) do
@@ -436,7 +440,7 @@ SlashCmdList.CLASSICBESTIARYOBSERVED = function(message)
     elseif command == "scan" then
         if encounters then encounters:Scan(); encounters:Report(say) else say("Encounter module unavailable.") end
     elseif command == "debug" then
-        say("Version 0.6.24; all cast events: " .. diagnostics.events .. "; new observations: " .. diagnostics.learned
+        say("Version 0.6.25; all cast events: " .. diagnostics.events .. "; new observations: " .. diagnostics.learned
             .. "; tooltip callbacks: " .. diagnostics.tooltips)
         say("Last cast check: " .. diagnostics.last)
         say("Events matched to target/mouseover: " .. matchedEvents .. ". All-event count includes unrelated units.")

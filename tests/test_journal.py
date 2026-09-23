@@ -86,6 +86,12 @@ check(#journal:List('Humanoid','defias',false)==1,'name search and category')
 check(#journal:List(nil,'',false,'D')==1 and #journal:List(nil,'',false,'M')==0,'alphabet index filter')
 check(#journal:List(nil,'humanoid',false)==1,'type searchable')
 check(#journal:List('Beast','',false)==0,'category isolation')
+check(journal:SetOffense(42,'Fire',true) and journal.entries[42].offenses.Fire,'offensive school stored on creature')
+check(journal:SetResistance(42,'Frost',true) and journal.entries[42].resistances.Frost,'resistance stored on creature')
+check(journal:SetImmunity(42,'Shadow',true) and journal.entries[42].immunities.Shadow,'immunity stored on creature')
+check(not journal:SetOffense(42,'Physical',true),'non-magic school rejected')
+check(journal:SetBehaviour(42,'Hostile',true) and journal:SetBehaviour(42,'Neutral',true),'behaviour observations stored')
+check(not journal.entries[42].behaviours.Hostile and journal.entries[42].behaviours.Neutral,'hostile and neutral remain mutually exclusive')
 journal.entries[77]={id=77,name='Unknown Test',category='Not specified',abilities={},locations={},confirmed=false}
 journal.entries[78]={id=78,name='Unreadable Test',category='Unclassified',abilities={},locations={},confirmed=false}
 check(#journal:List('Unclassified','',false)==2,'unclassified filter includes not-specified entries')
@@ -96,6 +102,7 @@ check(#journal:List('Humanoid','',false,nil,{['Elwynn Forest']=true})==1,'locati
 check(#journal:List('Beast','',false,nil,{['Elwynn Forest']=true})==0,'location filter does not override creature type')
 local restored=ns.CreateJournal(db,identify)
 check(restored.entries[42].confirmed and restored.entries[42].damage[9].high==24,'journal survives reload')
+check(restored.entries[42].offenses.Fire and restored.entries[42].resistances.Frost and restored.entries[42].immunities.Shadow,'creature observations survive reload')
 check(restored.entries[42].abilities['Test Trap'].state=='confirmed','migration does not reset confirmation')
 ''')
 # Native-widget mock: execute construction, selection, edits, scrolling and reopen.
@@ -140,8 +147,9 @@ lua.execute(r'''
 controller=ns.CreateBook(journal)
 controller:Toggle()
 check(ClassicBestiaryBook:IsShown(),'book opens')
-check(#UISpecialFrames==4 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
+check(#UISpecialFrames==7 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
 check(controller:OpenAtUnit('mouseover'),'mouseover binding opens the observed NPC page')
+for _,o in ipairs(objects) do check(o.text~='Your note','empty manual field note stays visually empty') end
 local function click(text)
     for _,o in ipairs(objects) do
         if o.kind=='Button' and o.text==text and o.scripts.OnClick then o.scripts.OnClick(o); return true end
@@ -157,6 +165,9 @@ check(click('Next') and click('Previous'),'entry navigation buttons')
 check(click('Pending'),'review filter')
 check(click('All entries'),'review filter clears')
 check(click('Locations') and ClassicBestiaryLocations:IsShown(),'location filter window opens')
+check(click('Offenses') and ClassicBestiaryOffenses:IsShown(),'offenses window opens')
+check(click('Defenses') and ClassicBestiaryDefenses:IsShown(),'defenses window opens')
+check(click('Behaviour') and ClassicBestiaryBehaviour:IsShown(),'behaviour window opens')
 check(click('Unlock this entry'),'confirmed entry unlocks')
 check(not journal.entries[42].confirmed,'unlock state saved')
 check(click('Lock this entry'),'entry can be locked again')
