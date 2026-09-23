@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.21"
+    return "0.6.22"
 end
 
 function ns.CreateBook(journal)
@@ -769,11 +769,16 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         local notesForm=CreateFrame("Frame","ClassicBestiaryDamageNotes",book,"BackdropTemplate")
         notesForm:SetSize(500,330); notesForm:SetPoint("CENTER"); notesForm:SetFrameStrata("FULLSCREEN_DIALOG"); notesForm:SetFrameLevel(101)
+        notesForm:SetClampedToScreen(true)
+        notesForm:SetMovable(true); notesForm:EnableMouse(true); notesForm:RegisterForDrag("LeftButton")
+        notesForm:SetScript("OnDragStart",function(self) self:StartMoving() end)
+        notesForm:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
         notesForm:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         local notesPaper=notesForm:CreateTexture(nil,"BACKGROUND",nil,1)
-        notesPaper:SetPoint("TOPLEFT",notesForm,"TOPLEFT",12,-12); notesPaper:SetPoint("BOTTOMRIGHT",notesForm,"BOTTOMRIGHT",-12,12)
-        notesPaper:SetColorTexture(1,1,1,1)
-        addBackgroundLayer(notesPaper, 0.41328,0.34776,0.23184)
+        notesPaper:SetPoint("TOPLEFT",notesForm,"TOPLEFT",6,-6); notesPaper:SetPoint("BOTTOMRIGHT",notesForm,"BOTTOMRIGHT",-6,6)
+        notesPaper:SetTexture("Interface\\AddOns\\ClassicBestiary\\Artwork\\ParchmentBook.tga")
+        notesPaper:SetTexCoord(0,1,0,1)
+        addBackgroundLayer(notesPaper, 0.504,0.504,0.48888)
         notesForm.title=label(notesForm,"Damage observations",24,-25,400,"GameFontNormalLarge")
         label(notesForm,"Each row is one observation. Removing it recalculates the displayed range.",24,-57,440,"GameFontHighlightSmall")
         button(notesForm,"X",451,-19,25,function() notesForm:Hide() end)
@@ -808,6 +813,7 @@ local ink = { 0.75, 0.8, 0.8 }
             notesForm.next:SetEnabled(noteOffset+6<#notes)
             if #notes==0 then notesForm:Hide() end
         end
+        notesForm:SetScript("OnHide",function(self) self:StopMovingOrSizing() end)
         notesForm:Hide(); book.notesForm=notesForm
 
         local locationFrame=CreateFrame("Frame","ClassicBestiaryLocations",UIParent,"BackdropTemplate")
