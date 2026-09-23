@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.5.58"
+    return "0.5.59"
 end
 
 function ns.CreateBook(journal)
@@ -327,8 +327,8 @@ function ns.CreateBook(journal)
             -- The portrait supplies the left cap. Do not paint a rectangular
             -- title background behind its transparent outer silhouette.
             book.titleBar:ClearAllPoints()
-            book.titleBar:SetPoint("TOPLEFT",60,-6)
-            book.titleBar:SetPoint("TOPRIGHT",-5,-6)
+            book.titleBar:SetPoint("TOPLEFT",60,-5)
+            book.titleBar:SetPoint("TOPRIGHT",-5,-5)
             book.titleBar:SetHeight(27)
             local function edge(atlas, width, height, horizontal, vertical)
                 local texture = book.titleIcon:CreateTexture(nil,"OVERLAY")
@@ -342,10 +342,10 @@ function ns.CreateBook(journal)
             -- An additional square corner here protrudes above that bevel.
             local top = edge("_UI-Frame-TitleTile",256,28,true)
             -- Keep the native top trim on the same edge as the dark title fill.
-            top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-13)
-            top:SetPoint("TOPRIGHT",book,"TOPRIGHT",-10,-6)
+            top:SetPoint("TOPLEFT",iconBorder,"TOPRIGHT",0,-12)
+            top:SetPoint("TOPRIGHT",book,"TOPRIGHT",-10,-5)
             local topRight = edge("UI-Frame-TopCornerRightSimple",18,18)
-            topRight:SetPoint("TOPRIGHT",book,"TOPRIGHT",0,-6)
+            topRight:SetPoint("TOPRIGHT",book,"TOPRIGHT",0,-5)
             local bottomLeft = edge("UI-Frame-BotCornerLeft",14,14)
             bottomLeft:SetPoint("BOTTOMLEFT",0,0)
             local bottomRight = edge("UI-Frame-BotCornerRight",11,11)
