@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.12"
+    return "0.6.13"
 end
 
 function ns.CreateBook(journal)
@@ -395,10 +395,10 @@ local ink = { 0.75, 0.8, 0.8 }
         helpGlyph:SetAllPoints(); helpGlyph:SetJustifyH("CENTER"); helpGlyph:SetJustifyV("MIDDLE")
         helpGlyph:SetTextColor(1.00,0.82,0.14); helpGlyph:SetText("?")
         book.helpButton:SetScript("OnClick",function() book.help:SetShown(not book.help:IsShown()) end)
-        label(book, "Filters", 24, -90, 96, "GameFontHighlightSmall")
+        label(book, "Filters", 36, -90, 96, "GameFontHighlightSmall")
         book.typeButtons = {}
         local function addTypeButton(name, y)
-            local typeButton = button(book, name == "All creatures" and "All" or name, 24, y, 96, function()
+            local typeButton = button(book, name == "All creatures" and "All" or name, 36, y, 96, function()
                 category = name == "All creatures" and nil or name
                 offset = 0; refresh()
             end)
@@ -410,7 +410,7 @@ local ink = { 0.75, 0.8, 0.8 }
         label(book, "Search the index", 124, -55, 172)
         book.search = edit(book, 136, -78, 152, 100)
         book.search:SetScript("OnTextChanged", function() offset = 0; refresh() end)
-        book.review = button(book, "Pending", 24, -534, 96, function()
+        book.review = button(book, "Pending", 36, -534, 96, function()
             reviewOnly = not reviewOnly
             book.review:SetText(reviewOnly and "All entries" or "Pending")
             offset = 0; refresh()
@@ -440,7 +440,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.letterButtons = {}
         for i=1,26 do
             local letter = string.char(64+i)
-            local tab = button(book, letter, 2, -83-(i-1)*23, 28, function()
+            local tab = button(book, letter, 3, -83-(i-1)*23, 28, function()
                 initial=letter; offset=0; refresh()
             end)
             tab:SetHeight(21)
@@ -450,7 +450,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.title = label(book, "", 336, -55, 365, "GameFontNormalLarge")
         local titlePath, titleSize, titleFlags = book.title:GetFont()
         if titlePath and titleSize then book.title:SetFont(titlePath, titleSize + 2, titleFlags) end
-        book.subTitle = label(book, "", 336, -84, 570)
+        book.subTitle = label(book, "", 336, -84, 600)
         book.empty = label(book, "Every page begins with an encounter.\n\nOnly creatures you have met appear here.\nSelect an entry from the index to review your notes.", 340, -210, 520)
         book.detail = CreateFrame("Frame", nil, book)
         book.detail:SetAllPoints()
@@ -547,28 +547,28 @@ local ink = { 0.75, 0.8, 0.8 }
         book.confirm:SetLockedState(false)
         book.confirm:Hide()
         book.damageBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
-        book.damageBorder:SetPoint("TOPLEFT",575,-109); book.damageBorder:SetSize(320,139)
+        book.damageBorder:SetPoint("TOPLEFT",575,-109); book.damageBorder:SetSize(350,139)
         book.damageBorder:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,insets={left=2,right=2,top=2,bottom=2}})
         -- Neutral translucent cream separates this panel without a coloured cast.
         book.damageBorder:SetBackdropColor(0.045,0.032,0.018,0.88)
         book.damageBorder:SetBackdropBorderColor(0.36,0.23,0.10,0.48)
-        local damageHeading = label(book.damageBorder, "Equal-level damage taken", 13, -9, 285)
+        local damageHeading = label(book.damageBorder, "Equal-level damage taken", 13, -9, 315)
         damageHeading:SetTextColor(1.00, 0.82, 0.14)
         local damageScroll=CreateFrame("ScrollFrame",nil,detail,"UIPanelScrollFrameTemplate")
-        damageScroll:SetPoint("TOPLEFT",588,-139); damageScroll:SetSize(290,72)
+        damageScroll:SetPoint("TOPLEFT",588,-139); damageScroll:SetSize(320,72)
         book.damageChild=CreateFrame("Frame",nil,damageScroll)
-        book.damageChild:SetSize(285,72); damageScroll:SetScrollChild(book.damageChild)
+        book.damageChild:SetSize(315,72); damageScroll:SetScrollChild(book.damageChild)
         book.damageScroll=damageScroll
         book.damageScrollBar=damageScroll.ScrollBar
         if type(book.damageScrollBar)=="function" then book.damageScrollBar=nil end
         if not book.damageScrollBar and type(damageScroll.GetScrollBar)=="function" then book.damageScrollBar=damageScroll:GetScrollBar() end
         book.damageRows={}
-        book.noDamage=label(book.damageChild,"No equal-level hit ranges recorded.",3,-3,275,"GameFontHighlightSmall")
+        book.noDamage=label(book.damageChild,"No equal-level hit ranges recorded.",3,-3,305,"GameFontHighlightSmall")
         local abilityDivider = detail:CreateTexture(nil, "ARTWORK")
         abilityDivider:SetColorTexture(0.35,0.20,0.08,0.42)
-        abilityDivider:SetPoint("TOPLEFT",326,-315); abilityDivider:SetSize(570,1)
+        abilityDivider:SetPoint("TOPLEFT",326,-315); abilityDivider:SetSize(600,1)
         label(detail, "Recorded abilities", 326, -325, 248, "GameFontNormalLarge")
-        book.abilityCount = label(detail, "", 580, -331, 316, "GameFontHighlightSmall")
+        book.abilityCount = label(detail, "", 580, -331, 346, "GameFontHighlightSmall")
         book.abilityCount:SetJustifyH("RIGHT")
         book.abilities = {}
         for i=1,4 do
@@ -632,9 +632,9 @@ local ink = { 0.75, 0.8, 0.8 }
         label(detail,"Effects (optional)",596,-549,280,"GameFontHighlightSmall")
         book.manualName=edit(detail,332,-567,248,100)
         book.manualEffects={}
-        book.effectButton=button(detail,"Choose effects",602,-567,303,function() book.effectPicker:Show(); book.refreshEffectPicker() end)
+        book.effectButton=button(detail,"Choose effects",602,-567,333,function() book.effectPicker:Show(); book.refreshEffectPicker() end)
         label(detail,"Field note (optional)",326,-600,575,"GameFontHighlightSmall")
-        book.manualNote=edit(detail,332,-620,573,300)
+        book.manualNote=edit(detail,332,-620,603,300)
         label(detail,"Optional spell ID, link, or exact name (out of combat)",326,-652,575,"GameFontHighlightSmall")
         book.spellLink=edit(detail,332,-672,300,255)
         button(detail,"Resolve",640,-672,92,function()
@@ -647,12 +647,12 @@ local ink = { 0.75, 0.8, 0.8 }
             if book.manualName:GetText()=="" then book.manualName:SetText(spellName) end
             message("Exact match: "..spellName.." (ID "..spellID..").")
         end)
-        button(detail,"Confirm this ability",740,-672,165,function()
+        button(detail,"Confirm this ability",740,-672,195,function()
             local ok,msg=journal:AddManual(selected,book.manualName:GetText(),book.manualNote:GetText(),book.spellLink:GetText(),book.manualEffects)
             message(msg)
             if ok then book.manualName:SetText(""); book.manualNote:SetText(""); book.spellLink:SetText(""); book.manualEffects={}; book.effectButton:SetText("Choose effects"); refresh() end
         end)
-        book.damageButton=button(detail,"Record equal-level hits",588,-277,285,function()
+        book.damageButton=button(detail,"Record equal-level hits",588,-277,347,function()
             book.damageForm:SetShown(not book.damageForm:IsShown())
         end)
         book.message=label(book,"",326,-704,578,"GameFontHighlightSmall")
