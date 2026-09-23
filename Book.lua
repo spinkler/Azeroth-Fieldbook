@@ -12,7 +12,7 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.6.4"
+    return "0.6.5"
 end
 
 function ns.CreateBook(journal)
@@ -233,7 +233,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book = CreateFrame("Frame", "ClassicBestiaryBook", UIParent, "BackdropTemplate")
         book:SetSize(960, 740)
         book:SetPoint("CENTER")
-        book:SetFrameStrata("DIALOG")
+        book:SetFrameStrata("HIGH")
         book:SetClampedToScreen(true)
         book:SetMovable(true)
         book:EnableMouse(true)
