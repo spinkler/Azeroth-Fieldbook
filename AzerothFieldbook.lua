@@ -197,7 +197,9 @@ end
 
 local function observeCurrent(unit)
     if afterWipeHold then return end
-    if not db or not watchedEnemy(unit) then return end
+    if not db then return end
+    if journal then journal:RecordKill(unit) end
+    if not watchedEnemy(unit) then return end
     if journal then journal:Observe(unit) end
     local function inspect(label, fn, channel)
         local source = unit .. " " .. label
@@ -312,10 +314,15 @@ local function initialize()
     elseif GameTooltip and GameTooltip:HasScript("OnTooltipSetUnit") then
         GameTooltip:HookScript("OnTooltipSetUnit", addTooltip)
     end
+    if ns.UIScale then ns.UIScale:Initialize(db) end
     if ns.CastIDs then ns.CastIDs:Initialize(db) end
     if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy) end
     if journal then
+        journal:SetPointsAwardedCallback(function(entry, amount, reason)
+            local name = entry.name or ("Creature #" .. entry.id)
+            say("+" .. amount .. (amount == 1 and " point: " or " points: ") .. name .. " — " .. reason .. ".")
+        end)
         journal:SetEntryAddedCallback(function(entry)
             if journal:GetCreatureAnnouncement() then
                 say("New bestiary entry: " .. entry.name .. " (" .. entry.category .. ").")
@@ -323,6 +330,7 @@ local function initialize()
         end)
     end
     if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal) end
+    if ns.MinimapButton then ns.MinimapButton:Initialize(db, book) end
     if ns.CreateBestiaryEncounterReader then encounters = ns.CreateBestiaryEncounterReader(storeObserved) end
     if encounters and db.ignoreEncounterHistory then encounters:ForgetHistory() end
 end
@@ -364,6 +372,7 @@ frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
     elseif event == "PLAYER_TARGET_CHANGED" then
         afterWipeHold = false
         observeCurrent("target")
+        if book then book:FollowNotesTarget() end
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
         afterWipeHold = false
         observeCurrent("mouseover")

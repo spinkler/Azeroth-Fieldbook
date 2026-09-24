@@ -44,6 +44,7 @@ function ns.ShowDebugReport(report)
             panel:SetScale(math.min(1, (UIParent:GetWidth()-30)/740, (UIParent:GetHeight()-30)/540))
         end
     end
+    if ns.UIScale then ns.UIScale:Register(panel) end
     panel:Show()
     edit:SetText(report); edit:SetCursorPosition(0)
     scroll:SetVerticalScroll(0)

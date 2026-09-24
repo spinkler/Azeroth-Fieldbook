@@ -91,8 +91,39 @@ assert(GameTooltip.id==6268 and GameTooltip.lines[1]=='Spell ID: 6268')
 journal:SetSpellIDTooltips(false)
 frame.rows[1].scripts.OnEnter()
 assert(#GameTooltip.lines==0)
+assert(journal:GetNotesFollowTarget())
+local originalObserve=journal.Observe
+local targetID=2
+journal.Observe=function() return targetID end
+notes:FollowTarget()
+assert(frame.creature.text=='Geomancer' and frame.notes.text=='Uses wards.')
+notes:Refresh()
+assert(frame.creature.text=='Geomancer') -- Book refresh must not undo target following.
+frame.notes:SetText('Target-follow note')
+targetID=nil; notes:FollowTarget()
+assert(frame.creature.text=='Geomancer')
+journal:SetNotesFollowTarget(false); targetID=1; notes:FollowTarget()
+assert(frame.creature.text=='Geomancer')
+local restoredSettings=ns.CreateBestiaryJournal(db,function() return nil end)
+assert(not restoredSettings:GetNotesFollowTarget())
+journal:SetNotesFollowTarget(true); notes:FollowTarget()
+assert(frame.creature.text=='Mountain Boar' and journal:GetIDNotes(2).text=='Target-follow note')
+local function escapeRegistered()
+    for _,name in ipairs(UISpecialFrames) do if name=='AzerothFieldbookCreatureNotes' then return true end end
+    return false
+end
+assert(escapeRegistered())
+frame.pinButton.scripts.OnClick()
+assert(not frame.closeButton.enabled and not escapeRegistered())
+frame.closeButton.scripts.OnClick(); assert(frame.shown)
+targetID=2; notes:FollowTarget(); assert(frame.creature.text=='Geomancer')
+frame.pinButton.scripts.OnClick()
+assert(frame.closeButton.enabled and escapeRegistered())
+frame.closeButton.scripts.OnClick(); assert(not frame.shown)
+targetID=1; notes:FollowTarget(); assert(not frame.shown)
+journal.Observe=originalObserve
 notes:Open(nil)
-assert(frame.count.text=='0/10' and not frame.spellInput.shown and frame.notes.text=='')
+assert(frame.count.text=='0/10'  and not frame.spellInput.shown and frame.notes.text=='')
 notes:Open(1)
 journal:Reset()
 notes:SetCreature(1)

@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.8.1 (Beta)
+# Azeroth Fieldbook 0.8.2 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -8,7 +8,7 @@ information from the player's own encounters. It does not ship with creature or
 spell databases.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.8.1.
+are not part of version 0.8.2.
 
 ## Installation and opening
 
@@ -16,6 +16,7 @@ Install the addon as `Interface/AddOns/AzerothFieldbook` and enable
 **Azeroth Fieldbook** in the addon list.
 
 - `/fieldbook` or `/fieldbook book` opens the Bestiary.
+- The minimap button opens or closes the journal; its visibility is optional.
 - `/bestiary` remains available as a compatibility alias.
 - The two keybindings open the Bestiary normally or directly at the creature
   beneath the mouse pointer.
@@ -47,13 +48,24 @@ remain manual where the client does not expose reliable addon-readable evidence.
 
 Only confirmed abilities from a locked creature entry appear in NPC tooltips.
 Locking freezes the creature's recorded abilities, traits, damage observations,
-metadata and kill count. Unlock it to resume recording. Personal ID Logs and
-Notes remain editable while locked.
+and metadata. Kill and discovery-point progress continue while locked. Unlock to resume recording.
+Personal ID Logs and Notes remain editable while locked.
 
 Delete removes the selected creature and its saved records after you type
 `delete` and press Enter. Future encounters can record it again. Share is a
 disabled placeholder. Ability effects include school-specific resistance and
 immunity tags.
+
+Each creature entry awards 1 point, including its initial level and zone. Later
+sightings revealing a new level, zone, or both award 1 discovery point per sighting.
+Repeat sightings award nothing. For testing, one kill awards 1 additional
+point (silver); two kills award 2 more (gold), for 3 kill points total. Existing
+entries receive discovery credit for saved zones and recorded level endpoints.
+
+The ? menu includes UI scale (50–150%, default 100%), applied when the slider
+is released. Offenses, Defenses and Behaviour share a position and replace
+one another by default; disable that option to keep multiple windows open.
+Point award chat messages are enabled by default and can be disabled.
 
 ## Spell IDs and personal notes
 
@@ -80,6 +92,10 @@ to open its **ID Logs and Notes**. Enter up to ten spell IDs to create spell lin
 remove rows with the red x. Each creature also has a 400-character personal notes
 box. These records persist per creature and do not automatically confirm abilities.
 The aura spell-ID tooltip option also controls IDs appended to these spell links.
+Creature notes follow eligible target selections by default, without opening
+a closed window or changing the selected Bestiary page. Disable this in Options
+to follow only manual selections. Pin prevents Close and Escape from dismissing
+the notes window.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
@@ -112,7 +128,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.8.1 stores per-character data in `AzerothFieldbookDB`, with monster
+Version 0.8.2 stores per-character data in `AzerothFieldbookDB`, with monster
 journal data under its `bestiary` section.
 
 The previous binding action IDs remain registered behind the newly branded

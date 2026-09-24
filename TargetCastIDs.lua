@@ -75,6 +75,7 @@ local function Setup()
     -- Independent parent avoids becoming a child of the secure target button.
     -- Establish this one-way anchor out of combat; never modify Blizzard's bar.
     panel = CreateFrame("Frame", nil, UIParent)
+        if ns.UIScale then ns.UIScale:Register(panel) end
     panel:Hide()
     panel:SetSize(180, 14)
     panel:SetFrameStrata("HIGH")

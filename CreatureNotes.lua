@@ -1,7 +1,7 @@
 local _, ns = ...
 
 function ns.CreateCreatureNotesWindow(journal)
-    local frame, selected, entry, loading, expanded
+    local frame, selected, entry, loading, expanded, pinned
     local controller = {}
     local function label(parent, value, x, y, width, font)
         local text = parent:CreateFontString(nil,"OVERLAY",font or "GameFontHighlightSmall")
@@ -79,11 +79,45 @@ function ns.CreateCreatureNotesWindow(journal)
         frame.paper=frame:CreateTexture(nil,"BACKGROUND")
         frame.paper:SetPoint("TOPLEFT",6,-6); frame.paper:SetPoint("BOTTOMRIGHT",-6,6)
         frame.paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
-        label(frame,"ID Logs and Notes",18,-18,330,"GameFontNormalLarge")
+        label(frame,"ID Logs and Notes",18,-18,280,"GameFontNormalLarge")
         frame.creature=label(frame,"",18,-43,360,"GameFontNormal")
         frame.creature:SetHeight(28)
         local close=CreateFrame("Button",nil,frame,"UIPanelCloseButton")
-        close:SetPoint("TOPRIGHT",-3,-3); close:SetScript("OnClick",function() frame:Hide() end)
+        close:SetSize(24,24); close:SetPoint("TOPRIGHT",-3,-3); close:SetScript("OnClick",function() if not pinned then frame:Hide() end end)
+        frame.closeButton=close
+        local pin=CreateFrame("Button",nil,frame,"UIPanelCloseButton")
+        pin:SetSize(24,24); pin:SetPoint("RIGHT",close,"LEFT",-2,0)
+        local cover=pin:CreateTexture(nil,"OVERLAY")
+        cover:SetPoint("TOPLEFT",6,-6); cover:SetPoint("BOTTOMRIGHT",-6,6)
+        cover:SetColorTexture(0.13,0.025,0.015,1)
+        local pinParts={}
+        local function pinPart(width,height,x,y)
+            local part=pin:CreateTexture(nil,"OVERLAY",nil,1)
+            part:SetSize(width,height); part:SetPoint("CENTER",x,y)
+            part:SetColorTexture(1,0.82,0.14,1)
+            pinParts[#pinParts+1]=part
+        end
+        pinPart(8,2,0,4); pinPart(4,4,0,1)
+        pinPart(10,2,0,-2); pinPart(1,4,0,-5)
+        pin:SetScript("OnEnter",function()
+            if GameTooltip then GameTooltip:SetOwner(pin,"ANCHOR_RIGHT"); GameTooltip:SetText(pinned and "Unpin notes window" or "Pin notes window"); GameTooltip:Show() end
+        end)
+        pin:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        frame.pinButton=pin
+        pin:SetScript("OnClick",function()
+            pinned=not pinned
+            for _,part in ipairs(pinParts) do
+                part:SetVertexColor(1,pinned and 0.65 or 1,pinned and 0.35 or 1)
+            end
+            pin:SetButtonState(pinned and "PUSHED" or "NORMAL",pinned)
+            close:SetEnabled(not pinned); close:SetAlpha(pinned and 0.4 or 1)
+            if UISpecialFrames then
+                for i=#UISpecialFrames,1,-1 do
+                    if UISpecialFrames[i]=="AzerothFieldbookCreatureNotes" then table.remove(UISpecialFrames,i) end
+                end
+                if not pinned then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookCreatureNotes" end
+            end
+        end)
         frame.inputLabel=label(frame,"Spell ID — press Enter to record",18,-77,300)
         frame.spellInput=CreateFrame("EditBox",nil,frame,"InputBoxTemplate")
         frame.spellInput:SetSize(145,22); frame.spellInput:SetPoint("TOPLEFT",23,-94)
@@ -157,6 +191,7 @@ function ns.CreateCreatureNotesWindow(journal)
             frame.spellInput:ClearFocus(); frame.notes:ClearFocus(); frame:StopMovingOrSizing()
         end)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookCreatureNotes" end
+        if ns.UIScale then ns.UIScale:Register(frame) end
         frame:Hide()
     end
     function controller:SetCreature(id)
@@ -172,6 +207,13 @@ function ns.CreateCreatureNotesWindow(journal)
         expanded=entry ~= nil
         loading=false
         render()
+    end
+    function controller:Refresh()
+        self:SetCreature(selected)
+    end
+    function controller:FollowTarget()
+        local id=journal:GetNotesTarget()
+        if id then self:SetCreature(id) end
     end
     function controller:Open(id)
         build()

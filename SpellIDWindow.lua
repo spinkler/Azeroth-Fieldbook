@@ -50,6 +50,7 @@ end
 local function setup()
     if panel then return end
     panel = CreateFrame("Frame", "AzerothFieldbookSpellIDWindow", UIParent)
+        if ns.UIScale then ns.UIScale:Register(panel) end
     panel:SetSize(330, 286); panel:SetFrameStrata("MEDIUM")
     panel:SetClampedToScreen(true); panel:SetMovable(true)
     panel:EnableMouse(true); panel:RegisterForDrag("LeftButton")

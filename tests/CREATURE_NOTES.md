@@ -24,8 +24,8 @@
    expanded window fits on screen.
 8. Lock a creature. Ability editors, review controls, Offenses, Defenses,
    Behaviour, Choose effects and damage recording must be disabled and dimmed.
-   Open editors must close. Automatic observations, metadata and kills must not
-   change its saved entry. Unlocking restores editing. ID Logs and Notes remain
+   Open editors must close. Automatic observations and metadata must not
+   change its saved entry. Kill progress continues while locked. Unlocking restores editing. ID Logs and Notes remain
    editable in both states.
 
 Automated tests cover persistence, isolation, limits, invalid/secret inputs,

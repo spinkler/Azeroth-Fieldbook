@@ -122,11 +122,12 @@ check(not journal:SetAbilityTooltip(42,'Test Trap',false),'locked tooltip select
 check(not journal:RemoveAbility(42,'Test Trap'),'locked removal blocked')
 check(not journal:AddDamage(42,9,1,2) and not journal:RemoveDamageNote(42,9,1),'locked damage changes blocked')
 journal:Offer(42,'New automatic ability','Test',999)
+check(journal.revision==beforeRevision,'locked field edits leave revision unchanged')
 local oldMax=journal.entries[42].levelMax
 level=50; zone='New zone'; journal:Observe('target')
 check(journal.entries[42].levelMax==oldMax and not journal.entries[42].locations['New zone'],'locked metadata unchanged')
 level=10; zone='Elwynn Forest'
-check(journal.revision==beforeRevision and not journal.entries[42].abilities['New automatic ability'],'locked automatic ability blocked')
+check(not journal.entries[42].abilities['New automatic ability'],'locked automatic ability blocked')
 check(journal:SetCreatureNotes(42,'Still editable') and journal:AddNoteSpell(42,'777'),'locked creature notes editable')
 check(journal:RemoveNoteSpell(42,777),'locked manual ID removal allowed')
 local restored=ns.CreateBestiaryJournal(db,identify)
@@ -207,9 +208,52 @@ check(AzerothFieldbookBestiary.offenseButton.enabled and AzerothFieldbookBestiar
 check(click('Offenses') and AzerothFieldbookBestiaryOffenses:IsShown(),'offenses window opens')
 check(click('Defenses') and AzerothFieldbookBestiaryDefenses:IsShown(),'defenses window opens')
 check(click('Behaviour') and AzerothFieldbookBestiaryBehaviour:IsShown(),'behaviour window opens')
+local offense=AzerothFieldbookBestiaryOffenses
+local defense=AzerothFieldbookBestiaryDefenses
+local behaviour=AzerothFieldbookBestiaryBehaviour
+check(journal:GetSingleObservationWindow(),'single observation window defaults on')
+UIParent.GetEffectiveScale=function() return 1 end
+offense.GetLeft=function() return 100 end; offense.GetTop=function() return 600 end
+offense.GetEffectiveScale=function() return 0.8 end
+defense.GetEffectiveScale=function() return 0.8 end
+defense.SetPoint=function(self,point,relative,relativePoint,x,y) self.anchorX=x; self.anchorY=y end
+offense:Show(); offense.scripts.OnShow(offense)
+check(offense:IsShown() and not defense:IsShown() and not behaviour:IsShown(),'offenses closes its siblings')
+defense:Show(); defense.scripts.OnShow(defense)
+check(defense:IsShown() and not offense:IsShown(),'defenses replaces offenses')
+check(defense.anchorX==100 and defense.anchorY==600,'swapped window shares top-left at custom scale')
+defense.GetLeft=function() return 150 end; defense.GetTop=function() return 500 end
+defense.scripts.OnDragStop(defense)
+defense:Hide()
+behaviour.GetEffectiveScale=function() return 0.8 end
+behaviour.SetPoint=function(self,point,relative,relativePoint,x,y) self.anchorX=x; self.anchorY=y end
+behaviour:Show(); behaviour.scripts.OnShow(behaviour)
+check(behaviour.anchorX==150 and behaviour.anchorY==500,'dragged shared position survives closing before swap')
+defense:Show()
+
+journal:SetSingleObservationWindow(false)
+behaviour:Show(); behaviour.scripts.OnShow(behaviour)
+check(defense:IsShown() and behaviour:IsShown(),'disabled option allows simultaneous windows')
+check(not ns.CreateBestiaryJournal(db,identify):GetSingleObservationWindow(),'window preference persists')
+local singleOption=AzerothFieldbookHelp.singleObservationWindow
+singleOption.GetChecked=function() return true end
+singleOption.scripts.OnClick(singleOption)
+check(behaviour:IsShown() and not defense:IsShown(),'enabling option retains latest open window')
 check(click('Lock this entry'),'entry can be locked again')
 local help=AzerothFieldbookHelp
 help.scripts.OnShow(help)
+check(help.uiScale.scripts.OnKeyUp==nil and help.uiScale.scripts.OnKeyDown==nil,'options scale slider does not capture keyboard input')
+local oldScale=journal:GetUIScale()
+help.uiScale.scripts.OnValueChanged(help.uiScale,0.75)
+check(journal:GetUIScale()==oldScale,'scale preview does not move the UI')
+help.uiScale.scripts.OnMouseUp(help.uiScale,'LeftButton')
+check(journal:GetUIScale()==0.75,'scale applies on mouse release')
+help.uiScale.scripts.OnValueChanged(help.uiScale,0.5)
+help.uiScale.scripts.OnHide(help.uiScale)
+help.uiScale.scripts.OnMouseUp(help.uiScale,'LeftButton')
+check(journal:GetUIScale()==0.75,'closing discards unfinished scale adjustment')
+check(click('100%') and journal:GetUIScale()==1,'scale reset applies immediately')
+
 check(journal:GetSpellIDWindowOption('displaySpellIDWindow'),'ID window defaults on')
 check(not journal:GetSpellIDWindowOption('spellIDWindowLocked'),'ID window defaults unlocked')
 check(not journal:GetSpellIDWindowOption('spellIDWindowIndefinite'),'ID window defaults expiring')
@@ -304,6 +348,59 @@ check(#ranksJournal:List(nil,'',false,nil,nil,{Elite=true,Rare=true})==2,'rank f
 check(#ranksJournal:List(nil,'',false,nil,nil,{['Rare Elite']=true})==1,'rare elite is separately selectable')
 check(#ranksJournal:List(nil,'Rank 4',false,nil,nil,{['World Boss']=true})==1,'rank combines with text')
 check(#ranksJournal:List(nil,'Rank 1',false,nil,nil,{Rare=true})==0,'rank and text both required')
+local rewards=ns.CreateBestiaryJournal({},function() return nil end)
+local first=rewards:Ensure(1)
+for _,sample in ipairs({{0,0},{1,1,'silver'},{2,3,'gold'},{3,3,'gold'},{20,3,'gold'}}) do
+    first.kills=sample[1]
+    local points,star=rewards:GetKillReward(1)
+    check(points==sample[2] and star==sample[3],'kill reward threshold')
+end
+rewards:Ensure(2).kills=1
+local count,points=rewards:GetTotals()
+check(count==2 and points==6,'entry points combine with cumulative kill rewards')
+rewards:DeleteEntry(1)
+count,points=rewards:GetTotals()
+check(count==1 and points==2,'deletion updates derived totals')
+local discoveryDB={}
+local discovery=ns.CreateBestiaryJournal(discoveryDB,function() return 900 end)
+level=5; zone='First zone'; discovery:Observe('target')
+local _,discoveryPoints=discovery:GetTotals()
+check(discoveryPoints==1,'first creature level and zone award only one point')
+discovery:Observe('target')
+local _,repeatPoints=discovery:GetTotals(); check(repeatPoints==1,'repeat observation awards nothing')
+level=7; discovery:Observe('target')
+level=6; discovery:Observe('target')
+zone='Second zone'; discovery:Observe('target')
+local _,newPoints=discovery:GetTotals(); check(newPoints==4,'distinct intermediate level and new zone each award one')
+discovery:SetEntryConfirmed(900,true); level=8; discovery:Observe('target')
+level=9; zone='Third zone'; discovery:Observe('target')
+local reloadedDiscovery=ns.CreateBestiaryJournal(discoveryDB,function() return 900 end)
+local _,savedPoints=reloadedDiscovery:GetTotals(); check(savedPoints==6,'simultaneous new level and zone award one point; progress persists while locked')
+local legacy=ns.CreateBestiaryJournal({bestiary={entries={[1]={id=1,levelMin=3,levelMax=6,locations={Old=true},abilities={}}},creatures={}}},function() end)
+local _,legacyPoints=legacy:GetTotals(); check(legacyPoints==2,'legacy credit uses only observed endpoints and zones')
+local awardsDB={}
+local awards=ns.CreateBestiaryJournal(awardsDB,function() return 901 end)
+local notifications={}
+awards:SetPointsAwardedCallback(function(_,amount,reason) notifications[#notifications+1]={amount,reason} end)
+check(awards:GetPointAnnouncements(),'point messages default on')
+level=3; zone='Award zone'; awards:Observe('target')
+check(#notifications==1,'entry level and zone announce one point')
+awards:Observe('target'); awards:GetTotals()
+check(#notifications==1,'repeat observations and totals do not announce again')
+local oldDead=UnitIsDead
+UnitIsDead=function() return true end
+guid='award-first'; awards:RecordKill('target'); awards:RecordKill('target')
+check(#notifications==2 and notifications[2][1]==1,'first kill awards silver once')
+guid='award-second'; awards:RecordKill('target')
+check(#notifications==3 and notifications[3][1]==2,'second kill announces two additional points')
+awards:SetPointAnnouncements(false); zone='Silent zone'; awards:Observe('target')
+check(#notifications==3,'option disables new award messages')
+local _,silentTotal=awards:GetTotals(); check(silentTotal==5,'muting messages still awards points')
+local savedAwards=ns.CreateBestiaryJournal(awardsDB,function() return 901 end)
+check(not savedAwards:GetPointAnnouncements(),'notification option persists')
+savedAwards:SetPointsAwardedCallback(function() error('existing credit must not be reannounced') end)
+savedAwards:SetPointAnnouncements(true); savedAwards:GetTotals(); savedAwards:Observe('target')
+UnitIsDead=oldDead
 check(click('Ranks') and AzerothFieldbookBestiaryRanks:IsShown(),'rank picker opens')
 journal:Reset(); controller:Refresh()
 check(#journal:List(nil,'',false)==0,'reset clears book')

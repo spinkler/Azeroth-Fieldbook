@@ -7,7 +7,8 @@ function ns.CreateBestiaryJournal(db, identify)
     local journal = { entries = db.bestiary.entries, revision = 0 }
     local seenGUIDs = {}
     local killedGUIDs = {}
-    local onEntryAdded
+    local liveUnits = {}
+    local onEntryAdded, onPointsAwarded
     local rankLabels = { elite = "Elite", rare = "Rare", rareelite = "Rare Elite", worldboss = "World Boss" }
     local rankPriority = { ["Rare"] = 1, ["Elite"] = 2, ["Rare Elite"] = 3, ["World Boss"] = 4 }
     local magicSchools = { Arcane=true, Fire=true, Frost=true, Holy=true, Nature=true, Shadow=true }
@@ -31,6 +32,83 @@ function ns.CreateBestiaryJournal(db, identify)
         if value == "" or #value > limit then return end
         return value
     end
+    -- Testing thresholds. Each tier stores cumulative points: silver 1, gold adds 2.
+    local killMilestones = {
+        { kills = 2, points = 3, star = "gold" },
+        { kills = 1, points = 1, star = "silver" },
+    }
+    function journal:GetKillReward(id)
+        local entry = self.entries[id]
+        local kills = entry and math.max(0, math.floor(tonumber(entry.kills) or 0)) or 0
+        for _, milestone in ipairs(killMilestones) do
+            if kills >= milestone.kills then return milestone.points, milestone.star, kills end
+        end
+        return 0, nil, kills
+    end
+    function journal:GetPointAnnouncements()
+        return db.pointAnnouncements ~= false
+    end
+    function journal:SetPointAnnouncements(enabled)
+        db.pointAnnouncements = enabled == true
+    end
+    function journal:SetPointsAwardedCallback(callback)
+        onPointsAwarded = type(callback) == "function" and callback or nil
+    end
+    local function award(self, entry, amount, reason)
+        if amount > 0 and self:GetPointAnnouncements() and onPointsAwarded then
+            onPointsAwarded(entry, amount, reason)
+        end
+    end
+    local function discoveryProgress(entry)
+        if type(entry.discoveryProgress) ~= "table" then
+            local progress = { levels = {}, zones = {} }
+            -- Older journals kept only level endpoints; never infer unseen levels between them.
+            if number(entry.levelMin) then progress.levels[entry.levelMin] = true end
+            if number(entry.levelMax) then progress.levels[entry.levelMax] = true end
+            for zone in pairs(entry.locations or {}) do progress.zones[zone] = true end
+            entry.discoveryProgress = progress
+        end
+        local progress = entry.discoveryProgress
+        if progress.points == nil then
+            local levels, zones = 0, 0
+            for _ in pairs(progress.levels) do levels = levels + 1 end
+            for _ in pairs(progress.zones) do zones = zones + 1 end
+            -- Remove the first level/zone bonuses from older scoring. Old records
+            -- do not retain whether later discoveries happened together.
+            progress.points = math.max(0, levels-1) + math.max(0, zones-1)
+        end
+        return progress
+    end
+    local function recordDiscovery(self, entry, level, zone)
+        local progress = discoveryProgress(entry)
+        local reasons = {}
+        if number(level) and not progress.levels[level] then
+            progress.levels[level] = true
+            reasons[#reasons+1] = "new observed level " .. level
+        end
+        if str(zone) and not progress.zones[zone] then
+            progress.zones[zone] = true
+            reasons[#reasons+1] = "new zone: " .. zone
+        end
+        if progress.initial then
+            -- The entry point covers its first observed level and zone together.
+            progress.initial = nil
+        elseif #reasons > 0 then
+            progress.points = progress.points + 1
+            award(self, entry, 1, table.concat(reasons, "; "))
+        end
+        if #reasons > 0 then self:Touch() end
+    end
+    function journal:GetTotals()
+        local count, points = 0, 0
+        for id, entry in pairs(self.entries) do
+            count = count + 1
+            points = points + 1 + self:GetKillReward(id)
+            local progress = discoveryProgress(entry)
+            points = points + progress.points
+        end
+        return count, points
+    end
     function journal:Touch() self.revision = self.revision + 1 end
     function journal:SetEntryAddedCallback(callback)
         onEntryAdded = type(callback) == "function" and callback or nil
@@ -38,10 +116,41 @@ function ns.CreateBestiaryJournal(db, identify)
     function journal:DeleteEntry(id)
         if not number(id) or not self.entries[id] then return false end
         self.entries[id] = nil
+        for unit, observed in pairs(liveUnits) do if observed.id == id then liveUnits[unit] = nil end end
         -- Remove legacy observations too, so reload cannot migrate the entry back.
         db.bestiary.creatures[id] = nil
         self:Touch()
         return true
+    end
+    function journal:GetSingleObservationWindow()
+        return db.singleObservationWindow ~= false
+    end
+    function journal:SetSingleObservationWindow(enabled)
+        db.singleObservationWindow = enabled == true
+    end
+    function journal:GetUIScale()
+        return math.max(0.5, math.min(1.5, tonumber(db.uiScale) or 1))
+    end
+    function journal:SetUIScale(value)
+        db.uiScale = math.max(0.5, math.min(1.5, tonumber(value) or 1))
+        if ns.UIScale then ns.UIScale:Set(db.uiScale) end
+    end
+    function journal:GetMinimapButton()
+        return db.showMinimapButton ~= false
+    end
+    function journal:SetMinimapButton(enabled)
+        db.showMinimapButton = enabled == true
+        if ns.MinimapButton then ns.MinimapButton:ApplySettings() end
+    end
+    function journal:GetNotesFollowTarget()
+        return db.creatureNotesFollowTarget ~= false
+    end
+    function journal:SetNotesFollowTarget(enabled)
+        db.creatureNotesFollowTarget = enabled == true
+    end
+    function journal:GetNotesTarget()
+        if not self:GetNotesFollowTarget() then return end
+        return self:Observe("target")
     end
     function journal:GetCreatureAnnouncement()
         return db.creatureAnnouncements == true
@@ -100,18 +209,28 @@ function ns.CreateBestiaryJournal(db, identify)
         local entry = self.entries[id]
         if not entry then
             entry = { id = id, category = "Unclassified", abilities = {}, damage = {}, locations = {}, offenses = {}, resistances = {}, immunities = {}, behaviours = {}, kills = 0, confirmed = false }
+            entry.discoveryProgress = { levels = {}, zones = {}, points = 0, initial = true }
             self.entries[id] = entry
             self:Touch()
+            award(self, entry, 1, "new creature entry")
         end
         return entry
     end
     function journal:Observe(unit)
         local id = identify(unit)
         if not id then return end
-        if self.entries[id] and self.entries[id].confirmed then return id end
+        local liveGUID = read(UnitGUID, unit)
+        if str(liveGUID) and read(UnitIsDead, unit) == false then
+            liveUnits[unit] = { id = id, guid = liveGUID }
+        end
+        if self.entries[id] and self.entries[id].confirmed then
+            recordDiscovery(self, self.entries[id], read(UnitLevel, unit), read(GetRealZoneText) or read(GetZoneText))
+            return id
+        end
         local name = read(UnitName, unit)
         if not str(name) then return end
         local entry = self:Ensure(id)
+        recordDiscovery(self, entry, read(UnitLevel, unit), read(GetRealZoneText) or read(GetZoneText))
         local wasNamed = str(entry.name)
         local category, level, classification = read(UnitCreatureType, unit), read(UnitLevel, unit), read(UnitClassification, unit)
         local changed = entry.name ~= name
@@ -182,13 +301,24 @@ function ns.CreateBestiaryJournal(db, identify)
     end
     function journal:RecordKill(unit)
         if read(UnitIsDead, unit) ~= true then return false end
-        local id = identify(unit)
-        local entry = id and self.entries[id]
         local guid = read(UnitGUID, unit)
-        if not entry or entry.confirmed or not str(guid) or killedGUIDs[guid] then return false end
+        if not str(guid) or killedGUIDs[guid] then return false end
+        local id = identify(unit)
+        local observed = liveUnits[unit]
+        -- A corpse may no longer be attackable. Accept only the same readable GUID
+        -- previously observed as an eligible living NPC, with ownership still checked.
+        if not id and observed and observed.guid == guid
+            and read(UnitExists, unit) == true and read(UnitPlayerControlled, unit) == false then
+            id = observed.id
+        end
+        local entry = id and self.entries[id]
+        if not entry then return false end
+        local previousPoints = self:GetKillReward(id)
         killedGUIDs[guid] = true
         entry.kills = math.max(0, tonumber(entry.kills) or 0) + 1
         self:Touch()
+        local points, star = self:GetKillReward(id)
+        award(self, entry, points - previousPoints, (star or "kill") .. " star")
         return true
     end
     function journal:Offer(id, name, origin, spellID)
@@ -429,6 +559,9 @@ function ns.CreateBestiaryJournal(db, identify)
         self.entries = db.bestiary.entries
         seenGUIDs = {}
         killedGUIDs = {}
+        liveUnits = {}
+        if ns.UIScale then ns.UIScale:Initialize(db) end
+        if ns.MinimapButton then ns.MinimapButton:ApplySettings() end
         self:Touch()
     end
     function journal:ResetDatabase()

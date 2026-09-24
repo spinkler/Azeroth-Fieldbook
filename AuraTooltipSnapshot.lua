@@ -101,6 +101,7 @@ function snapshot:Initialize(settings, anchor, eligibility)
     db.displayHoveredAuraSnapshots = db.displayHoveredAuraSnapshots ~= false
     if not panel then
         panel = CreateFrame("Frame", "AzerothFieldbookAuraSnapshot", UIParent, "BackdropTemplate")
+        if ns.UIScale then ns.UIScale:Register(panel) end
         panel:SetSize(455,340); panel:SetClampedToScreen(true); panel:SetFrameStrata("MEDIUM")
         panel:SetPoint("TOPLEFT",anchor,"TOPRIGHT",8,0)
         panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12})

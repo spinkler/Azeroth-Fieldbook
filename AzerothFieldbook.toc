@@ -2,10 +2,11 @@
 ## Title: Azeroth Fieldbook
 ## Notes: A personal monster journal for World of Warcraft.
 ## Author: Spinkler
-## Version: 0.8.1
+## Version: 0.8.2
 ## X-Curse-Project-ID: 1708795
 ## SavedVariablesPerCharacter: AzerothFieldbookDB
 
+UIScale.lua
 BestiaryEncounterReader.lua
 BestiaryJournal.lua
 CreatureNotes.lua
@@ -14,4 +15,5 @@ TargetCastIDs.lua
 AuraTooltipSnapshot.lua
 SpellIDWindow.lua
 DebugReport.lua
+MinimapButton.lua
 AzerothFieldbook.lua

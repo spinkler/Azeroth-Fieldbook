@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.8.2-beta - 2026-09-24
+
+### Added
+
+- Default-on Creature notes follow target selection option. Eligible targets
+  switch ID Logs and Notes without changing the Bestiary page or opening a
+  closed notes window.
+- Pin icon beside the notes close button. Pinning depresses the button, disables
+  Close and prevents Escape from dismissing the notes window.
+- Default-on minimap button to open or close the journal, with a visibility
+  checkbox. Both journal and minimap use the INV_Misc_Book_02 icon.
+- Saved UI scale from 50% to 150%, default 100%, with a reset button. The slider
+  previews the percentage and applies scaling only when released.
+- Discovery points: first sightings award one point including their initial
+  level and zone. Later sightings revealing a new level, zone, or both award
+  one point per observation; repeated sightings award nothing.
+- Silver and gold kill milestones with cumulative rewards: silver awards one
+  point and gold adds two more. **Testing thresholds remain one kill for silver
+  and two kills for gold.**
+- Default-on point award chat messages, controlled by an Options checkbox.
+- Journal entry and point totals above search, a grey Search placeholder, and
+  a muted review legend below the list.
+
+### Changed
+
+- Widened the creature list by 24px within the same book dimensions, preserving
+  action-button widths while compressing the right-pane fields.
+- Colored creature names yellow and moved the kill counter beside Creature
+  Notes, with its silver/gold star immediately to the left.
+- Offenses, Defenses and Behaviour replace one another and share their top-left
+  position by default, including after dragging. An option permits multiple windows.
+- Added a yellow OPTIONS heading and grey No damage recorded empty-state text.
+- Kill and discovery-point progress continue while entries are locked; reviewed
+  creature information remains protected from changes.
+
+### Fixed
+
+- Added death polling and a same-GUID fallback for previously observed eligible
+  NPCs that become unattackable corpses. Each death is counted once without an
+  XP requirement; unreadable or missing death evidence still cannot be counted.
+- Removed duplicate first-level and first-zone discovery bonuses. Existing
+  records use saved zones and observed level endpoints; older data cannot
+  reconstruct whether later discoveries occurred in the same observation.
+- Removed keyboard capture from the Options scale slider.
+
 ## v0.8.1-beta - 2026-09-24
 
 ### Added
