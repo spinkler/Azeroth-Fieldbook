@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.8.1-beta - 2026-09-24
+
+### Added
+
+- Delete a selected creature with a typed `delete` confirmation. This removes
+  its observations, abilities, ID logs, notes and legacy record. Cancelling or
+  changing selection discards confirmation; future encounters can record it again.
+- Ranks filter with Elite, Rare, Rare Elite and World Boss selections, combined
+  with existing filters. Added 6px of spacing below Unclassified.
+- Ability effect tags for Arcane, Fire, Frost, Holy, Nature and Shadow resistance
+  and immunity.
+- Disabled Share placeholder beside Delete, below Previous/Next.
+
+### Changed
+
+- Refined and reduced the padlock button and artwork, rounded its corners,
+  added a keyhole and raised shackle, and moved it up 2px. Added 1px of padding
+  on each side of the artwork and 2px of left padding to the creature pane.
+- Reserved a fixed column for the review asterisk so creature names do not shift
+  when entries are locked or unlocked.
+- Matched the Locations, Ranks, Effects, Offenses, Defenses, Behaviour and Options
+  corner close buttons to ID Logs and Notes.
+- Colored the five instructions headings and ABOUT heading yellow.
+
+### Fixed
+
+- Kept the rank filter and its controls together when raising the window.
+- Added a scrollbar for more than four Recorded Abilities, synchronized with
+  mouse-wheel navigation and hidden when all abilities fit.
+- Used the damage window's available height for five single-line records;
+  scrolling now accounts for wrapped lines and appears only when needed.
+- Hid the Locations scrollbar and disabled wheel scrolling when the list fits.
+
 ## v0.8.0-beta - 2026-09-24
 
 This release moves Azeroth Fieldbook from Alpha to Beta.

@@ -35,6 +35,14 @@ function ns.CreateBestiaryJournal(db, identify)
     function journal:SetEntryAddedCallback(callback)
         onEntryAdded = type(callback) == "function" and callback or nil
     end
+    function journal:DeleteEntry(id)
+        if not number(id) or not self.entries[id] then return false end
+        self.entries[id] = nil
+        -- Remove legacy observations too, so reload cannot migrate the entry back.
+        db.bestiary.creatures[id] = nil
+        self:Touch()
+        return true
+    end
     function journal:GetCreatureAnnouncement()
         return db.creatureAnnouncements == true
     end
@@ -388,7 +396,7 @@ function ns.CreateBestiaryJournal(db, identify)
         table.sort(names)
         return names
     end
-    function journal:List(category, query, reviewOnly, initial, locations)
+    function journal:List(category, query, reviewOnly, initial, locations, ranks)
         query = (query or ""):lower()
         local locationFilterActive = type(locations) == "table" and next(locations) ~= nil
         local rows = {}
@@ -407,6 +415,7 @@ function ns.CreateBestiaryJournal(db, identify)
                 or (category == "Unclassified" and entry.category == "Not specified")
             if categoryMatch and (not initial or first == initial)
                 and (not reviewOnly or review)
+                and (not ranks or not next(ranks) or ranks[entry.rank] == true)
                 and locationMatch
                 and (name:lower():find(query, 1, true) or entry.category:lower():find(query, 1, true)) then
                 rows[#rows + 1] = { id = id, name = name, review = review }

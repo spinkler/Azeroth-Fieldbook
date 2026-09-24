@@ -177,7 +177,7 @@ lua.execute(r'''
 controller=ns.CreateBestiaryBook(journal)
 controller:Toggle()
 check(AzerothFieldbookBestiary:IsShown(),'book opens')
-check(#UISpecialFrames==7 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
+check(#UISpecialFrames==9 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
 check(controller:OpenAtUnit('mouseover'),'mouseover binding opens the observed NPC page')
 for _,o in ipairs(objects) do check(o.text~='Your note','empty manual field note stays visually empty') end
 local function click(text)
@@ -238,6 +238,73 @@ check(notes.creature.text=='Other creature' and notes.count.text=='0/10','book s
 selectEntry(42)
 check(notes.count.text=='1/10' and notes.notes.text=='Boar field notes','book selection restores notes')
 check(click('Creature Notes'),'creature notes button opens window')
+local abilityBook=AzerothFieldbookBestiary
+local savedAbilities=journal.entries[42].abilities
+journal.entries[42].abilities={}
+for i=1,4 do journal.entries[42].abilities['Ability '..i]={state='confirmed',spellID=i} end
+controller:Refresh()
+check(not abilityBook.abilityScrollBar:IsShown(),'four abilities fit without scrollbar')
+journal.entries[42].abilities['Ability 5']={state='confirmed',spellID=5}; controller:Refresh()
+check(abilityBook.abilityScrollBar:IsShown(),'fifth ability enables scrollbar')
+abilityBook.abilityScrollBar.scripts.OnValueChanged(abilityBook.abilityScrollBar,1)
+check(abilityBook.abilities[1].name=='Ability 2','scrollbar changes displayed abilities')
+abilityBook.abilities[1].scripts.OnMouseWheel(abilityBook.abilities[1],1)
+check(abilityBook.abilities[1].name=='Ability 1','mouse wheel changes displayed abilities')
+journal.entries[42].abilities['Ability 5']=nil; controller:Refresh()
+check(not abilityBook.abilityScrollBar:IsShown(),'scrollbar hides when abilities fit again')
+journal.entries[42].abilities=savedAbilities; controller:Refresh()
+local damageBook=AzerothFieldbookBestiary
+local savedDamage=journal.entries[42].damage
+journal.entries[42].damage={}
+damageBook.damageScrollBar=CreateFrame('Frame')
+for level=1,5 do journal.entries[42].damage[level]={low=10,high=20,reports=1} end
+controller:Refresh()
+for _, row in ipairs(damageBook.damageRows) do row.text.GetStringHeight=function() return 14 end end
+controller:Refresh()
+check(not damageBook.damageScrollBar:IsShown(),'five single-line damage rows need no scrollbar')
+journal.entries[42].damage[6]={low=10,high=20,reports=1}; controller:Refresh()
+check(damageBook.damageScrollBar:IsShown(),'six damage rows show scrollbar')
+journal.entries[42].damage[6]=nil
+local text=damageBook.damageRows[1].text
+text.GetStringHeight=function() return 28 end
+controller:Refresh()
+check(damageBook.damageScrollBar:IsShown(),'wrapped damage text counts toward overflow')
+text.GetStringHeight=function() return 14 end
+controller:Refresh()
+check(not damageBook.damageScrollBar:IsShown(),'scrollbar hides again when content fits')
+journal.entries[42].damage=savedDamage; controller:Refresh()
+
+check(click('Delete'),'delete button opens confirmation')
+local deletion=AzerothFieldbookDeleteCreature
+check(deletion:IsShown() and deletion.id==42,'confirmation identifies selected creature')
+deletion.input:SetText('DELETE'); deletion.input.scripts.OnEnterPressed(deletion.input)
+check(journal.entries[42],'incorrect confirmation preserves entry')
+selectEntry(43)
+check(not deletion:IsShown(),'changing selection cancels confirmation')
+deletion.input:SetText('delete'); deletion.input.scripts.OnEnterPressed(deletion.input)
+check(journal.entries[42] and journal.entries[43],'stale confirmation cannot delete either entry')
+selectEntry(42); click('Delete')
+deletion.input.scripts.OnEscapePressed(deletion.input)
+check(journal.entries[42] and not deletion:IsShown(),'escape cancels deletion')
+db.bestiary.creatures[42]={spells={}}
+click('Delete'); deletion.input:SetText('delete'); deletion.input.scripts.OnEnterPressed(deletion.input)
+check(not journal.entries[42] and not db.bestiary.creatures[42],'confirmed deletion removes locked entry and legacy data')
+check(journal.entries[43] and not AzerothFieldbookBestiary.deleteButton.enabled,'other entries survive; no selection disables delete')
+check(notes.count.text=='0/10','deleted creature notes cleared from window')
+local reloaded=ns.CreateBestiaryJournal(db,function() return nil end)
+check(not reloaded.entries[42],'deleted entry does not return through legacy migration')
+local ranksDB={bestiary={entries={},creatures={}}}
+local ranksJournal=ns.CreateBestiaryJournal(ranksDB,function() return nil end)
+for i, rank in ipairs({'Elite','Rare','Rare Elite','World Boss'}) do
+    local entry=ranksJournal:Ensure(i); entry.rank=rank; entry.name='Rank '..i
+end
+ranksJournal:Ensure(5).name='Ordinary'
+check(#ranksJournal:List(nil,'',false,nil,nil,{})==5,'empty rank filter includes ordinary creatures')
+check(#ranksJournal:List(nil,'',false,nil,nil,{Elite=true,Rare=true})==2,'rank filters combine with OR')
+check(#ranksJournal:List(nil,'',false,nil,nil,{['Rare Elite']=true})==1,'rare elite is separately selectable')
+check(#ranksJournal:List(nil,'Rank 4',false,nil,nil,{['World Boss']=true})==1,'rank combines with text')
+check(#ranksJournal:List(nil,'Rank 1',false,nil,nil,{Rare=true})==0,'rank and text both required')
+check(click('Ranks') and AzerothFieldbookBestiaryRanks:IsShown(),'rank picker opens')
 journal:Reset(); controller:Refresh()
 check(#journal:List(nil,'',false)==0,'reset clears book')
 ''')

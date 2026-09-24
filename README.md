@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.8.0 (Beta)
+# Azeroth Fieldbook 0.8.1 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -8,7 +8,7 @@ information from the player's own encounters. It does not ship with creature or
 spell databases.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.8.0.
+are not part of version 0.8.1.
 
 ## Installation and opening
 
@@ -29,7 +29,7 @@ Target or mouse over an attackable NPC to record its readable name, creature
 type, level range, location and model. Players, pets, vehicles and
 player-controlled creatures are excluded.
 
-The index supports creature-type, location, review-state, text and A-Z filters.
+The index supports creature-type, location, rank, review-state, text and A-Z filters.
 Filters combine. Entries with unreadable or unspecified creature types share the
 **Unclassified** filter.
 
@@ -49,6 +49,11 @@ Only confirmed abilities from a locked creature entry appear in NPC tooltips.
 Locking freezes the creature's recorded abilities, traits, damage observations,
 metadata and kill count. Unlock it to resume recording. Personal ID Logs and
 Notes remain editable while locked.
+
+Delete removes the selected creature and its saved records after you type
+`delete` and press Enter. Future encounters can record it again. Share is a
+disabled placeholder. Ability effects include school-specific resistance and
+immunity tags.
 
 ## Spell IDs and personal notes
 
@@ -107,7 +112,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.8.0 stores per-character data in `AzerothFieldbookDB`, with monster
+Version 0.8.1 stores per-character data in `AzerothFieldbookDB`, with monster
 journal data under its `bestiary` section.
 
 The previous binding action IDs remain registered behind the newly branded
