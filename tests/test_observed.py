@@ -353,7 +353,24 @@ entry.confirmed=true; entry.abilities['Observed trap'].state='confirmed'
 AzerothFieldbookDB.bestiary.creatures={}
 GameTooltip.lines={}; tooltipHook(GameTooltip)
 check(GameTooltip.lines[2]=='Observed trap','manual journal abilities work without automatic DB')
+guid='Creature-0-1-2-3-42-locked'
+castName,castID='Locked new ability',888
+frames[5].handler(frames[5], 'UNIT_SPELLCAST_SUCCEEDED', 'target', nil, 888)
+check(not entry.abilities['Locked new ability'] and next(AzerothFieldbookDB.bestiary.creatures)==nil,'locked casts cannot alter either saved knowledge store')
+dead=true; frames[5].handler(frames[5], 'UNIT_HEALTH', 'target')
+check(entry.kills==1,'locked creature kill total stays unchanged')
+dead=false
 guid='Player-1-42'; GameTooltip.lines={}; tooltipHook(GameTooltip)
 check(#GameTooltip.lines==0,'journal still excludes players')
+''')
+book_namespace.ShowDebugReport = lua.eval('function(text) copiedDebugReport=text end')
+lua.execute(r'''messages={}
+SlashCmdList.AZEROTHFIELDBOOK('debug')
+local lines={}
+for _,message in ipairs(messages) do
+    lines[#lines+1]=message:gsub('^|cff80d0ffAzeroth Fieldbook:|r ', '')
+end
+check(copiedDebugReport==table.concat(lines,'\n'),'copy window receives the entire chat diagnostic snapshot')
+check(copiedDebugReport:find('Equal-hit automation',1,true),'final diagnostic line included')
 ''')
 print('PASS: Lua 5.1 observation, spoiler boundaries, restricted input, tooltip, journal integration, reload and reset tests')

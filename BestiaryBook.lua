@@ -12,10 +12,11 @@ local function addonVersion()
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
         if ok and type(version) == "string" and version ~= "" then return version end
     end
-    return "0.7.0"
+    return "0.8.0"
 end
 
 function ns.CreateBestiaryBook(journal)
+    local creatureNotes = ns.CreateCreatureNotesWindow and ns.CreateCreatureNotesWindow(journal)
     local book, selected, offset, abilityOffset = nil, nil, 0, 0
     local noteOffset, refreshDamageNotes = 0, nil
     local category, initial, reviewOnly = nil, nil, false
@@ -174,6 +175,20 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         book.indexCount:SetText(#rows .. " entries  |  * awaiting review")
         local e = selected and journal.entries[selected]
+        if creatureNotes then creatureNotes:SetCreature(selected) end
+        book.creatureNotesButton:SetEnabled(e ~= nil)
+        local editable = e ~= nil and not e.confirmed
+        for _, control in ipairs({book.offenseButton, book.defenseButton, book.behaviourButton,
+            book.effectButton, book.confirmAbilityButton, book.resolveButton, book.damageButton,
+            book.manualName, book.manualNote, book.spellLink}) do
+            control:SetEnabled(editable)
+            control:SetAlpha(editable and 1 or 0.45)
+        end
+        if not editable then
+            book.manualName:ClearFocus(); book.manualNote:ClearFocus(); book.spellLink:ClearFocus()
+            book.offensePicker:Hide(); book.defensePicker:Hide(); book.behaviourPicker:Hide()
+            book.effectPicker:Hide(); book.damageForm:Hide(); book.notesForm:Hide()
+        end
         book.detail:SetShown(e ~= nil)
         book.empty:SetShown(e == nil)
         if not e then
@@ -240,8 +255,11 @@ local ink = { 0.75, 0.8, 0.8 }
                 local effects=effectsText(ability.effects)
                 local note=ability.note or (ability.origin ~= "Your note" and ability.origin or nil)
                 row.note:SetText(effects and note and (effects.." — "..note) or effects or note or "")
-                row.accept:SetEnabled(ability.state ~= "confirmed")
-                row.link:SetEnabled(true)
+                row.accept:SetEnabled(editable and ability.state ~= "confirmed")
+                row.link:SetEnabled(editable)
+                row.reject:SetEnabled(editable)
+                row.tooltipCheck:SetEnabled(editable)
+                for _, control in ipairs({row.accept,row.link,row.reject,row.tooltipCheck}) do control:SetAlpha(editable and 1 or 0.45) end
                 row.reject:SetText(ability.state == "rejected" and "Remove" or "Reject")
             else row:Hide() end
         end
@@ -496,6 +514,11 @@ local ink = { 0.75, 0.8, 0.8 }
             book.letterButtons[i]=tab
         end
         book.title = label(book, "", 336, -55, 365, "GameFontNormalLarge")
+        book.creatureNotesButton=button(book,"Creature Notes",806,-52,130,function()
+            if creatureNotes then creatureNotes:Open(selected) end
+        end)
+        book.creatureNotesButton:ClearAllPoints()
+        book.creatureNotesButton:SetPoint("TOPRIGHT",book,"TOPRIGHT",-24,-52)
         local titlePath, titleSize, titleFlags = book.title:GetFont()
         if titlePath and titleSize then book.title:SetFont(titlePath, titleSize + 2, titleFlags) end
         book.subTitle = label(book, "", 336, -84, 600)
@@ -698,8 +721,8 @@ local ink = { 0.75, 0.8, 0.8 }
             message("Exact match: "..spellName.." (ID "..spellID..").")
         end
         book.spellLink:SetScript("OnEnterPressed",function(self) resolveSpellLink(); self:ClearFocus() end)
-        button(detail,"Resolve",640,-672,92,resolveSpellLink)
-        button(detail,"Confirm this ability",740,-672,195,function()
+        book.resolveButton=button(detail,"Resolve",640,-672,92,resolveSpellLink)
+        book.confirmAbilityButton=button(detail,"Confirm this ability",740,-672,195,function()
             local ok,msg=journal:AddManual(selected,book.manualName:GetText(),book.manualNote:GetText(),book.spellLink:GetText(),book.manualEffects)
             message(msg)
             if ok then book.manualName:SetText(""); book.manualNote:SetText(""); book.spellLink:SetText(""); book.manualEffects={}; book.effectButton:SetText("Choose effects"); refresh() end
@@ -815,7 +838,7 @@ local ink = { 0.75, 0.8, 0.8 }
             for _,control in ipairs(offensePicker.schoolButtons) do
                 local enabled=entry and type(entry.offenses)=="table" and entry.offenses[control.schoolName] == true
                 control:SetText("|cff"..control.schoolColor..control.schoolName.."|r")
-                control:SetAlpha(enabled and 1 or 0.45); control:SetEnabled(entry ~= nil)
+                control:SetAlpha(enabled and 1 or 0.45); control:SetEnabled(entry ~= nil and not entry.confirmed)
             end
         end
         offensePicker:HookScript("OnShow",refreshOffensePicker)
@@ -844,7 +867,7 @@ local ink = { 0.75, 0.8, 0.8 }
             for _,row in ipairs(defensePicker.rows) do
                 row.resistant:SetChecked(entry and type(entry.resistances)=="table" and entry.resistances[row.schoolName] == true)
                 row.immune:SetChecked(entry and type(entry.immunities)=="table" and entry.immunities[row.schoolName] == true)
-                row.resistant:SetEnabled(entry ~= nil); row.immune:SetEnabled(entry ~= nil)
+                row.resistant:SetEnabled(entry ~= nil and not entry.confirmed); row.immune:SetEnabled(entry ~= nil and not entry.confirmed)
             end
         end
         defensePicker:HookScript("OnShow",refreshDefensePicker)
@@ -880,7 +903,7 @@ local ink = { 0.75, 0.8, 0.8 }
             local entry=selected and journal.entries[selected]
             for _,control in ipairs(behaviourPicker.controls) do
                 control:SetChecked(entry and type(entry.behaviours)=="table" and entry.behaviours[control.behaviourName] == true)
-                control:SetEnabled(entry ~= nil)
+                control:SetEnabled(entry ~= nil and not entry.confirmed)
             end
         end
         behaviourPicker:HookScript("OnShow",refreshBehaviourPicker)
@@ -973,6 +996,9 @@ local ink = { 0.75, 0.8, 0.8 }
                 local index=noteOffset+i; local note=notes[index]
                 row.noteIndex=note and index or nil
                 if note then
+                    local entry=selected and journal.entries[selected]
+                    row.remove:SetEnabled(entry ~= nil and not entry.confirmed)
+                    row.remove:SetAlpha(entry and not entry.confirmed and 1 or 0.45)
                     row.text:SetText((note.legacy and "Older combined note: " or "Observed range: ")..note.low.."-"..note.high)
                     row:Show()
                 else row:Hide() end
@@ -1045,7 +1071,7 @@ local ink = { 0.75, 0.8, 0.8 }
         locationFrame:Hide(); book.locationFrame=locationFrame
 
         local help=CreateFrame("Frame","AzerothFieldbookHelp",UIParent,"BackdropTemplate")
-        help:SetSize(610,735); help:SetPoint("CENTER"); help:SetFrameStrata("FULLSCREEN_DIALOG"); help:SetClampedToScreen(true)
+        help:SetSize(610,767); help:SetPoint("CENTER"); help:SetFrameStrata("FULLSCREEN_DIALOG"); help:SetClampedToScreen(true)
         help:SetMovable(true); help:EnableMouse(true); help:RegisterForDrag("LeftButton")
         help:SetScript("OnDragStart",function(self) self:StartMoving() end)
         help:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
@@ -1056,20 +1082,34 @@ local ink = { 0.75, 0.8, 0.8 }
         helpPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         helpPaper:SetTexCoord(0,1,0,1); addBackgroundLayer(helpPaper, 0.504,0.504,0.48888)
         label(help,"AZEROTH FIELDBOOK - BESTIARY",30,-30,500,"GameFontNormalLarge")
-        label(help,"1. Encounter\nTarget or mouse over an attackable NPC. Its name, creature type and observed level range are added without revealing unseen abilities.\n\n2. Record\nReadable casts and safe post-combat records become pending field notes. Add hidden traps or other missing abilities manually only after experiencing them. Equal-level hit ranges are manual observations because Forever blocks per-hit combat-log data.\n\n3. Review\nOpen the Bestiary, select the creature and review each ability. Confirm accurate observations, reject doubtful ones, or remove rejected notes.\n\n4. Lock in\nLock the creature entry when you are satisfied. Only confirmed abilities from locked entries appear in NPC tooltips. Unlocking hides them again without deleting your notes.\n\n5. Browse\nUse creature-type buttons, search, A-Z tabs and the Index reset to navigate the Bestiary. All knowledge remains per character and comes from your own encounters.\n\n6. Reset\nTo permanently erase the Bestiary section, type /fieldbook wipe, then /fieldbook wipe confirm within 60 seconds.",35,-75,535)
-        label(help,"ABOUT",35,-472,120,"GameFontNormal")
-        label(help,"Created by Spinkler\n\nDeveloped with AI-assisted coding tools.\nDesign, direction, testing and final development decisions by the author.",35,-494,535,"GameFontHighlightSmall")
-        help.creatureAnnouncement=CreateFrame("CheckButton",nil,help,"UICheckButtonTemplate")
-        help.creatureAnnouncement:SetPoint("TOPLEFT",30,-565); help.creatureAnnouncement:SetSize(24,24)
-        label(help,"Show a chat message when a new creature entry is added",58,-571,460,"GameFontHighlightSmall")
+        local helpScroll=CreateFrame("ScrollFrame",nil,help,"UIPanelScrollFrameTemplate")
+        helpScroll:SetPoint("TOPLEFT",help,"TOPLEFT",0,-75)
+        helpScroll:SetPoint("BOTTOMRIGHT",help,"BOTTOMRIGHT",-32,65)
+        local helpBody=CreateFrame("Frame",nil,helpScroll)
+        helpBody:SetSize(570,855)
+        helpScroll:SetScrollChild(helpBody)
+        local helpInstructions=label(helpBody,"1. Encounter\nTarget or mouse over an attackable NPC to add it to your Bestiary. Its name, creature type, location and observed level range are recorded automatically.\n\n2. Record\nReadable casts and safe post-combat observations are added as pending notes. Abilities the addon cannot observe directly can also be added manually. Damage ranges must be recorded manually from your own data. Equal-level observations are recommended so level scaling does not distort the results.\n\n3. Review\nOpen the Bestiary and select a creature to review its observations. Confirm accurate abilities, reject doubtful ones, or remove notes you no longer want.\n\n4. Lock Entry\nWhen you are satisfied with an entry, lock it to stop further changes. Confirmed abilities appear in NPC tooltips. ID Logs and Notes remain editable. Unlock to resume recording and hide its abilities from tooltips.\n\n5. Browse\nUse creature-type filters, search, A-Z tabs and Index reset to navigate the Bestiary. All knowledge is stored per character and comes from your own encounters.",35,0,535)
+        local helpDetails=CreateFrame("Frame",nil,helpBody)
+        helpDetails:SetPoint("TOPLEFT",helpInstructions,"BOTTOMLEFT",-35,-14)
+        helpDetails:SetSize(570,490)
+        helpBody:SetHeight(helpInstructions:GetStringHeight()+14+490)
+        label(helpDetails,"ABOUT",35,0,120,"GameFontNormal")
+        label(helpDetails,"Created by Spinkler\n\nDeveloped with AI-assisted coding tools.\nDesign, direction, testing and final development decisions by the author.",35,-22,535,"GameFontHighlightSmall")
+        help.creatureAnnouncement=CreateFrame("CheckButton",nil,helpDetails,"UICheckButtonTemplate")
+        help.creatureAnnouncement:SetPoint("TOPLEFT",30,-93); help.creatureAnnouncement:SetSize(24,24)
+        label(helpDetails,"Show a chat message when a new creature entry is added",58,-99,460,"GameFontHighlightSmall")
         help.creatureAnnouncement:SetScript("OnClick",function(self) journal:SetCreatureAnnouncement(self:GetChecked() == true) end)
-        help.spellIDTooltips=CreateFrame("CheckButton",nil,help,"UICheckButtonTemplate")
-        help.spellIDTooltips:SetPoint("TOPLEFT",30,-597); help.spellIDTooltips:SetSize(24,24)
-        label(help,"Show aura spell IDs on tooltips",58,-603,460,"GameFontHighlightSmall")
+        help.spellIDTooltips=CreateFrame("CheckButton",nil,helpDetails,"UICheckButtonTemplate")
+        help.spellIDTooltips:SetPoint("TOPLEFT",30,-125); help.spellIDTooltips:SetSize(24,24)
+        label(helpDetails,"Show aura spell IDs on tooltips",58,-131,460,"GameFontHighlightSmall")
         help.spellIDTooltips:SetScript("OnClick",function(self) journal:SetSpellIDTooltips(self:GetChecked() == true) end)
-        label(help,"Background brightness",58,-630,170,"GameFontHighlightSmall")
-        help.backgroundBrightness=CreateFrame("Slider",nil,help,"OptionsSliderTemplate")
-        help.backgroundBrightness:SetPoint("TOPLEFT",30,-645)
+        help.displayCastIDs=CreateFrame("CheckButton",nil,helpDetails,"UICheckButtonTemplate")
+        help.displayCastIDs:SetPoint("TOPLEFT",30,-157); help.displayCastIDs:SetSize(24,24)
+        label(helpDetails,"Display Cast IDs",58,-163,460,"GameFontHighlightSmall")
+        help.displayCastIDs:SetScript("OnClick",function(self) journal:SetDisplayCastIDs(self:GetChecked() == true) end)
+        label(helpDetails,"Background brightness",58,-190,170,"GameFontHighlightSmall")
+        help.backgroundBrightness=CreateFrame("Slider",nil,helpDetails,"OptionsSliderTemplate")
+        help.backgroundBrightness:SetPoint("TOPLEFT",30,-205)
         help.backgroundBrightness:SetSize(180,16)
         local brightnessTrack=help.backgroundBrightness:CreateTexture(nil,"BACKGROUND")
         brightnessTrack:SetPoint("TOPLEFT",2,-4)
@@ -1082,6 +1122,32 @@ local ink = { 0.75, 0.8, 0.8 }
             journal:SetBackgroundBrightness(value)
             book:SetBackgroundBrightness(value)
         end)
+        label(helpDetails,"SPELL ID WINDOW",35,-243,460,"GameFontNormal")
+        local function windowCheck(key, title, y)
+            local check=CreateFrame("CheckButton",nil,helpDetails,"UICheckButtonTemplate")
+            check:SetPoint("TOPLEFT",30,y); check:SetSize(24,24)
+            label(helpDetails,title,58,y-6,470,"GameFontHighlightSmall")
+            check:SetScript("OnClick",function(self) journal:SetSpellIDWindowOption(key,self:GetChecked() == true) end)
+            help[key]=check
+        end
+        windowCheck("displaySpellIDWindow","Display Spell ID window",-264)
+        windowCheck("spellIDWindowLocked","Lock Spell ID window",-292)
+        windowCheck("spellIDWindowIndefinite","Display Spell IDs in the ID window indefinitely",-320)
+        windowCheck("displayHoveredAuraSnapshots","Retain hovered aura tooltips",-348)
+        local alphaLabel=label(helpDetails,"Window background opacity: 35%",58,-386,460,"GameFontHighlightSmall")
+        help.spellIDWindowAlpha=CreateFrame("Slider",nil,helpDetails,"OptionsSliderTemplate")
+        help.spellIDWindowAlpha:SetPoint("TOPLEFT",30,-401); help.spellIDWindowAlpha:SetSize(180,16)
+        local alphaTrack=help.spellIDWindowAlpha:CreateTexture(nil,"BACKGROUND")
+        alphaTrack:SetPoint("TOPLEFT",2,-4)
+        alphaTrack:SetPoint("BOTTOMRIGHT",-2,4)
+        alphaTrack:SetColorTexture(0.045,0.032,0.018,1)
+        help.spellIDWindowAlpha:SetMinMaxValues(0,1); help.spellIDWindowAlpha:SetValueStep(0.05)
+        help.spellIDWindowAlpha:SetObeyStepOnDrag(true)
+        help.spellIDWindowAlpha:SetScript("OnValueChanged",function(_,value)
+            journal:SetSpellIDWindowOption("spellIDWindowAlpha",value)
+            alphaLabel:SetText("Window background opacity: " .. math.floor(value*100+0.5) .. "%")
+        end)
+        label(helpDetails,"Each row expires two minutes after observation unless kept indefinitely. IDs are display-only; record useful findings manually.",35,-448,510,"GameFontHighlightSmall")
         if type(StaticPopupDialogs) == "table" then
             StaticPopupDialogs.AZEROTHFIELDBOOK_BESTIARY_RESET_CONFIRM = {
                 text = "Reset the Azeroth Fieldbook Bestiary? This permanently deletes all creature entries, notes, abilities, damage records and Bestiary settings.",
@@ -1096,15 +1162,21 @@ local ink = { 0.75, 0.8, 0.8 }
                 timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
             }
         end
-        button(help,"Reset Bestiary",30,-690,160,function()
+        button(help,"Reset Bestiary",30,-722,160,function()
             if StaticPopup_Show then StaticPopup_Show("AZEROTHFIELDBOOK_BESTIARY_RESET_CONFIRM") end
         end)
         help:SetScript("OnShow",function()
+            helpBody:SetHeight(helpInstructions:GetStringHeight()+14+490)
             help.creatureAnnouncement:SetChecked(journal:GetCreatureAnnouncement())
             help.spellIDTooltips:SetChecked(journal:GetSpellIDTooltips())
+            help.displayCastIDs:SetChecked(journal:GetDisplayCastIDs())
+            for _, key in ipairs({"displaySpellIDWindow","spellIDWindowLocked","spellIDWindowIndefinite","displayHoveredAuraSnapshots"}) do
+                help[key]:SetChecked(journal:GetSpellIDWindowOption(key))
+            end
+            help.spellIDWindowAlpha:SetValue(journal:GetSpellIDWindowOption("spellIDWindowAlpha"))
             help.backgroundBrightness:SetValue(journal:GetBackgroundBrightness())
         end)
-        button(help,"Close",225,-690,160,function() help:Hide() end)
+        button(help,"Close",225,-722,160,function() help:Hide() end)
         help:Hide(); book.help=help
         book:SetScript("OnHide",function() book.search:ClearFocus(); book.manualName:ClearFocus(); book.manualNote:ClearFocus(); book.spellLink:ClearFocus(); form:Hide(); notesForm:Hide(); effectPicker:Hide(); locationFrame:Hide(); offensePicker:Hide(); defensePicker:Hide(); behaviourPicker:Hide() end)
         local elapsed, revision = 0, -1
@@ -1136,5 +1208,13 @@ local ink = { 0.75, 0.8, 0.8 }
         return true
     end
     function controller:Refresh() if book then refresh() end end
+    function controller:OpenNotes()
+        if not book then build() end
+        if not selected or not journal.entries[selected] then
+            local target=journal:Observe("target")
+            if target then choose(target) else book:Show(); refresh() end
+        end
+        if creatureNotes then creatureNotes:Open(selected) end
+    end
     return controller
 end

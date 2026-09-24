@@ -142,6 +142,8 @@ end
 
 local function storeObserved(id, spellID, observedName)
     if not db or not positiveID(id) then return end
+    local entry = journal and journal.entries[id]
+    if entry and entry.confirmed then diagnostics.last = "Creature locked; observation not recorded."; return end
     local hasID = positiveID(spellID)
     local hasName = publicString(observedName)
     if not hasID then
@@ -310,6 +312,8 @@ local function initialize()
     elseif GameTooltip and GameTooltip:HasScript("OnTooltipSetUnit") then
         GameTooltip:HookScript("OnTooltipSetUnit", addTooltip)
     end
+    if ns.CastIDs then ns.CastIDs:Initialize(db) end
+    if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy) end
     if journal then
         journal:SetEntryAddedCallback(function(entry)
@@ -423,6 +427,8 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         for key in pairs(db) do db[key] = nil end
         db.version, db.bestiary, db.announce, db.creatureAnnouncements = 1, { creatures = {}, entries = {} }, false, true
         db.showSpellIDs, db.spellIDTooltipInitialized = true, true
+        if ns.CastIDs then ns.CastIDs:Initialize(db) end
+        if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
         if type(SetCVar) == "function" then pcall(SetCVar, "tooltipShowAuraSpellIDs", "1") end
         -- Prevent retained meter history from silently restoring wiped knowledge
         -- after reload. New sessions after each load can still be learned.
@@ -437,12 +443,29 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         say("Wipe cancelled. Nothing deleted.")
     elseif command == "" or command == "book" then
         if book then book:Toggle() else say("Book module unavailable; reload the UI.") end
+    elseif command == "notes" then
+        if book then book:OpenNotes() else say("Book module unavailable; reload the UI.") end
     elseif command == "encounters" then
         if encounters then encounters:Report(say) else say("Encounter module unavailable.") end
     elseif command == "scan" then
         if encounters then encounters:Scan(); encounters:Report(say) else say("Encounter module unavailable.") end
+    elseif command == "debug on" or command == "debug off" then
+        local enabled = command == "debug on"
+        if ns.CastIDs then ns.CastIDs:SetDebug(enabled) end
+        say(enabled and "Cast ID diagnostics on until /reload." or "Cast ID diagnostics off.")
+    elseif command == "debug ?" then
+        say("/fieldbook debug opens a copyable diagnostic report; /fieldbook debug on | off toggles cast ID diagnostic text.")
     elseif command == "debug" then
-        say("Version 0.7.0; all cast events: " .. diagnostics.events .. "; new observations: " .. diagnostics.learned
+        local lines = {}
+        local chatSay = say
+        local function say(line)
+            lines[#lines + 1] = line
+            chatSay(line)
+        end
+        if ns.CastIDs then ns.CastIDs:Report(say) end
+        if ns.SpellIDWindow then ns.SpellIDWindow:Report(say) end
+        local version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "unknown"
+        say("Version " .. version .. "; all cast events: " .. diagnostics.events .. "; new observations: " .. diagnostics.learned
             .. "; tooltip callbacks: " .. diagnostics.tooltips)
         say("Last cast check: " .. diagnostics.last)
         say("Events matched to target/mouseover: " .. matchedEvents .. ". All-event count includes unrelated units.")
@@ -469,6 +492,7 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         say("Readable name OR ID can identify a spell; NPC identity must also pass. Checks are samples, not unique casts.")
         say("Earlier results are session-wide, may belong to a previous target, and survive idle polls until /reload.")
         say("Equal-hit automation unavailable: Forever blocks addon combat-log events; C_DamageMeter exposes totals, not individual hits or crit flags.")
+        if ns.ShowDebugReport then ns.ShowDebugReport(table.concat(lines, "\n")) end
     elseif command == "alerts" then
         db.announce = not db.announce
         say(db.announce and "Discovery messages on." or "Discovery messages off.")
@@ -486,5 +510,6 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         say("/fieldbook debug explains discovery checks (no hidden spell data).")
         say("/fieldbook alerts toggles discovery messages; /fieldbook wipe starts the double-confirmed wipe.")
         say("/fieldbook opens the Azeroth Fieldbook Bestiary; confirm entries and add your own ability notes there.")
+        say("/fieldbook notes opens ID Logs and Notes for the selected Bestiary creature.")
     end
 end

@@ -41,6 +41,26 @@ function ns.CreateBestiaryJournal(db, identify)
     function journal:SetCreatureAnnouncement(enabled)
         db.creatureAnnouncements = enabled == true
     end
+    function journal:GetDisplayCastIDs()
+        return db.displayCastIDs ~= false
+    end
+    function journal:SetDisplayCastIDs(enabled)
+        db.displayCastIDs = enabled == true
+        if ns.CastIDs then ns.CastIDs:SetEnabled(db.displayCastIDs) end
+    end
+    function journal:GetSpellIDWindowOption(key)
+        if key == "displaySpellIDWindow" or key == "displayHoveredAuraSnapshots" then return db[key] ~= false end
+        if key == "spellIDWindowAlpha" then return tonumber(db[key]) or 0.35 end
+        return db[key] == true
+    end
+    function journal:SetSpellIDWindowOption(key, value)
+        if key == "spellIDWindowAlpha" then
+            db[key] = math.max(0, math.min(1, tonumber(value) or 0.35))
+        elseif key == "displaySpellIDWindow" or key == "displayHoveredAuraSnapshots" or key == "spellIDWindowLocked" or key == "spellIDWindowIndefinite" then
+            db[key] = value == true
+        else return end
+        if ns.SpellIDWindow then ns.SpellIDWindow:ApplySettings() end
+    end
     function journal:GetSpellIDTooltips()
         if type(GetCVarBool) == "function" then
             local ok, enabled = pcall(GetCVarBool, "tooltipShowAuraSpellIDs")
@@ -80,6 +100,7 @@ function ns.CreateBestiaryJournal(db, identify)
     function journal:Observe(unit)
         local id = identify(unit)
         if not id then return end
+        if self.entries[id] and self.entries[id].confirmed then return id end
         local name = read(UnitName, unit)
         if not str(name) then return end
         local entry = self:Ensure(id)
@@ -122,7 +143,7 @@ function ns.CreateBestiaryJournal(db, identify)
     end
     local function setSchoolObservation(self, id, field, school, enabled)
         local entry = self.entries[id]
-        if not entry or not magicSchools[school] then return false end
+        if not entry or entry.confirmed or not magicSchools[school] then return false end
         entry[field] = type(entry[field]) == "table" and entry[field] or {}
         local value = enabled == true and true or nil
         if entry[field][school] == value then return true end
@@ -141,7 +162,7 @@ function ns.CreateBestiaryJournal(db, identify)
     end
     function journal:SetBehaviour(id, name, enabled)
         local entry = self.entries[id]
-        if not entry or not behaviourNames[name] then return false end
+        if not entry or entry.confirmed or not behaviourNames[name] then return false end
         entry.behaviours = type(entry.behaviours) == "table" and entry.behaviours or {}
         local value = enabled == true and true or nil
         if value and name == "Hostile" then entry.behaviours.Neutral = nil end
@@ -156,7 +177,7 @@ function ns.CreateBestiaryJournal(db, identify)
         local id = identify(unit)
         local entry = id and self.entries[id]
         local guid = read(UnitGUID, unit)
-        if not entry or not str(guid) or killedGUIDs[guid] then return false end
+        if not entry or entry.confirmed or not str(guid) or killedGUIDs[guid] then return false end
         killedGUIDs[guid] = true
         entry.kills = math.max(0, tonumber(entry.kills) or 0) + 1
         self:Touch()
@@ -166,7 +187,7 @@ function ns.CreateBestiaryJournal(db, identify)
         name = clean(name, 100)
         if not name then return end
         local entry = self:Ensure(id)
-        if not entry then return end
+        if not entry or entry.confirmed then return end
         if entry.ignoredAbilities and entry.ignoredAbilities[name] then return end
         -- Rejected observations stay rejected when automatic scans repeat.
         if not entry.abilities[name] then
@@ -186,7 +207,7 @@ function ns.CreateBestiaryJournal(db, identify)
     end
     function journal:SetAbility(id, name, state)
         local entry = self.entries[id]
-        if not entry or not entry.abilities[name] then return false end
+        if not entry or entry.confirmed or not entry.abilities[name] then return false end
         if state ~= "confirmed" and state ~= "rejected" and state ~= "pending" then return false end
         entry.abilities[name].state = state
         self:Touch()
@@ -194,18 +215,63 @@ function ns.CreateBestiaryJournal(db, identify)
     end
     function journal:SetAbilityTooltip(id, name, enabled)
         local entry = self.entries[id]
-        if not entry or not entry.abilities[name] then return false end
+        if not entry or entry.confirmed or not entry.abilities[name] then return false end
         entry.abilities[name].showInTooltip = enabled == true
         self:Touch()
         return true
     end
     function journal:RemoveAbility(id, name)
         local entry = self.entries[id]
-        if not entry or not entry.abilities[name] then return false end
+        if not entry or entry.confirmed or not entry.abilities[name] then return false end
         entry.abilities[name] = nil
         entry.ignoredAbilities = entry.ignoredAbilities or {}
         entry.ignoredAbilities[name] = true
         self:Touch()
+        return true
+    end
+    function journal:GetIDNotes(id)
+        local entry = self.entries[id]
+        if not entry then return end
+        return entry.idNotes or { spells = {}, text = "" }
+    end
+    function journal:AddNoteSpell(id, reference)
+        local entry = self.entries[id]
+        if not entry then return false, "Select a creature in the Bestiary first." end
+        local spellID = str(reference) and tonumber(reference:match("^%s*(%d+)%s*$"))
+        if not number(spellID) or spellID > 2147483647 then return false, "Enter a positive numeric spell ID." end
+        local log = self:GetIDNotes(id)
+        for _, existing in ipairs(log.spells) do
+            if existing == spellID then return false, "That spell ID is already recorded." end
+        end
+        if #log.spells >= 10 then return false, "Ten abilities recorded. Remove a row to add another." end
+        log.spells[#log.spells + 1] = spellID
+        entry.idNotes = log
+        self:Touch()
+        return true
+    end
+    function journal:RemoveNoteSpell(id, spellID)
+        local log = self:GetIDNotes(id)
+        if not log then return false end
+        for index, existing in ipairs(log.spells) do
+            if existing == spellID then table.remove(log.spells, index); self:Touch(); return true end
+        end
+        return false
+    end
+    function journal:SetCreatureNotes(id, text)
+        local entry = self.entries[id]
+        if not entry or not public(text) or type(text) ~= "string" then return false end
+        -- Literal manual notes; preserve line breaks but not embedded UI markup.
+        text = text:gsub("|", ""):gsub("%c", function(character)
+            return (character == "\n" or character == "\t") and character or ""
+        end)
+        local characters = 0
+        for position in text:gmatch("()[^\128-\191]") do
+            characters = characters + 1
+            if characters > 400 then text = text:sub(1, position - 1); break end
+        end
+        local log = self:GetIDNotes(id)
+        if log.text == text then return true end
+        log.text = text; entry.idNotes = log; self:Touch()
         return true
     end
     function journal:ResolveSpell(reference)
@@ -233,6 +299,7 @@ function ns.CreateBestiaryJournal(db, identify)
     end
     function journal:AddManual(id, name, note, reference, effects)
         local entry = self.entries[id]
+        if entry and entry.confirmed then return false, "Unlock this creature before changing its abilities." end
         name = clean(name, 100)
         local spellID, linkedName, errorMessage = self:ResolveSpell(reference)
         if errorMessage then return false, errorMessage end
@@ -259,6 +326,7 @@ function ns.CreateBestiaryJournal(db, identify)
     end
     function journal:AddDamage(id, level, low, high)
         local entry = self.entries[id]
+        if entry and entry.confirmed then return false, "Unlock this creature before recording damage." end
         level, low, high = tonumber(level), tonumber(low), tonumber(high)
         if not entry or not number(level) or not number(low) or not number(high) or low > high then
             return false, "Enter a shared level and a positive minimum/maximum hit range."
@@ -293,6 +361,7 @@ function ns.CreateBestiaryJournal(db, identify)
     end
     function journal:RemoveDamageNote(id, level, index)
         local entry = self.entries[id]
+        if entry and entry.confirmed then return false end
         local record = entry and entry.damage[level]
         local notes = self:DamageNotes(id, level)
         if not record or not number(index) or not notes[index] then return false end
@@ -358,6 +427,8 @@ function ns.CreateBestiaryJournal(db, identify)
         db.version, db.bestiary, db.announce, db.creatureAnnouncements = 1, { entries = {}, creatures = {} }, false, true
         db.showSpellIDs, db.spellIDTooltipInitialized = true, true
         db.backgroundBrightness = 1
+        self:SetDisplayCastIDs(true)
+        if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
         db.ignoreEncounterHistory = true
         self:Reset()
     end

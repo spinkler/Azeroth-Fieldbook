@@ -3,3 +3,7 @@ package-as: AzerothFieldbook
 ignore:
   - tests
   - .github
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown

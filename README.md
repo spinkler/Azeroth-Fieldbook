@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.7.1 (alpha)
+# Azeroth Fieldbook 0.8.0
 
 *A personal monster journal for World of Warcraft.*
 
@@ -8,7 +8,7 @@ information from the player's own encounters. It does not ship with creature or
 spell databases.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.7.1.
+are not part of version 0.8.0.
 
 ## Installation and opening
 
@@ -46,6 +46,37 @@ Magic schools are color-coded in the creature summary. Creature observations
 remain manual where the client does not expose reliable addon-readable evidence.
 
 Only confirmed abilities from a locked creature entry appear in NPC tooltips.
+Locking freezes the creature's recorded abilities, traits, damage observations,
+metadata and kill count. Unlock it to resume recording. Personal ID Logs and
+Notes remain editable while locked.
+
+## Spell IDs and personal notes
+
+The target cast bar can display **Last Spell ID**. It remains for up to one
+minute, clearing when the target changes, another cast starts, or you right-click
+it. **Display Cast IDs** is enabled by default in the book's ? menu.
+
+A separate movable **Last observed spell IDs** window shows the latest enemy
+cast, identifiable instant cast, debuff on you and buff on a non-player-controlled
+NPC target. It starts enabled and unlocked with 35% background opacity. Entries
+expire after two minutes unless **Display Spell IDs in the ID window indefinitely**
+is enabled. Aura effect types are shown when available.
+
+**Retain hovered aura tooltips** keeps a compact historical snapshot of accessible
+buff/debuff tooltips after hovering. Right-click to dismiss it; durations are
+historical text, not a countdown. This option is enabled by default and shares
+the ID window's expiry setting. Combat restrictions can block enemy aura queries
+or protected native tooltips, so not every buff or instant ability can be shown.
+Displayable secret values are passed directly to UI text; they are not inspected
+or saved as observations.
+
+Use **Creature Notes** beside the selected creature's name, or `/fieldbook notes`,
+to open its **ID Logs and Notes**. Enter up to ten spell IDs to create spell links;
+remove rows with the red x. Each creature also has a 400-character personal notes
+box. These records persist per creature and do not automatically confirm abilities.
+The aura spell-ID tooltip option also controls IDs appended to these spell links.
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Automatic observations
 
@@ -63,7 +94,9 @@ meter settings, or read disk combat logs.
 - `/fieldbook status`: show observation totals and scan status.
 - `/fieldbook encounters`: show encounter import diagnostics.
 - `/fieldbook scan`: retry encounter imports outside combat.
-- `/fieldbook debug`: show API and tooltip diagnostics.
+- `/fieldbook notes`: open personal ID logs and notes for a creature.
+- `/fieldbook debug`: show diagnostics in chat and a selectable copy window.
+- `/fieldbook debug on|off`: enable or disable additional diagnostics.
 - `/fieldbook alerts`: toggle local discovery messages.
 - `/fieldbook wipe`: begin the destructive reset confirmation.
 - `/fieldbook wipe confirm`: erase this character's Bestiary and settings within
@@ -74,7 +107,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.7.1 stores per-character data in `AzerothFieldbookDB`, with monster
+Version 0.8.0 stores per-character data in `AzerothFieldbookDB`, with monster
 journal data under its `bestiary` section.
 
 The previous binding action IDs remain registered behind the newly branded
