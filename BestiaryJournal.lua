@@ -173,7 +173,7 @@ function ns.CreateBestiaryJournal(db, identify)
     function journal:SetSpellIDWindowOption(key, value)
         if key == "spellIDWindowAlpha" then
             db[key] = math.max(0, math.min(1, tonumber(value) or 0.35))
-        elseif key == "displaySpellIDWindow" or key == "displayHoveredAuraSnapshots" or key == "spellIDWindowLocked" or key == "spellIDWindowIndefinite" then
+        elseif key == "displaySpellIDWindow" or key == "displayHoveredAuraSnapshots" or key == "spellIDWindowLocked" or key == "spellIDWindowIndefinite" or key == "spellIDWindowAutoFade" then
             db[key] = value == true
         else return end
         if ns.SpellIDWindow then ns.SpellIDWindow:ApplySettings() end

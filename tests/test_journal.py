@@ -187,7 +187,7 @@ local function click(text)
     end
     return false
 end
-check(click('Record equal-level hits'),'damage form opens')
+check(click('Record damage taken'),'damage form opens')
 check(click('Cancel'),'damage form closes')
 check(click('All'),'category selection')
 check(click('D'),'alphabet tab')
@@ -239,6 +239,26 @@ local singleOption=AzerothFieldbookHelp.singleObservationWindow
 singleOption.GetChecked=function() return true end
 singleOption.scripts.OnClick(singleOption)
 check(behaviour:IsShown() and not defense:IsShown(),'enabling option retains latest open window')
+-- The buttons toggle closed as well as open. Native OnShow drives sibling exclusion.
+for _,item in ipairs({{'Locations',AzerothFieldbookBestiaryLocations},
+    {'Ranks',AzerothFieldbookBestiaryRanks},{'Offenses',offense},
+    {'Defenses',defense},{'Behaviour',behaviour},
+    {'Choose effects',AzerothFieldbookBestiary.effectPicker}}) do
+    item[2]:Hide()
+    check(click(item[1]) and item[2]:IsShown(),'button opens '..item[1])
+    check(click(item[1]) and not item[2]:IsShown(),'button closes '..item[1])
+end
+journal:SetSingleObservationWindow(true)
+click('Offenses'); offense.scripts.OnShow(offense)
+click('Defenses'); defense.scripts.OnShow(defense)
+check(not offense:IsShown() and defense:IsShown(),'toggle buttons preserve single-window swapping')
+click('Defenses'); check(not defense:IsShown(),'active single window can be toggled off')
+journal:SetSingleObservationWindow(false)
+click('Offenses'); offense.scripts.OnShow(offense)
+click('Defenses'); defense.scripts.OnShow(defense)
+click('Offenses')
+check(not offense:IsShown() and defense:IsShown(),'multi-window mode closes only clicked window')
+journal:SetSingleObservationWindow(true)
 check(click('Lock this entry'),'entry can be locked again')
 local help=AzerothFieldbookHelp
 help.scripts.OnShow(help)

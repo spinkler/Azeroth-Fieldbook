@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.8.2 (Beta)
+# Azeroth Fieldbook 0.8.3 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -8,7 +8,7 @@ information from the player's own encounters. It does not ship with creature or
 spell databases.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.8.2.
+are not part of version 0.8.3.
 
 ## Installation and opening
 
@@ -128,7 +128,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.8.2 stores per-character data in `AzerothFieldbookDB`, with monster
+Version 0.8.3 stores per-character data in `AzerothFieldbookDB`, with monster
 journal data under its `bestiary` section.
 
 The previous binding action IDs remain registered behind the newly branded

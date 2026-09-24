@@ -6,6 +6,7 @@ local db, panel, background
 local rows, seen = {}, { player = {}, target = {} }
 local castBars = {}
 local castBarOrder = {}
+local displayAlpha = 1
 local auraStatus = { player = "not scanned", target = "not scanned" }
 local events = CreateFrame("Frame")
 local function public(value) return not (issecretvalue and issecretvalue(value)) end
@@ -47,6 +48,15 @@ local function text(parent, x, y, width, template)
     value:SetPoint("TOPLEFT", x, y); value:SetSize(width, 14); value:SetJustifyH("LEFT")
     return value
 end
+local function updateFade(delta)
+    local hasData = false
+    for _, row in ipairs(rows) do if row.observed then hasData = true; break end end
+    local fading = db.spellIDWindowAutoFade == true and not hasData
+    if fading then displayAlpha = math.max(0, displayAlpha - delta / 0.3)
+    else displayAlpha = 1 end
+    panel:SetAlpha(displayAlpha)
+    panel:EnableMouse(not db.spellIDWindowLocked and not fading)
+end
 local function setup()
     if panel then return end
     panel = CreateFrame("Frame", "AzerothFieldbookSpellIDWindow", UIParent)
@@ -82,12 +92,15 @@ local function setup()
     local elapsed = 0
     panel:SetScript("OnUpdate", function(_, delta)
         elapsed = elapsed + delta
-        if elapsed < 0.25 then return end
-        elapsed = 0
-        if db.spellIDWindowIndefinite then return end
-        for _, row in ipairs(rows) do
-            if row.observed and GetTime() - row.observed >= 120 then clear(row) end
+        if elapsed >= 0.25 then
+            elapsed = 0
+            if not db.spellIDWindowIndefinite then
+                for _, row in ipairs(rows) do
+                    if row.observed and GetTime() - row.observed >= 120 then clear(row) end
+                end
+            end
         end
+        updateFade(delta)
     end)
 end
 local function present(index, id, name, effect)
@@ -100,6 +113,7 @@ local function present(index, id, name, effect)
     pcall(row.effect.SetText, row.effect, effect)
     row.observed = GetTime()
     row.body:Show()
+    updateFade(0)
     return true
 end
 local function scanAuras(unit, updates)
@@ -280,6 +294,7 @@ function window:ApplySettings()
     end
     panel:Show()
     scanAuras("player"); scanAuras("target")
+    updateFade(0)
 end
 function window:Initialize(settings)
     db = settings

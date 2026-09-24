@@ -8,6 +8,7 @@ end
 function scale:Apply()
     local value = self:Get()
     for frame, base in pairs(frames) do frame:SetScale(base * value) end
+    if ns.MinimapButton then ns.MinimapButton:UpdatePosition() end
 end
 function scale:Initialize(settings)
     db = settings

@@ -19,7 +19,8 @@ function methods:SetSize() end
 function methods:SetFrameStrata() end
 function methods:SetClampedToScreen() end
 function methods:SetMovable(v) self.movable=v end
-function methods:EnableMouse() end
+function methods:EnableMouse(value) self.mouseEnabled=value end
+function methods:SetAlpha(value) self.alpha=value end
 function methods:RegisterForDrag() end
 function methods:StartMoving() self.moving=true end
 function methods:StopMovingOrSizing() self.moving=false end
@@ -256,6 +257,18 @@ slotAuras[8]=slotAuras[7]
 fire('PLAYER_REGEN_ENABLED')
 assert(buff.shown and id(buff)==134)
 assert(frames[1].events.PLAYER_REGEN_ENABLED)
+-- Fade depends on observation state, never secret text contents.
+db.spellIDWindowAutoFade=true; db.spellIDWindowIndefinite=false
+ns.SpellIDWindow:ApplySettings()
+now=now+121; panel.scripts.OnUpdate(panel,0.3)
+assert(panel.alpha==0 and not panel.mouseEnabled and panel.shown)
+enemy=true
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,134)
+assert(panel.alpha==1) -- New data restores immediately.
+now=now+121; panel.scripts.OnUpdate(panel,0.3)
+assert(panel.alpha==0)
+db.spellIDWindowAutoFade=false; ns.SpellIDWindow:ApplySettings()
+assert(panel.alpha==1)
 -- Only settings, never observed IDs/names, go into the saved database.
 assert(db.spellId==nil and db.observed==nil)
 ns.SpellIDWindow:Initialize(db)

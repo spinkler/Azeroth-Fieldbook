@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.3-beta - 2026-09-25
+
+- Made the minimap button draggable around the minimap perimeter, with a saved
+  position and Shift-click lock toggle. Starts unlocked; dragging does not open the book.
+- Made Choose effects, Offenses, Defenses, Behaviour, Locations and Ranks toggle
+  their windows; observation windows still respect the single-window option.
+- Renamed Record equal-level hits to Record damage taken.
+- Added optional Spell ID window auto-fade when all observation rows are empty.
+  New data restores it immediately; faded windows do not intercept mouse input.
+
 ## v0.8.2-beta - 2026-09-24
 
 ### Added
