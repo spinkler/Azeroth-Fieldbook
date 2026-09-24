@@ -339,11 +339,13 @@ AzerothFieldbookDB = nil
 function UnitName() return 'Test humanoid' end
 function UnitCreatureType() return 'Humanoid' end
 function UnitLevel() return 9 end
+function UnitIsTapDenied() return false end
 frames[5].handler(frames[5], 'ADDON_LOADED', 'AzerothFieldbook')
 castName, castID = 'Observed trap', nil
 frames[5].handler(frames[5], 'PLAYER_TARGET_CHANGED')
 local entry=AzerothFieldbookDB.bestiary.entries[42]
 check(entry.category=='Humanoid' and entry.levelMin==9,'main records creature metadata')
+frames[5].handler(frames[5], 'PARTY_KILL', playerGUID, guid)
 dead=true; frames[5].handler(frames[5], 'UNIT_HEALTH', 'target'); frames[5].handler(frames[5], 'UNIT_HEALTH', 'target')
 check(entry.kills==1,'observed creature death increments kill counter once per GUID')
 dead=false
@@ -357,6 +359,7 @@ guid='Creature-0-1-2-3-42-locked'
 castName,castID='Locked new ability',888
 frames[5].handler(frames[5], 'UNIT_SPELLCAST_SUCCEEDED', 'target', nil, 888)
 check(not entry.abilities['Locked new ability'] and next(AzerothFieldbookDB.bestiary.creatures)==nil,'locked casts cannot alter either saved knowledge store')
+frames[5].handler(frames[5], 'PARTY_KILL', playerGUID, guid)
 dead=true; frames[5].handler(frames[5], 'UNIT_HEALTH', 'target')
 check(entry.kills==2,'locked creature kill progress continues')
 -- Grey/low-level kills need neither an XP event nor a health event.
@@ -365,6 +368,7 @@ local oldLevel=UnitLevel
 function UnitLevel() return 1 end
 function UnitXP() error('kill tracking must not query XP') end
 frames[5].handler(frames[5], 'PLAYER_TARGET_CHANGED')
+frames[5].handler(frames[5], 'PARTY_KILL', playerGUID, guid)
 dead=true; hostile=false
 frames[5].OnUpdate(frames[5],0.2)
 check(entry.kills==3,'polling counts known corpse without XP or continued attackability')
@@ -375,6 +379,7 @@ frames[5].OnUpdate(frames[5],0.2)
 check(entry.kills==3,'corpse fallback rejects an unobserved GUID')
 dead=false; hostile=true; guid='Creature-0-1-2-3-42-controlled'
 frames[5].handler(frames[5], 'PLAYER_TARGET_CHANGED')
+frames[5].handler(frames[5], 'PARTY_KILL', playerGUID, guid)
 dead=true; hostile=false; controlled=true
 frames[5].OnUpdate(frames[5],0.2)
 check(entry.kills==3,'corpse fallback rejects player-controlled units')

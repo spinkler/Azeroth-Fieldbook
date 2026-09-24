@@ -1,9 +1,9 @@
 -- Azeroth Fieldbook Bestiary section for Forever 1.60.1.
 -- Original monster-tooltip concept by Urbit @ Benediction.
--- No bundled spell list, descriptions, or shared player data.
+-- No bundled spell list or creature database. Sharing requires explicit acceptance.
 local addonName, ns = ...
 ns = ns or {}
-local db
+local db, trackingDB
 local encounters
 local journal, book
 local wipeDeadline = 0
@@ -158,10 +158,10 @@ local function storeObserved(id, spellID, observedName)
     local name = hasName and observedName or spellName(spellID)
     if not name then diagnostics.last = "Observed spell name unavailable."; return end
     if journal then journal:Offer(id, name, "Automatic observation", spellID) end
-    local creature = db.bestiary.creatures[id]
+    local creature = trackingDB.bestiary.creatures[id]
     if not creature then
         creature = { spells = {} }
-        db.bestiary.creatures[id] = creature
+        trackingDB.bestiary.creatures[id] = creature
     end
     -- A directly observed, public cast name is sufficient evidence. Never guess
     -- a hidden ID by searching spell data. No secret values enter SavedVariables.
@@ -241,7 +241,7 @@ local function addTooltip(tooltip)
     if not publicString(unit) then tooltipStatus = "GetUnit token: " .. valueState(unit) .. "."; return end
     local id, reason = npcID(unit)
     if not id then tooltipStatus = reason; return end
-    local creature = id and db.bestiary.creatures[id]
+    local creature = id and trackingDB.bestiary.creatures[id]
     if journal then
         local names = journal:ConfirmedNames(id)
         if #names == 0 then tooltipStatus = "No confirmed abilities: review this entry in /fieldbook."; return end
@@ -288,9 +288,10 @@ local function initialize()
         AzerothFieldbookDB = { version = 1, bestiary = { creatures = {}, entries = {} }, announce = false }
     end
     db = AzerothFieldbookDB
-    db.bestiary = type(db.bestiary) == "table" and db.bestiary or {}
-    db.bestiary.creatures = type(db.bestiary.creatures) == "table" and db.bestiary.creatures or {}
-    db.bestiary.entries = type(db.bestiary.entries) == "table" and db.bestiary.entries or {}
+    trackingDB = ns.InitializeTracking and ns.InitializeTracking(db) or db
+    trackingDB.bestiary = type(trackingDB.bestiary) == "table" and trackingDB.bestiary or {}
+    trackingDB.bestiary.creatures = type(trackingDB.bestiary.creatures) == "table" and trackingDB.bestiary.creatures or {}
+    trackingDB.bestiary.entries = type(trackingDB.bestiary.entries) == "table" and trackingDB.bestiary.entries or {}
     if type(db.creatureAnnouncements) ~= "boolean" then db.creatureAnnouncements = true end
     if db.spellIDTooltipInitialized ~= true then
         db.showSpellIDs, db.spellIDTooltipInitialized = true, true
@@ -299,9 +300,9 @@ local function initialize()
         db.showSpellIDs = true
     end
     -- Discard malformed saved entries rather than trying to infer missing data.
-    for id, creature in pairs(db.bestiary.creatures) do
+    for id, creature in pairs(trackingDB.bestiary.creatures) do
         if not positiveID(id) or type(creature) ~= "table" or type(creature.spells) ~= "table" then
-            db.bestiary.creatures[id] = nil
+            trackingDB.bestiary.creatures[id] = nil
         elseif type(creature.names) ~= "table" then
             creature.names = {}
         end
@@ -317,7 +318,7 @@ local function initialize()
     if ns.UIScale then ns.UIScale:Initialize(db) end
     if ns.CastIDs then ns.CastIDs:Initialize(db) end
     if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
-    if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy) end
+    if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
     if journal then
         journal:SetPointsAwardedCallback(function(entry, amount, reason)
             local name = entry.name or ("Creature #" .. entry.id)
@@ -329,7 +330,11 @@ local function initialize()
             end
         end)
     end
+    if journal and ns.InitializeSharing then ns.InitializeSharing(journal) end
     if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal) end
+    if journal and journal.sharing then
+        journal.sharing:SetImportedCallback(function() if book then book:Refresh() end end)
+    end
     if ns.MinimapButton then ns.MinimapButton:Initialize(db, book) end
     if ns.CreateBestiaryEncounterReader then encounters = ns.CreateBestiaryEncounterReader(storeObserved) end
     if encounters and db.ignoreEncounterHistory then encounters:ForgetHistory() end
@@ -376,6 +381,12 @@ frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
         afterWipeHold = false
         observeCurrent("mouseover")
+    elseif event == "PARTY_KILL" then
+        if journal and not afterWipeHold then journal:RecordPartyKill(unit, castGUID) end
+    elseif event == "UNIT_DIED" then
+        if journal and not afterWipeHold then journal:RecordUnitDeath(unit) end
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        if journal then journal:ClearKillEvidence() end
     elseif event == "UNIT_HEALTH" then
         local watched = watchedAlias(unit)
         if watched and journal then journal:RecordKill(watched) end
@@ -418,6 +429,11 @@ for _, event in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_TARGET_CHANGED"
     "DAMAGE_METER_COMBAT_SESSION_UPDATED", "DAMAGE_METER_CURRENT_SESSION_UPDATED", "DAMAGE_METER_RESET" }) do
     frame:RegisterEvent(event)
 end
+-- Standalone GUID events in Forever 69977 (not combat-log subevents). Missing
+-- registration fails closed; ordinary scans still perform discovery only.
+for _, event in ipairs({ "PARTY_KILL", "UNIT_DIED" }) do
+    pcall(frame.RegisterEvent, frame, event)
+end
 
 SLASH_AZEROTHFIELDBOOK1 = "/fieldbook"
 SLASH_AZEROTHFIELDBOOK2 = "/bestiary"
@@ -426,27 +442,30 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
     local command = message:lower():match("^%s*(.-)%s*$"):gsub("%s+", " ")
     if command == "wipe" or command == "reset" or command == "reset confirm" then
         wipeDeadline = GetTime() + 60
-        say("WARNING: wipe permanently deletes ALL of this character's Bestiary entries, abilities, notes, damage records and settings.")
+        local scope = trackingDB ~= db and "the account-wide" or "this character's"
+        say("WARNING: wipe permanently deletes ALL of " .. scope .. " Bestiary entries, abilities, notes, damage records and sharing points/history, plus this character's settings.")
         say("Command 1/2 accepted. Type /fieldbook wipe confirm within 60 seconds to permanently delete it.")
     elseif command == "wipe confirm" then
         if wipeDeadline == 0 or GetTime() > wipeDeadline then
             wipeDeadline = 0; say("No active wipe request. Start with /fieldbook wipe."); return
         end
         wipeDeadline = 0
-        for key in pairs(db) do db[key] = nil end
-        db.version, db.bestiary, db.announce, db.creatureAnnouncements = 1, { creatures = {}, entries = {} }, false, true
-        db.showSpellIDs, db.spellIDTooltipInitialized = true, true
+        if journal then journal:ResetDatabase()
+        else
+            for key in pairs(db) do db[key] = nil end
+            db.version, trackingDB.bestiary, db.announce, db.creatureAnnouncements = 1, { creatures = {}, entries = {} }, false, true
+            db.showSpellIDs, db.spellIDTooltipInitialized = true, true
+        end
         if ns.CastIDs then ns.CastIDs:Initialize(db) end
         if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
         if type(SetCVar) == "function" then pcall(SetCVar, "tooltipShowAuraSpellIDs", "1") end
         -- Prevent retained meter history from silently restoring wiped knowledge
         -- after reload. New sessions after each load can still be learned.
         db.ignoreEncounterHistory = true
-        if journal then journal:Reset() end
         if encounters then encounters:ForgetHistory() end
         if book then book:Refresh() end
         afterWipeHold = true
-        say("This character's Azeroth Fieldbook Bestiary has been wiped. Retarget an NPC to begin again.")
+        say((trackingDB ~= db and "The account-wide" or "This character's") .. " Azeroth Fieldbook Bestiary has been wiped. Retarget an NPC to begin again.")
     elseif command == "wipe cancel" then
         wipeDeadline = 0
         say("Wipe cancelled. Nothing deleted.")
@@ -458,12 +477,29 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         if encounters then encounters:Report(say) else say("Encounter module unavailable.") end
     elseif command == "scan" then
         if encounters then encounters:Scan(); encounters:Report(say) else say("Encounter module unavailable.") end
+    elseif command == "debug kills on" or command == "debug kills off" then
+        if not ns.KillDiagnostics then say("Kill diagnostic module unavailable; reload the UI."); return end
+        local enabled = command == "debug kills on"
+        ns.KillDiagnostics:SetEnabled(enabled)
+        if enabled then
+            ns.KillDiagnostics:Sample("target", journal, "start")
+            ns.KillDiagnostics:Sample("mouseover", journal, "start")
+        end
+        say(enabled and "Kill evidence recording on until /reload. Qualified kills and discovery remain active. /fieldbook debug kills opens the report."
+            or "Kill evidence recording off.")
+    elseif command == "debug kills" then
+        if not ns.KillDiagnostics then say("Kill diagnostic module unavailable; reload the UI."); return end
+        local lines = {}
+        ns.KillDiagnostics:Report(function(line) lines[#lines + 1] = line end)
+        if ns.ShowDebugReport then ns.ShowDebugReport(table.concat(lines, "\n")) end
+        say("Kill diagnostic snapshot opened. Decision lines separate kill awards from discovery points.")
     elseif command == "debug on" or command == "debug off" then
         local enabled = command == "debug on"
         if ns.CastIDs then ns.CastIDs:SetDebug(enabled) end
         say(enabled and "Cast ID diagnostics on until /reload." or "Cast ID diagnostics off.")
     elseif command == "debug ?" then
         say("/fieldbook debug opens a copyable diagnostic report; /fieldbook debug on | off toggles cast ID diagnostic text.")
+        say("/fieldbook debug kills on | off controls the temporary kill evidence recorder; /fieldbook debug kills opens its report.")
     elseif command == "debug" then
         local lines = {}
         local chatSay = say
@@ -473,6 +509,10 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         end
         if ns.CastIDs then ns.CastIDs:Report(say) end
         if ns.SpellIDWindow then ns.SpellIDWindow:Report(say) end
+        if ns.KillDiagnostics then
+            say("Kill evidence recorder: " .. (ns.KillDiagnostics.enabled and "ON" or "OFF")
+                .. ". /fieldbook debug kills opens its separate report.")
+        end
         local version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "unknown"
         say("Version " .. version .. "; all cast events: " .. diagnostics.events .. "; new observations: " .. diagnostics.learned
             .. "; tooltip callbacks: " .. diagnostics.tooltips)
@@ -507,7 +547,7 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         say(db.announce and "Discovery messages on." or "Discovery messages off.")
     else
         local creatures, spells = 0, 0
-        for _, creature in pairs(db.bestiary.creatures) do
+        for _, creature in pairs(trackingDB.bestiary.creatures) do
             creatures = creatures + 1
             for _ in pairs(creature.spells) do spells = spells + 1 end
             for _ in pairs(creature.names or {}) do spells = spells + 1 end

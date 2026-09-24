@@ -1,5 +1,82 @@
 # Changelog
 
+## v0.9.6-beta - 2026-09-25
+
+- Hide scrollbars whenever a window's content fits its visible area, including
+  Help, Options, Notes, Rumours, sharing previews and debug reports. Scrollbars
+  reappear when content grows and disappear when it shrinks to fit again.
+
+- Help and Options now share the last top-left window position. Dragging either
+  page, switching pages or closing and reopening them retains that position,
+  accounting for UI scale.
+
+- Added a gold cog button directly to the left of the main window's help button,
+  matching the existing red beveled title-bar buttons, size and spacing.
+- Moved all settings and Reset Bestiary into a dedicated Options page. The help
+  page now contains instructions and About only. Both pages retain parchment
+  styling, scrolling, dragging, brightness/UI scale settings and Escape-to-close.
+
+- Added **Account-wide tracking** at the top of Options, enabled by default.
+  Changing it takes effect after `/reload`; the option shows when a reload is needed.
+- Added account-wide Bestiary storage. Each character's existing journal merges
+  once when that character first loads with account tracking enabled, combining
+  creature records, kills, discoveries, notes and previously earned/spent points.
+  Original character journals remain available with account tracking disabled.
+- Kept UI preferences per character and sharing transactions owned by their
+  original character. Migration does not replay on reload or after a reset.
+- Made reset prompts identify the active account or character journal. Resets
+  clear that journal and the current character's settings, preserving the other
+  journal and the selected tracking mode.
+
+- Set the silver kill star to 2 kills and the gold star to 25 kills. Silver still
+  awards 1 point and gold adds 2; already-earned points remain credited.
+- Moved Rumours onto the book's frame strata, below dialogs, and enabled normal
+  focus raising for both windows so they can overlap without blocking each other.
+- Dimmed the empty recorded-abilities prompt to grey.
+- Made Index a toggle: it starts red with A-Z hidden and no letter filter. Clicking
+  it highlights the button and reveals all 26 clickable letters. Switching it off
+  hides the letters and clears the letter filter.
+
+- Fixed corpse inspection and unrelated deaths granting kills or milestone
+  points. Kills now require matching player/pet/party, eligibility and death
+  evidence for one creature GUID, with bounded pending/replay protection.
+  Discovery and existing reward amounts are unchanged; no XP or loot is required.
+  Added opt-in kill decision diagnostics and regression coverage. Live testing
+  confirms party-assisted credit, corpse duplicate protection and no credit for
+  a watched unrelated death or a personal finishing blow on another player's
+  tag. Own zero-XP, no-loot kills also pass through the new gate. Pet delivery
+  remains unverified live. Live reload acceptance is blocked by the operator-
+  reported Forever SavedVariables reload bug; automated persistence checks pass.
+- Moved Rumours between the main window's kill counter and Creature Notes.
+  It toggles a separate parchment window with attributed claims, shared basics,
+  scrolling, brightness/scale settings, dragging, screen clamping and Escape.
+- Added a green tick to verify a rumour directly into the personal journal,
+  preserving existing ability notes and effects. Locked entries must be unlocked
+  before verification; receiving and reviewing still earn no points.
+- Matching manual abilities, confirmed observations and trait selections remove
+  corresponding rumours across senders. Already-known facts do not add rumours.
+- Kept x for rejection. Later reports of a rejected claim show Previously rejected
+  in the offer preview and Rumours window, including when sent by another player.
+- Retained exact installed-version checks for sharing. Added regression coverage
+  for rumour review, manual matching, rejection history and the separate window.
+
+- Added point-funded sharing of one creature to a named recipient, with explicit
+  acceptance, delivery acknowledgement and attributed unverified Rumours.
+- Basic information costs 1 point; each selected rumour adds 1 point, with no
+  two-rumour selection cap. Reservations, spending and personal earning credit
+  are tracked separately; receiving reports earns no points.
+- Added realm-free character names with surnames, two-column rumour selection,
+  and specific explanations when sending is unavailable.
+- Added installed-addon version checking before new offers and paid retries.
+  Both players must use the same version; mismatches show both versions when
+  supplied and reject new offers without spending points. Sharing uses protocol
+  3 while retaining report schema 1 and historical costs for paid retries.
+- Required an increment of the last version number for each completed local
+  change set, with batch pushes publishing through the existing Beta tag workflow.
+- Live delivery, recipient attribution and separate rumour storage were confirmed
+  during development. Persistence testing remains blocked by the operator-reported
+  WoW Forever persistence bug.
+
 ## v0.8.3-beta - 2026-09-25
 
 - Made the minimap button draggable around the minimap perimeter, with a saved

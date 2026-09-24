@@ -1,14 +1,19 @@
 local _, ns = ...
 
-function ns.CreateBestiaryJournal(db, identify)
-    db.bestiary = type(db.bestiary) == "table" and db.bestiary or {}
-    db.bestiary.entries = type(db.bestiary.entries) == "table" and db.bestiary.entries or {}
-    db.bestiary.creatures = type(db.bestiary.creatures) == "table" and db.bestiary.creatures or {}
-    local journal = { entries = db.bestiary.entries, revision = 0 }
+function ns.CreateBestiaryJournal(db, identify, trackingDB)
+    trackingDB = trackingDB or db
+    trackingDB.bestiary = type(trackingDB.bestiary) == "table" and trackingDB.bestiary or {}
+    trackingDB.bestiary.entries = type(trackingDB.bestiary.entries) == "table" and trackingDB.bestiary.entries or {}
+    trackingDB.bestiary.creatures = type(trackingDB.bestiary.creatures) == "table" and trackingDB.bestiary.creatures or {}
+    local journal = { entries = trackingDB.bestiary.entries, revision = 0 }
+    local activeAccountWideTracking = db.accountWideTracking ~= false
     local seenGUIDs = {}
     local killedGUIDs = {}
-    local liveUnits = {}
+    local killInstances = {}
+    local recentKills
+    local instanceLimit, observationSeconds, pendingSeconds, recentLimit = 64, 120, 10, 512
     local onEntryAdded, onPointsAwarded
+    local ledger
     local rankLabels = { elite = "Elite", rare = "Rare", rareelite = "Rare Elite", worldboss = "World Boss" }
     local rankPriority = { ["Rare"] = 1, ["Elite"] = 2, ["Rare Elite"] = 3, ["World Boss"] = 4 }
     local magicSchools = { Arcane=true, Fire=true, Frost=true, Holy=true, Nature=true, Shadow=true }
@@ -25,6 +30,53 @@ function ns.CreateBestiaryJournal(db, identify)
         local ok, value = pcall(fn, ...)
         if ok and public(value) then return value end
     end
+    local function creatureID(guid)
+        if not str(guid) or #guid > 128 then return end
+        local id = tonumber(guid:match("^Creature%-%d+%-%d+%-%d+%-%d+%-(%d+)%-%w+$"))
+        if number(id) then return id end
+    end
+    local function now()
+        local value = read(GetTime)
+        if type(value) == "number" and value >= 0 and value < math.huge then return value end
+    end
+    local function decision(guid, status, points)
+        if ns.KillDiagnostics and ns.KillDiagnostics.enabled then
+            ns.KillDiagnostics:Decision(guid, status, points or 0)
+        end
+        return status == "accepted"
+    end
+    local function clearTerminal(guid, observed)
+        if observed.deadline then decision(guid, "stale: living reset or combat state unknown") end
+        observed.actor, observed.dead, observed.eligible, observed.rejected, observed.deadline = nil, nil, nil, nil, nil
+    end
+    local function pruneInstances(at)
+        for guid, observed in pairs(killInstances) do
+            local deadline = observed.deadline or (observed.seenAt + observationSeconds)
+            if at > deadline or at < observed.seenAt then
+                killInstances[guid] = nil
+                decision(guid, "expired: observation or pending evidence")
+            end
+        end
+    end
+    local function observeInstance(id, guid, at)
+        if not at or creatureID(guid) ~= id then return end
+        pruneInstances(at)
+        local observed = killInstances[guid]
+        if not observed then
+            local count, oldestGUID, oldest = 0, nil, math.huge
+            for key, value in pairs(killInstances) do
+                count = count + 1
+                if value.seenAt < oldest then oldestGUID, oldest = key, value.seenAt end
+            end
+            if count >= instanceLimit then
+                killInstances[oldestGUID] = nil
+                decision(oldestGUID, "evicted: observation limit")
+            end
+            observed = { id = id }
+            killInstances[guid] = observed
+        end
+        observed.seenAt = at
+    end
     local function clean(value, limit)
         if not str(value) then return end
         -- Literal field notes only: no links, textures, colors or control codes.
@@ -32,10 +84,10 @@ function ns.CreateBestiaryJournal(db, identify)
         if value == "" or #value > limit then return end
         return value
     end
-    -- Testing thresholds. Each tier stores cumulative points: silver 1, gold adds 2.
+    -- Each tier stores cumulative points: silver 1, gold adds 2.
     local killMilestones = {
-        { kills = 2, points = 3, star = "gold" },
-        { kills = 1, points = 1, star = "silver" },
+        { kills = 25, points = 3, star = "gold" },
+        { kills = 2, points = 1, star = "silver" },
     }
     function journal:GetKillReward(id)
         local entry = self.entries[id]
@@ -55,6 +107,7 @@ function ns.CreateBestiaryJournal(db, identify)
         onPointsAwarded = type(callback) == "function" and callback or nil
     end
     local function award(self, entry, amount, reason)
+        if amount > 0 then ledger.earned = ledger.earned + amount end
         if amount > 0 and self:GetPointAnnouncements() and onPointsAwarded then
             onPointsAwarded(entry, amount, reason)
         end
@@ -79,8 +132,50 @@ function ns.CreateBestiaryJournal(db, identify)
         end
         return progress
     end
+    -- Credit survives deletion of a display entry. Migration runs only once and
+    -- preserves the old derived total, including its legacy endpoint rules.
+    local function initializePoints()
+        if type(trackingDB.bestiary.points) ~= "table" then
+            ledger = { version = 1, earned = 0, spent = 0, credits = {}, reservations = {} }
+            for id, entry in pairs(journal.entries) do
+                local progress = discoveryProgress(entry)
+                local credit = { discovered = true, levels = {}, zones = {}, points = progress.points,
+                    initial = progress.initial, killPoints = journal:GetKillReward(id), killGUIDs = {} }
+                for level in pairs(progress.levels) do credit.levels[level] = true end
+                for zone in pairs(progress.zones) do credit.zones[zone] = true end
+                ledger.credits[id] = credit
+                ledger.earned = ledger.earned + 1 + credit.points + credit.killPoints
+                entry.personalEncountered = true
+            end
+            trackingDB.bestiary.points = ledger
+        else
+            ledger = trackingDB.bestiary.points
+        end
+    end
+    initializePoints()
+    local function initializeRecentKills()
+        -- Separate from the point ledger: a bounded replay guard, never credit.
+        recentKills, killedGUIDs = {}, {}
+        local saved = type(trackingDB.bestiary.recentKills) == "table" and trackingDB.bestiary.recentKills or {}
+        for index = math.max(1, #saved - recentLimit + 1), #saved do
+            local guid = saved[index]
+            if creatureID(guid) and not killedGUIDs[guid] then
+                recentKills[#recentKills + 1], killedGUIDs[guid] = guid, true
+            end
+        end
+        trackingDB.bestiary.recentKills = recentKills
+    end
+    initializeRecentKills()
+    local function creditFor(id)
+        local credit = ledger.credits[id]
+        if not credit then
+            credit = { levels = {}, zones = {}, points = 0, killPoints = 0, killGUIDs = {} }
+            ledger.credits[id] = credit
+        end
+        return credit
+    end
     local function recordDiscovery(self, entry, level, zone)
-        local progress = discoveryProgress(entry)
+        local progress = creditFor(entry.id)
         local reasons = {}
         if number(level) and not progress.levels[level] then
             progress.levels[level] = true
@@ -100,14 +195,44 @@ function ns.CreateBestiaryJournal(db, identify)
         if #reasons > 0 then self:Touch() end
     end
     function journal:GetTotals()
-        local count, points = 0, 0
-        for id, entry in pairs(self.entries) do
-            count = count + 1
-            points = points + 1 + self:GetKillReward(id)
-            local progress = discoveryProgress(entry)
-            points = points + progress.points
+        local count = 0
+        for _ in pairs(self.entries) do count = count + 1 end
+        return count, ledger.earned
+    end
+    function journal:GetSharingBalance()
+        local reserved = 0
+        for _, cost in pairs(ledger.reservations) do reserved = reserved + cost end
+        return math.max(0, ledger.earned - ledger.spent - reserved), ledger.earned, ledger.spent, reserved
+    end
+    function journal:ReserveShare(transaction, cost)
+        if not str(transaction) or not number(cost) then return false end
+        if ledger.reservations[transaction] then return ledger.reservations[transaction] == cost end
+        if self:GetSharingBalance() < cost then return false end
+        ledger.reservations[transaction] = cost
+        self:Touch()
+        return true
+    end
+    function journal:ReleaseShare(transaction)
+        ledger.reservations[transaction] = nil
+        self:Touch()
+    end
+    function journal:CommitShare(transaction)
+        local cost = ledger.reservations[transaction]
+        if not cost then return false end
+        ledger.spent = ledger.spent + cost
+        ledger.reservations[transaction] = nil
+        self:Touch()
+        return true
+    end
+    function journal:GetSharingStorage()
+        if trackingDB ~= db then
+            trackingDB.bestiary.sharingCharacters = trackingDB.bestiary.sharingCharacters or {}
+            local stores, key = trackingDB.bestiary.sharingCharacters, db.accountTrackingKey
+            stores[key] = stores[key] or { sequence = 0, receipts = {}, incoming = {} }
+            return stores[key]
         end
-        return count, points
+        trackingDB.bestiary.sharing = trackingDB.bestiary.sharing or { sequence = 0, receipts = {}, incoming = {} }
+        return trackingDB.bestiary.sharing
     end
     function journal:Touch() self.revision = self.revision + 1 end
     function journal:SetEntryAddedCallback(callback)
@@ -116,14 +241,26 @@ function ns.CreateBestiaryJournal(db, identify)
     function journal:DeleteEntry(id)
         if not number(id) or not self.entries[id] then return false end
         self.entries[id] = nil
-        for unit, observed in pairs(liveUnits) do if observed.id == id then liveUnits[unit] = nil end end
+        for guid, observed in pairs(killInstances) do if observed.id == id then killInstances[guid] = nil end end
         -- Remove legacy observations too, so reload cannot migrate the entry back.
-        db.bestiary.creatures[id] = nil
+        trackingDB.bestiary.creatures[id] = nil
         self:Touch()
         return true
     end
     function journal:GetSingleObservationWindow()
         return db.singleObservationWindow ~= false
+    end
+    function journal:GetAccountWideTracking()
+        return db.accountWideTracking ~= false
+    end
+    function journal:SetAccountWideTracking(enabled)
+        db.accountWideTracking = enabled == true
+    end
+    function journal:IsTrackingChangePending()
+        return self:GetAccountWideTracking() ~= activeAccountWideTracking
+    end
+    function journal:IsAccountWideTrackingActive()
+        return activeAccountWideTracking
     end
     function journal:SetSingleObservationWindow(enabled)
         db.singleObservationWindow = enabled == true
@@ -204,15 +341,22 @@ function ns.CreateBestiaryJournal(db, identify)
     end
     -- Debuff chat reporting is intentionally unavailable: Forever exposes
     -- combat aura details as secret values that addons cannot inspect.
-    function journal:Ensure(id)
+    function journal:Ensure(id, sharedOnly)
         if not number(id) then return end
         local entry = self.entries[id]
         if not entry then
             entry = { id = id, category = "Unclassified", abilities = {}, damage = {}, locations = {}, offenses = {}, resistances = {}, immunities = {}, behaviours = {}, kills = 0, confirmed = false }
-            entry.discoveryProgress = { levels = {}, zones = {}, points = 0, initial = true }
             self.entries[id] = entry
             self:Touch()
-            award(self, entry, 1, "new creature entry")
+        end
+        if not sharedOnly then
+            local credit = creditFor(id)
+            if not entry.personalEncountered then entry.personalEncountered = true; self:Touch() end
+            if not credit.discovered then
+                credit.discovered, credit.initial = true, true
+                award(self, entry, 1, "new creature entry")
+                self:Touch()
+            end
         end
         return entry
     end
@@ -221,9 +365,14 @@ function ns.CreateBestiaryJournal(db, identify)
         if not id then return end
         local liveGUID = read(UnitGUID, unit)
         if str(liveGUID) and read(UnitIsDead, unit) == false then
-            liveUnits[unit] = { id = id, guid = liveGUID }
+            observeInstance(id, liveGUID, now())
+            local observed = killInstances[liveGUID]
+            if observed and read(UnitAffectingCombat, unit) ~= true then
+                clearTerminal(liveGUID, observed)
+            end
         end
         if self.entries[id] and self.entries[id].confirmed then
+            self:Ensure(id)
             recordDiscovery(self, self.entries[id], read(UnitLevel, unit), read(GetRealZoneText) or read(GetZoneText))
             return id
         end
@@ -273,6 +422,10 @@ function ns.CreateBestiaryJournal(db, identify)
         if not entry or entry.confirmed or not magicSchools[school] then return false end
         entry[field] = type(entry[field]) == "table" and entry[field] or {}
         local value = enabled == true and true or nil
+        if value and self.ResolveRumours then
+            local kinds={offenses="offense",resistances="resistance",immunities="immunity"}
+            self:ResolveRumours(id,{kind=kinds[field],value=school})
+        end
         if entry[field][school] == value then return true end
         entry[field][school] = value
         self:Touch()
@@ -294,32 +447,126 @@ function ns.CreateBestiaryJournal(db, identify)
         local value = enabled == true and true or nil
         if value and name == "Hostile" then entry.behaviours.Neutral = nil end
         if value and name == "Neutral" then entry.behaviours.Hostile = nil end
+        if value and self.ResolveRumours then self:ResolveRumours(id,{kind="behaviour",value=name}) end
         if entry.behaviours[name] == value then return true end
         entry.behaviours[name] = value
         self:Touch()
         return true
     end
-    function journal:RecordKill(unit)
-        if read(UnitIsDead, unit) ~= true then return false end
-        local guid = read(UnitGUID, unit)
-        if not str(guid) or killedGUIDs[guid] then return false end
-        local id = identify(unit)
-        local observed = liveUnits[unit]
-        -- A corpse may no longer be attackable. Accept only the same readable GUID
-        -- previously observed as an eligible living NPC, with ownership still checked.
-        if not id and observed and observed.guid == guid
-            and read(UnitExists, unit) == true and read(UnitPlayerControlled, unit) == false then
-            id = observed.id
+    local function getInstance(guid, at)
+        if not at or not creatureID(guid) then return end
+        pruneInstances(at)
+        return killInstances[guid]
+    end
+    local function startPending(observed, at)
+        -- Repeated scans/events never extend an ambiguous death indefinitely.
+        observed.deadline = observed.deadline or (at + pendingSeconds)
+    end
+    local function actorRole(guid)
+        if not str(guid) then return end
+        for _, unit in ipairs({ "player", "pet", "party1", "partypet1", "party2", "partypet2",
+            "party3", "partypet3", "party4", "partypet4" }) do
+            local candidate = read(UnitGUID, unit)
+            if str(candidate) and candidate == guid then return unit end
         end
-        local entry = id and self.entries[id]
-        if not entry then return false end
-        local previousPoints = self:GetKillReward(id)
+    end
+    local function sampleEligibility(observed, unit, guid)
+        if read(UnitGUID, unit) ~= guid then return end
+        local exists, controlled = read(UnitExists, unit), read(UnitPlayerControlled, unit)
+        local denied = read(UnitIsTapDenied, unit)
+        if read(UnitGUID, unit) ~= guid then return end
+        if controlled == true or denied == true then
+            observed.rejected, observed.eligible = true, nil
+        elseif exists == true and controlled == false and denied == false then
+            observed.eligible = true
+        end
+        -- Missing/error/secret values leave eligibility unknown. In particular,
+        -- false denial is useful ONLY alongside a qualifying PARTY_KILL event.
+    end
+    local function completeKill(self, guid, observed)
+        if observed.rejected then return decision(guid, "rejected: tap denied or player-controlled") end
+        if not observed.actor then return decision(guid, "pending: no qualifying PARTY_KILL") end
+        if not observed.dead then return decision(guid, "pending: death not readable yet") end
+        if observed.eligible ~= true then return decision(guid, "pending: eligibility unknown") end
+        local id, entry = observed.id, self.entries[observed.id]
+        if not entry then return decision(guid, "rejected: entry removed") end
+        local credit = creditFor(id)
+        if killedGUIDs[guid] then return decision(guid, "duplicate") end
+        for _, previous in ipairs(credit.killGUIDs) do
+            if previous == guid then return decision(guid, "duplicate") end
+        end
+        -- Consume evidence before callbacks; failed/early attempts consume none.
+        killInstances[guid] = nil
         killedGUIDs[guid] = true
+        recentKills[#recentKills + 1] = guid
+        if #recentKills > recentLimit then killedGUIDs[table.remove(recentKills, 1)] = nil end
+        credit.killGUIDs[#credit.killGUIDs + 1] = guid
+        if #credit.killGUIDs > 16 then table.remove(credit.killGUIDs, 1) end
+        self:Ensure(id)
         entry.kills = math.max(0, tonumber(entry.kills) or 0) + 1
         self:Touch()
         local points, star = self:GetKillReward(id)
-        award(self, entry, points - previousPoints, (star or "kill") .. " star")
-        return true
+        local newlyEarned = math.max(0, points - credit.killPoints)
+        credit.killPoints = math.max(credit.killPoints, points)
+        award(self, entry, newlyEarned, (star or "kill") .. " star")
+        return decision(guid, "accepted", newlyEarned)
+    end
+    function journal:ClearKillEvidence()
+        killInstances = {}
+    end
+    function journal:RecordPartyKill(attackerGUID, victimGUID)
+        local at = now()
+        if not creatureID(victimGUID) then return false end
+        if killedGUIDs[victimGUID] then return decision(victimGUID, "duplicate") end
+        local observed = getInstance(victimGUID, at)
+        if not observed then return decision(victimGUID, "rejected: no recent living observation") end
+        local role = actorRole(attackerGUID)
+        if not role then return decision(victimGUID, "rejected: attacker not readable player/pet/party") end
+        observed.actor = role
+        startPending(observed, at)
+        -- Query only watched tokens that STILL identify this event's victim.
+        -- Eligibility is sampled only with a kill/death notification or corpse,
+        -- never cached from ordinary living observations before either event.
+        for _, unit in ipairs({ "target", "mouseover" }) do
+            sampleEligibility(observed, unit, victimGUID)
+        end
+        return completeKill(self, victimGUID, observed)
+    end
+    function journal:RecordUnitDeath(guid)
+        if not creatureID(guid) then return false end
+        if killedGUIDs[guid] then return decision(guid, "duplicate") end
+        local at = now()
+        local observed = getInstance(guid, at)
+        if not observed then return false end
+        observed.dead = true
+        startPending(observed, at)
+        for _, unit in ipairs({ "target", "mouseover" }) do
+            sampleEligibility(observed, unit, guid)
+        end
+        return completeKill(self, guid, observed)
+    end
+    function journal:RecordKill(unit)
+        if ns.KillDiagnostics and ns.KillDiagnostics.enabled then ns.KillDiagnostics:Sample(unit, self) end
+        local guid, at = read(UnitGUID, unit), now()
+        if not creatureID(guid) then return false end
+        if killedGUIDs[guid] then return decision(guid, "duplicate") end
+        local observed = getInstance(guid, at)
+        if not observed then return false end
+        local dead = read(UnitIsDead, unit)
+        if read(UnitGUID, unit) ~= guid then return false end
+        if dead == false then
+            -- A reset/evade or living reappearance invalidates terminal evidence.
+            -- Ordinary live tap/threat/combat observations never authorize kills.
+            if read(UnitAffectingCombat, unit) ~= true then
+                clearTerminal(guid, observed)
+            end
+            return false
+        end
+        if dead ~= true then return false end
+        observed.dead = true
+        startPending(observed, at)
+        sampleEligibility(observed, unit, guid)
+        return completeKill(self, guid, observed)
     end
     function journal:Offer(id, name, origin, spellID)
         name = clean(name, 100)
@@ -339,6 +586,9 @@ function ns.CreateBestiaryJournal(db, identify)
     function journal:SetEntryConfirmed(id, confirmed)
         local entry = self.entries[id]
         if not entry then return false end
+        if confirmed==true and not entry.confirmed and self.GetBasicInfo then
+            entry.lockedBasic = self:GetBasicInfo(id)
+        elseif confirmed~=true then entry.lockedBasic=nil end
         entry.confirmed = confirmed == true
         self:Touch()
         return true
@@ -348,6 +598,9 @@ function ns.CreateBestiaryJournal(db, identify)
         if not entry or entry.confirmed or not entry.abilities[name] then return false end
         if state ~= "confirmed" and state ~= "rejected" and state ~= "pending" then return false end
         entry.abilities[name].state = state
+        if state=="confirmed" and self.ResolveRumours then
+            self:ResolveRumours(id,{kind="ability",value=name,spellID=entry.abilities[name].spellID})
+        end
         self:Touch()
         return true
     end
@@ -459,6 +712,7 @@ function ns.CreateBestiaryJournal(db, identify)
             end
         end
         entry.abilities[name] = { state = "confirmed", origin = "Your note", note = cleaned, effects = savedEffects, spellID = spellID }
+        if self.ResolveRumours then self:ResolveRumours(id,{kind="ability",value=name,spellID=spellID}) end
         self:Touch()
         return true, "Ability confirmed. Lock in the entry to show it in tooltips."
     end
@@ -531,23 +785,24 @@ function ns.CreateBestiaryJournal(db, identify)
         local locationFilterActive = type(locations) == "table" and next(locations) ~= nil
         local rows = {}
         for id, entry in pairs(self.entries) do
-            local name = entry.name or ("Encountered creature #" .. id)
+            local basic = self.GetBasicInfo and self:GetBasicInfo(id) or entry
+            local name = basic.name or ("Encountered creature #" .. id)
             local review = not entry.confirmed
             for _, ability in pairs(entry.abilities) do if ability.state == "pending" then review = true end end
             local first = name:sub(1, 1):upper()
             local locationMatch = not locationFilterActive
             if locationFilterActive then
-                for location in pairs(entry.locations or {}) do
+                for location in pairs(basic.locations or {}) do
                     if locations[location] then locationMatch = true; break end
                 end
             end
-            local categoryMatch = not category or entry.category == category
-                or (category == "Unclassified" and entry.category == "Not specified")
+            local categoryMatch = not category or basic.category == category
+                or (category == "Unclassified" and basic.category == "Not specified")
             if categoryMatch and (not initial or first == initial)
                 and (not reviewOnly or review)
                 and (not ranks or not next(ranks) or ranks[entry.rank] == true)
                 and locationMatch
-                and (name:lower():find(query, 1, true) or entry.category:lower():find(query, 1, true)) then
+                and (name:lower():find(query, 1, true) or basic.category:lower():find(query, 1, true)) then
                 rows[#rows + 1] = { id = id, name = name, review = review }
             end
         end
@@ -555,18 +810,23 @@ function ns.CreateBestiaryJournal(db, identify)
         return rows
     end
     function journal:Reset()
-        db.bestiary = { entries = {}, creatures = {} }
-        self.entries = db.bestiary.entries
+        trackingDB.bestiary = { entries = {}, creatures = {} }
+        self.entries = trackingDB.bestiary.entries
+        initializePoints()
+        initializeRecentKills()
         seenGUIDs = {}
-        killedGUIDs = {}
-        liveUnits = {}
+        killInstances = {}
+        if self.sharing then self.sharing:Reset() end
         if ns.UIScale then ns.UIScale:Initialize(db) end
         if ns.MinimapButton then ns.MinimapButton:ApplySettings() end
         self:Touch()
     end
     function journal:ResetDatabase()
+        local personalBestiary, trackingKey = db.bestiary, db.accountTrackingKey
         for key in pairs(db) do db[key] = nil end
-        db.version, db.bestiary, db.announce, db.creatureAnnouncements = 1, { entries = {}, creatures = {} }, false, true
+        db.version, db.announce, db.creatureAnnouncements = 1, false, true
+        db.accountTrackingKey, db.accountWideTracking = trackingKey, activeAccountWideTracking
+        if trackingDB ~= db then db.bestiary = personalBestiary end
         db.showSpellIDs, db.spellIDTooltipInitialized = true, true
         db.backgroundBrightness = 1
         self:SetDisplayCastIDs(true)
@@ -575,11 +835,12 @@ function ns.CreateBestiaryJournal(db, identify)
         self:Reset()
     end
     -- Preserve old observations but ask for review; never invent names/levels.
-    for id, creature in pairs(db.bestiary.creatures) do
+    for id, creature in pairs(trackingDB.bestiary.creatures) do
         for spellID, spell in pairs(creature.spells or {}) do
             if type(spell) == "table" then journal:Offer(id, spell.name, "Previous observations", spellID) end
         end
         for name in pairs(creature.names or {}) do journal:Offer(id, name, "Previous observations") end
     end
+    if ns.InstallSharingRecords then ns.InstallSharingRecords(journal) end
     return journal
 end

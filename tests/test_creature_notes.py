@@ -24,6 +24,7 @@ function methods:SetEnabled(v) self.enabled=v end
 function methods:SetFocus() self.focused=true end
 function methods:SetVerticalScroll(v) self.scroll=v end
 function methods:GetVerticalScroll() return self.scroll or 0 end
+function methods:GetVerticalScrollRange() return 0 end
 function methods:CreateFontString() return CreateFrame('FontString') end
 function methods:CreateTexture() return CreateFrame('Texture') end
 function CreateFrame(kind,name,parent)
@@ -37,7 +38,7 @@ function GameTooltip:AddLine(text) self.lines[#self.lines+1]=text end
 function GameTooltip:Show() end
 function GameTooltip:Hide() end
 ''')
-for name in ['BestiaryJournal.lua','CreatureNotes.lua']:
+for name in ['Scrollbars.lua','BestiaryJournal.lua','CreatureNotes.lua']:
     lua.execute((root/name).read_text(),'AzerothFieldbook',lua.globals().ns)
 lua.execute(r'''journal=ns.CreateBestiaryJournal(db,function() return nil end)
 journal:Ensure(1).name='Mountain Boar'

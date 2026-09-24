@@ -8,6 +8,13 @@ lua.execute(r'''
 ns, frames, UISpecialFrames, UIParent = {}, {}, {}, {}
 local methods = {}
 function methods:SetScript(k,f) self.scripts[k]=f end
+function methods:HookScript(k,f)
+    local previous=self.scripts[k]
+    self.scripts[k]=function(...) if previous then previous(...) end; f(...) end
+end
+function methods:GetVerticalScrollRange() return math.max(0,(self.child and self.child:GetHeight() or 0)-self:GetHeight()) end
+function methods:UpdateScrollChildRect() end
+function methods:EnableMouseWheel(v) self.wheel=v end
 function methods:SetSize(w,h) self.width=w; self.height=h end
 function methods:SetWidth(w) self.width=w end
 function methods:SetHeight(h) self.height=h end
@@ -43,6 +50,7 @@ function CreateFrame(kind,name,parent)
 end
 function methods:CreateFontString() return CreateFrame('FontString',nil,self) end
 ''')
+lua.execute((Path(__file__).resolve().parents[1] / 'Scrollbars.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute((Path(__file__).resolve().parents[1] / 'DebugReport.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(r'''
 local report=string.rep('A long diagnostic line\n',500)

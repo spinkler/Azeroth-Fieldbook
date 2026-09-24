@@ -36,7 +36,8 @@ function ns.CreateCreatureNotesWindow(journal)
     local function render()
         if not frame then return end
         local log = selected and journal:GetIDNotes(selected)
-        frame.creature:SetText(entry and entry.name or "Select a creature in the Bestiary.")
+        local basic=entry and journal.GetBasicInfo and journal:GetBasicInfo(selected) or entry
+        frame.creature:SetText(basic and basic.name or "Select a creature in the Bestiary.")
         frame.spellInput:SetShown(entry ~= nil)
         frame.inputLabel:SetShown(entry ~= nil)
         frame.notesToggle:SetEnabled(entry ~= nil)
@@ -71,7 +72,7 @@ function ns.CreateCreatureNotesWindow(journal)
         frame:SetSize(400,176); frame:SetPoint("CENTER",UIParent,"CENTER",200,0)
         frame:SetFrameStrata("DIALOG"); frame:SetClampedToScreen(true)
         if UIParent.GetWidth and UIParent.GetHeight then
-            frame:SetScale(math.min(1,(UIParent:GetWidth()-30)/400,(UIParent:GetHeight()-30)/570))
+            frame:SetScale(math.min(1,(UIParent:GetWidth()-30)/(400*1.5),(UIParent:GetHeight()-30)/(570*1.5)))
         end
         frame:SetMovable(true); frame:EnableMouse(true); frame:RegisterForDrag("LeftButton")
         frame:SetScript("OnDragStart",frame.StartMoving); frame:SetScript("OnDragStop",frame.StopMovingOrSizing)
@@ -168,6 +169,7 @@ function ns.CreateCreatureNotesWindow(journal)
         frame.notes:SetMultiLine(true); frame.notes:SetAutoFocus(false); frame.notes:SetFontObject(ChatFontNormal)
         frame.notes:SetWidth(332); frame.notes:SetHeight(116); frame.notes:SetMaxLetters(400)
         frame.notesArea:SetScrollChild(frame.notes)
+        ns.AutoHideScrollBar(frame.notesArea)
         local function focusNotes(_, button)
             if entry and button == "LeftButton" then frame.notes:SetFocus() end
         end
@@ -196,7 +198,7 @@ function ns.CreateCreatureNotesWindow(journal)
     end
     function controller:SetCreature(id)
         local nextEntry=id and journal.entries[id]
-        if id==selected and nextEntry==entry then return end
+        if id==selected and nextEntry==entry then render(); return end
         selected,entry=id,nextEntry
         if not frame then return end
         loading=true

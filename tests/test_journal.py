@@ -150,6 +150,8 @@ function methods:GetWidth() return self.width or 1920 end
 function methods:GetHeight() return self.height or 1080 end
 function methods:GetStringHeight() return 32 end
 function methods:GetFrameLevel() return 10 end
+function methods:GetVerticalScroll() return 0 end
+function methods:GetVerticalScrollRange() return 0 end
 function methods:Show() self.shown=true end
 function methods:Hide() self.shown=false; if self.scripts.OnHide then self.scripts.OnHide(self) end end
 function methods:SetShown(v) if v then self:Show() else self:Hide() end end
@@ -172,13 +174,14 @@ end
 UIParent=CreateFrame('Frame'); UIParent:SetSize(1920,1080)
 UISpecialFrames={}
 ''')
+lua.execute(root.joinpath('Scrollbars.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(root.joinpath('CreatureNotes.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(root.joinpath('BestiaryBook.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(r'''
 controller=ns.CreateBestiaryBook(journal)
 controller:Toggle()
 check(AzerothFieldbookBestiary:IsShown(),'book opens')
-check(#UISpecialFrames==9 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
+check(#UISpecialFrames==10 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
 check(controller:OpenAtUnit('mouseover'),'mouseover binding opens the observed NPC page')
 for _,o in ipairs(objects) do check(o.text~='Your note','empty manual field note stays visually empty') end
 local function click(text)
@@ -190,8 +193,31 @@ end
 check(click('Record damage taken'),'damage form opens')
 check(click('Cancel'),'damage form closes')
 check(click('All'),'category selection')
-check(click('D'),'alphabet tab')
-check(click('Index'),'alphabet index reset')
+local indexBook=AzerothFieldbookBestiary
+local function checkIndex(open)
+    check(indexBook.indexButton.enabled,'Index always remains clickable')
+    for _,line in ipairs(indexBook.indexButton.selectionOutline) do
+        check(line:IsShown()==open,'Index highlights only while open')
+    end
+    check(#indexBook.letterButtons==26,'Index contains all letters')
+    for _,tab in ipairs(indexBook.letterButtons) do
+        check(tab:IsShown()==open and tab.enabled,'letters follow Index visibility and remain clickable')
+    end
+end
+checkIndex(false)
+check(indexBook.rows[1].id==42,'default list is unfiltered')
+check(click('Index'),'alphabet index opens')
+checkIndex(true)
+check(click('D') and indexBook.rows[1].id==42,'alphabet tab selects matching entries')
+check(click('Z') and not indexBook.rows[1]:IsShown(),'empty letters are clickable and show no matches')
+check(click('Index'),'alphabet index closes')
+checkIndex(false)
+check(indexBook.rows[1].id==42,'closing Index restores entries after an empty letter filter')
+check(click('Index'),'alphabet index reopens')
+checkIndex(true)
+check(indexBook.rows[1].id==42,'reopening Index does not restore a stale letter filter')
+check(click('D') and click('Index'),'close Index after a matching filter')
+checkIndex(false)
 check(click('Next') and click('Previous'),'entry navigation buttons')
 check(click('Pending'),'review filter')
 check(click('All entries'),'review filter clears')
@@ -235,7 +261,7 @@ journal:SetSingleObservationWindow(false)
 behaviour:Show(); behaviour.scripts.OnShow(behaviour)
 check(defense:IsShown() and behaviour:IsShown(),'disabled option allows simultaneous windows')
 check(not ns.CreateBestiaryJournal(db,identify):GetSingleObservationWindow(),'window preference persists')
-local singleOption=AzerothFieldbookHelp.singleObservationWindow
+local singleOption=AzerothFieldbookOptions.singleObservationWindow
 singleOption.GetChecked=function() return true end
 singleOption.scripts.OnClick(singleOption)
 check(behaviour:IsShown() and not defense:IsShown(),'enabling option retains latest open window')
@@ -260,17 +286,27 @@ click('Offenses')
 check(not offense:IsShown() and defense:IsShown(),'multi-window mode closes only clicked window')
 journal:SetSingleObservationWindow(true)
 check(click('Lock this entry'),'entry can be locked again')
-local help=AzerothFieldbookHelp
-help.scripts.OnShow(help)
-check(help.uiScale.scripts.OnKeyUp==nil and help.uiScale.scripts.OnKeyDown==nil,'options scale slider does not capture keyboard input')
+local options=AzerothFieldbookOptions
+options.scripts.OnShow(options)
+check(journal:GetAccountWideTracking() and not journal:IsTrackingChangePending(),'account-wide tracking defaults on')
+options.accountWideTracking.GetChecked=function() return false end
+options.accountWideTracking.scripts.OnClick(options.accountWideTracking)
+check(db.accountWideTracking==false and journal:IsTrackingChangePending(),'tracking checkbox saves a pending character scope')
+check(options.trackingReload.text=='Applies after /reload','tracking changes explain when they apply')
+options.scripts.OnShow(options)
+check(not journal:GetAccountWideTracking(),'opening options preserves an explicit off preference')
+options.accountWideTracking.GetChecked=function() return true end
+options.accountWideTracking.scripts.OnClick(options.accountWideTracking)
+check(not journal:IsTrackingChangePending() and options.trackingReload.text=='','returning to active tracking cancels the pending change')
+check(options.uiScale.scripts.OnKeyUp==nil and options.uiScale.scripts.OnKeyDown==nil,'options scale slider does not capture keyboard input')
 local oldScale=journal:GetUIScale()
-help.uiScale.scripts.OnValueChanged(help.uiScale,0.75)
+options.uiScale.scripts.OnValueChanged(options.uiScale,0.75)
 check(journal:GetUIScale()==oldScale,'scale preview does not move the UI')
-help.uiScale.scripts.OnMouseUp(help.uiScale,'LeftButton')
+options.uiScale.scripts.OnMouseUp(options.uiScale,'LeftButton')
 check(journal:GetUIScale()==0.75,'scale applies on mouse release')
-help.uiScale.scripts.OnValueChanged(help.uiScale,0.5)
-help.uiScale.scripts.OnHide(help.uiScale)
-help.uiScale.scripts.OnMouseUp(help.uiScale,'LeftButton')
+options.uiScale.scripts.OnValueChanged(options.uiScale,0.5)
+options.uiScale.scripts.OnHide(options.uiScale)
+options.uiScale.scripts.OnMouseUp(options.uiScale,'LeftButton')
 check(journal:GetUIScale()==0.75,'closing discards unfinished scale adjustment')
 check(click('100%') and journal:GetUIScale()==1,'scale reset applies immediately')
 
@@ -278,10 +314,10 @@ check(journal:GetSpellIDWindowOption('displaySpellIDWindow'),'ID window defaults
 check(not journal:GetSpellIDWindowOption('spellIDWindowLocked'),'ID window defaults unlocked')
 check(not journal:GetSpellIDWindowOption('spellIDWindowIndefinite'),'ID window defaults expiring')
 check(journal:GetSpellIDWindowOption('spellIDWindowAlpha')==0.35,'ID window default opacity')
-help.spellIDWindowAlpha.scripts.OnValueChanged(help.spellIDWindowAlpha,0.7)
+options.spellIDWindowAlpha.scripts.OnValueChanged(options.spellIDWindowAlpha,0.7)
 check(db.spellIDWindowAlpha==0.7,'opacity control saves setting')
-help.spellIDWindowLocked.GetChecked=function() return true end
-help.spellIDWindowLocked.scripts.OnClick(help.spellIDWindowLocked)
+options.spellIDWindowLocked.GetChecked=function() return true end
+options.spellIDWindowLocked.scripts.OnClick(options.spellIDWindowLocked)
 check(db.spellIDWindowLocked,'lock checkbox saves setting')
 controller:Toggle(); check(not AzerothFieldbookBestiary:IsShown(),'book closes')
 controller:Toggle(); check(AzerothFieldbookBestiary:IsShown(),'book reopens')
@@ -370,17 +406,27 @@ check(#ranksJournal:List(nil,'Rank 4',false,nil,nil,{['World Boss']=true})==1,'r
 check(#ranksJournal:List(nil,'Rank 1',false,nil,nil,{Rare=true})==0,'rank and text both required')
 local rewards=ns.CreateBestiaryJournal({},function() return nil end)
 local first=rewards:Ensure(1)
-for _,sample in ipairs({{0,0},{1,1,'silver'},{2,3,'gold'},{3,3,'gold'},{20,3,'gold'}}) do
+for _,sample in ipairs({{0,0},{1,0},{2,1,'silver'},{3,1,'silver'},{24,1,'silver'},{25,3,'gold'},{26,3,'gold'}}) do
     first.kills=sample[1]
     local points,star=rewards:GetKillReward(1)
     check(points==sample[2] and star==sample[3],'kill reward threshold')
 end
-rewards:Ensure(2).kills=1
+rewards:Ensure(2).kills=2
+-- Saved legacy kills are credited exactly once during migration, rather than
+-- by mutating a live display entry and asking the totals getter to award them.
+local rewardsDB={bestiary={entries=rewards.entries,creatures={}}}
+rewards=ns.CreateBestiaryJournal(rewardsDB,function() return nil end)
 local count,points=rewards:GetTotals()
 check(count==2 and points==6,'entry points combine with cumulative kill rewards')
+-- A ledger credited under the old thresholds keeps its earned points even
+-- though the star now reflects the higher threshold.
+rewards.entries[1].kills=2
+rewards=ns.CreateBestiaryJournal(rewardsDB,function() return nil end)
+check(select(2,rewards:GetKillReward(1))=='silver','saved kill count uses the current star threshold')
+check(select(2,rewards:GetTotals())==6,'threshold changes preserve previously credited points')
 rewards:DeleteEntry(1)
 count,points=rewards:GetTotals()
-check(count==1 and points==2,'deletion updates derived totals')
+check(count==1 and points==6,'deletion removes display records but retains earned credit')
 local discoveryDB={}
 local discovery=ns.CreateBestiaryJournal(discoveryDB,function() return 900 end)
 level=5; zone='First zone'; discovery:Observe('target')
@@ -407,12 +453,30 @@ level=3; zone='Award zone'; awards:Observe('target')
 check(#notifications==1,'entry level and zone announce one point')
 awards:Observe('target'); awards:GetTotals()
 check(#notifications==1,'repeat observations and totals do not announce again')
-local oldDead=UnitIsDead
-UnitIsDead=function() return true end
-guid='award-first'; awards:RecordKill('target'); awards:RecordKill('target')
-check(#notifications==2 and notifications[2][1]==1,'first kill awards silver once')
-guid='award-second'; awards:RecordKill('target')
-check(#notifications==3 and notifications[3][1]==2,'second kill announces two additional points')
+local oldDead,oldGUID,oldExists,oldControlled,oldTap,oldTime=UnitIsDead,UnitGUID,UnitExists,UnitPlayerControlled,UnitIsTapDenied,GetTime
+local awardDead=false
+UnitIsDead=function() return awardDead end
+UnitGUID=function(unit) if unit=='player' then return 'Player-1-1' elseif unit=='target' then return guid end end
+UnitExists=function() return true end
+UnitPlayerControlled=function() return false end
+UnitIsTapDenied=function() return false end
+GetTime=function() return 0 end
+local function awardDeath(suffix)
+    guid='Creature-0-1-2-3-901-'..suffix
+    awardDead=false; awards:Observe('target')
+    awards:RecordPartyKill('Player-1-1',guid)
+    awardDead=true; awards:RecordUnitDeath(guid); awards:RecordKill('target')
+end
+awardDeath('first')
+check(#notifications==1,'first kill awards no star points')
+awardDeath('second')
+check(#notifications==2 and notifications[2][1]==1 and notifications[2][2]=='silver star','second kill awards silver once')
+for i=3,24 do awardDeath('kill'..i) end
+check(#notifications==2,'kills below 25 do not announce gold')
+awardDeath('gold')
+check(#notifications==3 and notifications[3][1]==2 and notifications[3][2]=='gold star','25th kill announces two additional points')
+awardDeath('afterGold')
+check(#notifications==3,'kills above 25 do not repeat gold points')
 awards:SetPointAnnouncements(false); zone='Silent zone'; awards:Observe('target')
 check(#notifications==3,'option disables new award messages')
 local _,silentTotal=awards:GetTotals(); check(silentTotal==5,'muting messages still awards points')
@@ -420,7 +484,7 @@ local savedAwards=ns.CreateBestiaryJournal(awardsDB,function() return 901 end)
 check(not savedAwards:GetPointAnnouncements(),'notification option persists')
 savedAwards:SetPointsAwardedCallback(function() error('existing credit must not be reannounced') end)
 savedAwards:SetPointAnnouncements(true); savedAwards:GetTotals(); savedAwards:Observe('target')
-UnitIsDead=oldDead
+UnitIsDead,UnitGUID,UnitExists,UnitPlayerControlled,UnitIsTapDenied,GetTime=oldDead,oldGUID,oldExists,oldControlled,oldTap,oldTime
 check(click('Ranks') and AzerothFieldbookBestiaryRanks:IsShown(),'rank picker opens')
 journal:Reset(); controller:Refresh()
 check(#journal:List(nil,'',false)==0,'reset clears book')
