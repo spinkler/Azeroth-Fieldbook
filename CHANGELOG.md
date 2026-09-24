@@ -1,6 +1,8 @@
 # Changelog
 
-## v0.8.0 - 2026-09-24
+## v0.8.0-beta - 2026-09-24
+
+This release moves Azeroth Fieldbook from Alpha to Beta.
 
 ### Added
 

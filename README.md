@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.8.0
+# Azeroth Fieldbook 0.8.0 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
