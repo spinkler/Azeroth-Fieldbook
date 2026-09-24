@@ -104,8 +104,10 @@ check(journal:SetBehaviour(42,'Hostile',true) and journal:SetBehaviour(42,'Neutr
 check(not journal.entries[42].behaviours.Hostile and journal.entries[42].behaviours.Neutral,'hostile and neutral remain mutually exclusive')
 journal.entries[77]={id=77,name='Unknown Test',category='Not specified',abilities={},locations={},confirmed=false}
 journal.entries[78]={id=78,name='Unreadable Test',category='Unclassified',abilities={},locations={},confirmed=false}
-check(#journal:List('Unclassified','',false)==2,'unclassified filter includes not-specified entries')
-journal.entries[77]=nil; journal.entries[78]=nil
+journal.entries[79]={id=79,name='Totem Test',category='Totem',abilities={},locations={},confirmed=false}
+journal.entries[80]={id=80,name='Gas Test',category='Gas Cloud',abilities={},locations={},confirmed=false}
+check(#journal:List('Other','',false)==4,'other filter combines unclassified, unspecified, totems and gas clouds')
+journal.entries[77]=nil; journal.entries[78]=nil; journal.entries[79]=nil; journal.entries[80]=nil
 check(#journal:List(nil,'',false,nil,{['Elwynn Forest']=true})==1,'location filter includes an observed location')
 check(#journal:List(nil,'',false,nil,{Westfall=true})==0,'location filter excludes other locations')
 check(#journal:List('Humanoid','',false,nil,{['Elwynn Forest']=true})==1,'location filter combines with creature type')

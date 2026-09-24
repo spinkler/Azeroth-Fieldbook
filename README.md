@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.6 (Beta)
+# Azeroth Fieldbook 0.9.11 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,11 +6,11 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.6 includes sharing, addon-version compatibility
+spell databases. Version 0.9.11 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.6.
+are not part of version 0.9.11.
 
 ## Installation and opening
 
@@ -57,8 +57,8 @@ The **Index** button starts red with the letters hidden and no letter filter.
 Click it to highlight the button and reveal all 26 letter buttons. Click it again
 to hide the letters and clear the letter filter, restoring the full creature list
 within any other active filters.
-Filters combine. Entries with unreadable or unspecified creature types share the
-**Unclassified** filter.
+Filters combine. Totems, gas clouds and entries with unreadable or unspecified
+creature types share the **Other** filter.
 
 Each creature entry can contain:
 
@@ -266,7 +266,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.6 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.11 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode and one-time migration markers.

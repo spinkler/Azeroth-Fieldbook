@@ -1,7 +1,7 @@
 # Point-funded sharing: implementation and live checkpoint
 
 Development baseline: clean `main`, `f33e392`, TOC 0.8.3 / interface 16001.
-Release version: 0.9.6 Beta, including account-wide tracking and the separate Rumours review window,
+Release version: 0.9.11 Beta, including account-wide tracking and the separate Rumours review window,
 updated kill thresholds and Index toggle after the operator-designated 0.9.0 sharing
 milestone. The operator requires an increment
 of the last version component for each completed local change set. No commit,
@@ -66,7 +66,7 @@ leaving combat and player name updates. The composer displays the specific
 prerequisite that currently disables sending.
 
 Compatibility requires sharing protocol **3**, literal report schema **1**, and
-the **same installed addon version** on both clients (currently 0.9.6). The native
+the **same installed addon version** on both clients (currently 0.9.11). The native
 adapter reads `C_AddOns.GetAddOnMetadata(addonName, "Version")`; an unavailable or
 unreadable version disables sharing. `H` and `R` carry a bounded literal version
 string. Both ends check it before sending/staging report data, and a mismatch

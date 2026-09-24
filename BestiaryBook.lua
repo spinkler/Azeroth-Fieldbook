@@ -24,7 +24,7 @@ function ns.CreateBestiaryBook(journal)
     local category, initial, reviewOnly = nil, nil, false
     local indexOpen = false
     local locationFilters, rankFilters = {}, {}
-    local typeOrder = { "Beast", "Humanoid", "Dragonkin", "Demon", "Elemental", "Giant", "Undead", "Mechanical", "Critter", "Totem", "Aberration", "Gas Cloud", "Unclassified" }
+    local typeOrder = { "Beast", "Humanoid", "Dragonkin", "Demon", "Elemental", "Giant", "Undead", "Mechanical", "Critter", "Aberration", "Other" }
     local magicSchools = {
         { name="Arcane", color="d884ff" }, { name="Fire", color="ff7043" },
         { name="Frost", color="69ccf0" }, { name="Holy", color="fff09a" },
@@ -147,7 +147,7 @@ local ink = { 0.75, 0.8, 0.8 }
         local available = {}
         for id in pairs(journal.entries) do
             local e=basicInfo(id)
-            local displayCategory = e.category == "Not specified" and "Unclassified" or e.category
+            local displayCategory = journal:GetCategoryFilter(e.category)
             available[displayCategory] = true
         end
         if category and not available[category] then category = nil end
@@ -302,10 +302,11 @@ local ink = { 0.75, 0.8, 0.8 }
                 local note=ability.note or (ability.origin ~= "Your note" and ability.origin or nil)
                 row.note:SetText(effects and note and (effects.." — "..note) or effects or note or "")
                 row.accept:SetEnabled(editable and ability.state ~= "confirmed")
+                row.resolve:SetEnabled(editable)
                 row.link:SetEnabled(editable)
                 row.reject:SetEnabled(editable)
                 row.tooltipCheck:SetEnabled(editable)
-                for _, control in ipairs({row.accept,row.link,row.reject,row.tooltipCheck}) do control:SetAlpha(editable and 1 or 0.45) end
+                for _, control in ipairs({row.accept,row.resolve,row.link,row.reject,row.tooltipCheck}) do control:SetAlpha(editable and 1 or 0.45) end
                 row.reject:SetText(ability.state == "rejected" and "Remove" or "Reject")
             else row:Hide() end
         end
@@ -564,11 +565,11 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         addTypeButton("All creatures", -110)
         for i, name in ipairs(typeOrder) do addTypeButton(name, -110-i*28) end
-        book.locationsButton = button(book, "Locations", 42, -516, 88, function()
+        book.locationsButton = button(book, "Locations", 42, -479, 88, function()
             book.locationFrame:SetShown(not book.locationFrame:IsShown())
         end)
         addSelectionOutline(book.locationsButton)
-        book.ranksButton = button(book, "Ranks", 42, -548, 88, function() book.rankFrame:SetShown(not book.rankFrame:IsShown()) end)
+        book.ranksButton = button(book, "Ranks", 42, -511, 88, function() book.rankFrame:SetShown(not book.rankFrame:IsShown()) end)
         addSelectionOutline(book.ranksButton)
         book.entryCount=label(book,"",135,-55,90,"GameFontHighlightSmall")
         book.pointsCount=label(book,"",225,-55,90,"GameFontHighlightSmall")
@@ -580,7 +581,7 @@ local ink = { 0.75, 0.8, 0.8 }
             searchPlaceholder:SetShown(self:GetText() == "")
             offset = 0; refresh()
         end)
-        book.review = button(book, "Pending", 42, -580, 88, function()
+        book.review = button(book, "Pending", 42, -543, 88, function()
             reviewOnly = not reviewOnly
             book.review:SetText(reviewOnly and "All entries" or "Pending")
             offset = 0; refresh()
@@ -865,11 +866,16 @@ local ink = { 0.75, 0.8, 0.8 }
             row.tooltipCheck:SetScript("OnClick",function(self)
                 if selected and row.name then journal:SetAbilityTooltip(selected,row.name,self:GetChecked() == true); refresh() end
             end)
-            row.text = label(row,"",22,0,256)
+            row.text = label(row,"",22,0,214)
             row.text:SetWordWrap(false)
-            row.note = label(row,"",35,-17,326,"GameFontHighlightSmall")
+            row.note = label(row,"",35,-17,201,"GameFontHighlightSmall")
             row.note:SetHeight(23)
-            row.link = button(row,"Edit",287,0,72,function()
+            row.resolve = button(row,"Resolve",244,0,72,function()
+                local ok,msg=journal:ResolveAbility(selected,row.name)
+                message(msg)
+                if ok then refresh() end
+            end)
+            row.link = button(row,"Edit",322,0,54,function()
                 local ability=journal.entries[selected].abilities[row.name]
                 local ok,combat=pcall(InCombatLockdown)
                 if not ok or (issecretvalue and issecretvalue(combat)) or combat~=false then message("Spell linking is available outside combat."); return end
@@ -887,10 +893,10 @@ local ink = { 0.75, 0.8, 0.8 }
                     message("Ability loaded below. Add an optional spell ID, link, or exact name, then confirm.")
                 end
             end)
-            row.accept = button(row,"Confirm",368,0,88,function()
+            row.accept = button(row,"Confirm",382,0,80,function()
                 journal:SetAbility(selected,row.name,"confirmed"); refresh()
             end)
-            row.reject = button(row,"Reject",462,0,88,function()
+            row.reject = button(row,"Reject",468,0,80,function()
                 local a=journal.entries[selected].abilities[row.name]
                 if a.state=="rejected" then
                     journal:RemoveAbility(selected,row.name)

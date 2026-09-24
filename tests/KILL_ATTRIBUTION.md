@@ -1,6 +1,6 @@
 # Kill attribution: implementation and live evidence
 
-Status: implemented locally against **main, HEAD f33e392, addon 0.9.6**.
+Status: implemented locally against **main, HEAD f33e392, addon 0.9.11**.
 The automated checks passed. Solo event delivery with and without XP was observed
 on the installed Forever client. Live acceptance now confirms a party member's
 finishing blow counts once through the new production gate, corpse reinspection

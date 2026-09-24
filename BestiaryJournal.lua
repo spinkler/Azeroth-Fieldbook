@@ -570,7 +570,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:Offer(id, name, origin, spellID)
         name = clean(name, 100)
-        if not name then return end
+        if not name or name:lower() == "attack" then return end
         local entry = self:Ensure(id)
         if not entry or entry.confirmed then return end
         if entry.ignoredAbilities and entry.ignoredAbilities[name] then return end
@@ -688,6 +688,22 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not str(name) then return nil, nil, "That spell is not readable/cached. Try again, or save the name without a link." end
         return spellID, name
     end
+    function journal:ResolveAbility(id, name)
+        local entry = self.entries[id]
+        local ability = entry and entry.abilities[name]
+        if not ability then return false, "Select a recorded ability first." end
+        if entry.confirmed then return false, "Unlock this creature before changing its abilities." end
+        local reference = number(ability.spellID) and tostring(ability.spellID) or name
+        local spellID, linkedName, errorMessage = self:ResolveSpell(reference)
+        if errorMessage then return false, errorMessage end
+        if not spellID then return false, "No exact readable spell match. Use Edit to enter an ID or spell link." end
+        if linkedName:lower() ~= name:lower() then
+            return false, "The match is for " .. linkedName .. ". Use Edit to review the spell link."
+        end
+        ability.spellID = spellID
+        self:Touch()
+        return true, "Exact match: " .. linkedName .. " (ID " .. spellID .. ")."
+    end
     function journal:AddManual(id, name, note, reference, effects)
         local entry = self.entries[id]
         if entry and entry.confirmed then return false, "Unlock this creature before changing its abilities." end
@@ -780,6 +796,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         table.sort(names)
         return names
     end
+    function journal:GetCategoryFilter(category)
+        if category == "Unclassified" or category == "Not specified"
+            or category == "Totem" or category == "Gas Cloud" then return "Other" end
+        return category
+    end
     function journal:List(category, query, reviewOnly, initial, locations, ranks)
         query = (query or ""):lower()
         local locationFilterActive = type(locations) == "table" and next(locations) ~= nil
@@ -796,8 +817,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
                     if locations[location] then locationMatch = true; break end
                 end
             end
-            local categoryMatch = not category or basic.category == category
-                or (category == "Unclassified" and basic.category == "Not specified")
+            local categoryMatch = not category or self:GetCategoryFilter(basic.category) == category
             if categoryMatch and (not initial or first == initial)
                 and (not reviewOnly or review)
                 and (not ranks or not next(ranks) or ranks[entry.rank] == true)

@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.9.11-beta - 2026-09-25
+
+- Added **Resolve** to recorded ability rows, allowing spell resolution outside
+  combat without opening Edit. It uses the recorded spell ID when available,
+  otherwise the exact ability name, and remains enabled for unlocked entries.
+  Resolution preserves notes, effects and review state; pending abilities still
+  use the existing Confirm button afterward.
+- Ignore **Attack** during automatic ability recording, including cast events,
+  encounter observations and restoration of older observation records. Ignored
+  attacks produce no observation announcements or new ability entries.
+- Combined Totem, Gas Cloud and Unclassified into a single **Other** creature-type
+  filter, preserving each creature's recorded type.
+- Halved the gap between Other and Locations, moving Locations, Ranks and Pending
+  upward together to preserve their spacing.
+
 ## v0.9.6-beta - 2026-09-25
 
 - Hide scrollbars whenever a window's content fits its visible area, including

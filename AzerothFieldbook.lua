@@ -157,6 +157,10 @@ local function storeObserved(id, spellID, observedName)
     -- Called only with direct cast evidence or attributed encounter records.
     local name = hasName and observedName or spellName(spellID)
     if not name then diagnostics.last = "Observed spell name unavailable."; return end
+    if name:match("^%s*(.-)%s*$"):lower() == "attack" then
+        diagnostics.last = "Basic Attack ignored."
+        return
+    end
     if journal then journal:Offer(id, name, "Automatic observation", spellID) end
     local creature = trackingDB.bestiary.creatures[id]
     if not creature then
