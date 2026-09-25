@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.9.82-beta - 2026-09-26
+
+This release includes all changes since v0.9.79-beta (local iterations v0.9.80
+through v0.9.82). The previous-push and previous-release baseline is commit
+1d2b9903fbe50d6009dc32466ebbb76716aaf695. Both players must use the same addon
+version to share creatures.
+
+- Keep the Last observed spell IDs window on LOW strata, including when focused,
+  so bags and other game windows can appear above it. Other addon windows retain
+  their existing focus behavior.
+- Shift+left-click the unlocked Spell ID window to hide it. Re-enable it with
+  Display Spell ID window in Options. Its hint now reads “Drag to move /
+  Shift+Click to hide” in grey.
+- Store UI scale account-wide, independently of Bestiary tracking scope. Migrate
+  the first character’s existing scale and keep the shared value on subsequent
+  characters and Bestiary resets. Window positions remain character-specific.
+- Update usage documentation and version references. Extend regression coverage
+  for Shift+click, persistent hiding, scale migration, cross-character settings
+  and reset preservation. All 23 test files pass; live rendering requires WoW.
+
+## v0.9.81 - Unreleased
+
+- Shift+left-click the unlocked Spell ID window to hide it; re-enable it with Display Spell ID window in Options. Update its hint to grey “Drag to move / Shift+Click to hide”.
+
+## v0.9.80 - Unreleased
+
+- Keep the Last observed spell IDs window on LOW strata, including when focused, so bags and other game windows can appear above it. Other addon windows retain their existing focus behavior.
+
 ## v0.9.79-beta - 2026-09-25
 
 This release includes all changes since v0.9.74-beta (local iterations v0.9.75

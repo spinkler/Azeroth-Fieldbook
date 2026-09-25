@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.79 (Beta)
+# Azeroth Fieldbook 0.9.82 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,11 +6,11 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.79 includes sharing, addon-version compatibility
+spell databases. Version 0.9.82 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.79.
+are not part of version 0.9.82.
 
 ## Installation and opening
 
@@ -286,7 +286,7 @@ keep their own attribution. A new report of a previously rejected claim reuses
 its existing source record and is flagged for review. There is no copy/paste export in this first version.
 SavedVariables cannot provide crash-proof delivery or resist edited saves/clients.
 
-The ? menu includes UI scale (50–150%, default 100%), applied when the slider
+The ? menu includes account-wide UI scale (50–150%, default 100%), applied when the slider
 is released. The minus and plus buttons beside **100%** apply five-percentage-point
 changes immediately, so you can adjust scale without dragging the slider.
 Offenses, Defenses and Behaviour share a position and replace
@@ -382,7 +382,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.79 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.82 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,

@@ -23,13 +23,13 @@ local function watch(frame, window)
     for _, child in ipairs({frame:GetChildren()}) do watch(child, window) end
 end
 
-function focus:Register(window)
+function focus:Register(window, strata)
     if windows[window] then return end
     windows[window] = true
     if ns.WindowPositions then ns.WindowPositions:Track(window) end
     -- Raise only works within one strata. Native top-level handling also raises
     -- a window when clicking controls added after it was first displayed.
-    window:SetFrameStrata("DIALOG")
+    window:SetFrameStrata(strata or "DIALOG")
     window:SetToplevel(true)
     watch(window, window)
     window:HookScript("OnShow", function(self)

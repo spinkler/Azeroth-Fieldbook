@@ -12,7 +12,13 @@ function scale:Apply()
     if ns.MinimapButton then ns.MinimapButton:UpdatePosition() end
 end
 function scale:Initialize(settings)
-    db = settings
+    if type(AzerothFieldbookAccountDB) ~= "table" then AzerothFieldbookAccountDB = {} end
+    db = AzerothFieldbookAccountDB
+    -- The first character after upgrading seeds the shared preference.
+    if db.uiScale == nil then
+        db.uiScale = math.max(0.5, math.min(1.5, tonumber(settings.uiScale) or 1))
+    end
+    settings.uiScale = nil
     self:Apply()
     if ns.WindowPositions then ns.WindowPositions:Initialize(settings) end
 end

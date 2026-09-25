@@ -62,7 +62,7 @@ local function setup()
     if panel then return end
     panel = CreateFrame("Frame", "AzerothFieldbookSpellIDWindow", UIParent)
         if ns.UIScale then ns.UIScale:Register(panel) end
-    panel:SetSize(330, 286); panel:SetFrameStrata("MEDIUM")
+    panel:SetSize(330, 286); panel:SetFrameStrata("LOW")
     panel:SetClampedToScreen(true); panel:SetMovable(true)
     if panel.SetClampRectInsets then panel:SetClampRectInsets(0,0,0,0) end
     panel:EnableMouse(true); panel:RegisterForDrag("LeftButton")
@@ -70,6 +70,13 @@ local function setup()
     background:SetAllPoints(); background:SetColorTexture(0, 0, 0, 0.35)
     text(panel, 10, -9, 310, "GameFontNormalSmall"):SetText("Last observed spell IDs")
     panel.hint = text(panel, 10, -27, 310)
+    panel.hint:SetTextColor(0.6, 0.6, 0.6)
+    panel:SetScript("OnMouseUp", function(_, button)
+        if button == "LeftButton" and IsShiftKeyDown() then
+            db.displaySpellIDWindow = false
+            window:ApplySettings()
+        end
+    end)
     panel:SetScript("OnDragStart", function(self)
         if not db.spellIDWindowLocked then self:StartMoving() end
     end)
@@ -105,7 +112,7 @@ local function setup()
         end
         updateFade(delta)
     end)
-    if ns.WindowFocus then ns.WindowFocus:Register(panel) end
+    if ns.WindowFocus then ns.WindowFocus:Register(panel, "LOW") end
 end
 local function present(index, id, name, effect)
     if public(id) and (type(id) ~= "number" or id <= 0) then return end
@@ -280,7 +287,7 @@ function window:ApplySettings()
     panel:SetMovable(not db.spellIDWindowLocked)
     panel.afbPinned=db.spellIDWindowLocked
     panel:EnableMouse(not db.spellIDWindowLocked)
-    panel.hint:SetText(db.spellIDWindowLocked and "" or "Drag to move")
+    panel.hint:SetText(db.spellIDWindowLocked and "" or "Drag to move / Shift+Click to hide")
     background:SetColorTexture(0, 0, 0, db.spellIDWindowAlpha)
     events:UnregisterAllEvents()
     if db.displaySpellIDWindow == false then

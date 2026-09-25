@@ -401,9 +401,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         db.singleObservationWindow = enabled == true
     end
     function journal:GetUIScale()
+        if ns.UIScale then return ns.UIScale:Get() end
         return math.max(0.5, math.min(1.5, tonumber(db.uiScale) or 1))
     end
     function journal:SetUIScale(value)
+        if ns.UIScale then ns.UIScale:Set(value); return end
         db.uiScale = math.max(0.5, math.min(1.5, tonumber(value) or 1))
         if ns.UIScale then ns.UIScale:Set(db.uiScale) end
     end

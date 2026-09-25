@@ -30,6 +30,8 @@ function methods:SetJustifyH() end
 function methods:SetPoint(...) self.point={...} end
 function methods:GetPoint() return unpack(self.point) end
 function methods:ClearAllPoints() self.point=nil end
+function methods:SetTextColor(...) self.color={...} end
+function IsShiftKeyDown() return shiftDown == true end
 function methods:SetText(v) self.text=v end
 function methods:GetText() error('text readback') end
 function methods:Hide() self.shown=false end
@@ -280,5 +282,15 @@ db.spellIDWindowPosition=nil
 ns.SpellIDWindow:Initialize(db)
 assert(panel.point[1]=='RIGHT' and panel.point[2]==AzerothFieldbookBestiary and panel.point[3]=='LEFT',
     'untouched spell window defaults beside the main book once it exists')
+''')
+lua.execute(r'''
+local panel=AzerothFieldbookSpellIDWindow
+db.spellIDWindowLocked=false; ns.SpellIDWindow:ApplySettings()
+assert(panel.hint.text=='Drag to move / Shift+Click to hide')
+assert(panel.hint.color[1]==0.6)
+shiftDown=false; panel.scripts.OnMouseUp(panel,'LeftButton'); assert(panel.shown)
+shiftDown=true; panel.scripts.OnMouseUp(panel,'RightButton'); assert(panel.shown)
+panel.scripts.OnMouseUp(panel,'LeftButton'); assert(not panel.shown)
+ns.SpellIDWindow:ApplySettings(); assert(not panel.shown,'hide persists through settings refresh')
 ''')
 print('Spell ID window lifecycle checks passed (live rendering still requires WoW).')
