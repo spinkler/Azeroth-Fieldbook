@@ -381,5 +381,48 @@ class WindowPositionTests(unittest.TestCase):
         ''')
 
 
+    def test_secret_geometry_on_show_is_neither_calculated_nor_saved(self):
+        self.lua.execute('''
+            UIParent.width=1400;UIParent.height=900
+            local secretNumber=987654
+            function issecretvalue(value) return value==secretNumber end
+            local abs=math.abs
+            math.abs=function(value)
+                assert(not issecretvalue(value),'secret reached numeric validation')
+                return abs(value)
+            end
+            local cast=CreateFrame()
+            cast.left=100;cast.top=600;cast.width=200;cast.height=100;cast.shown=true
+            ns.WindowPositions:Track(cast)
+            for _,field in ipairs({'left','top','width','height','scale'}) do
+                local original=cast[field]
+                cast[field]=secretNumber
+                cast:Fire('OnShow') -- Cast-ID panel Show invokes this hook.
+                assert(cast[field]==secretNumber,'restricted geometry must not be rearranged')
+                cast[field]=original
+            end
+            cast.left=secretNumber
+            ns.WindowPositions:Save(cast,'Cast')
+            assert(db.windowPositions.Cast==nil,'secret coordinates are not persisted')
+            cast.left=100
+            local neighbour=CreateFrame()
+            neighbour.left=100;neighbour.top=600;neighbour.width=300;neighbour.height=300;neighbour.shown=true
+            neighbour.GetAlpha=function() return secretNumber end
+            ns.WindowPositions:Track(neighbour)
+            cast:Fire('OnShow');near(cast.left,100)
+            neighbour.GetAlpha=function() return 1 end
+            neighbour.IsVisible=function() return secretNumber end
+            cast:Fire('OnShow');near(cast.left,100)
+            neighbour.IsVisible=function() return true end
+            neighbour.shown=secretNumber
+            cast:Fire('OnShow');near(cast.left,100)
+            neighbour.shown=true;neighbour.left=secretNumber
+            cast:Fire('OnShow');near(cast.left,100)
+            neighbour.left=100
+            cast:Fire('OnShow')
+            assert(cast.left~=100 or cast.top~=600,'public geometry resumes overlap placement')
+        ''')
+
+
 if __name__ == '__main__':
     unittest.main()

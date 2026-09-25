@@ -5,8 +5,17 @@ local db, events
 local frames = {}
 local windows, tracked = {}, {}
 
+local function public(value)
+    return not (issecretvalue and issecretvalue(value))
+end
+
 local function finite(value)
-    return type(value) == "number" and value == value and math.abs(value) < math.huge
+    return public(value) and type(value) == "number" and value == value and math.abs(value) < math.huge
+end
+
+local function shown(frame)
+    local value=frame:IsShown()
+    return public(value) and value==true
 end
 
 local function applyDefault(frame, registration)
@@ -75,7 +84,7 @@ end
 
 function positions:SaveVisible()
     for frame in pairs(frames) do
-        if frame:IsShown() then self:SaveIfMoved(frame) end
+        if shown(frame) then self:SaveIfMoved(frame) end
     end
 end
 
@@ -126,7 +135,9 @@ function positions:AvoidWindowOverlap(frame)
     -- An oversized dialog cannot be made visible by moving it alone.
     local fit = math.min(1, screenWidth/box.width, screenHeight/box.height)
     if fit < 1 then
-        frame:SetScale(frame:GetScale()*fit)
+        local scale=frame:GetScale()
+        if not finite(scale) or scale<=0 then return end
+        frame:SetScale(scale*fit)
         box = rectangle(frame)
         if not box then return end
     end
@@ -137,16 +148,23 @@ function positions:AvoidWindowOverlap(frame)
     local left, top = clamp(box.left, box.top)
     local obstacles, seen = {}, {}
     local function addObstacle(window)
-        if not window or window==frame or seen[window] or not window:IsShown() then return end
+        if not window or window==frame or seen[window] or not shown(window) then return end
         seen[window]=true
-        if window.IsVisible and window:IsVisible()==false then return end
-        if window.GetAlpha and window:GetAlpha()==0 then return end
+        if window.IsVisible then
+            local visible=window:IsVisible()
+            if not public(visible) or visible==false then return end
+        end
+        if window.GetAlpha then
+            local alpha=window:GetAlpha()
+            if not finite(alpha) or alpha==0 then return end
+        end
         local other=rectangle(window)
         if other then obstacles[#obstacles+1]=other end
     end
     addObstacle(book)
     for _, window in ipairs(windows) do addObstacle(window) end
-    local main = book and book~=frame and book:IsShown() and rectangle(book)
+    local main
+    for _,other in ipairs(obstacles) do if other.frame==book then main=other;break end end
     local function overlap(x, y)
         local area=0
         for _, other in ipairs(obstacles) do
@@ -255,7 +273,7 @@ function positions:Track(frame)
         if not frames[self] then positions:AvoidWindowOverlap(self) end
         if C_Timer and C_Timer.After then
             C_Timer.After(0,function()
-                if self:IsShown() then positions:AvoidWindowOverlap(self) end
+                if shown(self) then positions:AvoidWindowOverlap(self) end
             end)
         end
     end)

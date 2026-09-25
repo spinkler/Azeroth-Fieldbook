@@ -444,6 +444,42 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not wasNamed and self:GetCreatureName(id) and restoreObservations then restoreObservations(self, id) end
         return entry, discovered
     end
+    function journal:ObserveTameability(unit)
+        if unit~="target" and unit~="mouseover" then return end
+        local id=identify(unit)
+        local entry=id and self.entries[id]
+        if not entry or not self:GetCreatureName(id) then return end
+        -- No family/type inference: only the game's explicit Beast Lore text.
+        -- Until localized strings are verified, other locales remain unknown.
+        local locale=read(GetLocale)
+        if locale~="enUS" and locale~="enGB" then return end
+        if not C_TooltipInfo or type(C_TooltipInfo.GetUnit)~="function" then return end
+        local status=read(function()
+            local data=C_TooltipInfo.GetUnit(unit)
+            if not public(data) or type(data)~="table" or not public(data.lines) or type(data.lines)~="table" then return end
+            local result
+            for _,line in ipairs(data.lines) do
+                if public(line) and type(line)=="table" then
+                    local text=line.leftText
+                    if str(text) then
+                        text=text:gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r",""):match("^%s*(.-)%s*$")
+                        local value
+                        if text=="Tameable" then value=true elseif text=="Cannot be Tamed" then value=false end
+                        if value~=nil then
+                            if result~=nil and result~=value then return end
+                            result=value
+                        end
+                    end
+                end
+            end
+            return result
+        end)
+        if type(status)=="boolean" and entry.tameable~=status then
+            entry.tameable=status
+            entry.tameabilitySource="gameTooltip"
+            self:Touch()
+        end
+    end
     function journal:Observe(unit)
         local id = identify(unit)
         if not id then return end
@@ -463,6 +499,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             end
         end
         if self.entries[id] and self.entries[id].confirmed and self:GetCreatureName(id) then
+            self:ObserveTameability(unit)
             self:Ensure(id, false, nil, observation)
             recordDiscovery(self, self.entries[id], level, location, observation)
             return id
@@ -472,6 +509,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local wasNamed = self.entries[id] and creatureName(self.entries[id].name)
         local entry, discovered = self:Ensure(id, false, name, observation)
         if not entry then return end
+        self:ObserveTameability(unit)
         recordDiscovery(self, entry, level, location, observation)
         if entry.confirmed then return id end
         local classification = read(UnitClassification, unit)

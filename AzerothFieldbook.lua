@@ -272,6 +272,7 @@ local function addTooltip(tooltip)
     if not id then tooltipStatus = reason; return end
     local creature = id and trackingDB.bestiary.creatures[id]
     if journal then
+        journal:ObserveTameability(unit)
         local names = journal:ConfirmedNames(id)
         if #names == 0 then tooltipStatus = "No confirmed abilities: review this entry in /fieldbook."; return end
         tooltip:AddLine("Azeroth Fieldbook - Bestiary", 0.5, 0.82, 1)

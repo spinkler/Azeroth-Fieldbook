@@ -1,5 +1,162 @@
 # Changelog
 
+## v0.9.74-beta - 2026-09-25
+
+This release includes all changes since v0.9.56-beta (local iterations v0.9.57
+through v0.9.74). Both players must use the same addon version to share creatures.
+
+### Restricted-value safety
+
+- Fix the WindowPositions secret-number comparison triggered when cast-ID panels
+  open. Check secrecy before numeric comparisons or arithmetic in geometry validation.
+- Guard local scale, visibility and opacity reads too. Skip unreadable geometry
+  instead of repositioning it, and never persist secret coordinates. Add regression
+  coverage for the OnShow path, secret neighbours and resumed public positioning.
+
+### Recorded abilities
+
+- Replace Reject/Remove with a square button matching and aligned with the green
+  confirmation tick. Reject uses the native yellow close-button cross; Remove uses
+  a thick centered yellow dash. Preserve Edit/Resolve alignment and locked-entry hiding.
+- Fix corrupted cropped Reject artwork by using the unmodified native button.
+  Refresh the hovered Reject/Remove tooltip immediately when its action changes,
+  using native ownership checks; hide it when removing the ability.
+- Increase padding below row dividers while keeping four abilities and their notes
+  visible. Add a dark themed scrollbar track and border, sized for the revised rows
+  and hidden whenever the scrollbar is inactive.
+
+### Options and window presentation
+
+- Organize Options into Tracking, Chat notifications, Appearance, Window behavior,
+  Sharing, Tooltips and cast IDs, and Spell ID window. Use consistent yellow category
+  headings reduced by 2 points, preserve setting behavior and the fixed reset footer,
+  and clarify that chat preferences do not disable Event log collection.
+- Give Help, Options and Event log dark native-trim title bars matching the main
+  Fieldbook, with centered yellow text. Refine bar/text alignment, keep borders
+  above the bars and close buttons above both, and preserve scrollbar placement.
+- Raise the top content fade by 1 pixel and align its parchment sampling. Adjust
+  Event log sizing for the smaller title area while preserving its adaptive height.
+
+### Game-observed tameability
+
+- Add a portrait badge with a "Tameable" tooltip, populated only from explicit
+  Tameable/Cannot be Tamed text returned by C_TooltipInfo.GetUnit on target/mouseover.
+  Detection currently supports English clients and requires the game to reveal the
+  information, such as through Beast Lore. Missing or restricted data remains unknown;
+  creature families are never used to guess tameability.
+- Preserve observed status across reloads/account merges and permit game status
+  updates on locked entries. The experimental manual Behaviour checkbox from local
+  v0.9.72 is removed; old manual flags cannot establish the badge or be newly shared.
+
+### Validation and documentation
+
+- Update version references and document tameability's detection limits.
+- Extend tests for tooltip-derived tameability, persistence, error handling,
+  title-bar layout/layering and secret geometry. All 20 test files pass. Live client
+  rendering and Beast Lore detection still require in-game verification.
+
+## v0.9.73 - Unreleased
+
+- Replace the manual Tameable behaviour with game-observed status and a portrait
+  badge whose tooltip reads "Tameable". Read explicit Tameable/Cannot be Tamed
+  lines through C_TooltipInfo.GetUnit for target/mouseover; do not infer from family,
+  missing data, API errors or restricted values. Detection currently supports
+  English clients and requires the game to reveal the information (e.g. Beast Lore).
+- Preserve status across reloads/account merges and allow game observations on
+  locked entries. Old manual flags remain stored but cannot establish the badge
+  or be newly shared as behaviour rumours. Remove the manual checkbox.
+
+## v0.9.72 - Unreleased
+
+- Add Tameable to Behaviour's observed Traits and the creature summary. Record it
+  manually after personal verification; unchecked means unknown/unrecorded, not
+  untameable. Preserve it across reloads and respect creature locking.
+- Allow Tameable to be shared and verified through the existing behaviour-rumour
+  flow and pricing. No automatic detection or bundled tameability database is added.
+
+## v0.9.71 - Unreleased
+
+- Lower Help, Options and Event log title text by one additional UI pixel.
+
+## v0.9.70 - Unreleased
+
+- Lower the Help, Options and Event log title text by 2 UI pixels within the
+  existing title bars, leaving the bars, borders and buttons in place.
+
+## v0.9.69 - Unreleased
+
+- Raise Help, Options and Event log title bars by another 1 UI pixel, retaining
+  their height and the border-over-title layering.
+
+## v0.9.68 - Unreleased
+
+- Raise the top content fade in Help, Options and Event log by 1 UI pixel and
+  adjust its parchment sampling to match the new position.
+
+## v0.9.67 - Unreleased
+
+- Raise Help, Options and Event log title bars by 1 UI pixel. Layer window borders
+  over the title bars for clean edge overlaps, keeping close buttons above both.
+
+## v0.9.66 - Unreleased
+
+- Give Help, Options and Event log dark native-trim title bars with centered yellow
+  titles matching the main book. Keep title bars above fades and below close buttons,
+  with scrollbar arrows directly beneath the close buttons and content below the trim.
+- Update Event log content sizing for the smaller title area while preserving its
+  compact minimum, maximum height and scrolling behavior.
+
+## v0.9.65 - Unreleased
+
+- Reduce Options category headings by 2 points, retaining their yellow styling.
+
+## v0.9.64 - Unreleased
+
+- Organize Options into Tracking, Chat notifications, Appearance, Window behavior,
+  Sharing, Tooltips and cast IDs, and Spell ID window sections. Use consistent
+  yellow headings and section spacing, keeping existing controls and behavior.
+- Clarify that chat settings do not disable Event log collection and retain the
+  fixed Reset Bestiary footer outside the scrolling settings.
+
+## v0.9.63 - Unreleased
+
+- Refresh the hovered Reject/Remove tooltip as its action changes, using native
+  tooltip ownership during the normal UI refresh. Hide it when removing the ability.
+
+## v0.9.62 - Unreleased
+
+- Fix corrupted Reject artwork by using the unmodified native yellow close-button
+  cross instead of cropping and tinting its texture. Keep the centered yellow dash
+  for Remove and preserve button alignment.
+
+## v0.9.61 - Unreleased
+
+- Add padding below ability-row dividers and increase row spacing while retaining
+  four visible abilities and their notes. Keep the first ability in place.
+- Give the ability scrollbar a dark themed track and border, extending it to
+  match the revised row layout. The track hides with the inactive scrollbar.
+
+## v0.9.60 - Unreleased
+
+- Replace the Remove text hyphen with a centered, thick yellow dash. Use the
+  native close-button cross artwork tinted red for Reject, retaining the frame colors.
+
+## v0.9.59 - Unreleased
+
+- Raise the confirmation tick by 1 UI pixel, keeping the Reject/Remove square
+  aligned with it and preserving Edit/Resolve positions.
+
+## v0.9.58 - Unreleased
+
+- Replace Reject/Remove with a themed square button aligned with the confirmation
+  tick. Show a red X for Reject or a yellow minus for Remove, with matching action
+  tooltips. Preserve the existing reject/remove behavior and locked-entry hiding.
+
+## v0.9.57 - Unreleased
+
+- Lower the Recorded Abilities confirmation tick button by 2 UI pixels while
+  preserving the positions of Edit, Reject and Resolve.
+
 ## v0.9.56-beta - 2026-09-25
 
 This release includes all changes since v0.9.42-beta (local iterations v0.9.43

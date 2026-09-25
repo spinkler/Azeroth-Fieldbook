@@ -71,6 +71,9 @@ local function mergeEntry(target, source)
         target.category = source.category or target.category
     end
     target.personalEncountered = target.personalEncountered == true or source.personalEncountered == true
+    if target.tameabilitySource~="gameTooltip" and source.tameabilitySource=="gameTooltip" then
+        target.tameable=source.tameable;target.tameabilitySource="gameTooltip"
+    end
     target.confirmed = target.confirmed == true and source.confirmed == true
     -- Preserve the account's locked snapshot until the page is unlocked.
     if not target.confirmed then target.lockedBasic = nil end

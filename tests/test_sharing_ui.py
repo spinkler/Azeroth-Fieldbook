@@ -516,7 +516,10 @@ for _,page in ipairs({main.help,main.options}) do
     assert(not page.border:IsMouseClickEnabled() and not page.border:IsMouseMotionEnabled() and not page.border.scripts.OnMouseDown,
         'border overlay never blocks window controls')
     assert(page.closeButton:GetFrameLevel()>page.border:GetFrameLevel(),'close button remains above the border')
-    eq(scroll.points[1][3],-72,'top clipping edge and its fade move up three pixels together')
+    eq(scroll.points[1][3],-42,'content and fade begin below the compact title bar')
+    assert(page.border:GetFrameLevel()>page.titleBar:GetFrameLevel()
+        and page.closeButton:GetFrameLevel()>page.border:GetFrameLevel(),'border overlaps title bar while close button stays above it')
+    eq(page.titleBar.points[1][3],-3,'title bar raised another pixel')
 end
 -- Location filters fit their contents and keep at most fifteen rows visible.
 do

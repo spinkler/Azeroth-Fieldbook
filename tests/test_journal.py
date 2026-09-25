@@ -111,6 +111,23 @@ check(journal:SetResistance(42,'Frost',true) and journal.entries[42].resistances
 check(journal:SetImmunity(42,'Shadow',true) and journal.entries[42].immunities.Shadow,'immunity stored on creature')
 check(not journal:SetOffense(42,'Physical',true),'non-magic school rejected')
 check(journal:SetBehaviour(42,'Hostile',true) and journal:SetBehaviour(42,'Neutral',true),'behaviour observations stored')
+check(not journal:SetBehaviour(42,'Tameable',true),'tameability is no longer a behaviour')
+GetLocale=function() return 'enUS' end
+C_TooltipInfo={GetUnit=function() return {lines={{leftText='Tameable'}}} end}
+journal:ObserveTameability('target')
+check(journal.entries[42].tameable==true,'explicit game tooltip records tameability')
+C_TooltipInfo.GetUnit=function() return {lines={{leftText='Cannot be Tamed'}}} end
+journal:ObserveTameability('target')
+check(journal.entries[42].tameable==false,'explicit negative is recorded')
+C_TooltipInfo.GetUnit=function() return {lines={{leftText='Beast'}}} end
+journal:ObserveTameability('target')
+check(journal.entries[42].tameable==false,'missing data does not infer tameability')
+C_TooltipInfo.GetUnit=function() return {lines={{leftText='Tameable'}}} end
+journal:ObserveTameability('target')
+C_TooltipInfo.GetUnit=function() error('restricted') end
+journal:ObserveTameability('target')
+check(journal.entries[42].tameable==true,'API failures preserve observed status')
+C_TooltipInfo=nil
 check(not journal.entries[42].behaviours.Hostile and journal.entries[42].behaviours.Neutral,'hostile and neutral remain mutually exclusive')
 journal.entries[77]={id=77,name='Unknown Test',category='Not specified',abilities={},locations={},confirmed=false}
 journal.entries[78]={id=78,name='Unreadable Test',category='Unclassified',abilities={},locations={},confirmed=false}
@@ -128,6 +145,7 @@ check(not journal:SetOffense(42,'Nature',true),'locked offense blocked')
 check(not journal:SetResistance(42,'Fire',true),'locked resistance blocked')
 check(not journal:SetImmunity(42,'Fire',true),'locked immunity blocked')
 check(not journal:SetBehaviour(42,'Hostile',true),'locked behaviour blocked')
+check(not journal:SetBehaviour(42,'Tameable',false),'locked tameability protected')
 check(not journal:AddManual(42,'New ability',''),'locked manual ability blocked')
 check(not journal:SetAbility(42,'Test Trap','rejected'),'locked review blocked')
 check(not journal:SetAbilityTooltip(42,'Test Trap',false),'locked tooltip selection blocked')
@@ -143,6 +161,7 @@ check(not journal.entries[42].abilities['New automatic ability'],'locked automat
 check(journal:SetCreatureNotes(42,'Still editable') and journal:AddNoteSpell(42,'777'),'locked creature notes editable')
 check(journal:RemoveNoteSpell(42,777),'locked manual ID removal allowed')
 local restored=ns.CreateBestiaryJournal(db,identify)
+check(restored.entries[42].tameable and restored.entries[42].tameabilitySource=='gameTooltip','game tameability survives reload')
 check(restored.entries[42].confirmed and restored.entries[42].damage[9].high==24,'journal survives reload')
 check(restored:DamageNotes(42,9)[2].playerLevel==15,'unequal-level observation survives reload')
 check(restored.entries[42].offenses.Fire and restored.entries[42].resistances.Frost and restored.entries[42].immunities.Shadow,'creature observations survive reload')

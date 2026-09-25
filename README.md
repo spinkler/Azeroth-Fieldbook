@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.56 (Beta)
+# Azeroth Fieldbook 0.9.74 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,11 +6,11 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.56 includes sharing, addon-version compatibility
+spell databases. Version 0.9.74 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.56.
+are not part of version 0.9.74.
 
 ## Installation and opening
 
@@ -99,7 +99,7 @@ Each creature entry can contain:
 - Optional exact spell IDs, hyperlinks or names resolved through the client.
 - Personal damage observations with separate player and creature levels. Equal-level records are recommended; other levels are supported.
 - Observed offensive spell schools, resistances and immunities.
-- Observed disposition, combat style and behavioural traits.
+- Observed disposition, combat style and behavioural traits. A separate Tameable portrait badge records explicit game tooltip information (English clients, when revealed by the game, such as Beast Lore). Missing or unreadable data remains unknown; previous manual marks do not establish this badge.
 - A deduplicated kill counter requiring player/pet/party kill evidence and
   readable eligibility for the same observed creature GUID. Inspecting another
   player's corpse grants no kill credit; XP and actual loot drops are not required.
@@ -345,7 +345,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.56 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.74 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode and one-time migration markers.
