@@ -278,6 +278,7 @@ function window:ApplySettings()
     if ns.AuraTooltipSnapshot then ns.AuraTooltipSnapshot:ApplySettings() end
     panel:StopMovingOrSizing()
     panel:SetMovable(not db.spellIDWindowLocked)
+    panel.afbPinned=db.spellIDWindowLocked
     panel:EnableMouse(not db.spellIDWindowLocked)
     panel.hint:SetText(db.spellIDWindowLocked and "" or "Drag to move")
     background:SetColorTexture(0, 0, 0, db.spellIDWindowAlpha)

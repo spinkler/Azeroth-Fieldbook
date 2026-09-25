@@ -346,6 +346,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.abilityScrollBar:SetShown(maxAbilityOffset > 0)
         book.updatingAbilityScroll = false
         for i, row in ipairs(book.abilities) do
+            row:SetWidth(maxAbilityOffset > 0 and 559 or 583)
             row:EnableMouseWheel(maxAbilityOffset > 0)
             local name = names[abilityOffset + i]
             if name then
@@ -359,12 +360,22 @@ local ink = { 0.75, 0.8, 0.8 }
                 local note=ability.note or (ability.origin ~= "Your note" and ability.origin or nil)
                 row.note:SetText(effects and note and (effects.." — "..note) or effects or note or "")
                 row.accept:SetEnabled(editable and ability.state ~= "confirmed")
-                row.resolve:SetShown(linkMissing or ability.state ~= "confirmed")
+                row.accept.cover:SetColorTexture(unpack((editable and ability.state ~= "confirmed") and {0.13,0.025,0.015,1} or {0.22,0.22,0.22,1}))
+                row.resolve:SetShown(editable and (linkMissing or ability.state ~= "confirmed"))
+                for _,control in ipairs({row.tooltipCheck,row.link,row.reject,row.accept}) do control:SetShown(editable) end
+                row.divider:SetShown(i>1)
+                row.tooltipArea:ClearAllPoints()
+                row.tooltipArea:SetPoint("TOPLEFT",row,"TOPLEFT",20,0)
+                if editable then
+                    row.tooltipArea:SetPoint("BOTTOMRIGHT",row.resolve:IsShown() and row.resolve or row.link,"BOTTOMLEFT",-6,-18)
+                else
+                    row.tooltipArea:SetPoint("BOTTOMRIGHT",row,"BOTTOMRIGHT",0,0)
+                end
                 row.resolve:SetEnabled(editable)
                 row.link:SetEnabled(editable)
                 row.reject:SetEnabled(editable)
                 row.tooltipCheck:SetEnabled(editable)
-                for _, control in ipairs({row.accept,row.resolve,row.link,row.reject,row.tooltipCheck}) do control:SetAlpha(editable and 1 or 0.45) end
+                for _, control in ipairs({row.resolve,row.link,row.reject,row.tooltipCheck}) do control:SetAlpha(editable and 1 or 0.45) end
                 row.reject:SetText(ability.state == "rejected" and "Remove" or "Reject")
             else row:Hide() end
         end
@@ -392,7 +403,13 @@ local ink = { 0.75, 0.8, 0.8 }
                 end)
                 book.damageRows[i]=row
             end
-            row.level=level; row.text:SetText("Lv "..level..": "..table.concat(parts,"; ").."  >")
+            local playerLevels, seenPlayers = {}, {}
+            for _, note in ipairs(journal:DamageNotes(selected,level)) do
+                if not seenPlayers[note.playerLevel] then playerLevels[#playerLevels+1]=note.playerLevel; seenPlayers[note.playerLevel]=true end
+            end
+            table.sort(playerLevels)
+            local players = #playerLevels>0 and (" · Player "..table.concat(playerLevels,", ")) or ""
+            row.level=level; row.text:SetText("Creature "..level..players..": "..table.concat(parts,"; ").."  >")
             local textHeight = row.text:GetStringHeight()
             local rowHeight = math.max(14, type(textHeight) == "number" and textHeight or 14)
             row:ClearAllPoints(); row:SetPoint("TOPLEFT",0,-contentHeight)
@@ -615,6 +632,16 @@ local ink = { 0.75, 0.8, 0.8 }
             if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT"); GameTooltip:SetText("Options"); GameTooltip:Show() end
         end)
         book.optionsButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        book.eventLogButton=titleButton(book.optionsButton,function() book.eventLog:SetShown(not book.eventLog:IsShown()) end)
+        for line=1,3 do
+            local stroke=book.eventLogButton:CreateTexture(nil,"OVERLAY",nil,1)
+            stroke:SetColorTexture(1,0.82,0.14,1);stroke:SetSize(10,1)
+            stroke:SetPoint("CENTER",0,4-(line-1)*4)
+        end
+        book.eventLogButton:SetScript("OnEnter",function(self)
+            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Event log");GameTooltip:Show() end
+        end)
+        book.eventLogButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         book.typeButtons = {}
         local function addTypeButton(name, y)
             local typeButton = button(book, name == "All creatures" and "All" or name, 42, y, 88, function()
@@ -731,7 +758,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.title:SetTextColor(1,0.82,0.14)
         book.title:SetWordWrap(false)
         book.creatureNotesButton=button(book,"Creature Notes",806,-52,130,function()
-            if creatureNotes then creatureNotes:Open(selected) end
+            if creatureNotes then creatureNotes:Toggle(selected) end
         end)
         book.creatureNotesButton:ClearAllPoints()
         book.creatureNotesButton:SetPoint("TOPRIGHT",book,"TOPRIGHT",-24,-52)
@@ -894,7 +921,7 @@ local ink = { 0.75, 0.8, 0.8 }
         -- Neutral translucent cream separates this panel without a coloured cast.
         book.damageBorder:SetBackdropColor(0.045,0.032,0.018,0.88)
         book.damageBorder:SetBackdropBorderColor(0.36,0.23,0.10,0.48)
-        local damageHeading = label(book.damageBorder, "Equal-level damage taken", 13, -9, 311)
+        local damageHeading = label(book.damageBorder, "Damage taken", 13, -9, 311)
         damageHeading:SetTextColor(1.00, 0.82, 0.14)
         local damageScroll=CreateFrame("ScrollFrame",nil,detail,"UIPanelScrollFrameTemplate")
         damageScroll:SetPoint("TOPLEFT",592,-163); damageScroll:SetSize(296,75)
@@ -930,7 +957,11 @@ local ink = { 0.75, 0.8, 0.8 }
         book.abilities = {}
         for i=1,4 do
             local row = CreateFrame("Frame", nil, detail)
-            row:SetPoint("TOPLEFT", 352, -360-(i-1)*43); row:SetSize(558, 42)
+            row:SetPoint("TOPLEFT", 352, -360-(i-1)*43); row:SetSize(583, 42)
+            row.divider=row:CreateTexture(nil,"ARTWORK")
+            row.divider:SetColorTexture(0.35,0.20,0.08,0.16)
+            row.divider:SetPoint("TOPLEFT",0,3);row.divider:SetPoint("TOPRIGHT",-9,3)
+            row.divider:SetHeight(1)
             row.tooltipCheck=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate")
             row.tooltipCheck:SetPoint("TOPLEFT",-2,0); row.tooltipCheck:SetSize(20,20)
             row.tooltipCheck:SetScript("OnClick",function(self)
@@ -971,10 +1002,41 @@ local ink = { 0.75, 0.8, 0.8 }
                     message("Ability loaded below. Add an optional spell ID, link, or exact name, then confirm.")
                 end
             end)
-            row.accept = button(row,"Confirm",382,0,80,function()
+            row.accept = CreateFrame("Button",nil,row,"UIPanelCloseButton")
+            row.accept:SetSize(24,24)
+            row.accept:SetPoint("TOPRIGHT",row,"TOPRIGHT",0,0)
+            -- Clone the client's themed normal artwork: the legacy minimize
+            -- texture does not carry the current close-button border.
+            local disabled=row.accept:CreateTexture(nil,"ARTWORK")
+            disabled:SetAllPoints()
+            local normal=row.accept:GetNormalTexture()
+            local atlas=normal and normal.GetAtlas and normal:GetAtlas()
+            if atlas then
+                disabled:SetAtlas(atlas)
+            else
+                disabled:SetTexture(normal and normal:GetTexture() or "Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+                if normal then disabled:SetTexCoord(normal:GetTexCoord()) end
+            end
+            disabled:SetDesaturated(true)
+            row.accept:SetDisabledTexture(disabled)
+            row.accept.cover=row.accept:CreateTexture(nil,"OVERLAY")
+            row.accept.cover:SetPoint("TOPLEFT",6,-6);row.accept.cover:SetPoint("BOTTOMRIGHT",-6,6)
+            local tick=row.accept:CreateTexture(nil,"OVERLAY",nil,1)
+            tick:SetPoint("CENTER");tick:SetSize(16,16)
+            tick:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+            tick:SetVertexColor(0.2,1,0.2)
+            row.accept:SetMotionScriptsWhileDisabled(true)
+            row.accept:SetScript("OnEnter",function(self)
+                local ability=selected and journal.entries[selected] and journal.entries[selected].abilities[row.name]
+                GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+                GameTooltip:SetText(ability and ability.state=="confirmed" and "Ability confirmed" or "Confirm ability")
+                GameTooltip:Show()
+            end)
+            row.accept:SetScript("OnLeave",function() GameTooltip:Hide() end)
+            row.accept:SetScript("OnClick",function()
                 journal:SetAbility(selected,row.name,"confirmed"); refresh()
             end)
-            row.reject = button(row,"Reject",468,0,80,function()
+            row.reject = button(row,"Reject",382,0,80,function()
                 local a=journal.entries[selected].abilities[row.name]
                 if a.state=="rejected" then
                     journal:RemoveAbility(selected,row.name)
@@ -982,8 +1044,13 @@ local ink = { 0.75, 0.8, 0.8 }
                 else journal:SetAbility(selected,row.name,"rejected") end
                 refresh()
             end)
-            row:SetScript("OnEnter",function(self)
-                local ability=selected and journal.entries[selected] and journal.entries[selected].abilities[self.name]
+            row.reject:ClearAllPoints(); row.reject:SetPoint("TOPRIGHT",row.accept,"TOPLEFT",-6,0)
+            row.link:ClearAllPoints(); row.link:SetPoint("TOPRIGHT",row.reject,"TOPLEFT",-6,0)
+            row.resolve:ClearAllPoints(); row.resolve:SetPoint("TOPRIGHT",row.link,"TOPLEFT",-6,0)
+            row.tooltipArea=CreateFrame("Frame",nil,row)
+            row.tooltipArea:EnableMouse(true)
+            row.tooltipArea:SetScript("OnEnter",function(self)
+                local ability=selected and journal.entries[selected] and journal.entries[selected].abilities[row.name]
                 if not ability or ability.state~="confirmed" or type(ability.spellID)~="number" or ability.spellID<=0 then return end
                 if GameTooltip and type(GameTooltip.SetOwner)=="function" and type(GameTooltip.SetSpellByID)=="function" then
                     pcall(GameTooltip.SetOwner,GameTooltip,self,"ANCHOR_CURSOR")
@@ -996,12 +1063,14 @@ local ink = { 0.75, 0.8, 0.8 }
                     end
                 end
             end)
-            row:SetScript("OnLeave",function()
+            row.tooltipArea:SetScript("OnLeave",function()
                 if GameTooltip and type(GameTooltip.Hide)=="function" then GameTooltip:Hide() end
             end)
             row:EnableMouse(true)
             row:EnableMouseWheel(true)
             row:SetScript("OnMouseWheel",function(_,delta) abilityOffset=abilityOffset-delta; refresh() end)
+            row.tooltipArea:EnableMouseWheel(true)
+            row.tooltipArea:SetScript("OnMouseWheel",function(_,delta) abilityOffset=abilityOffset-delta; refresh() end)
             book.abilities[i]=row
         end
         label(detail,"Ability name you experienced",352,-549,241,"GameFontHighlightSmall")
@@ -1161,7 +1230,7 @@ local ink = { 0.75, 0.8, 0.8 }
             return picker
         end
 
-        local offensePicker=createObservationPicker("AzerothFieldbookBestiaryOffenses","Observed offenses","Select every magic school this creature has been observed casting.",400,250)
+        local offensePicker=createObservationPicker("AzerothFieldbookBestiaryOffenses","Observed offenses","Select every magic school this creature has been observed casting.",400,220)
         offensePicker.schoolButtons={}
         local refreshOffensePicker
         for i,school in ipairs(magicSchools) do
@@ -1217,7 +1286,7 @@ local ink = { 0.75, 0.8, 0.8 }
         defensePicker:HookScript("OnShow",refreshDefensePicker)
         defensePicker:Hide(); book.defensePicker=defensePicker; book.refreshDefensePicker=refreshDefensePicker
 
-        local behaviourPicker=createObservationPicker("AzerothFieldbookBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen\nfrom this creature.",390,430)
+        local behaviourPicker=createObservationPicker("AzerothFieldbookBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen\nfrom this creature.",350,430)
         local behaviourGroups={
             { "Disposition", { "Hostile", "Neutral" } },
             { "Combat style", { "Melee", "Ranged", "Caster" } },
@@ -1235,7 +1304,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 local control=CreateFrame("CheckButton",nil,behaviourPicker,"UICheckButtonTemplate")
                 control:SetPoint("TOPLEFT",30+column*180,y); control:SetSize(24,24)
                 control.behaviourName=name
-                control.text=label(behaviourPicker,name,60+column*180,y-5,135,"GameFontHighlightSmall")
+                control.text=label(behaviourPicker,name,60+column*180,y-5,column==0 and 135 or 85,"GameFontHighlightSmall")
                 control:SetScript("OnClick",function(self)
                     journal:SetBehaviour(selected,self.behaviourName,self:GetChecked()==true)
                     refresh(); refreshBehaviourPicker()
@@ -1254,7 +1323,7 @@ local ink = { 0.75, 0.8, 0.8 }
         behaviourPicker:Hide(); book.behaviourPicker=behaviourPicker; book.refreshBehaviourPicker=refreshBehaviourPicker
 
         local form=CreateFrame("Frame",nil,UIParent,"BackdropTemplate")
-        form:SetSize(560,230); form:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0); form:SetFrameStrata("FULLSCREEN_DIALOG")
+        form:SetSize(524,230); form:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0); form:SetFrameStrata("FULLSCREEN_DIALOG")
         form:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         local formPaper=form:CreateTexture(nil,"BACKGROUND",nil,1)
         -- Run the parchment beneath the complete frame so there are no bare
@@ -1269,13 +1338,16 @@ local ink = { 0.75, 0.8, 0.8 }
         form:RegisterForDrag("LeftButton")
         form:SetScript("OnDragStart",function(self) self:StartMoving() end)
         form:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
-        label(form,"Your equal-level damage observation",22,-22,515,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
-        label(form,"Record hits you took when you and this creature were the SAME level.\nThese are personal observations, affected by your armor and buffs.",22,-55,515)
-        label(form,"Both level",28,-103,125); label(form,"Smallest hit",185,-103,140); label(form,"Largest hit",350,-103,140)
+        label(form,"Your damage observations",22,-22,480,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        label(form,"Same-level observations are recommended; other levels are welcome.\nHits are affected by your armor and buffs. Record your level at the time.",22,-55,480)
+        label(form,"Player level",28,-103,100); label(form,"Creature level",143,-103,110)
+        label(form,"Smallest hit",266,-103,105); label(form,"Largest hit",386,-103,110)
+        local playerLevel=edit(form,34,-129,94,4)
+        form.playerLevel=playerLevel
         local selectedLevel
         local level=CreateFrame("Frame",nil,form,"UIDropDownMenuTemplate")
-        level:SetPoint("TOPLEFT",18,-119)
-        if UIDropDownMenu_SetWidth then UIDropDownMenu_SetWidth(level,125) end
+        level:SetPoint("TOPLEFT",133,-119)
+        if UIDropDownMenu_SetWidth then UIDropDownMenu_SetWidth(level,95) end
         if UIDropDownMenu_Initialize then
             UIDropDownMenu_Initialize(level,function(_,menuLevel)
                 local entry=selected and journal.entries[selected]
@@ -1288,16 +1360,19 @@ local ink = { 0.75, 0.8, 0.8 }
                 end
             end)
         end
-        local low=edit(form,191,-129,140,9)
-        local high=edit(form,356,-129,140,9)
+        local low=edit(form,272,-129,99,9)
+        local high=edit(form,392,-129,104,9)
         button(form,"Confirm observation",28,-172,290,function()
-            local ok,msg=journal:AddDamage(selected,selectedLevel,low:GetText(),high:GetText())
+            local ok,msg=journal:AddDamage(selected,selectedLevel,low:GetText(),high:GetText(),playerLevel:GetText())
             if ok then form:Hide(); low:SetText(""); high:SetText("") end
             message(msg); refresh()
         end)
         button(form,"Cancel",350,-172,146,function() form:Hide() end)
         form:Hide(); book.damageForm=form
         form:SetScript("OnShow",function()
+            local ok,currentLevel=pcall(UnitLevel,"player")
+            if not ok or (issecretvalue and issecretvalue(currentLevel)) or type(currentLevel)~="number" or currentLevel<=0 then currentLevel=nil end
+            playerLevel:SetText(currentLevel and tostring(currentLevel) or "")
             local entry=selected and journal.entries[selected]
             selectedLevel=entry and entry.levelMin or nil
             if UIDropDownMenu_SetText then UIDropDownMenu_SetText(level,selectedLevel and tostring(selectedLevel) or "No observed level") end
@@ -1335,7 +1410,7 @@ local ink = { 0.75, 0.8, 0.8 }
         refreshDamageNotes=function()
             local notes=selected and book.notesLevel and journal:DamageNotes(selected,book.notesLevel) or {}
             noteOffset=math.max(0,math.min(noteOffset,math.max(0,#notes-6)))
-            notesForm.title:SetText("Level "..tostring(book.notesLevel or "?").." damage observations")
+            notesForm.title:SetText("Creature level "..tostring(book.notesLevel or "?").." damage observations")
             for i,row in ipairs(notesForm.rows) do
                 local index=noteOffset+i; local note=notes[index]
                 row.noteIndex=note and index or nil
@@ -1343,7 +1418,7 @@ local ink = { 0.75, 0.8, 0.8 }
                     local entry=selected and journal.entries[selected]
                     row.remove:SetEnabled(entry ~= nil and not entry.confirmed)
                     row.remove:SetAlpha(entry and not entry.confirmed and 1 or 0.45)
-                    row.text:SetText((note.legacy and "Older combined note: " or "Observed range: ")..note.low.."-"..note.high)
+                    row.text:SetText("Player "..note.playerLevel.." · "..(note.legacy and "Older range: " or "Range: ")..note.low.."-"..note.high)
                     row:Show()
                 else row:Hide() end
             end
@@ -1590,6 +1665,49 @@ local ink = { 0.75, 0.8, 0.8 }
             layoutFades(); updateFades()
             return page,body
         end
+        local eventLog,eventBody=createBookPage("AzerothFieldbookEventLog","Event log",65)
+        book.eventLog=eventLog
+        local eventPage=0
+        local eventText=label(eventBody,"",30,0,530,"GameFontHighlightSmall")
+        local eventStatus=label(eventLog,"",255,-722,300,"GameFontHighlightSmall")
+        local newer,older
+        local function refreshEventLog()
+            local log=journal:GetEventLog()
+            local entries=log.entries
+            eventPage=math.max(0,math.min(eventPage,math.max(0,math.ceil(#entries/50)-1)))
+            local lines={}
+            for index=#entries-eventPage*50,math.max(1,#entries-eventPage*50-49),-1 do
+                local entry=entries[index]
+                local stamp=entry.timestamp and date and date("%Y-%m-%d %H:%M:%S",entry.timestamp) or "Unknown time"
+                lines[#lines+1]="|cff999999"..stamp.."|r\n"..entry.message
+            end
+            eventText:SetText(#lines>0 and table.concat(lines,"\n\n") or "No events recorded yet. Events are saved even when chat messages are disabled.")
+            local contentHeight=math.max(1,eventText:GetStringHeight()+20)
+            local height=math.max(200,math.min(767,72+contentHeight+65))
+            local resized=eventLog:GetHeight()~=height
+            eventLog:SetHeight(height)
+            eventBody:SetHeight(contentHeight)
+            local range=math.max(0,contentHeight-(height-72-65))
+            eventLog.scroll:SetVerticalScroll(math.min(eventLog.scroll:GetVerticalScroll() or 0,range))
+            eventLog.scroll:UpdateScrollChildRect()
+            local bar=eventLog.scroll.ScrollBar
+            if bar and type(bar)~="function" then bar:SetShown(range>0) end
+            eventLog.scroll:EnableMouseWheel(range>0)
+            if resized and eventLog:IsShown() and ns.WindowPositions then ns.WindowPositions:AvoidWindowOverlap(eventLog) end
+            eventStatus:SetText(#entries.." events"..(#entries>50 and (" · Page "..(eventPage+1).." / "..math.ceil(#entries/50)) or ""))
+            newer:SetShown(#entries>50);older:SetShown(#entries>50)
+            newer:SetEnabled(eventPage>0);older:SetEnabled((eventPage+1)*50<#entries)
+        end
+        newer=button(eventLog,"Newer",30,-722,100,function() eventPage=eventPage-1;eventLog.scroll:SetVerticalScroll(0);refreshEventLog() end)
+        older=button(eventLog,"Older",140,-722,100,function() eventPage=eventPage+1;eventLog.scroll:SetVerticalScroll(0);refreshEventLog() end)
+        newer:ClearAllPoints();newer:SetPoint("BOTTOMLEFT",30,21)
+        older:ClearAllPoints();older:SetPoint("BOTTOMLEFT",140,21)
+        eventStatus:ClearAllPoints();eventStatus:SetPoint("BOTTOMRIGHT",-35,28)
+        eventLog.text,eventLog.newer,eventLog.older=eventText,newer,older
+        eventLog:SetScript("OnShow",refreshEventLog)
+        journal:SetEventLogChangedCallback(function() if eventLog:IsShown() then refreshEventLog() end end)
+        eventLog:Hide()
+        UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookEventLog"
         local help,helpBody=createBookPage("AzerothFieldbookHelp","AZEROTH FIELDBOOK - HELP",24)
         local helpInstructions=label(helpBody,"|cffffd1001. Encounter|r\nTarget or mouse over an attackable NPC to add it to your Bestiary. Its name, creature type, location and observed level range are recorded automatically.\n\n|cffffd1002. Record|r\nReadable casts and safe post-combat observations are added as pending notes. Abilities the addon cannot observe directly can also be added manually. Damage ranges must be recorded manually from your own data. Equal-level observations are recommended so level scaling does not distort the results.\n\n|cffffd1003. Review|r\nOpen the Bestiary and select a creature to review its observations. Confirm accurate abilities, reject doubtful ones, or remove notes you no longer want.\n\n|cffffd1004. Lock Entry|r\nWhen you are satisfied with an entry, lock it to stop further changes. Confirmed abilities appear in NPC tooltips. Kill and discovery points continue, and ID Logs, Notes and received Rumours remain separate and editable. Unlock to resume recording and hide its abilities from tooltips.\n\n|cffffd1005. Browse|r\nUse creature-type filters and search to navigate the Bestiary. Click Index to reveal the A-Z tabs; click it again to hide them and clear the letter filter. Account-wide tracking is on by default in Options. Turn it off to use this character's separate journal; changes apply after /reload. Existing character journals merge once when first using account tracking.\n\n|cffffd1006. Share|r\nOutside combat, Share sends one creature to one named recipient. New basics cost 1 point; already-known basics are free. Each selected rumour costs 1 point. Choose any number of existing traits within the report size limit. All received traits are unverified Rumours with the offering character's name. Click Rumours beside Creature Notes to open or close its separate window. The green tick verifies a rumour and adds it to your journal; x rejects it. Unlock an entry before verifying. Matching manual records remove rumours, and repeated rejected claims are marked Previously rejected. Receiving alone never confirms traits or abilities; verified abilities use the normal entry-lock and tooltip rules.\n\nThe book shows earned progress. Share shows available points after spending and reservations. Send reserves the maximum cost; acceptance waives the basic-information point if the recipient already knows it and commits the final cost. Declines and pre-commit cancellation are free. Unknown delivery keeps the cost spent: reopen Share to retry the same report, at most three times within 24 hours. Receiving earns no points; later personal discovery still can. Entry deletion preserves credited milestones and spending; full reset erases them.",35,0,535)
         local pointsBlock=CreateFrame("Frame",nil,helpBody,"BackdropTemplate")
@@ -1627,7 +1745,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         help:Hide(); book.help=help
         local options,optionsBody=createBookPage("AzerothFieldbookOptions","AZEROTH FIELDBOOK - OPTIONS",65)
-        optionsBody:SetHeight(714)
+        optionsBody:SetHeight(746)
         options.accountWideTracking=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
         options.accountWideTracking:SetPoint("TOPLEFT",30,0); options.accountWideTracking:SetSize(24,24)
         label(optionsBody,"Account-wide tracking",58,-6,235,"GameFontHighlightSmall")
@@ -1731,6 +1849,12 @@ local ink = { 0.75, 0.8, 0.8 }
             GameTooltip:Show()
         end)
         options.blockIncomingOffers:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        options.alwaysAnchorToMain=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
+        options.alwaysAnchorToMain:SetPoint("TOPLEFT",30,-706); options.alwaysAnchorToMain:SetSize(24,24)
+        label(optionsBody,"Always attempt to anchor to main window",58,-712,470,"GameFontHighlightSmall")
+        options.alwaysAnchorToMain:SetScript("OnClick",function(self)
+            journal:SetAlwaysAnchorToMain(self:GetChecked()==true)
+        end)
         local scaleLabel=label(optionsBody,"UI scale: 100%",58,-572,460,"GameFontHighlightSmall")
         options.uiScale=CreateFrame("Slider",nil,optionsBody,"OptionsSliderTemplate")
         options.uiScale:SetPoint("TOPLEFT",30,-592); options.uiScale:SetSize(180,16)
@@ -1790,6 +1914,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 OnAccept = function()
                     journal:ResetDatabase()
                     options.blockIncomingOffers:SetChecked(journal:GetBlockIncomingOffers())
+                    options.alwaysAnchorToMain:SetChecked(journal:GetAlwaysAnchorToMain())
                     refreshTrackingOption()
                     for location in pairs(locationFilters) do locationFilters[location] = nil end
                     book:SetBackgroundBrightness(journal:GetBackgroundBrightness())
@@ -1806,6 +1931,7 @@ local ink = { 0.75, 0.8, 0.8 }
             showBookPage(self)
             refreshTrackingOption()
             options.singleObservationWindow:SetChecked(journal:GetSingleObservationWindow())
+            options.alwaysAnchorToMain:SetChecked(journal:GetAlwaysAnchorToMain())
             options.blockIncomingOffers:SetChecked(journal:GetBlockIncomingOffers())
             options.uiScale:SetValue(journal:GetUIScale())
             pendingScale=nil; updateScaleControls(journal:GetUIScale())
@@ -1837,11 +1963,17 @@ local ink = { 0.75, 0.8, 0.8 }
         -- the scale formerly inherited by its child dialogs and their anchors.
         for _, window in ipairs({book,deleteForm,effectPicker,form,notesForm}) do window:SetScale(bookScale) end
         if ns.UIScale then
-            for _, window in ipairs({book,help,options,locationFrame,rankFrame,offensePicker,defensePicker,behaviourPicker,deleteForm,effectPicker,form,notesForm}) do
+            for _, window in ipairs({book,help,options,eventLog,locationFrame,rankFrame,offensePicker,defensePicker,behaviourPicker,deleteForm,effectPicker,form,notesForm}) do
+                window.afbPreferBookEdge=window~=book
                 ns.UIScale:Register(window)
             end
         end
         if ns.WindowFocus then ns.WindowFocus:Register(deleteForm) end
+        for _, window in ipairs({form,offensePicker,defensePicker,behaviourPicker,effectPicker}) do
+            window.afbAnchorRule="right"
+        end
+        locationFrame.afbAnchorRule="filters";rankFrame.afbAnchorRule="filters"
+        help.afbAnchorRule="pages";options.afbAnchorRule="pages";eventLog.afbAnchorRule="pages"
         -- Establish the initial stacks before registering saved-position overrides.
         for _, picker in ipairs(observationPickers) do
             picker:ClearAllPoints()
@@ -1853,6 +1985,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         positionRankFilter(rankFrame)
         if ns.WindowPositions then
+            ns.WindowPositions:Register(eventLog,eventLog:GetName())
             for _, window in ipairs({book,locationFrame,notesForm}) do
                 ns.WindowPositions:Register(window,window:GetName())
             end

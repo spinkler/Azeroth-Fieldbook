@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.42 (Beta)
+# Azeroth Fieldbook 0.9.56 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,11 +6,11 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.42 includes sharing, addon-version compatibility
+spell databases. Version 0.9.56 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.42.
+are not part of version 0.9.56.
 
 ## Installation and opening
 
@@ -34,9 +34,23 @@ Rumours below ID Logs. Locations starts on the left, with Ranks beneath it and
 their right edges aligned. The narrower Share window starts on the right with
 its bottom edge aligned to the book. Default dialogs follow the book and stay
 inside the screen; restored positions are clamped for the current screen size.
-Saved positions override these defaults. Clicking an
+The default-on **Always attempt to anchor to main window** option rechecks even
+saved positions on opening. Damage, offense, defense, behaviour and effect panels
+prefer the book's right edge, then the right edge of the next window. Filters
+prefer the book's left edge, then its bottom, then the left of another window.
+Help and Options prefer the book's right edge, then its left. Disabling the option
+retains saved positions unless overlap or screen bounds require adjustment.
+Opening any addon window checks for
+overlap with all other visible addon windows and places it beside, above or below
+them when possible. Dialogs opened from the book prefer a free edge of the main
+book before falling back to unrelated windows. Pinned Notes and the locked spell-ID window retain their
+positions; other windows arrange around them. Screen visibility takes priority
+even for pinned windows. If no free space fits, overlap is minimized; oversized
+windows shrink to fit the screen. Clicking an
 addon window or one of its controls brings that window to the front of the other
 addon windows.
+
+The list button left of Options opens the **Event log**. It records timestamped discoveries, point awards and observed-cast alerts even with chat announcements disabled. This per-character history starts on first use, survives reloads and Bestiary resets, and keeps all events with newest-first pages of 50. Earlier events cannot be reconstructed.
 
 The gold cog immediately left of **?** opens **Options**, containing all settings
 and **Reset Bestiary**. **?** opens instructions and About. Both buttons toggle
@@ -83,7 +97,7 @@ Each creature entry can contain:
 
 - Confirmed and pending observed abilities, optional field notes and effect tags.
 - Optional exact spell IDs, hyperlinks or names resolved through the client.
-- Personal equal-level damage observations.
+- Personal damage observations with separate player and creature levels. Equal-level records are recommended; other levels are supported.
 - Observed offensive spell schools, resistances and immunities.
 - Observed disposition, combat style and behavioural traits.
 - A deduplicated kill counter requiring player/pet/party kill evidence and
@@ -331,7 +345,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.42 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.56 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode and one-time migration markers.

@@ -200,6 +200,186 @@ class WindowPositionTests(unittest.TestCase):
             assert(b.anchor[2]==AzerothFieldbookBestiary and b.anchor[5]==-206)
         ''')
 
+    def test_opening_moves_overlapping_saved_dialog_to_a_free_side(self):
+        self.lua.execute('''
+            UIParent.width=1600; UIParent.height=1000
+            AzerothFieldbookBestiary=CreateFrame()
+            local book=AzerothFieldbookBestiary
+            book.left=300;book.top=700;book.width=600;book.height=500;book.shown=true
+            a=CreateFrame();a.width=300;a.height=200
+            ns.WindowPositions:Register(a,'Help')
+            moved(a,700,650);a:Fire('OnShow')
+            near(a.left,900);near(a.top,650)
+            book.left=950;book.top=1000;book.height=950
+            moved(a,1100,650);a:Fire('OnShow')
+            near(a.left,650);near(a.top,650)
+            a:Fire('OnHide');near(db.windowPositions.Help.left,650)
+        ''')
+
+    def test_vertical_edges_and_no_room_fallback_stay_inside_screen(self):
+        self.lua.execute('''
+            UIParent.width=1000;UIParent.height=1000
+            AzerothFieldbookBestiary=CreateFrame()
+            local book=AzerothFieldbookBestiary
+            book.left=150;book.top=600;book.width=700;book.height=300;book.shown=true
+            a=CreateFrame();a.width=400;a.height=200;a.left=300;a.top=500
+            ns.WindowPositions:AvoidWindowOverlap(a)
+            near(a.top,300);near(a.left,300)
+            a.left=300;a.top=650;ns.WindowPositions:AvoidWindowOverlap(a)
+            near(a.top,800);near(a.left,300)
+            UIParent.height=800
+            book.left=100;book.top=700;book.width=800;book.height=600
+            a.width=400;a.height=300;a.left=350;a.top=650
+            ns.WindowPositions:AvoidWindowOverlap(a)
+            near(a.top,800)
+            assert(a.left>=0 and a.left+a.width<=1000 and a.top<=800 and a.top-a.height>=0,
+                'visibility wins when every side overlaps')
+        ''')
+
+    def test_opening_geometry_accounts_for_scale_and_hidden_book(self):
+        self.lua.execute('''
+            UIParent.width=1600;UIParent.height=1000;UIParent.scale=0.8
+            AzerothFieldbookBestiary=CreateFrame()
+            local book=AzerothFieldbookBestiary
+            book.scale=0.8;book.left=300;book.top=700;book.width=600;book.height=500;book.shown=true
+            a=CreateFrame();a.scale=1.2;a.width=200;a.height=100;a.left=450;a.top=400
+            ns.WindowPositions:AvoidWindowOverlap(a)
+            near(a.left*1.5,900);near(a.top*1.5,600)
+            a.left=650;a.top=400
+            ns.WindowPositions:AvoidWindowOverlap(a)
+            near(a.left,650);near(a.top,400) -- Already beside the book.
+            book.shown=false;a.left=1200;a.top=20
+            ns.WindowPositions:AvoidWindowOverlap(a)
+            near(a.left*1.5,1300);near(a.top*1.5,150)
+            UIParent.scale=1;a.scale=1;a.width=2000;a.height=1200;a.left=-50;a.top=100
+            ns.WindowPositions:AvoidWindowOverlap(a)
+            near(a.scale,0.8)
+            assert(a.left*a.scale>=0 and a.top*a.scale<=1000)
+            assert((a.top-a.height)*a.scale>=0,'oversized windows fit vertically too')
+        ''')
+
+    def test_multiple_neighbours_are_avoided_together_on_show(self):
+        self.lua.execute('''
+            UIParent.width=1400;UIParent.height=900
+            local function window(left,top,width,height)
+                local frame=CreateFrame()
+                frame.left=left;frame.top=top;frame.width=width;frame.height=height;frame.shown=true
+                ns.WindowPositions:Track(frame)
+                return frame
+            end
+            AzerothFieldbookBestiary=window(0,800,700,600)
+            local notes=window(700,800,300,300)
+            notes.afbPinned=true
+            local rumours=window(700,500,300,300)
+            local opening=window(600,700,200,200)
+            opening:Fire('OnShow')
+            near(opening.left,1000);near(opening.top,700)
+            near(notes.left,700);near(notes.top,800)
+            near(rumours.left,700);near(rumours.top,500)
+            -- Hidden and transparent windows must not consume layout space.
+            opening.left=700;opening.top=700
+            notes.shown=false
+            rumours.GetAlpha=function() return 0 end
+            opening:Fire('OnShow')
+            near(opening.left,700);near(opening.top,700)
+        ''')
+
+    def test_pins_allow_overlap_but_never_override_screen_bounds(self):
+        self.lua.execute('''
+            UIParent.width=1000;UIParent.height=800
+            local neighbour=CreateFrame()
+            neighbour.left=200;neighbour.top=600;neighbour.width=400;neighbour.height=400;neighbour.shown=true
+            ns.WindowPositions:Track(neighbour)
+            local pinned=CreateFrame()
+            pinned.left=300;pinned.top=500;pinned.width=200;pinned.height=200;pinned.afbPinned=true
+            ns.WindowPositions:Track(pinned)
+            pinned:Fire('OnShow')
+            near(pinned.left,300);near(pinned.top,500)
+            pinned.left=950;pinned.top=50;pinned:Fire('OnShow')
+            near(pinned.left,800);near(pinned.top,200)
+            pinned.left=300;pinned.top=500;pinned.afbPinned=false;pinned:Fire('OnShow')
+            assert(pinned.left+200<=200 or pinned.left>=600 or pinned.top<=200 or pinned.top-200>=600,
+                'unpinning restores placement around other windows, even without the main book')
+        ''')
+
+    def test_main_window_also_avoids_existing_windows_without_dragging_them(self):
+        self.lua.execute('''
+            UIParent.width=1400;UIParent.height=900
+            local book=CreateFrame()
+            AzerothFieldbookBestiary=book
+            book.width=600;book.height=400;book.left=400;book.top=700
+            ns.WindowPositions:Track(book)
+            local notes=CreateFrame()
+            notes.width=300;notes.height=300;notes.shown=true;notes.afbPinned=true
+            notes:SetPoint('TOPLEFT',book,'TOPLEFT',800,650)
+            ns.WindowPositions:Track(notes)
+            book:Fire('OnShow')
+            near(book.left,200);near(book.top,700)
+            near(notes.left,800);near(notes.top,650)
+            assert(notes.anchor[2]==UIParent,'an already-visible anchored neighbour stays in place')
+        ''')
+
+    def test_book_edges_take_priority_over_nearer_unrelated_windows(self):
+        self.lua.execute('''
+            UIParent.width=1400;UIParent.height=900
+            local book=CreateFrame();AzerothFieldbookBestiary=book
+            book.left=400;book.top=900;book.width=400;book.height=900;book.shown=true
+            local neighbour=CreateFrame()
+            neighbour.left=800;neighbour.top=900;neighbour.width=400;neighbour.height=900;neighbour.shown=true
+            ns.WindowPositions:Track(neighbour)
+            local dialog=CreateFrame()
+            dialog.left=1000;dialog.top=700;dialog.width=200;dialog.height=200;dialog.afbPreferBookEdge=true
+            ns.WindowPositions:AvoidWindowOverlap(dialog)
+            near(dialog.left,200);near(dialog.top,700)
+            -- Blocking the last free book edge permits the unrelated edge.
+            local leftBlock=CreateFrame()
+            leftBlock.left=0;leftBlock.top=900;leftBlock.width=400;leftBlock.height=900;leftBlock.shown=true
+            ns.WindowPositions:Track(leftBlock)
+            dialog.left=1000;dialog.top=700
+            ns.WindowPositions:AvoidWindowOverlap(dialog)
+            near(dialog.left,1200);near(dialog.top,700)
+            assert(dialog.left+dialog.width<=UIParent.width)
+        ''')
+
+
+    def test_default_on_direction_rules_and_disabled_or_pinned_positions(self):
+        self.lua.execute('''
+            UIParent.width=1800;UIParent.height=1000
+            local function window(x,y,w,h)
+                local f=CreateFrame();f.left=x;f.top=y;f.width=w;f.height=h;f.shown=true
+                ns.WindowPositions:Track(f);return f
+            end
+            AzerothFieldbookBestiary=window(600,900,500,600)
+            local dialog=CreateFrame();dialog.width=200;dialog.height=200;dialog.afbPreferBookEdge=true
+            local function place(rule)
+                dialog.left=100;dialog.top=600;dialog.afbAnchorRule=rule
+                ns.WindowPositions:AvoidWindowOverlap(dialog)
+            end
+            place('right');near(dialog.left,1100)
+            db.alwaysAnchorToMain=false
+            place('right');near(dialog.left,100)
+            db.alwaysAnchorToMain=true;dialog.afbPinned=true
+            place('right');near(dialog.left,100)
+            dialog.afbPinned=false
+            local right=window(1100,1000,200,1000)
+            place('right');near(dialog.left,1300)
+            place('pages');near(dialog.left,400)
+            right.shown=false
+            place('pages');near(dialog.left,1100)
+            place('filters');near(dialog.left,400)
+            local left=window(400,1000,200,1000)
+            place('filters');near(dialog.top,300)
+            local bottom=window(600,300,500,300)
+            place('filters');near(dialog.left,200)
+            -- A crowded screen may overlap, but never place any edge off-screen.
+            UIParent.width=800;UIParent.height=600
+            AzerothFieldbookBestiary.left=0;AzerothFieldbookBestiary.top=600
+            AzerothFieldbookBestiary.width=800;AzerothFieldbookBestiary.height=600
+            left.shown=false;bottom.shown=false
+            place('right')
+            assert(dialog.left>=0 and dialog.left+200<=800 and dialog.top<=600 and dialog.top>=200)
+        ''')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -79,6 +79,22 @@ class AnnouncementTests(unittest.TestCase):
                     self.assertEqual(self.messages(), expected)
                     self.lua.execute('messages={}; units.target.level=10; observe()')
                     self.assertEqual(len(self.messages()), 1 if points else 0)
+                    self.assertEqual(self.lua.eval('#AzerothFieldbookDB.eventLog.entries'), 2)
+                    self.assertEqual(self.lua.eval('AzerothFieldbookDB.eventLog.entries[1].details.points'), 1)
+
+    def test_log_survives_reload_and_bestiary_reset_without_replaying(self):
+        self.lua.execute('''
+            AzerothFieldbookDB.pointAnnouncements=false
+            AzerothFieldbookDB.creatureAnnouncements=false
+            observe()
+            local log=AzerothFieldbookDB.eventLog
+            fire('ADDON_LOADED','AzerothFieldbook')
+            observe()
+            assert(AzerothFieldbookDB.eventLog==log and #log.entries==1)
+            SlashCmdList.AZEROTHFIELDBOOK('wipe')
+            SlashCmdList.AZEROTHFIELDBOOK('wipe confirm')
+            assert(AzerothFieldbookDB.eventLog==log and #log.entries==1)
+        ''')
 
     def test_unresolved_names_are_silent_and_repair_announces_once(self):
         self.lua.execute('''

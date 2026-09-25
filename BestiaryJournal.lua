@@ -12,7 +12,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     local killInstances = {}
     local recentKills
     local instanceLimit, observationSeconds, pendingSeconds, recentLimit = 64, 120, 10, 512
-    local onEntryAdded, onPointsAwarded
+    local onEntryAdded, onPointsAwarded, onPointsRecorded, onEventLogChanged
     local restoreObservations
     local ledger
     local rankLabels = { elite = "Elite", rare = "Rare", rareelite = "Rare Elite", worldboss = "World Boss" }
@@ -129,8 +129,21 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:SetPointsAwardedCallback(callback)
         onPointsAwarded = type(callback) == "function" and callback or nil
     end
+    function journal:SetPointsRecordedCallback(callback) onPointsRecorded=callback end
+    function journal:GetEventLog()
+        if type(db.eventLog)~="table" then db.eventLog={startedAt=read(time),entries={}} end
+        return db.eventLog
+    end
+    function journal:SetEventLogChangedCallback(callback) onEventLogChanged=callback end
+    function journal:RecordEvent(message, details)
+        local log=self:GetEventLog()
+        log.entries[#log.entries+1]={timestamp=read(time),message=message,details=details}
+        if onEventLogChanged then onEventLogChanged() end
+    end
+    journal:GetEventLog()
     local function award(self, entry, amount, reason, observation)
         if amount > 0 then ledger.earned = ledger.earned + amount end
+        if amount > 0 and onPointsRecorded then onPointsRecorded(entry,amount,reason,observation) end
         if amount > 0 and self:GetPointAnnouncements() and onPointsAwarded then
             onPointsAwarded(entry, amount, reason, observation)
         end
@@ -289,6 +302,12 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:GetSingleObservationWindow()
         return db.singleObservationWindow ~= false
+    end
+    function journal:GetAlwaysAnchorToMain()
+        return db.alwaysAnchorToMain ~= false
+    end
+    function journal:SetAlwaysAnchorToMain(enabled)
+        db.alwaysAnchorToMain = enabled == true
     end
     function journal:GetBlockIncomingOffers()
         return db.blockIncomingOffers == true
@@ -831,12 +850,13 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         self:Touch()
         return true, "Ability confirmed. Lock in the entry to show it in tooltips."
     end
-    function journal:AddDamage(id, level, low, high)
+    function journal:AddDamage(id, level, low, high, playerLevel)
         local entry = self.entries[id]
         if entry and entry.confirmed then return false, "Unlock this creature before recording damage." end
         level, low, high = tonumber(level), tonumber(low), tonumber(high)
-        if not entry or not number(level) or not number(low) or not number(high) or low > high then
-            return false, "Enter a shared level and a positive minimum/maximum hit range."
+        playerLevel = playerLevel == nil and level or tonumber(playerLevel)
+        if not entry or not number(level) or not number(playerLevel) or not number(low) or not number(high) or low > high then
+            return false, "Enter positive whole-number player and creature levels and a valid minimum/maximum hit range."
         end
         if not entry.levelMin or level < entry.levelMin or level > entry.levelMax then
             return false, "That level is outside this creature's observed level range."
@@ -847,14 +867,15 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if #record.notes == 0 and record.low and record.high and (record.reports or 0) > 0 then
             record.notes[1] = { low = record.low, high = record.high, legacy = true }
         end
-        record.notes[#record.notes + 1] = { low = low, high = high }
+        self:DamageNotes(id, level)
+        record.notes[#record.notes + 1] = { low = low, high = high, playerLevel = playerLevel, creatureLevel = level }
         record.low, record.high, record.reports = nil, nil, #record.notes
         for _, note in ipairs(record.notes) do
             record.low = record.low and math.min(record.low, note.low) or note.low
             record.high = record.high and math.max(record.high, note.high) or note.high
         end
         self:Touch()
-        return true, "Saved your equal-level damage observation."
+        return true, "Saved your damage observation."
     end
     function journal:DamageNotes(id, level)
         local entry = self.entries[id]
@@ -863,6 +884,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         record.notes = type(record.notes) == "table" and record.notes or {}
         if #record.notes == 0 and record.low and record.high and (record.reports or 0) > 0 then
             record.notes[1] = { low = record.low, high = record.high, legacy = true }
+        end
+        -- Records made before separate levels were supported were equal-level.
+        for _, note in ipairs(record.notes) do
+            note.playerLevel = note.playerLevel or level
+            note.creatureLevel = note.creatureLevel or level
         end
         return record.notes
     end
@@ -945,8 +971,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         self:Touch()
     end
     function journal:ResetDatabase()
-        local personalBestiary, trackingKey = db.bestiary, db.accountTrackingKey
+        local personalBestiary, trackingKey, eventLog = db.bestiary, db.accountTrackingKey, self:GetEventLog()
         for key in pairs(db) do db[key] = nil end
+        db.eventLog=eventLog
         db.version, db.announce, db.creatureAnnouncements = 1, false, true
         db.accountTrackingKey, db.accountWideTracking = trackingKey, activeAccountWideTracking
         if trackingDB ~= db then db.bestiary = personalBestiary end

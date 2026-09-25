@@ -70,6 +70,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
     local function build()
         if frame then return end
         frame=CreateFrame("Frame","AzerothFieldbookCreatureNotes",UIParent,"BackdropTemplate")
+        frame.afbPreferBookEdge=true
         frame:SetSize(400,176)
         local book=getBook and getBook()
         if book then frame:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0)
@@ -111,6 +112,11 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         frame.pinButton=pin
         pin:SetScript("OnClick",function()
             pinned=not pinned
+            frame.afbPinned=pinned
+            if pinned and ns.WindowPositions then
+                ns.WindowPositions:Save(frame)
+                ns.WindowPositions:Restore(frame)
+            end
             for _,part in ipairs(pinParts) do
                 part:SetVertexColor(1,pinned and 0.65 or 1,pinned and 0.35 or 1)
             end
@@ -228,6 +234,13 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         selected,entry=false,false
         self:SetCreature(id)
         render(); frame:Show()
+    end
+    function controller:Toggle(id)
+        if frame and frame:IsShown() then
+            if not pinned then frame:Hide() end
+        else
+            self:Open(id)
+        end
     end
     return controller
 end

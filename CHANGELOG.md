@@ -1,5 +1,179 @@
 # Changelog
 
+## v0.9.56-beta - 2026-09-25
+
+This release includes all changes since v0.9.42-beta (local iterations v0.9.43
+through v0.9.56). Both players must use the same addon version to share creatures.
+
+### Window placement and sizing
+
+- Arrange opening addon windows around all visible addon windows, preferring
+  edges of the main Fieldbook for dialogs launched from it. Respect pinned Notes
+  and the locked spell-ID window, and keep already-visible windows stationary
+  when repositioning their anchor window.
+- Add the default-on "Always attempt to anchor to main window" option. Damage,
+  offense, defense, behaviour and effects prefer the book's right edge, then the
+  next window's right. Filters prefer the book's left, then bottom, then another
+  window's left. Help and Options prefer the book's right, then left.
+- Recheck saved positions on opening with anchoring enabled. Disabling the option
+  retains overlap-only repositioning. Account for UI scale, hidden windows and
+  late content sizing; keep windows on-screen, minimize overlap when crowded,
+  and shrink oversized windows to fit. Untouched defaults remain book-relative.
+- Trim empty space below Offenses and beside Behaviour. Give the damage form
+  balanced side margins. Make Creature Notes toggle open/closed while respecting
+  its pinned state.
+
+### Damage observations and recorded abilities
+
+- Rename the damage panel to "Damage taken" and the entry form to "Your damage
+  observations". Add an editable Player level before the Creature level dropdown,
+  defaulting to the current player level each time the form opens.
+- Store both levels per observation, allow different levels while recommending
+  equal-level records, and display recorded player levels in summary/history.
+  Preserve older records as equal-level observations; validate positive integer
+  levels, valid hit ranges and the creature's observed level range.
+- Replace Confirm with a themed square green tick to the right of Reject.
+  Right-align the action group with consistent spacing and reserve scrollbar room.
+  Pending buttons are red and clickable; confirmed buttons keep their full grey
+  themed border and green tick. Use the client's native texture/atlas for the
+  disabled border.
+- Restrict spell tooltips to the area left of visible action buttons, hiding them
+  when leaving that area so button gaps cannot trigger them. Preserve checkbox
+  hints, the spell-ID preference and wheel scrolling.
+
+- Show "Ability confirmed" on confirmed tick buttons. Hide the tooltip checkbox
+  and all ability action buttons while the creature is locked; restore them on unlock.
+- Add faint dividers between visible ability rows, with lower opacity than the
+  creature-information section divider. Keep ability tooltips available while locked.
+
+### Persistent event history
+
+- Add a fourth themed title-bar button beside Options for Event log. Record
+  discoveries, point awards and observed-cast alerts independently of chat settings,
+  preserving timestamps, colored messages and event details without duplicate
+  discovery messages.
+- Keep per-character history from first use across reloads, sessions and Bestiary
+  resets, without trimming events or inventing past history. Show newest-first
+  pages of 50 events with live updates, themed scrolling, saved position, scaling,
+  Escape dismissal and the normal placement rules.
+- Fit the log to its content, from a compact 200-unit empty window to a 767-unit
+  maximum before scrolling. Anchor footer controls to the bottom, hide unnecessary
+  pagination and recheck placement when the window grows.
+
+### Validation and documentation
+
+- Update current documentation and retain the local iteration notes below.
+- Extend regression coverage for placement priorities, scale, crowding, pinning,
+  saved anchoring preferences, unequal-level records, legacy damage, muted event
+  collection, log retention, live updates, pagination and adaptive window height.
+  All 20 test files pass; live WoW rendering remains an in-game check.
+
+## v0.9.55 - Unreleased
+
+- Size Event log height to its content, starting at a compact 200 UI units and
+  growing to the existing 767-unit maximum before scrolling. Keep footer controls
+  at the bottom, hide unnecessary pagination and recheck screen placement on growth.
+
+## v0.9.54 - Unreleased
+
+- Add a fourth themed title-bar button beside Options for a persistent Event log.
+  Capture creature discoveries, point awards and observed-cast alerts regardless
+  of their chat settings, retaining timestamps, colored messages and event details.
+- Keep per-character history from first use across reloads, sessions and Bestiary
+  resets, without trimming old events or fabricating pre-installation history.
+  Display newest-first pages of 50 events with live updates, themed scrolling,
+  saved position, scaling, Escape dismissal and normal window placement.
+- Verify muted-event collection, discovery deduplication, reload/reset retention,
+  the title-button toggle, live updates and access to older pages.
+
+## v0.9.53 - Unreleased
+
+- Restrict ability spell tooltips to the text area left of the first visible
+  action button. Leaving that area hides the tooltip; button gaps no longer
+  trigger it. Preserve checkbox/button hints and mouse-wheel scrolling.
+
+## v0.9.52 - Unreleased
+
+- Preserve the themed square border on confirmed/locked ability tick buttons by
+  deriving disabled artwork from the client's normal button texture or atlas,
+  desaturating the frame while retaining the green tick.
+
+## v0.9.51 - Unreleased
+
+- Right-align Recorded Abilities action buttons as a group, with the tick at the
+  content's right edge and consistent gaps between buttons. Reserve room when
+  the ability scrollbar is visible so it cannot overlap the tick.
+
+## v0.9.50 - Unreleased
+
+- Rename the main damage panel to "Damage taken" and the entry form to "Your
+  damage observations". Keep the observed-creature-level dropdown and add an
+  editable Player level field that defaults to the current level on opening.
+- Recommend equal-level observations while allowing different levels. Store both
+  levels on each observation and show player levels in the summary and history.
+  Preserve older observations as equal-level records; validate positive integer
+  levels and retain the existing damage-range and creature-level checks.
+- Cover unequal-level persistence, legacy records and invalid player levels.
+
+## v0.9.49 - Unreleased
+
+- Replace Recorded Abilities' Confirm button with a square green-tick button
+  using the close/help/options theme, positioned after Reject on the right.
+  Pending, unlocked abilities use a clickable red button; confirmed abilities
+  and locked entries use a disabled grey button while keeping the tick green.
+
+## v0.9.48 - Unreleased
+
+- Add the default-on "Always attempt to anchor to main window" option. Observation
+  and effect panels prefer the book's right edge, then the next window's right;
+  filters prefer the book's left, then bottom, then a neighbouring window's left;
+  Help and Options prefer the book's right, then left before general placement.
+- Recheck anchoring when reopening unpinned dialogs, including saved positions.
+  Turning the option off retains the previous overlap-only placement behavior.
+  Preserve screen bounds, pinning and overlap fallback when screen space is scarce.
+- Test directional fallbacks, default/saved option state, pinning and crowded screens.
+
+## v0.9.47 - Unreleased
+
+- Prefer a free main-book edge when positioning overlapping dialogs opened from
+  the Fieldbook, even if an unrelated window offers a nearer edge. Fall back to
+  other windows when the book's edges are blocked or off-screen; retain pinning
+  and screen-visibility priority.
+
+## v0.9.46 - Unreleased
+
+- Make the Creature Notes button toggle its window open and closed. Pinned Notes
+  remain open, and reopening displays the selected creature's saved notes.
+
+## v0.9.45 - Unreleased
+
+- Trim 30 UI units of empty space below the Offenses buttons and narrow Behaviour
+  by 40 UI units, keeping its labels inside the reduced right margin.
+- Narrow the equal-level damage observation window by 36 UI units so its control
+  row has matching 28-unit left and right margins; resize heading/instruction text.
+
+## v0.9.44 - Unreleased
+
+- Arrange every opening addon window, including the main book and spell-ID
+  displays, around all other visible addon windows. Evaluate neighbouring edges
+  together to avoid fixing one overlap by creating another.
+- Respect pinned Creature Notes and the locked spell-ID window, treating them
+  as obstacles without automatically moving them aside. Screen bounds still take
+  priority, and crowded layouts use the smallest available overlap.
+- Keep already-visible windows in place when moving their anchor window; cover
+  multiple neighbours, hidden/faded windows, pins and main-window opening in tests.
+
+## v0.9.43 - Unreleased
+
+- Check secondary dialogs for overlap with the visible main Fieldbook on opening,
+  including saved positions and content-sized layouts. Prefer a fully visible
+  position against one of the book's four edges, accounting for UI scale.
+- When no adjacent position fits, prioritize staying on-screen and minimize
+  overlap. Fit oversized dialogs to the screen and preserve untouched defaults
+  as book-relative anchors. Do not move the main window.
+- Add geometry regression coverage for side placement, vertical alternatives,
+  limited screen space, saved positions, scaling and a hidden main window.
+
 ## v0.9.42-beta - 2026-09-25
 
 This release includes all changes since v0.9.11-beta (local iterations v0.9.12

@@ -118,6 +118,7 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
     local function build()
         if frame then return end
         frame=CreateFrame("Frame","AzerothFieldbookRumours",UIParent,"BackdropTemplate")
+        frame.afbPreferBookEdge=true
         frame:SetSize(480,500)
         local book=getAnchors and getAnchors()
         if book then

@@ -94,7 +94,7 @@ local function say(message)
     end
 end
 
-local function announceBestiary(entry, title, amount, observation, categoryOnly)
+local function announceBestiary(entry, title, amount, observation, categoryOnly, chatEnabled, skipLog)
     local name = journal:GetCreatureName(entry.id)
     if not name then return end
     local basic = journal.GetBasicInfo and journal:GetBasicInfo(entry.id) or entry
@@ -106,8 +106,10 @@ local function announceBestiary(entry, title, amount, observation, categoryOnly)
         if publicString(observation.location) then details[#details + 1] = observation.location end
     end
     local reward = amount and ("+" .. amount .. (amount == 1 and " point: " or " points: ")) or ""
-    say("|cffffd100[" .. reward .. title .. "]|r Bestiary: " .. name
-        .. " |cff999999(" .. table.concat(details, " • ") .. ")|r")
+    local text="|cffffd100[" .. reward .. title .. "]|r Bestiary: " .. name
+        .. " |cff999999(" .. table.concat(details, " • ") .. ")|r"
+    if not skipLog then journal:RecordEvent(text,{creatureID=entry.id,title=title,points=amount,level=observation.level,location=observation.location}) end
+    if chatEnabled then say(text) end
 end
 
 local function spellName(spellID)
@@ -207,6 +209,7 @@ local function storeObserved(id, spellID, observedName, creatureName)
     end
     diagnostics.learned = diagnostics.learned + 1
     diagnostics.last = "Cast recorded."
+    if journal then journal:RecordEvent("Observed: " .. name,{kind="cast",creatureID=id}) end
     if db.announce then say("Observed: " .. name) end
     return true
 end
@@ -346,18 +349,17 @@ local function initialize()
     if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
     if journal then
-        journal:SetPointsAwardedCallback(function(entry, amount, reason, observation)
+        journal:SetPointsRecordedCallback(function(entry, amount, reason, observation)
             local killTitles = { ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
             local discoveryTitles = { level = "New observed level", location = "New observed location",
                 levelAndLocation = "New observed level and location" }
             local title = killTitles[reason] or (reason == "new creature entry" and "New discovery!")
                 or (observation and discoveryTitles[observation.kind])
-            if title then announceBestiary(entry, title, amount, observation, killTitles[reason] ~= nil) end
+            if title then announceBestiary(entry, title, amount, observation, killTitles[reason] ~= nil,journal:GetPointAnnouncements()) end
         end)
         journal:SetEntryAddedCallback(function(entry, discovered, observation)
-            if journal:GetCreatureAnnouncement() and not (discovered and journal:GetPointAnnouncements()) then
-                announceBestiary(entry, "New discovery!", nil, observation)
-            end
+            local chatEnabled=journal:GetCreatureAnnouncement() and not (discovered and journal:GetPointAnnouncements())
+            announceBestiary(entry,"New discovery!",nil,observation,false,chatEnabled,discovered)
         end)
     end
     if journal and ns.InitializeSharing then ns.InitializeSharing(journal) end

@@ -26,6 +26,7 @@ end
 function focus:Register(window)
     if windows[window] then return end
     windows[window] = true
+    if ns.WindowPositions then ns.WindowPositions:Track(window) end
     -- Raise only works within one strata. Native top-level handling also raises
     -- a window when clicking controls added after it was first displayed.
     window:SetFrameStrata("DIALOG")

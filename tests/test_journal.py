@@ -93,6 +93,15 @@ check(journal:RemoveDamageNote(42,9,1),'individual damage note removable')
 check(#journal:DamageNotes(42,9)==1 and journal.entries[42].damage[9].low==10,'range recalculated after removal')
 ok=journal:AddDamage(42,12,1,2); check(not ok,'unobserved mob level rejected')
 ok=journal:AddDamage(42,9,30,2); check(not ok,'reversed range rejected')
+local older=journal:DamageNotes(42,9)[1]
+older.playerLevel=nil; older.creatureLevel=nil
+check(journal:DamageNotes(42,9)[1].playerLevel==9,'old notes retain their equal-level meaning')
+check(journal:AddDamage(42,9,11,23,15),'unequal levels allowed')
+local different=journal:DamageNotes(42,9)[2]
+check(different.playerLevel==15 and different.creatureLevel==9,'both levels recorded separately')
+for _,invalid in ipairs({'',0,-1,1.5,'abc'}) do
+    check(not journal:AddDamage(42,9,1,2,invalid),'invalid player level rejected')
+end
 check(#journal:List('Humanoid','defias',false)==1,'name search and category')
 check(#journal:List(nil,'',false,'D')==1 and #journal:List(nil,'',false,'M')==0,'alphabet index filter')
 check(#journal:List(nil,'humanoid',false)==1,'type searchable')
@@ -135,6 +144,7 @@ check(journal:SetCreatureNotes(42,'Still editable') and journal:AddNoteSpell(42,
 check(journal:RemoveNoteSpell(42,777),'locked manual ID removal allowed')
 local restored=ns.CreateBestiaryJournal(db,identify)
 check(restored.entries[42].confirmed and restored.entries[42].damage[9].high==24,'journal survives reload')
+check(restored:DamageNotes(42,9)[2].playerLevel==15,'unequal-level observation survives reload')
 check(restored.entries[42].offenses.Fire and restored.entries[42].resistances.Frost and restored.entries[42].immunities.Shadow,'creature observations survive reload')
 check(restored.entries[42].abilities['Test Trap'].state=='confirmed','migration does not reset confirmation')
 ''')
@@ -217,7 +227,7 @@ end
 controller=ns.CreateBestiaryBook(journal)
 controller:Toggle()
 check(AzerothFieldbookBestiary:IsShown(),'book opens')
-check(#UISpecialFrames==10 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
+check(#UISpecialFrames==11 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
 check(controller:OpenAtUnit('mouseover'),'mouseover binding opens the observed NPC page')
 for _,o in ipairs(objects) do check(o.text~='Your note','empty manual field note stays visually empty') end
 local function click(text)
@@ -397,13 +407,14 @@ local oldCVar=GetCVarBool
 for _,native in ipairs({false,true}) do
     if native then GetCVarBool=function() return db.showSpellIDs end else GetCVarBool=nil end
     journal:SetSpellIDTooltips(true)
-    resolvedRow.scripts.OnEnter(resolvedRow)
+    resolvedRow.tooltipArea.scripts.OnEnter(resolvedRow.tooltipArea)
     check(GameTooltip.id==2139 and GameTooltip.shown and GameTooltip.lines[1]=='Spell ID: 2139','resolved ability tooltip includes ID when enabled')
     journal:SetSpellIDTooltips(false)
-    resolvedRow.scripts.OnEnter(resolvedRow)
+    resolvedRow.tooltipArea.scripts.OnEnter(resolvedRow.tooltipArea)
     check(GameTooltip.id==2139 and GameTooltip.shown and #GameTooltip.lines==0,'disabled IDs preserve the spell tooltip')
 end
-resolvedRow.scripts.OnLeave(); check(not GameTooltip.shown,'ability tooltip hides on leave')
+resolvedRow.tooltipArea.scripts.OnLeave(); check(not GameTooltip.shown,'ability tooltip hides on leave')
+check(not resolvedRow.scripts.OnEnter,'button area and gaps cannot open ability tooltip')
 GetCVarBool,GameTooltip=oldCVar,oldTooltip
 journal:SetEntryConfirmed(42,savedLock)
 journal.entries[42].abilities={}

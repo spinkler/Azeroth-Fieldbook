@@ -100,6 +100,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
     local function buildComposer()
         if composer then return end
         composer=window("AzerothFieldbookShare","Share one creature",650,460)
+        composer.afbPreferBookEdge=true
         local book=getBook and getBook()
         if book then
             composer:ClearAllPoints()
