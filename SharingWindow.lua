@@ -116,7 +116,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         composer.basic:SetTextColor(1,0.82,0.14)
         composer.details=label(composer.basicBody,"",0,-28,376)
         composer.details:SetTextColor(0.75,0.8,0.8)
-        composer.rumourHeading=label(composer,"Optional unverified rumours — 1 point each",24,-230,400,"GameFontNormal")
+        composer.rumourHeading=label(composer,"Optional unverified rumours — 1 knowledge each",24,-230,400,"GameFontNormal")
         composer.rumourArea,composer.rumourBody=scroll(composer,24,-255,390,166)
         composer.rows={}
         composer.empty=label(composer.rumourBody,"No eligible ability or trait records. Basic information can still be shared.",0,0,360)
@@ -183,10 +183,10 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             local cost=busy() and transaction.cost or 1+n
             local basicCost=busy() and (transaction.basicCost or 1) or 1
             local available,earned,spent,reserved=journal:GetSharingBalance()
-            composer.cost:SetText("Rumours: " .. n .. "   •   Basic info: " .. basicCost .. "   •   Total cost: " .. cost .. (cost==1 and " point" or " points") ..
+            composer.cost:SetText("Rumours: " .. n .. "   •   Basic info: " .. basicCost .. "   •   Total cost: " .. cost .. " knowledge" ..
                 (busy() and transaction.spent and "" or " (maximum)"))
             composer.balance:SetText("Available: " .. available .. "   Earned: " .. earned .. "   Spent: " .. spent .. "   Reserved: " .. reserved ..
-                (busy() and "" or (available>=cost and ("\nBalance after sending: " .. (available-cost)) or "\nInsufficient available points.")))
+                (busy() and "" or (available>=cost and ("\nBalance after sending: " .. (available-cost)) or "\nInsufficient available knowledge.")))
             composer.recipient:SetEnabled(not busy())
             local ready,unavailable=engine:Available()
             local blocked,restriction=engine:Blocked()
@@ -198,7 +198,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             elseif not ready then disabled=unavailable or "Addon messaging is unavailable."
             elseif blocked then disabled=restriction or "Sharing is available outside combat and messaging restrictions."
             elseif recipient~="" and recipientError then disabled=recipientError
-            elseif available<cost then disabled="Insufficient points: this report needs " .. cost .. " available " .. (cost==1 and "point" or "points") .. "; you have " .. available .. "." end
+            elseif available<cost then disabled="Insufficient knowledge: this report needs " .. cost .. " available knowledge; you have " .. available .. "." end
             composer.send:SetEnabled(disabled==nil)
             composer.retry:SetShown(transaction and transaction.spent and transaction.stage=="unknown" or false)
             composer.retry:SetEnabled(engine:CanRetry()==true and not engine:Blocked())
@@ -208,11 +208,11 @@ function ns.CreateSharingWindow(journal,engine,getBook)
                 or "Reserve on Send. Spend only after acceptance. A missing acknowledgement leaves delivery unknown."
             local remaining=engine:GetPreflightSecondsRemaining()
             if remaining then
-                status="Checking compatibility with " .. engine:GetOutgoing().recipient .. " (" .. remaining .. "s remaining). Points reserved; none spent."
+                status="Checking compatibility with " .. engine:GetOutgoing().recipient .. " (" .. remaining .. "s remaining). Knowledge reserved; none spent."
             end
             if transaction and transaction.basicInfoWaived then
                 status=status .. " Basic information already known by " .. transaction.recipient ..
-                    "; its 1-point cost was waived. This report cost " .. transaction.cost .. (transaction.cost==1 and " point." or " points.")
+                    "; its cost of 1 knowledge was waived. This report cost " .. transaction.cost .. " knowledge."
             end
             composer.status:SetText(status)
             composer.inbox:SetShown(#engine:GetIncoming()>0)
@@ -248,8 +248,8 @@ function ns.CreateSharingWindow(journal,engine,getBook)
                 or "No new creature information or rumours; this records the offering source.") or err)
             if preview and preview.conflict then lines[#lines+1]="Names/types differ. Your local information wins; the report stays separate." end
             if preview and preview.locked then lines[#lines+1]="Locked page: local metadata and traits stay locked. See received basics and rumours in Rumours." end
-            if preview and not preview.newBasic then lines[#lines+1]="You already have the basic information; the sender's 1-point basic-information cost will be waived." end
-            lines[#lines+1]="\nThe character offering this report is identified by the addon-message sender. Its claims remain unverified. Receiving earns no points."
+            if preview and not preview.newBasic then lines[#lines+1]="You already have the basic information; the sender's basic-information cost of 1 knowledge will be waived." end
+            lines[#lines+1]="\nThe character offering this report is identified by the addon-message sender. Its claims remain unverified. Receiving earns no knowledge."
             receiver.preview:SetText(table.concat(lines,"\n"))
             receiver.body:SetHeight(math.max(305,(receiver.preview:GetStringHeight() or 305)+16))
             local pending=incoming.state=="pending"

@@ -253,7 +253,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         local entryCount, points = journal:GetTotals()
         book.entryCount:SetText(entryCount .. " entries")
-        book.pointsCount:SetText(points .. " earned")
+        book.pointsCount:SetText(points .. " knowledge earned")
         local e = selected and journal.entries[selected]
         if creatureNotes then creatureNotes:Refresh() end
         if rumoursWindow then rumoursWindow:Refresh() end
@@ -669,8 +669,8 @@ local ink = { 0.75, 0.8, 0.8 }
         addSelectionOutline(book.locationsButton)
         book.ranksButton = button(book, "Ranks", 42, -511, 88, function() book.rankFrame:SetShown(not book.rankFrame:IsShown()) end)
         addSelectionOutline(book.ranksButton)
-        book.entryCount=label(book,"",135,-55,90,"GameFontHighlightSmall")
-        book.pointsCount=label(book,"",225,-55,90,"GameFontHighlightSmall")
+        book.entryCount=label(book,"",135,-55,55,"GameFontHighlightSmall")
+        book.pointsCount=label(book,"",190,-55,125,"GameFontHighlightSmall")
         book.pointsCount:SetJustifyH("RIGHT")
         book.search = edit(book, 139, -78, 176, 100)
         local searchPlaceholder=label(book.search,"Search",0,-4,170,"GameFontHighlightSmall")
@@ -1770,21 +1770,21 @@ local ink = { 0.75, 0.8, 0.8 }
         eventLog:Hide()
         UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookEventLog"
         local help,helpBody=createBookPage("AzerothFieldbookHelp","AZEROTH FIELDBOOK - HELP",24)
-        local helpInstructions=label(helpBody,"|cffffd1001. Encounter|r\nTarget or mouse over an attackable NPC to add it to your Bestiary. Its name, creature type, location and observed level range are recorded automatically.\n\n|cffffd1002. Record|r\nReadable casts and safe post-combat observations are added as pending notes. Abilities the addon cannot observe directly can also be added manually. Damage ranges must be recorded manually from your own data. Equal-level observations are recommended so level scaling does not distort the results.\n\n|cffffd1003. Review|r\nOpen the Bestiary and select a creature to review its observations. Confirm accurate abilities, reject doubtful ones, or remove notes you no longer want.\n\n|cffffd1004. Lock Entry|r\nWhen you are satisfied with an entry, lock it to stop further changes. Confirmed abilities appear in NPC tooltips. Kill and discovery points continue, and ID Logs, Notes and received Rumours remain separate and editable. Unlock to resume recording and hide its abilities from tooltips.\n\n|cffffd1005. Browse|r\nUse creature-type filters and search to navigate the Bestiary. Click Index to reveal the A-Z tabs; click it again to hide them and clear the letter filter. Account-wide tracking is on by default in Options. Turn it off to use this character's separate journal; changes apply after /reload. Existing character journals merge once when first using account tracking.\n\n|cffffd1006. Share|r\nOutside combat, Share sends one creature to one named recipient. New basics cost 1 point; already-known basics are free. Each selected rumour costs 1 point. Choose any number of existing traits within the report size limit. All received traits are unverified Rumours with the offering character's name. Click Rumours beside Creature Notes to open or close its separate window. The green tick verifies a rumour and adds it to your journal; x rejects it. Unlock an entry before verifying. Matching manual records remove rumours, and repeated rejected claims are marked Previously rejected. Receiving alone never confirms traits or abilities; verified abilities use the normal entry-lock and tooltip rules.\n\nThe book shows earned progress. Share shows available points after spending and reservations. Send reserves the maximum cost; acceptance waives the basic-information point if the recipient already knows it and commits the final cost. Declines and pre-commit cancellation are free. Unknown delivery keeps the cost spent: reopen Share to retry the same report, at most three times within 24 hours. Receiving earns no points; later personal discovery still can. Entry deletion preserves credited milestones and spending; full reset erases them.",35,0,535)
+        local helpInstructions=label(helpBody,"|cffffd1001. Encounter|r\nTarget or mouse over an attackable NPC to add it to your Bestiary. Its name, creature type, location and observed level range are recorded automatically.\n\n|cffffd1002. Record|r\nReadable casts and safe post-combat observations are added as pending notes. Abilities the addon cannot observe directly can also be added manually. Damage ranges must be recorded manually from your own data. Equal-level observations are recommended so level scaling does not distort the results.\n\n|cffffd1003. Review|r\nOpen the Bestiary and select a creature to review its observations. Confirm accurate abilities, reject doubtful ones, or remove notes you no longer want.\n\n|cffffd1004. Lock Entry|r\nWhen you are satisfied with an entry, lock it to stop further changes. Confirmed abilities appear in NPC tooltips. You continue to earn knowledge from kills and discoveries, and ID Logs, Notes and received Rumours remain separate and editable. Unlock to resume recording and hide its abilities from tooltips.\n\n|cffffd1005. Browse|r\nUse creature-type filters and search to navigate the Bestiary. Click Index to reveal the A-Z tabs; click it again to hide them and clear the letter filter. Account-wide tracking is on by default in Options. Turn it off to use this character's separate journal; changes apply after /reload. Existing character journals merge once when first using account tracking.\n\n|cffffd1006. Share|r\nOutside combat, Share sends one creature to one named recipient. New basics cost 1 knowledge; already-known basics are free. Each selected rumour costs 1 knowledge. Choose any number of existing traits within the report size limit. All received traits are unverified Rumours with the offering character's name. Click Rumours beside Creature Notes to open or close its separate window. The green tick verifies a rumour and adds it to your journal; x rejects it. Unlock an entry before verifying. Matching manual records remove rumours, and repeated rejected claims are marked Previously rejected. Receiving alone never confirms traits or abilities; verified abilities use the normal entry-lock and tooltip rules.\n\nThe book shows knowledge earned. Share shows available knowledge after spending and reservations. Send reserves the maximum cost; acceptance waives the basic-information cost if the recipient already knows it and commits the final cost. Declines and pre-commit cancellation are free. Unknown delivery keeps the cost spent: reopen Share to retry the same report, at most three times within 24 hours. Receiving earns no knowledge; later personal discovery still can. Entry deletion preserves credited milestones and spending; full reset erases them.",35,0,535)
         local pointsBlock=CreateFrame("Frame",nil,helpBody,"BackdropTemplate")
         pointsBlock:SetPoint("TOPLEFT",helpInstructions,"BOTTOMLEFT",0,-18)
         pointsBlock:SetWidth(535)
         pointsBlock:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,insets={left=3,right=3,top=3,bottom=3}})
         pointsBlock:SetBackdropColor(0.12,0.08,0.03,0.35)
         pointsBlock:SetBackdropBorderColor(0.55,0.40,0.20,1)
-        pointsBlock.title=label(pointsBlock,"Points",14,-14,507,"GameFontNormalLarge")
+        pointsBlock.title=label(pointsBlock,"Knowledge",14,-14,507,"GameFontNormalLarge")
         pointsBlock.title:SetTextColor(1,0.82,0.14)
-        pointsBlock.awardHeading=label(pointsBlock,"Earning points",14,0,507,"GameFontNormal")
+        pointsBlock.awardHeading=label(pointsBlock,"Earning knowledge",14,0,507,"GameFontNormal")
         pointsBlock.awardHeading:SetTextColor(1,0.82,0.14)
         pointsBlock.awards=label(pointsBlock,"+1 for new creature discovery\n+1 for new level discovery on an existing creature\n+1 for new location discovery on an existing creature\n\n+1 for 10 kills\n+2 for 25 kills\n+3 for 50 kills\n\nThe first level and location are included in a new discovery. A sighting that reveals both a new level and location awards +1 total.",14,0,507,"GameFontHighlightSmall")
-        pointsBlock.spendHeading=label(pointsBlock,"Spending points",14,0,507,"GameFontNormal")
+        pointsBlock.spendHeading=label(pointsBlock,"Sharing knowledge",14,0,507,"GameFontNormal")
         pointsBlock.spendHeading:SetTextColor(1,0.82,0.14)
-        pointsBlock.spending=label(pointsBlock,"Use points to share creature information with another player.\n\n1 point for basic information; free if the recipient already knows it.\n1 point per selected rumour.\n\nSending reserves the maximum cost; points are spent after acceptance. Receiving information is free.",14,0,507,"GameFontHighlightSmall")
+        pointsBlock.spending=label(pointsBlock,"Use knowledge to share creature information with another player.\n\n1 knowledge for basic information; free if the recipient already knows it.\n1 knowledge per selected rumour.\n\nSending reserves the maximum cost; knowledge are spent after acceptance. Receiving information is free.",14,0,507,"GameFontHighlightSmall")
         help.pointsBlock=pointsBlock
         local helpDetails=CreateFrame("Frame",nil,helpBody)
         helpDetails:SetPoint("TOPLEFT",pointsBlock,"BOTTOMLEFT",-35,-18)
@@ -1986,7 +1986,7 @@ local ink = { 0.75, 0.8, 0.8 }
         options.showMinimapButton:SetScript("OnClick",function(self) journal:SetMinimapButton(self:GetChecked() == true) end)
         options.pointAnnouncements=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
         options.pointAnnouncements:SetPoint("TOPLEFT",30,-148); options.pointAnnouncements:SetSize(24,24)
-        label(optionsBody,"Show a chat message when a point is awarded",58,-154,470,"GameFontHighlightSmall")
+        label(optionsBody,"Show a chat message when knowledge is earned",58,-154,470,"GameFontHighlightSmall")
         options.pointAnnouncements:SetScript("OnClick",function(self) journal:SetPointAnnouncements(self:GetChecked() == true) end)
         options.creatureNotesFollowTarget=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
         options.creatureNotesFollowTarget:SetPoint("TOPLEFT",30,-456); options.creatureNotesFollowTarget:SetSize(24,24)
@@ -1997,7 +1997,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         if type(StaticPopupDialogs) == "table" then
             StaticPopupDialogs.AZEROTHFIELDBOOK_BESTIARY_RESET_CONFIRM = {
-                text = "Reset the " .. (journal:IsAccountWideTrackingActive() and "account-wide" or "character") .. " Azeroth Fieldbook Bestiary? This deletes its creature entries, notes, abilities, damage records and sharing points/history, plus this character's settings. Saved backups and the Event log are kept.",
+                text = "Reset the " .. (journal:IsAccountWideTrackingActive() and "account-wide" or "character") .. " Azeroth Fieldbook Bestiary? This deletes its creature entries, notes, abilities, damage records and sharing knowledge/history, plus this character's settings. Saved backups and the Event log are kept.",
                 button1 = YES, button2 = NO,
                 OnAccept = function()
                     journal:ResetDatabase()

@@ -160,7 +160,7 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
         frame.preview:SetText(selected and summary(selected) or (mode=="import" and "Preview the pasted backup before restoring." or ""))
         y=y+frame.preview:GetStringHeight()+16
         frame.notice:ClearAllPoints();frame.notice:SetPoint("TOPLEFT",30,-y)
-        frame.notice:SetText("Restore replaces creature records. Earned milestones and point spending are preserved; settings, Event log and active offers stay current.\n\nIn-game backups share the addon's saved files. Export a separate copy for protection if those files are lost. Log out or reload normally to save in-game backups to disk.")
+        frame.notice:SetText("Restore replaces creature records. Earned milestones and knowledge spending are preserved; settings, Event log and active offers stay current.\n\nIn-game backups share the addon's saved files. Export a separate copy for protection if those files are lost. Log out or reload normally to save in-game backups to disk.")
         local height=y+frame.notice:GetStringHeight()+16
         body:SetHeight(height)
         local windowHeight=math.min(720,math.max(340,frame.contentTop+height+58))

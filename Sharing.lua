@@ -47,19 +47,19 @@ function ns.CreateSharing(journal, env)
         local tx=store.outgoing
         if tx and tx.stage=="preflight" and preflightDeadline and clock()>=preflightDeadline then
             finish(tx,"failed","No response from " .. tx.recipient .. " after " .. PREFLIGHT_SECONDS ..
-                " seconds. Azeroth Fieldbook may be missing or disabled, or the player may be offline, restricted or lagging. No points spent. Check their name and try again.")
+                " seconds. Azeroth Fieldbook may be missing or disabled, or the player may be offline, restricted or lagging. No knowledge spent. Check their name and try again.")
         end
     end
     local function unknown(tx,message)
         purge(tx.id,tx.recipient)
-        tx.stage,tx.message="unknown",message .. " Points remain spent; retry this transaction."
+        tx.stage,tx.message="unknown",message .. " Knowledge remains spent; retry this transaction."
         notify()
     end
     local function incompatible(tx,version)
         local message=validVersion(version)
             and ("Version mismatch: you have " .. env.addonVersion .. "; " .. tx.recipient .. " has " .. version .. ". Both players need the same addon version.")
             or "Receiver cannot confirm a compatible addon version. Both players need the same updated build."
-        if tx.spent then unknown(tx,message) else finish(tx,"failed",message .. " No points spent.") end
+        if tx.spent then unknown(tx,message) else finish(tx,"failed",message .. " No knowledge spent.") end
         send("X",tx.id,tx.recipient)
     end
     local function prune()
@@ -86,7 +86,7 @@ function ns.CreateSharing(journal, env)
         local count=math.ceil(#tx.payload/CHUNK)
         for i=1,count do
             if not send("O",tx.id,tx.recipient,i .. "~" .. count .. "~" .. tx.payload:sub((i-1)*CHUNK+1,i*CHUNK)) then
-                if tx.spent then unknown(tx,"Send queue full.") else finish(tx,"failed","Send queue full; no points spent.") end
+                if tx.spent then unknown(tx,"Send queue full.") else finish(tx,"failed","Send queue full; no knowledge spent.") end
                 return
             end
         end
@@ -104,7 +104,7 @@ function ns.CreateSharing(journal, env)
         end
         purge(tx.id,tx.recipient)
         tx.stage,tx.deadline="committed",env.now()+60
-        tx.message="Accepted. " .. tx.cost .. " points spent; awaiting import acknowledgement."
+        tx.message="Accepted. " .. tx.cost .. " knowledge spent; awaiting import acknowledgement."
         send("C",tx.id,tx.recipient)
         notify()
         if adjusted and costAdjusted then costAdjusted(tx) end
@@ -114,11 +114,11 @@ function ns.CreateSharing(journal, env)
     if active(store.outgoing) then
         if committed(store.outgoing) then
             store.outgoing.stage="unknown"
-            store.outgoing.message="Reload interrupted delivery. Points remain spent; retry this transaction."
+            store.outgoing.message="Reload interrupted delivery. Knowledge remains spent; retry this transaction."
         else
             journal:ReleaseShare(store.outgoing.id)
             store.outgoing.stage="cancelled"
-            store.outgoing.message="Reload cancelled the uncommitted offer; no points spent."
+            store.outgoing.message="Reload cancelled the uncommitted offer; no knowledge spent."
         end
     end
     for k,item in pairs(store.incoming) do
@@ -173,20 +173,20 @@ function ns.CreateSharing(journal, env)
         local payload,err=schema.Encode(value)
         if not payload then return nil,err end
         local cost=schema.Cost(value.rumours)
-        if not journal:ReserveShare(id,cost) then return nil,"Insufficient available points." end
+        if not journal:ReserveShare(id,cost) then return nil,"Insufficient available knowledge." end
         local tx={id=id,recipient=recipient,payload=payload,cost=cost,basicCost=1,created=env.now(),
             stage="preflight",deadline=env.now()+PREFLIGHT_SECONDS,retries=0,
-            message="Checking recipient compatibility (up to " .. PREFLIGHT_SECONDS .. " seconds); points reserved."}
+            message="Checking recipient compatibility (up to " .. PREFLIGHT_SECONDS .. " seconds); knowledge reserved."}
         store.outgoing=tx
         preflightDeadline=clock()+PREFLIGHT_SECONDS
-        if not send("H",id,recipient,env.addonVersion) then finish(tx,"failed","Send queue full; no points spent."); return nil,tx.message end
+        if not send("H",id,recipient,env.addonVersion) then finish(tx,"failed","Send queue full; no knowledge spent."); return nil,tx.message end
         notify()
         return tx
     end
     function engine:Cancel()
         local tx=store.outgoing
         if not active(tx) or tx.spent then return false end
-        finish(tx,"cancelled","Cancelled; no points spent.")
+        finish(tx,"cancelled","Cancelled; no knowledge spent.")
         send("X",tx.id,tx.recipient)
         return true
     end
@@ -213,7 +213,7 @@ function ns.CreateSharing(journal, env)
     function engine:CloseUnknown()
         local tx=store.outgoing
         if not tx or tx.stage~="unknown" or self:CanRetry() then return false end
-        finish(tx,"unresolved","Delivery unresolved; points remain spent. No further retries for this report.")
+        finish(tx,"unresolved","Delivery unresolved; knowledge remains spent. No further retries for this report.")
         return true
     end
     function engine:Accept(item)
@@ -336,7 +336,7 @@ function ns.CreateSharing(journal, env)
             commit(tx,tonumber(body))
         elseif kind=="D" and expected then
             if tx.spent then unknown(tx,"Receiver declined or could not stage the retry.")
-            else finish(tx,"declined","Offer declined, invalid, or receiver busy; no points spent.") end
+            else finish(tx,"declined","Offer declined, invalid, or receiver busy; no knowledge spent.") end
         elseif kind=="X" and item then
             store.incoming[k]=nil; purge(id,sender); notify()
         elseif kind=="C" then
@@ -351,7 +351,7 @@ function ns.CreateSharing(journal, env)
             if imported then imported(item.report.creatureID) end
             notify()
         elseif kind=="K" and expected and tx.spent then
-            finish(tx,"complete","Receipt acknowledged by " .. sender .. ". Spent " .. tx.cost .. " points.")
+            finish(tx,"complete","Receipt acknowledged by " .. sender .. ". Spent " .. tx.cost .. " knowledge.")
         elseif kind=="E" and expected and tx.spent then
             unknown(tx,"Recipient could not import the report (storage or validation changed).")
         end
@@ -362,7 +362,7 @@ function ns.CreateSharing(journal, env)
         local now,tx=env.now(),store.outgoing
         if active(tx) and tx.stage~="unknown" and tx.stage~="preflight" and now>tx.deadline then
             if tx.spent then unknown(tx,"Delivery acknowledgement timed out.")
-            else finish(tx,"failed","Offer expired without acceptance; no points spent.") end
+            else finish(tx,"failed","Offer expired without acceptance; no knowledge spent.") end
         end
         if env.blocked() or now<nextSend or #queue==0 then return end
         -- One small packet per second, no catch-up bursts. This is deliberately
@@ -375,7 +375,7 @@ function ns.CreateSharing(journal, env)
         table.remove(queue,1)
         if not ok and active(tx) and packet.id==tx.id and schema.SameCharacter(packet.target,tx.recipient) then
             if tx.spent then unknown(tx,"Transport failed: " .. (reason or "unavailable") .. ".")
-            else finish(tx,"failed","Transport failed: " .. (reason or "unavailable") .. "; no points spent.") end
+            else finish(tx,"failed","Transport failed: " .. (reason or "unavailable") .. "; no knowledge spent.") end
         end
     end
     function engine:Reset()

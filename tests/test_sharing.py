@@ -428,7 +428,7 @@ pump(1);eq(tx.stage,'failed');eq(a.j:GetSharingBalance(),10)
 eq(select(3,a.j:GetSharingBalance()),0);eq(select(4,a.j:GetSharingBalance()),0)
 assert(not a.engine:HasActiveOutgoing() and a.engine:GetPreflightSecondsRemaining()==nil)
 assert(tx.message:find('No response from Bob Stonewell after 20 seconds.',1,true))
-assert(tx.message:find('may be missing or disabled',1,true) and tx.message:find('No points spent.',1,true))
+assert(tx.message:find('may be missing or disabled',1,true) and tx.message:find('No knowledge spent.',1,true))
 assert(a.engine:Start(capture,'Bob Stonewell',{}),'a timed-out check allows a new attempt')
 
 -- Lagged replies inside the deadline still proceed to normal consent/import.

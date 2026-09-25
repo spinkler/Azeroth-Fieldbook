@@ -105,7 +105,7 @@ local function announceBestiary(entry, title, amount, observation, categoryOnly,
         if positiveID(observation.level) then details[#details + 1] = "Lvl" .. observation.level end
         if publicString(observation.location) then details[#details + 1] = observation.location end
     end
-    local reward = amount and ("+" .. amount .. (amount == 1 and " point: " or " points: ")) or ""
+    local reward = amount and ("+" .. amount .. " knowledge: ") or ""
     local text="|cffffd100[" .. reward .. title .. "]|r Bestiary: " .. name
         .. " |cff999999(" .. table.concat(details, " • ") .. ")|r"
     if not skipLog then journal:RecordEvent(text,{creatureID=entry.id,title=title,points=amount,level=observation.level,location=observation.location}) end
@@ -368,9 +368,9 @@ local function initialize()
     if journal and journal.sharing then
         journal.sharing:SetImportedCallback(function() if book then book:Refresh() end end)
         journal.sharing:SetCostAdjustedCallback(function(tx)
-            say("|cffffd100[1 point saved]|r " .. tx.recipient ..
+            say("|cffffd100[1 knowledge saved]|r " .. tx.recipient ..
                 " already has this creature's basic information; its cost was waived. Charged " ..
-                tx.cost .. (tx.cost==1 and " point." or " points."))
+                tx.cost .. " knowledge.")
         end)
     end
     if ns.MinimapButton then ns.MinimapButton:Initialize(db, book) end
@@ -485,7 +485,7 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
     if command == "wipe" or command == "reset" or command == "reset confirm" then
         wipeDeadline = GetTime() + 60
         local scope = trackingDB ~= db and "the account-wide" or "this character's"
-        say("WARNING: wipe permanently deletes ALL of " .. scope .. " Bestiary entries, abilities, notes, damage records and sharing points/history, plus this character's settings.")
+        say("WARNING: wipe permanently deletes ALL of " .. scope .. " Bestiary entries, abilities, notes, damage records and sharing knowledge/history, plus this character's settings.")
         say("Command 1/2 accepted. Type /fieldbook wipe confirm within 60 seconds to permanently delete it.")
     elseif command == "wipe confirm" then
         if wipeDeadline == 0 or GetTime() > wipeDeadline then
@@ -534,7 +534,7 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         local lines = {}
         ns.KillDiagnostics:Report(function(line) lines[#lines + 1] = line end)
         if ns.ShowDebugReport then ns.ShowDebugReport(table.concat(lines, "\n")) end
-        say("Kill diagnostic snapshot opened. Decision lines separate kill awards from discovery points.")
+        say("Kill diagnostic snapshot opened. Decision lines separate kill awards from discovery knowledge.")
     elseif command == "debug on" or command == "debug off" then
         local enabled = command == "debug on"
         if ns.CastIDs then ns.CastIDs:SetDebug(enabled) end

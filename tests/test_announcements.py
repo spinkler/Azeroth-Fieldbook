@@ -7,7 +7,7 @@ PREFIX = '|cff80d0ffAzeroth Fieldbook:|r '
 
 
 def announcement(title, details, points=1):
-    reward = '' if points is None else f'+{points} {"point" if points == 1 else "points"}: '
+    reward = '' if points is None else f'+{points} knowledge: '
     return f'{PREFIX}|cffffd100[{reward}{title}]|r Bestiary: Forest Lurker |cff999999({details})|r'
 
 
@@ -129,8 +129,8 @@ class AnnouncementTests(unittest.TestCase):
             costAdjusted({recipient='Bob Stonewell',cost=2})
         ''')
         self.assertEqual(self.messages(), [
-            f'{PREFIX}|cffffd100[1 point saved]|r Bob Stonewell already has this creature\'s basic information; '
-            'its cost was waived. Charged 2 points.'
+            f'{PREFIX}|cffffd100[1 knowledge saved]|r Bob Stonewell already has this creature\'s basic information; '
+            'its cost was waived. Charged 2 knowledge.'
         ])
 
 

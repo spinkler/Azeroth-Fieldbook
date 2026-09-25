@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.78 (Beta)
+# Azeroth Fieldbook 0.9.79 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,11 +6,11 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.78 includes sharing, addon-version compatibility
+spell databases. Version 0.9.79 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.78.
+are not part of version 0.9.79.
 
 ## Installation and opening
 
@@ -56,20 +56,20 @@ windows shrink to fit the screen. Clicking an
 addon window or one of its controls brings that window to the front of the other
 addon windows.
 
-The list button left of Options opens the **Event log**. It records timestamped discoveries, point awards and observed-cast alerts even with chat announcements disabled. This per-character history starts on first use, survives reloads and Bestiary resets, and keeps all events with newest-first pages of 50. Earlier events cannot be reconstructed.
+The list button left of Options opens the **Event log**. It records timestamped discoveries, knowledge awards and observed-cast alerts even with chat announcements disabled. This per-character history starts on first use, survives reloads and Bestiary resets, and keeps all events with newest-first pages of 50. Earlier events cannot be reconstructed.
 
 The gold cog immediately left of **?** opens **Options**, containing all settings
 and **Reset Bestiary**, **Backup Bestiary** and **Restore Bestiary**. **?** opens instructions and About. Both buttons toggle
 their page and close the other page when switching between Help and Options.
 Both pages share the last top-left position, so dragging either page also sets
-where the other opens. Help includes a separate **Points** block with sections
-for earning points through discovery and kills, and spending them on sharing.
+where the other opens. Help includes a separate **Knowledge** block with sections
+for earning knowledge through discovery and kills, and using it to share creature information.
 
 **Backup Bestiary** saves a dated copy immediately and opens the backup window.
 It keeps the five most recent manual backups for the active account-wide or
 character Bestiary; saving another replaces the oldest. Backups survive Reset
 Bestiary. They include creature records, abilities, damage observations, notes,
-locks, rumours and point history.
+locks, rumours and knowledge history.
 
 For a separate copy outside the game, select **Export selected**, press Ctrl+C,
 and paste into a text document to save. This includes personal creature notes.
@@ -84,8 +84,8 @@ without changing the journal. Portable backups support up to 4 MiB of text.
 
 Restore replaces creature records and saves the displaced records as **Before
 last restore**, a separate recovery copy that can be selected to undo a mistake.
-Current settings, Event log and active offers remain intact. Point history is
-combined without repeating credited milestones or refunding spent points.
+Current settings, Event log and active offers remain intact. Knowledge history is
+combined without repeating credited milestones or refunding spent knowledge.
 Restores are available outside combat and need no reload to take effect.
 
 **Filter: Locations** fits its content up to 15 rows, then scrolls using the same
@@ -100,13 +100,13 @@ uses the current character's separate journal. Changes apply after `/reload`.
 
 Each character's existing journal is merged into the account journal once, the
 first time that character loads with account tracking enabled. Creature records,
-kills, discoveries and earned/spent points combine; repeat logins do not import
+kills, discoveries and earned/spent knowledge combine; repeat logins do not import
 them again. Abilities, traits, locations, damage records and rumours are combined.
 Notes combine within the existing editor limits; existing account decisions win
 conflicts. Original character journals retain all their data, including conflicting
 notes and spell IDs beyond the ten-ID limit. Switching modes after the first import
 keeps the two journals independent. Sharing transactions remain owned by the
-character that started them, using the active journal's point balance.
+character that started them, using the active journal's knowledge balance.
 
 Target or mouse over an attackable NPC to record its readable name, creature
 type, level range, location and model. Players, pets, vehicles and
@@ -138,7 +138,7 @@ remain manual where the client does not expose reliable addon-readable evidence.
 
 Only confirmed abilities from a locked creature entry appear in NPC tooltips.
 Locking freezes the creature's recorded abilities, traits, damage observations,
-and metadata. Kill and discovery-point progress continue while locked. Unlock to resume recording.
+and metadata. Knowledge from kills and discoveries continues while locked. Unlock to resume recording.
 Personal ID Logs and Notes remain editable while locked.
 
 On an unlocked entry, **Resolve** beside an ability looks up its recorded spell
@@ -151,20 +151,20 @@ is confirmed with a spell ID; pending or unlinked abilities retain it.
 Delete removes the selected creature and its saved records after you type
 `delete` and press Enter. Future encounters can record it again. Previously
 credited milestones and spending survive deletion, so deleting and rediscovering
-an entry cannot repeatedly earn its points. Ability effects include
+an entry cannot repeatedly earn its knowledge. Ability effects include
 school-specific resistance and immunity tags.
 
-Each personal creature discovery awards 1 point, including its initial level and zone. Later
-sightings revealing a new level, zone, or both award 1 discovery point per sighting.
+Each personal creature discovery awards 1 knowledge, including its initial level and zone. Later
+sightings revealing a new level, zone, or both award 1 knowledge per sighting.
 Repeat sightings award nothing. Ten kills award a silver star and 1 additional
-point; 25 kills award a gold star and 2 more points; 50 kills award a gold crown
-and 3 more points, for 6 kill points total. The crown replaces the star beside
+knowledge; 25 kills award a gold star and 2 more knowledge; 50 kills award a gold crown
+and 3 more knowledge, for 6 knowledge from kills in total. The crown replaces the star beside
 the kill count. Existing personal entries with 50 or more kills receive any
-uncredited crown points on load. Already-earned kill points remain credited when
+uncredited crown knowledge on load. Already-earned kill knowledge remain credited when
 thresholds change and cannot be earned twice, including earlier silver credit. Existing
 entries retain their previous legitimate total through a one-time migration,
 including saved discovery progress and legacy recorded level endpoints. The
-book shows lifetime **earned** points. Sharing shows **available** points:
+book shows lifetime **knowledge earned**. Sharing shows **available** knowledge:
 earned minus spending and active reservations. Spending never removes kills,
 stars, crowns or discovery progress.
 
@@ -172,14 +172,14 @@ stars, crowns or discovery progress.
 
 Options includes **Block incoming offers**, off by default and saved per character.
 Enable it to automatically decline new offers and close unaccepted offers, with
-no points spent by the sender. Outgoing sharing and already accepted deliveries
+no knowledge spent by the sender. Outgoing sharing and already accepted deliveries
 continue normally. Turn it off to receive offers again.
 
 Select a creature, press **Share**, enter one recipient's **full character name**
 (including their surname if they have one), and select any existing traits you
 want to share from the two-column list. Self-offers are rejected before any
-points are reserved; matching ignores capitalization and extra spaces. Each selected rumour costs one additional
-point; there is no two-rumour selection cap. Names are realm-free; no realm is required or
+knowledge are reserved; matching ignores capitalization and extra spaces. Each selected rumour costs one additional
+knowledge; there is no two-rumour selection cap. Names are realm-free; no realm is required or
 appended. Spaces, localized letters, apostrophes and hyphens in names are preserved.
 The composer captures the creature when opened; changing targets or book pages
 does not change the report. Both players need this compatible development build
@@ -187,16 +187,16 @@ and must be outside combat and chat restrictions. Both players must have the
 **same installed addon version**. Sharing protocol 4 exchanges the TOC version
 before offering a report and when retrying a paid transaction. A version mismatch
 shows both version numbers when available, sends no report data and spends no
-points on a new offer. The initial compatibility check shows a **20-second
+knowledge on a new offer. The initial compatibility check shows a **20-second
 countdown**. With no reply, it explains that the addon may be missing/disabled or
-the player offline, restricted or lagging, releases reserved points, and enables
+the player offline, restricted or lagging, releases reserved knowledge, and enables
 a fresh send attempt. Silence alone is not treated as proof of a missing addon.
 Native delivery to a recipient with a surname, acknowledgement,
 and separate attributed imports were confirmed in game under the earlier pricing.
 The new pricing and larger selections have automated coverage; remaining live checks are listed in
 [tests/SHARING.md](tests/SHARING.md).
 
-**Send offer** enables when a valid creature report is captured, enough points
+**Send offer** enables when a valid creature report is captured, enough knowledge
 are available, no outgoing report is pending or unresolved, and addon messaging
 is ready outside combat and chat restrictions. The status text identifies the
 current blocker. Character identity and messaging registration are retried at
@@ -205,14 +205,14 @@ self-sharing and receiver compatibility are checked when sending.
 
 | Report | Sender cost |
 | --- | ---: |
-| Name, NPC ID, creature type, recorded levels and locations | 1 point if new; otherwise free |
-| Those basics plus one unverified rumour | 2 points |
-| Those basics plus two unverified rumours | 3 points |
-| Those basics plus three unverified rumours | 4 points |
+| Name, NPC ID, creature type, recorded levels and locations | 1 knowledge if new; otherwise free |
+| Those basics plus one unverified rumour | 2 knowledge |
+| Those basics plus two unverified rumours | 3 knowledge |
+| Those basics plus three unverified rumours | 4 knowledge |
 
-Total cost is **1 point for basic information + 1 point per selected rumour**.
+Total cost is **1 knowledge for basic information + 1 knowledge per selected rumour**.
 Selecting more rumours immediately updates the total and resulting balance;
-insufficient available points disable sending.
+insufficient available knowledge disable sending.
 
 Individual pending or confirmed ability names (including manual abilities),
 offensive schools, school resistances/immunities and behaviours are selectable.
@@ -224,17 +224,17 @@ claim, its personal journal record is eligible for sharing like your other recor
 A spell ID identifies a spell; it is not proof that this creature casts it.
 
 Opening, previewing and cancelling the composer are free. **Send offer** reserves
-the maximum cost (1 basic-information point plus the selected rumours). An unavailable or incompatible receiver, decline, cancellation, or
+the maximum cost (1 basic-information cost plus the selected rumours). An unavailable or incompatible receiver, decline, cancellation, or
 timeout **before commit** releases that reservation. After the recipient accepts,
 their current journal determines whether the report adds any new basic information.
-If those basics are already known, the sender commits one point less, releases
+If those basics are already known, the sender commits 1 less knowledge, releases
 the unused reservation, and receives a chat notice and a Share status explanation.
 This also applies when the recipient has broader levels or more locations; new
-or conflicting basic information retains its one-point cost. Each selected rumour
-still costs one point. A matching basics-only report settles at zero points.
+or conflicting basic information retains its cost of one knowledge. Each selected rumour
+still costs one knowledge. A matching basics-only report settles at zero knowledge.
 The sender commits the final cost before authorizing import. A receipt acknowledgement
 completes the report; an API success alone does not. A missing acknowledgement
-leaves delivery **unknown**, with the points still spent. Reopen Share and use
+leaves delivery **unknown**, with the knowledge still spent. Reopen Share and use
 **Retry status**: the same transaction can be reconciled at most three times
 within 24 hours, without a second charge. After that it can be closed as
 unresolved, with no refund. A new report is priced separately.
@@ -268,7 +268,7 @@ A later report of the same claim shows **Previously rejected** in the incoming
 offer and the Rumours list, even from another sender. Shared basic reports are
 also listed there so conflicting or locked information remains inspectable.
 
-Receiving and rumour edits award **zero** points. A later genuine encounter can
+Receiving and rumour edits award **zero** knowledge. A later genuine encounter can
 still earn the first personal discovery and previously uncredited levels/zones,
 even if the report already contained them. Normal reloads preserve earned credit,
 spending, accepted incoming reports and receipt deduplication. Uncommitted outgoing
@@ -291,13 +291,13 @@ is released. The minus and plus buttons beside **100%** apply five-percentage-po
 changes immediately, so you can adjust scale without dragging the slider.
 Offenses, Defenses and Behaviour share a position and replace
 one another by default; disable that option to keep multiple windows open.
-Point award chat messages are enabled by default and can be disabled. Discoveries
-and their point awards share one Bestiary announcement, using the creature's
+Knowledge award chat messages are enabled by default and can be disabled. Discoveries
+and their knowledge awards share one Bestiary announcement, using the creature's
 resolved name and observed type, level and location; unavailable details are
 omitted. Kill rewards show the name and type with 10/25/50-kill milestones.
 The addon prefix is cyan, bracketed rewards are yellow and parenthesized details
-are grey. With point messages disabled, the separate discovery setting can still
-show a discovery notice without its point amount.
+are grey. With knowledge messages disabled, the separate discovery setting can still
+show a discovery notice without its knowledge amount.
 
 ## Spell IDs and personal notes
 
@@ -382,7 +382,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.78 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.79 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,
@@ -398,9 +398,9 @@ Python/lupa Lua 5.1 tests in `tests/` cover observation boundaries, persistence,
 legacy migration, encounter attribution, filters, manual notes, damage records,
 creature traits, kill counting, tooltips and mocked native UI construction.
 Account-tracking tests cover migration, replay protection, separate character
-journals, shared event recording, point balances, transfer ownership and resets.
+journals, shared event recording, knowledge balances, transfer ownership and resets.
 Backup tests cover literal export/import, Unicode notes, malformed data, snapshot
-isolation, retention, reset/reload recovery, tracking scopes, point continuity,
+isolation, retention, reset/reload recovery, tracking scopes, knowledge continuity,
 live transfers and the preview/confirmation UI workflow.
 Sharing adds simulated two-client protocol tests, enum/error handling, migration,
 credit preservation, import isolation, malformed reports, consent, retries and

@@ -1,6 +1,76 @@
 # Changelog
 
-## v0.9.78-beta - 2026-09-25
+## v0.9.79-beta - 2026-09-25
+
+This release includes all changes since v0.9.74-beta (local iterations v0.9.75
+through v0.9.79). The previous-push and previous-release baseline is commit
+821e9fcc7a14cb3293ffaa6c1479eed317d7cd82. Both players must use the same addon
+version to share creatures.
+
+### Knowledge
+
+- Rename player-facing points to Knowledge throughout the Bestiary, sharing, chat announcements, Options, Help and backup notices. The main total now reads “N knowledge earned”.
+- Preserve existing balances, discovery and kill awards, sharing costs, and saved-data compatibility; this is a terminology change only.
+
+
+### Automatic locking
+
+- Add an enabled-by-default auto-lock checkbox in Options with an editable
+  threshold of 10 kills without changes to recorded creature information,
+  abilities, traits, damage or notes.
+- Reset the streak on content changes, manual unlock or toggling auto-lock.
+  Repeated sightings and unchanged edits retain progress; kills and knowledge alone
+  do not reset it. Streaks persist across sessions, existing entries start without
+  retroactive credit, and automatic locks appear in Event log. Pending abilities
+  remain pending.
+
+### Bestiary backups
+
+- Add Backup Bestiary and Restore Bestiary beside Reset Bestiary, separated by
+  a small gap. Keep five dated manual backups for the active account or character
+  Bestiary, surviving resets, plus a separate recovery copy saved before restore.
+- Preview backup dates, sources and creature/ability/note counts before confirming
+  replacement. Restore immediately outside combat and refresh the creature views.
+  Preserve settings, Event log, earned milestones, spending and active offers;
+  never replay old transactions or refund knowledge already spent.
+- Support copy/paste export and import, including personal notes, with instructions
+  for keeping a separate copy outside the game. Validate a bounded literal format
+  before restoring; incomplete or unsupported input changes nothing and is never
+  executed as Lua. In-game backups share the addon's saved files and are written
+  to disk on normal logout or reload.
+- Use the existing parchment, title bar, scrollbar, scale, focus and saved-position
+  styling in a backup window sized to its content. Reset confirmation explains
+  that saved backups and Event log are retained.
+
+### Ability effects
+
+- Add Heal immediately above Heal over Time. Move following sections down and
+  extend the Effects window to retain their existing spacing.
+
+### First encounter dates
+
+- Record the date and time of each creature's first personal encounter and show
+  it below the creature name in Creature Notes, using local time and grey styling.
+  Expand the window slightly to preserve spacing around the spell-ID controls.
+- Recover older dates from scored discovery events where available. Leave
+  undated personal entries as Unknown, and shared-only entries as Not personally
+  encountered until an actual observation. Repeated sightings never replace the date.
+- Keep the earliest known date through account migration, deletion/re-encounter,
+  reloads and backup export/import/restore. Add regression coverage for these
+  paths, missing or restricted timestamps, and the Creature Notes display.
+
+### Documentation and validation
+
+- Update usage documentation for auto-locking, backups and encounter dates, and
+  keep the TOC and README version references synchronized.
+- Add tests for persistent auto-lock streaks, backup isolation and retention,
+  export/import validation, recovery, knowledge continuity and live sharing state,
+  encounter timestamps and account migration. Extend mocked UI coverage for
+  restore preview/confirmation and Creature Notes. All 23 test files pass;
+  live in-game rendering remains a separate verification step.
+
+
+## v0.9.78 - Unreleased
 
 This release includes all changes since v0.9.74-beta (local iterations v0.9.75
 through v0.9.78). The previous-push and previous-release baseline is commit

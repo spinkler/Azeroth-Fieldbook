@@ -229,10 +229,10 @@ do
     local accepted=e:GetOutgoing()
     e:Receive('AFBShare','4~R~'..accepted.id..'~'..buildVersion,'WHISPER','Bob Stonewell')
     e:Receive('AFBShare','4~A~'..accepted.id..'~0','WHISPER','Bob Stonewell')
-    assert(window.cost.text:find('Basic info: 0',1,true) and window.cost.text:find('Total cost: 0 points',1,true))
-    assert(window.status.text:find('1-point cost was waived',1,true),'accepted discount is visible to the sender')
+    assert(window.cost.text:find('Basic info: 0',1,true) and window.cost.text:find('Total cost: 0 knowledge',1,true))
+    assert(window.status.text:find('cost of 1 knowledge was waived',1,true),'accepted discount is visible to the sender')
     e:Receive('AFBShare','4~K~'..accepted.id,'WHISPER','Bob Stonewell')
-    assert(window.status.text:find('This report cost 0 points.',1,true),'completed report retains the actual discounted cost')
+    assert(window.status.text:find('This report cost 0 knowledge.',1,true),'completed report retains the actual discounted cost')
     eq(select(3,j:GetSharingBalance()),0)
     window.cancel.scripts.OnClick()
 end
@@ -350,7 +350,7 @@ while j:GetSharingBalance()>1 do
     assert(j:ReserveShare(id,math.min(2,j:GetSharingBalance()-1)));held[#held+1]=id
 end
 composer.rows[1].scripts.OnClick(composer.rows[1])
-assert(not composer.send.enabled and composer.status.text:find('Insufficient points',1,true))
+assert(not composer.send.enabled and composer.status.text:find('Insufficient knowledge',1,true))
 composer.rows[2].scripts.OnClick(composer.rows[2]);composer.rows[3].scripts.OnClick(composer.rows[3])
 assert(not composer.send.enabled,'one available point cannot pay for even one rumour')
 composer.rows[4].scripts.OnClick(composer.rows[4]);assert(composer.send.enabled,'one available point enables basic-only report')
@@ -466,7 +466,7 @@ b:Receive('AFBShare','4~H~'..offered.transaction..'~'..buildVersion,'WHISPER','A
 n=math.ceil(#encoded/180)
 for i=1,n do b:Receive('AFBShare','4~O~'..offered.transaction..'~'..i..'~'..n..'~'..encoded:sub((i-1)*180+1,i*180),'WHISPER','Alice Sunstrider') end
 assert(receiver.shown and receiver.preview.text:find('Previously rejected',1,true),'incoming preview warns before acceptance')
-assert(receiver.preview.text:find('basic-information cost will be waived',1,true),'receiver sees that matching basics are free')
+assert(receiver.preview.text:find('basic-information cost of 1 knowledge will be waived',1,true),'receiver sees that matching basics are free')
 receiver.accept.scripts.OnClick()
 b:Receive('AFBShare','4~C~'..offered.transaction,'WHISPER','Alice Sunstrider')
 assert(bob:GetRumours(42)[1].previouslyRejected)
@@ -560,9 +560,9 @@ end
 do
     main.help.scripts.OnShow(main.help)
     local block=main.help.pointsBlock
-    eq(block.title.text,'Points')
+    eq(block.title.text,'Knowledge')
     assert(block.awards.text:find('+3 for 50 kills',1,true))
-    assert(block.spending.text:find('1 point per selected rumour',1,true))
+    assert(block.spending.text:find('1 knowledge per selected rumour',1,true))
     assert(block.spending.text:find('free if the recipient already knows it',1,true))
     local bottom=0
     for _,text in ipairs({block.title,block.awardHeading,block.awards,block.spendHeading,block.spending}) do
