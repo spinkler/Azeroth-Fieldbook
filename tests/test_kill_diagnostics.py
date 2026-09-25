@@ -24,8 +24,8 @@ class KillDiagnostics(unittest.TestCase):
         self.assertIn('tapDenied=false', report)
         self.assertIn('savedKills=0; killTierPoints=0; totalEarned=1', report)
         self.assertIn('sample only (no credit inferred from unit state)', report)
-        self.assertNotIn('silver star', lua.eval('output()'))
-        self.assertNotIn('gold star', lua.eval('output()'))
+        self.assertNotIn('10 kills!', lua.eval('output()'))
+        self.assertNotIn('25 kills!!', lua.eval('output()'))
         lua.execute('beforeRows=#ns.KillDiagnostics.rows; beforeMessages=#messages; tick(); tick()')
         self.assertEqual(lua.eval('#ns.KillDiagnostics.rows'), lua.eval('beforeRows'))
         self.assertEqual(lua.eval('#messages'), lua.eval('beforeMessages'), 'recording does not flood chat')
@@ -145,13 +145,14 @@ class KillDiagnostics(unittest.TestCase):
     def test_live_decisions_report_actual_awards_duplicates_and_expiry(self):
         lua = new_client(diagnostics=True)
         lua.execute(r'''
+            for i=1,8 do beginKill('earlier'..i); finishKill() end
             SlashCmdList.AZEROTHFIELDBOOK('debug kills on')
             beginKill('first'); finishKill()
             beginKill('earned'); finishKill()
             fire('UNIT_DIED',units.target.guid)
             beginKill('expired')
             fire('PARTY_KILL',UnitGUID('player'),units.target.guid)
-            clock=11; units.target.dead=true; fire('UNIT_DIED',units.target.guid)
+            clock=clock+11; units.target.dead=true; fire('UNIT_DIED',units.target.guid)
             SlashCmdList.AZEROTHFIELDBOOK('debug kills')
         ''')
         report = lua.eval('copiedReport')
@@ -160,7 +161,7 @@ class KillDiagnostics(unittest.TestCase):
         self.assertIn('accepted; killAward=1; killPointsAward=1', report)
         self.assertIn('duplicate; killAward=0; killPointsAward=0', report)
         self.assertIn('expired: observation or pending evidence', report)
-        self.assertEqual(lua.eval('kills()'), 2)
+        self.assertEqual(lua.eval('kills()'), 10)
 
 
 if __name__ == '__main__':

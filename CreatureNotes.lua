@@ -1,6 +1,6 @@
 local _, ns = ...
 
-function ns.CreateCreatureNotesWindow(journal)
+function ns.CreateCreatureNotesWindow(journal,getBook)
     local frame, selected, entry, loading, expanded, pinned
     local controller = {}
     local function label(parent, value, x, y, width, font)
@@ -37,7 +37,8 @@ function ns.CreateCreatureNotesWindow(journal)
         if not frame then return end
         local log = selected and journal:GetIDNotes(selected)
         local basic=entry and journal.GetBasicInfo and journal:GetBasicInfo(selected) or entry
-        frame.creature:SetText(basic and basic.name or "Select a creature in the Bestiary.")
+        frame.creature:SetText(basic and basic.name and (basic.name .. " |cff999999[#" .. selected .. "]|r")
+            or "Select a creature in the Bestiary.")
         frame.spellInput:SetShown(entry ~= nil)
         frame.inputLabel:SetShown(entry ~= nil)
         frame.notesToggle:SetEnabled(entry ~= nil)
@@ -69,7 +70,10 @@ function ns.CreateCreatureNotesWindow(journal)
     local function build()
         if frame then return end
         frame=CreateFrame("Frame","AzerothFieldbookCreatureNotes",UIParent,"BackdropTemplate")
-        frame:SetSize(400,176); frame:SetPoint("CENTER",UIParent,"CENTER",200,0)
+        frame:SetSize(400,176)
+        local book=getBook and getBook()
+        if book then frame:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0)
+        else frame:SetPoint("CENTER",UIParent,"CENTER",200,0) end
         frame:SetFrameStrata("DIALOG"); frame:SetClampedToScreen(true)
         if UIParent.GetWidth and UIParent.GetHeight then
             frame:SetScale(math.min(1,(UIParent:GetWidth()-30)/(400*1.5),(UIParent:GetHeight()-30)/(570*1.5)))
@@ -193,7 +197,7 @@ function ns.CreateCreatureNotesWindow(journal)
             frame.spellInput:ClearFocus(); frame.notes:ClearFocus(); frame:StopMovingOrSizing()
         end)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookCreatureNotes" end
-        if ns.UIScale then ns.UIScale:Register(frame) end
+        if ns.UIScale then ns.UIScale:Register(frame,"AzerothFieldbookCreatureNotes") end
         frame:Hide()
     end
     function controller:SetCreature(id)
@@ -210,6 +214,7 @@ function ns.CreateCreatureNotesWindow(journal)
         loading=false
         render()
     end
+    function controller:GetFrame() return frame end
     function controller:Refresh()
         self:SetCreature(selected)
     end

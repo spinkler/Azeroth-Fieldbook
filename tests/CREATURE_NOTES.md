@@ -4,7 +4,7 @@
    button shares the creature-name line and the page's right content edge.
    The small movable window should match the book's parchment theme.
 2. Type `6268` and press Enter. A spell link should appear below the input.
-   Hover it; toggle **Show aura spell IDs on tooltips** in the ? menu and check
+   Hover it; toggle **Show spell IDs on tooltips if possible** in Options and check
    that the notes link's tooltip shows/hides the appended ID accordingly.
    Click a link to open its spell tooltip; Shift-click inserts it into chat input.
 3. Record ten distinct IDs. An eleventh and a duplicate should be refused.

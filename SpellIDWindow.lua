@@ -3,6 +3,7 @@ local _, ns = ...
 local window = {}
 ns.SpellIDWindow = window
 local db, panel, background
+local customPosition = false
 local rows, seen = {}, { player = {}, target = {} }
 local castBars = {}
 local castBarOrder = {}
@@ -63,6 +64,7 @@ local function setup()
         if ns.UIScale then ns.UIScale:Register(panel) end
     panel:SetSize(330, 286); panel:SetFrameStrata("MEDIUM")
     panel:SetClampedToScreen(true); panel:SetMovable(true)
+    if panel.SetClampRectInsets then panel:SetClampRectInsets(0,0,0,0) end
     panel:EnableMouse(true); panel:RegisterForDrag("LeftButton")
     background = panel:CreateTexture(nil, "BACKGROUND")
     background:SetAllPoints(); background:SetColorTexture(0, 0, 0, 0.35)
@@ -75,6 +77,7 @@ local function setup()
         self:StopMovingOrSizing()
         local point, _, relativePoint, x, y = self:GetPoint()
         db.spellIDWindowPosition = { point = point, relativePoint = relativePoint, x = x, y = y }
+        customPosition = true
     end)
     for index, title in ipairs({ "Enemy cast", "Enemy instant cast", "Debuff on you", "Buff on target" }) do
         local row = {}
@@ -102,6 +105,7 @@ local function setup()
         end
         updateFade(delta)
     end)
+    if ns.WindowFocus then ns.WindowFocus:Register(panel) end
 end
 local function present(index, id, name, effect)
     if public(id) and (type(id) ~= "number" or id <= 0) then return end
@@ -296,6 +300,13 @@ function window:ApplySettings()
     scanAuras("player"); scanAuras("target")
     updateFade(0)
 end
+function window:AnchorToBook(book)
+    if panel and book and not customPosition then
+        panel:ClearAllPoints()
+        panel:SetPoint("RIGHT",book,"LEFT",-6,0)
+    end
+end
+
 function window:Initialize(settings)
     db = settings
     db.displaySpellIDWindow = db.displaySpellIDWindow ~= false
@@ -307,12 +318,17 @@ function window:Initialize(settings)
     seen = { player = {}, target = {} }; castBars = {}; castBarOrder = {}
     panel:ClearAllPoints()
     local position = db.spellIDWindowPosition
+    customPosition = false
     local points = { TOP=true, BOTTOM=true, LEFT=true, RIGHT=true, CENTER=true,
         TOPLEFT=true, TOPRIGHT=true, BOTTOMLEFT=true, BOTTOMRIGHT=true }
     if type(position) == "table" and points[position.point] and points[position.relativePoint]
         and type(position.x) == "number" and type(position.y) == "number" then
         panel:SetPoint(position.point, UIParent, position.relativePoint, position.x, position.y)
-    else panel:SetPoint("LEFT", UIParent, "LEFT", 30, 0) end
+        customPosition = true
+    else
+        panel:SetPoint("LEFT", UIParent, "LEFT", 30, 0)
+        self:AnchorToBook(AzerothFieldbookBestiary)
+    end
     if ns.AuraTooltipSnapshot then
         ns.AuraTooltipSnapshot:Initialize(db, panel, function(unit, kind)
             if unit == "player" and kind == "debuff" then return "Debuff on you" end

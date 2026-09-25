@@ -94,6 +94,22 @@ local function say(message)
     end
 end
 
+local function announceBestiary(entry, title, amount, observation, categoryOnly)
+    local name = journal:GetCreatureName(entry.id)
+    if not name then return end
+    local basic = journal.GetBasicInfo and journal:GetBasicInfo(entry.id) or entry
+    observation = observation or {}
+    local category = observation.category or basic.category
+    local details = { publicString(category) and category:gsub("[|%c]", "") or "Unclassified" }
+    if not categoryOnly then
+        if positiveID(observation.level) then details[#details + 1] = "Lvl" .. observation.level end
+        if publicString(observation.location) then details[#details + 1] = observation.location end
+    end
+    local reward = amount and ("+" .. amount .. (amount == 1 and " point: " or " points: ")) or ""
+    say("|cffffd100[" .. reward .. title .. "]|r Bestiary: " .. name
+        .. " |cff999999(" .. table.concat(details, " • ") .. ")|r")
+end
+
 local function spellName(spellID)
     if not C_Spell or type(C_Spell.GetSpellName) ~= "function" then
         noteProbe("C_Spell.GetSpellName", "API MISSING", true)
@@ -140,10 +156,8 @@ local function announceAddedDebuffs(unit, updateInfo)
 end
 ]]
 
-local function storeObserved(id, spellID, observedName)
+local function storeObserved(id, spellID, observedName, creatureName)
     if not db or not positiveID(id) then return end
-    local entry = journal and journal.entries[id]
-    if entry and entry.confirmed then diagnostics.last = "Creature locked; observation not recorded."; return end
     local hasID = positiveID(spellID)
     local hasName = publicString(observedName)
     if not hasID then
@@ -161,7 +175,12 @@ local function storeObserved(id, spellID, observedName)
         diagnostics.last = "Basic Attack ignored."
         return
     end
-    if journal then journal:Offer(id, name, "Automatic observation", spellID) end
+    if journal and not journal:Offer(id, name, "Automatic observation", spellID, creatureName) then
+        local entry = journal.entries[id]
+        diagnostics.last = entry and entry.confirmed and "Creature locked; observation not recorded."
+            or "Creature identity unavailable or observation excluded; nothing recorded."
+        return
+    end
     local creature = trackingDB.bestiary.creatures[id]
     if not creature then
         creature = { spells = {} }
@@ -196,6 +215,9 @@ local function remember(unit, spellID, observedName)
     if afterWipeHold then return end
     local id, reason = watchedEnemy(unit)
     if not id then diagnostics.last = reason; return end
+    -- Instant cast events may arrive before target/mouseover discovery. Resolve
+    -- the watched unit's identity before either observation store is written.
+    if journal then journal:Observe(unit) end
     return storeObserved(id, spellID, observedName)
 end
 
@@ -324,13 +346,17 @@ local function initialize()
     if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
     if journal then
-        journal:SetPointsAwardedCallback(function(entry, amount, reason)
-            local name = entry.name or ("Creature #" .. entry.id)
-            say("+" .. amount .. (amount == 1 and " point: " or " points: ") .. name .. " — " .. reason .. ".")
+        journal:SetPointsAwardedCallback(function(entry, amount, reason, observation)
+            local killTitles = { ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
+            local discoveryTitles = { level = "New observed level", location = "New observed location",
+                levelAndLocation = "New observed level and location" }
+            local title = killTitles[reason] or (reason == "new creature entry" and "New discovery!")
+                or (observation and discoveryTitles[observation.kind])
+            if title then announceBestiary(entry, title, amount, observation, killTitles[reason] ~= nil) end
         end)
-        journal:SetEntryAddedCallback(function(entry)
-            if journal:GetCreatureAnnouncement() then
-                say("New bestiary entry: " .. entry.name .. " (" .. entry.category .. ").")
+        journal:SetEntryAddedCallback(function(entry, discovered, observation)
+            if journal:GetCreatureAnnouncement() and not (discovered and journal:GetPointAnnouncements()) then
+                announceBestiary(entry, "New discovery!", nil, observation)
             end
         end)
     end
@@ -338,9 +364,18 @@ local function initialize()
     if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal) end
     if journal and journal.sharing then
         journal.sharing:SetImportedCallback(function() if book then book:Refresh() end end)
+        journal.sharing:SetCostAdjustedCallback(function(tx)
+            say("|cffffd100[1 point saved]|r " .. tx.recipient ..
+                " already has this creature's basic information; its cost was waived. Charged " ..
+                tx.cost .. (tx.cost==1 and " point." or " points."))
+        end)
     end
     if ns.MinimapButton then ns.MinimapButton:Initialize(db, book) end
-    if ns.CreateBestiaryEncounterReader then encounters = ns.CreateBestiaryEncounterReader(storeObserved) end
+    if ns.CreateBestiaryEncounterReader then
+        encounters = ns.CreateBestiaryEncounterReader(function(id, spellID, creatureName)
+            return storeObserved(id, spellID, nil, creatureName)
+        end)
+    end
     if encounters and db.ignoreEncounterHistory then encounters:ForgetHistory() end
 end
 

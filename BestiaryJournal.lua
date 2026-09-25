@@ -13,6 +13,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     local recentKills
     local instanceLimit, observationSeconds, pendingSeconds, recentLimit = 64, 120, 10, 512
     local onEntryAdded, onPointsAwarded
+    local restoreObservations
     local ledger
     local rankLabels = { elite = "Elite", rare = "Rare", rareelite = "Rare Elite", worldboss = "World Boss" }
     local rankPriority = { ["Rare"] = 1, ["Elite"] = 2, ["Rare Elite"] = 3, ["World Boss"] = 4 }
@@ -84,10 +85,32 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if value == "" or #value > limit then return end
         return value
     end
-    -- Each tier stores cumulative points: silver 1, gold adds 2.
+    local function creatureName(value)
+        if not str(value) or #value > 100 or value:find("[%c|]") then return end
+        value = value:match("^%s*(.-)%s*$")
+        if value == "" or value == UNKNOWNOBJECT or value == UNKNOWN
+            or value:match("^Creature #%d+$") or value:match("^Encountered creature #%d+$") then return end
+        return value
+    end
+    function journal:GetCreatureName(id)
+        if not number(id) then return end
+        local entry = self.entries[id]
+        if not entry then return end
+        local locked = entry.confirmed and entry.lockedBasic
+        local name = locked and creatureName(locked.name) or creatureName(entry.name)
+        if name then return name end
+        if not entry.confirmed then
+            for _, shared in ipairs(entry.sharedReports or {}) do
+                name = creatureName(shared.name)
+                if name then return name end
+            end
+        end
+    end
+    -- Each tier stores cumulative points: silver 1, gold adds 2, crown adds 3.
     local killMilestones = {
+        { kills = 50, points = 6, star = "crown" },
         { kills = 25, points = 3, star = "gold" },
-        { kills = 2, points = 1, star = "silver" },
+        { kills = 10, points = 1, star = "silver" },
     }
     function journal:GetKillReward(id)
         local entry = self.entries[id]
@@ -106,10 +129,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:SetPointsAwardedCallback(callback)
         onPointsAwarded = type(callback) == "function" and callback or nil
     end
-    local function award(self, entry, amount, reason)
+    local function award(self, entry, amount, reason, observation)
         if amount > 0 then ledger.earned = ledger.earned + amount end
         if amount > 0 and self:GetPointAnnouncements() and onPointsAwarded then
-            onPointsAwarded(entry, amount, reason)
+            onPointsAwarded(entry, amount, reason, observation)
         end
     end
     local function discoveryProgress(entry)
@@ -151,6 +174,17 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         else
             ledger = trackingDB.bestiary.points
         end
+        -- Reconcile newly available tiers for existing personal records. Keep
+        -- earlier credit when a threshold rises; never repeat a paid milestone.
+        for id in pairs(journal.entries) do
+            local credit = ledger.credits[id]
+            if credit and credit.discovered then
+                local reward = journal:GetKillReward(id)
+                local previous = credit.killPoints or 0
+                ledger.earned = ledger.earned + math.max(0, reward - previous)
+                credit.killPoints = math.max(previous, reward)
+            end
+        end
     end
     initializePoints()
     local function initializeRecentKills()
@@ -174,7 +208,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         end
         return credit
     end
-    local function recordDiscovery(self, entry, level, zone)
+    local function recordDiscovery(self, entry, level, zone, observation)
         local progress = creditFor(entry.id)
         local reasons = {}
         if number(level) and not progress.levels[level] then
@@ -190,13 +224,16 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             progress.initial = nil
         elseif #reasons > 0 then
             progress.points = progress.points + 1
-            award(self, entry, 1, table.concat(reasons, "; "))
+            observation = observation or {}
+            observation.kind = #reasons == 2 and "levelAndLocation"
+                or (reasons[1]:find("new observed level", 1, true) and "level" or "location")
+            award(self, entry, 1, table.concat(reasons, "; "), observation)
         end
         if #reasons > 0 then self:Touch() end
     end
     function journal:GetTotals()
         local count = 0
-        for _ in pairs(self.entries) do count = count + 1 end
+        for id in pairs(self.entries) do if self:GetCreatureName(id) then count = count + 1 end end
         return count, ledger.earned
     end
     function journal:GetSharingBalance()
@@ -216,13 +253,16 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         ledger.reservations[transaction] = nil
         self:Touch()
     end
-    function journal:CommitShare(transaction)
+    function journal:CommitShare(transaction, waiveBasic)
         local cost = ledger.reservations[transaction]
         if not cost then return false end
+        -- Settle the recipient's one-point basic-information waiver atomically
+        -- with the existing reservation; never refund or reprice a paid report.
+        if waiveBasic == true then cost = math.max(0, cost - 1) end
         ledger.spent = ledger.spent + cost
         ledger.reservations[transaction] = nil
         self:Touch()
-        return true
+        return true, cost
     end
     function journal:GetSharingStorage()
         if trackingDB ~= db then
@@ -249,6 +289,14 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:GetSingleObservationWindow()
         return db.singleObservationWindow ~= false
+    end
+    function journal:GetBlockIncomingOffers()
+        return db.blockIncomingOffers == true
+    end
+    function journal:SetBlockIncomingOffers(enabled)
+        db.blockIncomingOffers = enabled == true
+        if self.sharing then self.sharing:ApplyIncomingOfferSetting() end
+        self:Touch()
     end
     function journal:GetAccountWideTracking()
         return db.accountWideTracking ~= false
@@ -303,7 +351,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if ns.CastIDs then ns.CastIDs:SetEnabled(db.displayCastIDs) end
     end
     function journal:GetSpellIDWindowOption(key)
-        if key == "displaySpellIDWindow" or key == "displayHoveredAuraSnapshots" then return db[key] ~= false end
+        if key == "displaySpellIDWindow" then return db[key] ~= false end
         if key == "spellIDWindowAlpha" then return tonumber(db[key]) or 0.35 end
         return db[key] == true
     end
@@ -341,28 +389,52 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     -- Debuff chat reporting is intentionally unavailable: Forever exposes
     -- combat aura details as secret values that addons cannot inspect.
-    function journal:Ensure(id, sharedOnly)
+    function journal:Ensure(id, sharedOnly, name, observation)
         if not number(id) then return end
+        name = creatureName(name)
+        local wasNamed = self:GetCreatureName(id)
+        -- Spell IDs alone cannot establish a creature entry. Shared reports
+        -- supply their validated basics immediately after allocating the entry.
+        if not sharedOnly and not wasNamed and not name then return end
         local entry = self.entries[id]
         if not entry then
             entry = { id = id, category = "Unclassified", abilities = {}, damage = {}, locations = {}, offenses = {}, resistances = {}, immunities = {}, behaviours = {}, kills = 0, confirmed = false }
             self.entries[id] = entry
             self:Touch()
         end
+        if name and not creatureName(entry.name) then
+            entry.name = name
+            -- Older versions could lock a nameless page. Repair identity only;
+            -- its saved abilities, notes and other locked metadata stay intact.
+            if entry.confirmed and entry.lockedBasic and not creatureName(entry.lockedBasic.name) then
+                entry.lockedBasic.name = name
+            end
+            self:Touch()
+        end
+        local discovered = false
         if not sharedOnly then
             local credit = creditFor(id)
             if not entry.personalEncountered then entry.personalEncountered = true; self:Touch() end
             if not credit.discovered then
                 credit.discovered, credit.initial = true, true
-                award(self, entry, 1, "new creature entry")
+                discovered = true
+                award(self, entry, 1, "new creature entry", observation)
                 self:Touch()
             end
         end
-        return entry
+        if not wasNamed and self:GetCreatureName(id) and restoreObservations then restoreObservations(self, id) end
+        return entry, discovered
     end
     function journal:Observe(unit)
         local id = identify(unit)
         if not id then return end
+        local category, level = read(UnitCreatureType, unit), read(UnitLevel, unit)
+        local location = read(GetRealZoneText) or read(GetZoneText)
+        local observation = {
+            category = clean(category, 100),
+            level = number(level) and level > 0 and level or nil,
+            location = clean(location, 200),
+        }
         local liveGUID = read(UnitGUID, unit)
         if str(liveGUID) and read(UnitIsDead, unit) == false then
             observeInstance(id, liveGUID, now())
@@ -371,17 +443,19 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
                 clearTerminal(liveGUID, observed)
             end
         end
-        if self.entries[id] and self.entries[id].confirmed then
-            self:Ensure(id)
-            recordDiscovery(self, self.entries[id], read(UnitLevel, unit), read(GetRealZoneText) or read(GetZoneText))
+        if self.entries[id] and self.entries[id].confirmed and self:GetCreatureName(id) then
+            self:Ensure(id, false, nil, observation)
+            recordDiscovery(self, self.entries[id], level, location, observation)
             return id
         end
-        local name = read(UnitName, unit)
-        if not str(name) then return end
-        local entry = self:Ensure(id)
-        recordDiscovery(self, entry, read(UnitLevel, unit), read(GetRealZoneText) or read(GetZoneText))
-        local wasNamed = str(entry.name)
-        local category, level, classification = read(UnitCreatureType, unit), read(UnitLevel, unit), read(UnitClassification, unit)
+        local name = creatureName(read(UnitName, unit))
+        if not name then return end
+        local wasNamed = self.entries[id] and creatureName(self.entries[id].name)
+        local entry, discovered = self:Ensure(id, false, name, observation)
+        if not entry then return end
+        recordDiscovery(self, entry, level, location, observation)
+        if entry.confirmed then return id end
+        local classification = read(UnitClassification, unit)
         local changed = entry.name ~= name
         entry.name = name
         if str(category) and category ~= entry.category then entry.category = category; changed = true end
@@ -396,7 +470,6 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         entry.immunities = type(entry.immunities) == "table" and entry.immunities or {}
         entry.behaviours = type(entry.behaviours) == "table" and entry.behaviours or {}
         entry.kills = tonumber(entry.kills) or 0
-        local location = read(GetRealZoneText) or read(GetZoneText)
         if str(location) and not entry.locations[location] then
             entry.locations[location] = true
             changed = true
@@ -413,7 +486,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             end
             seenGUIDs[guid] = { id = id, level = number(level) and level or nil }
         end
-        if not wasNamed and onEntryAdded then onEntryAdded(entry) end
+        if not wasNamed and onEntryAdded then onEntryAdded(entry, discovered, observation) end
         if changed then self:Touch() end
         return id
     end
@@ -508,7 +581,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local points, star = self:GetKillReward(id)
         local newlyEarned = math.max(0, points - credit.killPoints)
         credit.killPoints = math.max(credit.killPoints, points)
-        award(self, entry, newlyEarned, (star or "kill") .. " star")
+        award(self, entry, newlyEarned, star == "crown" and "gold crown" or (star or "kill") .. " star")
         return decision(guid, "accepted", newlyEarned)
     end
     function journal:ClearKillEvidence()
@@ -568,10 +641,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         sampleEligibility(observed, unit, guid)
         return completeKill(self, guid, observed)
     end
-    function journal:Offer(id, name, origin, spellID)
+    function journal:Offer(id, name, origin, spellID, observedCreatureName)
         name = clean(name, 100)
         if not name or name:lower() == "attack" then return end
-        local entry = self:Ensure(id)
+        local wasNamed = self:GetCreatureName(id)
+        local entry, discovered = self:Ensure(id, false, observedCreatureName)
         if not entry or entry.confirmed then return end
         if entry.ignoredAbilities and entry.ignoredAbilities[name] then return end
         -- Rejected observations stay rejected when automatic scans repeat.
@@ -582,6 +656,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             entry.abilities[name].spellID = spellID
             self:Touch()
         end
+        if not wasNamed and onEntryAdded then onEntryAdded(entry, discovered) end
+        return true
     end
     function journal:SetEntryConfirmed(id, confirmed)
         local entry = self.entries[id]
@@ -697,12 +773,35 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local spellID, linkedName, errorMessage = self:ResolveSpell(reference)
         if errorMessage then return false, errorMessage end
         if not spellID then return false, "No exact readable spell match. Use Edit to enter an ID or spell link." end
-        if linkedName:lower() ~= name:lower() then
-            return false, "The match is for " .. linkedName .. ". Use Edit to review the spell link."
+        linkedName = clean(linkedName, 100)
+        if not linkedName then return false, "The resolved spell name is unavailable." end
+        local existing = entry.abilities[linkedName]
+        local note, effects = ability.note, {}
+        for effect, enabled in pairs(ability.effects or {}) do effects[effect] = enabled end
+        if existing and existing ~= ability then
+            if number(existing.spellID) and existing.spellID ~= spellID then
+                return false, "Another ability named " .. linkedName .. " has a different spell ID. Use Edit to review it."
+            end
+            if str(existing.note) and existing.note ~= note then
+                note = str(note) and (note .. "\n" .. existing.note) or existing.note
+                if #note > 300 then return false, "Combining these abilities would exceed the note limit. Use Edit to review their notes." end
+            end
+            for effect, enabled in pairs(existing.effects or {}) do if enabled then effects[effect] = true end end
         end
+        -- The recorded ID is authoritative. Keep the canonical spelling and
+        -- suppress the old observation name so rescans/reloads cannot revive it.
+        if linkedName ~= name then
+            entry.abilities[name] = nil
+            entry.ignoredAbilities = entry.ignoredAbilities or {}
+            entry.ignoredAbilities[name] = true
+        end
+        if entry.ignoredAbilities then entry.ignoredAbilities[linkedName] = nil end
+        ability.note, ability.effects, ability.origin = note, effects, "Your note"
         ability.spellID = spellID
-        self:Touch()
-        return true, "Exact match: " .. linkedName .. " (ID " .. spellID .. ")."
+        if existing and existing.showInTooltip == false then ability.showInTooltip = false end
+        entry.abilities[linkedName] = ability
+        self:SetAbility(id, linkedName, "confirmed")
+        return true, "Ability confirmed: " .. linkedName .. " (ID " .. spellID .. ")."
     end
     function journal:AddManual(id, name, note, reference, effects)
         local entry = self.entries[id]
@@ -788,7 +887,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:ConfirmedNames(id)
         local entry, names = self.entries[id], {}
-        if entry and entry.confirmed then
+        if entry and entry.confirmed and self:GetCreatureName(id) then
             for name, ability in pairs(entry.abilities) do
             if ability.state == "confirmed" and ability.showInTooltip ~= false then names[#names + 1] = name end
             end
@@ -806,24 +905,28 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local locationFilterActive = type(locations) == "table" and next(locations) ~= nil
         local rows = {}
         for id, entry in pairs(self.entries) do
-            local basic = self.GetBasicInfo and self:GetBasicInfo(id) or entry
-            local name = basic.name or ("Encountered creature #" .. id)
-            local review = not entry.confirmed
-            for _, ability in pairs(entry.abilities) do if ability.state == "pending" then review = true end end
-            local first = name:sub(1, 1):upper()
-            local locationMatch = not locationFilterActive
-            if locationFilterActive then
-                for location in pairs(basic.locations or {}) do
-                    if locations[location] then locationMatch = true; break end
+            local name = self:GetCreatureName(id)
+            -- Keep unresolved old records for later identification, without
+            -- exposing placeholder pages or counting them as usable entries.
+            if name then
+                local basic = self.GetBasicInfo and self:GetBasicInfo(id) or entry
+                local review = not entry.confirmed
+                for _, ability in pairs(entry.abilities) do if ability.state == "pending" then review = true end end
+                local first = name:sub(1, 1):upper()
+                local locationMatch = not locationFilterActive
+                if locationFilterActive then
+                    for location in pairs(basic.locations or {}) do
+                        if locations[location] then locationMatch = true; break end
+                    end
                 end
-            end
-            local categoryMatch = not category or self:GetCategoryFilter(basic.category) == category
-            if categoryMatch and (not initial or first == initial)
-                and (not reviewOnly or review)
-                and (not ranks or not next(ranks) or ranks[entry.rank] == true)
-                and locationMatch
-                and (name:lower():find(query, 1, true) or basic.category:lower():find(query, 1, true)) then
-                rows[#rows + 1] = { id = id, name = name, review = review }
+                local categoryMatch = not category or self:GetCategoryFilter(basic.category) == category
+                if categoryMatch and (not initial or first == initial)
+                    and (not reviewOnly or review)
+                    and (not ranks or not next(ranks) or ranks[entry.rank] == true)
+                    and locationMatch
+                    and (name:lower():find(query, 1, true) or basic.category:lower():find(query, 1, true)) then
+                    rows[#rows + 1] = { id = id, name = name, review = review }
+                end
             end
         end
         table.sort(rows, function(a, b) if a.name == b.name then return a.id < b.id end return a.name < b.name end)
@@ -853,14 +956,20 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
         db.ignoreEncounterHistory = true
         self:Reset()
+        -- Closing sharing dialogs during Reset can save their final positions.
+        if ns.WindowPositions then ns.WindowPositions:Reset() end
     end
-    -- Preserve old observations but ask for review; never invent names/levels.
-    for id, creature in pairs(trackingDB.bestiary.creatures) do
+    -- Unknown legacy spell records wait in their original store until a live
+    -- observation or an attributed encounter supplies the creature's name.
+    restoreObservations = function(self, id)
+        local creature = trackingDB.bestiary.creatures[id]
+        if not creature or not self:GetCreatureName(id) then return end
         for spellID, spell in pairs(creature.spells or {}) do
-            if type(spell) == "table" then journal:Offer(id, spell.name, "Previous observations", spellID) end
+            if type(spell) == "table" then self:Offer(id, spell.name, "Previous observations", spellID) end
         end
-        for name in pairs(creature.names or {}) do journal:Offer(id, name, "Previous observations") end
+        for name in pairs(creature.names or {}) do self:Offer(id, name, "Previous observations") end
     end
     if ns.InstallSharingRecords then ns.InstallSharingRecords(journal) end
+    for id in pairs(trackingDB.bestiary.creatures) do restoreObservations(journal, id) end
     return journal
 end

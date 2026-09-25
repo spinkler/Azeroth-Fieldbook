@@ -29,9 +29,10 @@ root = Path(__file__).resolve().parents[1]
 lua.execute(root.joinpath('BestiaryJournal.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(r'''
 journal = ns.CreateBestiaryJournal(db,identify)
-check(journal.entries[42].abilities['Test Trap'].state=='pending','migration requires review')
+check(not journal.entries[42],'migration waits for a usable creature name')
 check(db.bestiary.creatures[42],'Bestiary storage uses the section namespace')
 journal:Observe('target')
+check(journal.entries[42].abilities['Test Trap'].state=='pending','identified legacy observations require review')
 check(journal.entries[42].name=='Defias Test' and journal.entries[42].category=='Humanoid' and journal.entries[42].rank=='Elite','identity, creature type and elite rank')
 check(journal.entries[42].levelMin==9 and journal.entries[42].levelMax==9,'observed level')
 check(journal.entries[42].locations['Elwynn Forest'],'observed location')
@@ -148,9 +149,26 @@ function methods:SetText(text)
 end
 function methods:GetText() return rawget(self,'text') or '' end
 function methods:SetSize(w,h) self.width=w;self.height=h end
+function methods:SetWidth(w) self.width=w end
+function methods:SetHeight(h) self.height=h end
 function methods:GetWidth() return self.width or 1920 end
 function methods:GetHeight() return self.height or 1080 end
-function methods:GetStringHeight() return 32 end
+function methods:SetScale(value) self.scale=value end
+function methods:GetScale() return rawget(self,'scale') or 1 end
+function methods:GetEffectiveScale()
+    local parent=rawget(self,'parent')
+    return self:GetScale()*(parent and parent:GetEffectiveScale() or 1)
+end
+function methods:SetIndentedWordWrap(value) self.indentedWrap=value end
+function methods:GetStringWidth()
+    local text=self:GetText():gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','')
+    local _,characters=text:gsub('[^\128-\191]','')
+    return characters*6
+end
+function methods:GetStringHeight()
+    if self.indentedWrap then return math.max(1,math.ceil(self:GetStringWidth()/self:GetWidth()))*14 end
+    return 32
+end
 function methods:GetFrameLevel() return 10 end
 function methods:GetVerticalScroll() return 0 end
 function methods:GetVerticalScrollRange() return 0 end
@@ -178,8 +196,24 @@ UISpecialFrames={}
 ''')
 lua.execute(root.joinpath('Scrollbars.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(root.joinpath('CreatureNotes.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
-lua.execute(root.joinpath('BestiaryBook.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
+lua.execute(root.joinpath('BestiaryBook.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(r'''
+-- Property grouping measures rendered text, preserving school color markup.
+do
+    local function measure(text) return #text:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','') end
+    local casts='Casts: |cff72d65bNature|r'
+    local resists='Resists: |cffd884ffArcane|r'
+    local immune='Immune: |cffff7043Fire|r'
+    local first=casts..'  •  '..resists
+    local lines=ns.GroupPropertyLines({casts,resists,immune},measure(first),measure)
+    check(#lines==2 and lines[1]==first and lines[2]==immune,'a complete group moves to the next line when it cannot fit')
+    lines=ns.GroupPropertyLines({casts,resists},measure(first),measure)
+    check(#lines==1 and lines[1]==first,'exact-fit groups stay together with their separator')
+    local behaviour='Behaviour: Hostile, Melee, Flees at low health, Calls allies, Patrols, Summons, Heals, Enrages, Stealths'
+    lines=ns.GroupPropertyLines({casts,resists,behaviour,immune},measure(first),measure)
+    check(#lines==3 and lines[2]==behaviour and lines[3]==immune,'an oversized group gets its own indented-wrap paragraph')
+    check(#ns.GroupPropertyLines({},574,measure)==0,'empty properties produce no rows')
+end
 controller=ns.CreateBestiaryBook(journal)
 controller:Toggle()
 check(AzerothFieldbookBestiary:IsShown(),'book opens')
@@ -203,7 +237,8 @@ local function checkIndex(open)
     end
     check(#indexBook.letterButtons==26,'Index contains all letters')
     for _,tab in ipairs(indexBook.letterButtons) do
-        check(tab:IsShown()==open and tab.enabled,'letters follow Index visibility and remain clickable')
+        check(tab:IsShown()==open,'letters follow Index visibility')
+        check(tab.enabled==(tab.letter=='D'),'only letters containing matching entries are clickable')
     end
 end
 checkIndex(false)
@@ -211,10 +246,10 @@ check(indexBook.rows[1].id==42,'default list is unfiltered')
 check(click('Index'),'alphabet index opens')
 checkIndex(true)
 check(click('D') and indexBook.rows[1].id==42,'alphabet tab selects matching entries')
-check(click('Z') and not indexBook.rows[1]:IsShown(),'empty letters are clickable and show no matches')
+check(not indexBook.letterButtons[26].enabled and indexBook.rows[1].id==42,'empty letters cannot replace the current selection')
 check(click('Index'),'alphabet index closes')
 checkIndex(false)
-check(indexBook.rows[1].id==42,'closing Index restores entries after an empty letter filter')
+check(indexBook.rows[1].id==42,'closing Index preserves entries and clears the letter filter')
 check(click('Index'),'alphabet index reopens')
 checkIndex(true)
 check(indexBook.rows[1].id==42,'reopening Index does not restore a stale letter filter')
@@ -313,6 +348,7 @@ check(journal:GetUIScale()==0.75,'closing discards unfinished scale adjustment')
 check(click('100%') and journal:GetUIScale()==1,'scale reset applies immediately')
 
 check(journal:GetSpellIDWindowOption('displaySpellIDWindow'),'ID window defaults on')
+check(not journal:GetSpellIDWindowOption('displayHoveredAuraSnapshots'),'hovered aura snapshots default off')
 check(not journal:GetSpellIDWindowOption('spellIDWindowLocked'),'ID window defaults unlocked')
 check(not journal:GetSpellIDWindowOption('spellIDWindowIndefinite'),'ID window defaults expiring')
 check(journal:GetSpellIDWindowOption('spellIDWindowAlpha')==0.35,'ID window default opacity')
@@ -325,10 +361,10 @@ controller:Toggle(); check(not AzerothFieldbookBestiary:IsShown(),'book closes')
 controller:Toggle(); check(AzerothFieldbookBestiary:IsShown(),'book reopens')
 controller:OpenNotes()
 local notes=AzerothFieldbookCreatureNotes
-check(notes:IsShown() and notes.creature.text==journal.entries[42].name,'notes opens for selected creature')
+check(notes:IsShown() and notes.creature.text==journal.entries[42].name..' |cff999999[#42]|r','notes opens for selected creature with grey ID')
 notes.spellInput:SetText('6268'); notes.spellInput.scripts.OnEnterPressed(notes.spellInput)
 notes.notes:SetText('Boar field notes')
-journal:Ensure(43).name='Other creature'; controller:Refresh()
+journal:Ensure(43,false,'Other creature'); controller:Refresh()
 local function selectEntry(id)
     for _,row in ipairs(AzerothFieldbookBestiary.rows) do
         if row.id==id then row.scripts.OnClick(row); return end
@@ -336,12 +372,40 @@ local function selectEntry(id)
     error('entry not visible')
 end
 selectEntry(43)
-check(notes.creature.text=='Other creature' and notes.count.text=='0/10','book selection switches notes')
+check(notes.creature.text=='Other creature |cff999999[#43]|r' and notes.count.text=='0/10','book selection switches notes')
 selectEntry(42)
 check(notes.count.text=='1/10' and notes.notes.text=='Boar field notes','book selection restores notes')
 check(click('Creature Notes'),'creature notes button opens window')
 local abilityBook=AzerothFieldbookBestiary
 local savedAbilities=journal.entries[42].abilities
+local savedLock=journal.entries[42].confirmed
+journal:SetEntryConfirmed(42,false)
+journal.entries[42].abilities={['Observed Counterspell']={state='pending',origin='Automatic observation',spellID=2139}}
+controller:Refresh()
+local resolvedRow=abilityBook.abilities[1]
+resolvedRow.resolve.scripts.OnClick()
+check(resolvedRow.name=='Counterspell' and resolvedRow.text.text=='Counterspell','row Resolve saves canonical name and removes pending label: '..tostring(abilityBook.message.text))
+check(resolvedRow.note.text=='' and not resolvedRow.accept.enabled,'row Resolve removes automatic origin and confirms')
+local oldTooltip=GameTooltip
+GameTooltip={lines={}}
+function GameTooltip:SetOwner() end
+function GameTooltip:SetSpellByID(id) self.id=id; self.lines={}; self.shown=false end
+function GameTooltip:AddLine(text) self.lines[#self.lines+1]=text end
+function GameTooltip:Show() self.shown=true end
+function GameTooltip:Hide() self.shown=false end
+local oldCVar=GetCVarBool
+for _,native in ipairs({false,true}) do
+    if native then GetCVarBool=function() return db.showSpellIDs end else GetCVarBool=nil end
+    journal:SetSpellIDTooltips(true)
+    resolvedRow.scripts.OnEnter(resolvedRow)
+    check(GameTooltip.id==2139 and GameTooltip.shown and GameTooltip.lines[1]=='Spell ID: 2139','resolved ability tooltip includes ID when enabled')
+    journal:SetSpellIDTooltips(false)
+    resolvedRow.scripts.OnEnter(resolvedRow)
+    check(GameTooltip.id==2139 and GameTooltip.shown and #GameTooltip.lines==0,'disabled IDs preserve the spell tooltip')
+end
+resolvedRow.scripts.OnLeave(); check(not GameTooltip.shown,'ability tooltip hides on leave')
+GetCVarBool,GameTooltip=oldCVar,oldTooltip
+journal:SetEntryConfirmed(42,savedLock)
 journal.entries[42].abilities={}
 for i=1,4 do journal.entries[42].abilities['Ability '..i]={state='confirmed',spellID=i} end
 controller:Refresh()
@@ -355,6 +419,15 @@ check(abilityBook.abilities[1].name=='Ability 1','mouse wheel changes displayed 
 journal.entries[42].abilities['Ability 5']=nil; controller:Refresh()
 check(not abilityBook.abilityScrollBar:IsShown(),'scrollbar hides when abilities fit again')
 journal.entries[42].abilities=savedAbilities; controller:Refresh()
+local savedKills=journal.entries[42].kills
+for _,sample in ipairs({{9,false,false},{10,true,false},{25,true,false},{50,true,true},{49,true,false}}) do
+    journal.entries[42].kills=sample[1]; controller:Refresh()
+    check(abilityBook.killStar:IsShown()==sample[2],'reward icon visibility follows kill threshold')
+    check(#abilityBook.killStar.crownParts>0,'crown has its own silhouette')
+    for _,part in ipairs(abilityBook.killStar.parts) do check(part:IsShown()~=sample[3],'crown replaces the star') end
+    for _,part in ipairs(abilityBook.killStar.crownParts) do check(part:IsShown()==sample[3],'crown only appears at 50 kills') end
+end
+journal.entries[42].kills=savedKills; controller:Refresh()
 local damageBook=AzerothFieldbookBestiary
 local savedDamage=journal.entries[42].damage
 journal.entries[42].damage={}
@@ -398,22 +471,23 @@ check(not reloaded.entries[42],'deleted entry does not return through legacy mig
 local ranksDB={bestiary={entries={},creatures={}}}
 local ranksJournal=ns.CreateBestiaryJournal(ranksDB,function() return nil end)
 for i, rank in ipairs({'Elite','Rare','Rare Elite','World Boss'}) do
-    local entry=ranksJournal:Ensure(i); entry.rank=rank; entry.name='Rank '..i
+    local entry=ranksJournal:Ensure(i,false,'Rank '..i); entry.rank=rank
 end
-ranksJournal:Ensure(5).name='Ordinary'
+ranksJournal:Ensure(5,false,'Ordinary')
 check(#ranksJournal:List(nil,'',false,nil,nil,{})==5,'empty rank filter includes ordinary creatures')
 check(#ranksJournal:List(nil,'',false,nil,nil,{Elite=true,Rare=true})==2,'rank filters combine with OR')
 check(#ranksJournal:List(nil,'',false,nil,nil,{['Rare Elite']=true})==1,'rare elite is separately selectable')
 check(#ranksJournal:List(nil,'Rank 4',false,nil,nil,{['World Boss']=true})==1,'rank combines with text')
 check(#ranksJournal:List(nil,'Rank 1',false,nil,nil,{Rare=true})==0,'rank and text both required')
 local rewards=ns.CreateBestiaryJournal({},function() return nil end)
-local first=rewards:Ensure(1)
-for _,sample in ipairs({{0,0},{1,0},{2,1,'silver'},{3,1,'silver'},{24,1,'silver'},{25,3,'gold'},{26,3,'gold'}}) do
+local first=rewards:Ensure(1,false,'First creature')
+for _,sample in ipairs({{0,0},{2,0},{9,0},{10,1,'silver'},{24,1,'silver'},{25,3,'gold'},{49,3,'gold'},{50,6,'crown'},{51,6,'crown'}}) do
     first.kills=sample[1]
     local points,star=rewards:GetKillReward(1)
     check(points==sample[2] and star==sample[3],'kill reward threshold')
 end
-rewards:Ensure(2).kills=2
+first.kills=26
+rewards:Ensure(2,false,'Second creature').kills=10
 -- Saved legacy kills are credited exactly once during migration, rather than
 -- by mutating a live display entry and asking the totals getter to award them.
 local rewardsDB={bestiary={entries=rewards.entries,creatures={}}}
@@ -424,7 +498,7 @@ check(count==2 and points==6,'entry points combine with cumulative kill rewards'
 -- though the star now reflects the higher threshold.
 rewards.entries[1].kills=2
 rewards=ns.CreateBestiaryJournal(rewardsDB,function() return nil end)
-check(select(2,rewards:GetKillReward(1))=='silver','saved kill count uses the current star threshold')
+check(select(2,rewards:GetKillReward(1))==nil,'saved kill count uses the current star threshold')
 check(select(2,rewards:GetTotals())==6,'threshold changes preserve previously credited points')
 rewards:DeleteEntry(1)
 count,points=rewards:GetTotals()
@@ -471,17 +545,25 @@ local function awardDeath(suffix)
 end
 awardDeath('first')
 check(#notifications==1,'first kill awards no star points')
-awardDeath('second')
-check(#notifications==2 and notifications[2][1]==1 and notifications[2][2]=='silver star','second kill awards silver once')
-for i=3,24 do awardDeath('kill'..i) end
+for i=2,9 do awardDeath('kill'..i) end
+check(#notifications==1,'no silver reward before 10 kills')
+awardDeath('silver')
+check(#notifications==2 and notifications[2][1]==1 and notifications[2][2]=='silver star','tenth kill awards silver once')
+for i=11,24 do awardDeath('kill'..i) end
 check(#notifications==2,'kills below 25 do not announce gold')
 awardDeath('gold')
 check(#notifications==3 and notifications[3][1]==2 and notifications[3][2]=='gold star','25th kill announces two additional points')
 awardDeath('afterGold')
 check(#notifications==3,'kills above 25 do not repeat gold points')
+for i=27,49 do awardDeath('kill'..i) end
+check(#notifications==3,'no crown reward before 50 kills')
+awardDeath('crown')
+check(#notifications==4 and notifications[4][1]==3 and notifications[4][2]=='gold crown','50th kill awards three additional points')
+awardDeath('afterCrown')
+check(#notifications==4,'kills above 50 do not repeat crown points')
 awards:SetPointAnnouncements(false); zone='Silent zone'; awards:Observe('target')
-check(#notifications==3,'option disables new award messages')
-local _,silentTotal=awards:GetTotals(); check(silentTotal==5,'muting messages still awards points')
+check(#notifications==4,'option disables new award messages')
+local _,silentTotal=awards:GetTotals(); check(silentTotal==8,'muting messages still awards points')
 local savedAwards=ns.CreateBestiaryJournal(awardsDB,function() return 901 end)
 check(not savedAwards:GetPointAnnouncements(),'notification option persists')
 savedAwards:SetPointsAwardedCallback(function() error('existing credit must not be reannounced') end)

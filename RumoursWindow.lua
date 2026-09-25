@@ -1,6 +1,6 @@
 local _, ns = ...
 
-function ns.CreateRumoursWindow(journal,onChanged)
+function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
     local frame,selected,entry,revision
     local controller={}
     local function label(parent,text,x,y,width,font)
@@ -98,15 +98,33 @@ function ns.CreateRumoursWindow(journal,onChanged)
             frame.rows[index].claim,frame.rows[index].shared=nil,nil
             frame.rows[index]:Hide()
         end
-        frame.body:SetHeight(math.max(300,y))
-        frame.area:SetVerticalScroll(math.min(frame.area:GetVerticalScroll(),math.max(0,y-300)))
+        local empty=#rows==1 and not rows[1].claim and not rows[1].shared
+        local areaHeight=empty and y or 300
+        local hasMessage=frame.message:GetText()~=""
+        local height=empty and (128+areaHeight+(hasMessage and 72 or 16)) or 500
+        if frame:GetHeight()~=height then
+            -- Both default and restored positions already use a top anchor.
+            -- Preserve it so resizing does not detach this window from the book.
+            frame:SetHeight(height)
+        end
+        frame.area:SetHeight(areaHeight)
+        frame.body:SetHeight(math.max(areaHeight,y))
+        frame.area:SetVerticalScroll(math.min(frame.area:GetVerticalScroll(),math.max(0,y-areaHeight)))
+        frame.message:ClearAllPoints(); frame.message:SetPoint("TOPLEFT",18,-(128+areaHeight+21))
+        frame.message:SetShown(not empty or hasMessage)
         local brightness=journal:GetBackgroundBrightness()
         frame.paper:SetVertexColor(0.504*brightness,0.504*brightness,0.48888*brightness)
     end
     local function build()
         if frame then return end
         frame=CreateFrame("Frame","AzerothFieldbookRumours",UIParent,"BackdropTemplate")
-        frame:SetSize(480,500); frame:SetPoint("CENTER",UIParent,"CENTER",160,0)
+        frame:SetSize(480,500)
+        local book=getAnchors and getAnchors()
+        if book then
+            -- Reserve the expanded, empty ID Logs and Notes window (310 high)
+            -- even if Rumours is the first of the two windows opened.
+            frame:SetPoint("TOPLEFT",book,"TOPRIGHT",6,-316)
+        else frame:SetPoint("CENTER",UIParent,"CENTER",160,0) end
         -- Share the book's layer so dialogs stay above this independent window.
         frame:SetFrameStrata("HIGH"); frame:SetClampedToScreen(true)
         frame:SetToplevel(true)
@@ -141,7 +159,7 @@ function ns.CreateRumoursWindow(journal,onChanged)
         -- while the main book is hidden. Hidden windows do no per-frame work.
         frame:SetScript("OnUpdate",function() if revision~=journal.revision then controller:Refresh() end end)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookRumours" end
-        if ns.UIScale then ns.UIScale:Register(frame) end
+        if ns.UIScale then ns.UIScale:Register(frame,"AzerothFieldbookRumours") end
         frame:Hide()
     end
     function controller:SetCreature(id)

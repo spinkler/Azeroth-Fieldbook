@@ -50,6 +50,9 @@ local function eligible(unit,kind)
 end
 ns.AuraTooltipSnapshot:Initialize(db,{},eligible)
 local panel=AzerothFieldbookAuraSnapshot
+assert(db.displayHoveredAuraSnapshots==false,'hover retention defaults off')
+hover('SetUnitBuff','target'); assert(not panel.shown,'default-off does not duplicate last-observed information')
+db.displayHoveredAuraSnapshots=true; ns.AuraTooltipSnapshot:ApplySettings()
 hover('SetUnitBuff','target')
 assert(panel.shown and panel.height==112) -- Secret wrapping allowance plus compact public line.
 local found
@@ -83,5 +86,10 @@ db.displayHoveredAuraSnapshots=true
 GameTooltipTextLeft1.GetText=function() return 'Wrapped public description' end
 hover('SetUnitDebuff','player')
 assert(panel.shown and panel.height==108) -- 28px wrapped line + 14px ID + spacing/header.
+ns.AuraTooltipSnapshot:Initialize(db,{},eligible)
+assert(db.displayHoveredAuraSnapshots==true,'saved opt-in survives reload')
+hover('SetUnitDebuff','player'); assert(panel.shown)
+local fresh={}; ns.AuraTooltipSnapshot:Initialize(fresh,{},eligible)
+assert(fresh.displayHoveredAuraSnapshots==false and not panel.shown,'fresh settings and reset default off')
 ''')
 print('PASS: tooltip text relay, classification, access failure, expiry, disable and hook reuse')

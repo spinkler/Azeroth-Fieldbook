@@ -15,11 +15,30 @@ local function addonVersion()
     return "unknown"
 end
 
+-- Pack complete property groups before letting the font wrap an oversized
+-- group. Each returned paragraph gets its own hanging-indent FontString.
+function ns.GroupPropertyLines(groups,width,measure)
+    local lines,current={},nil
+    for _,group in ipairs(groups) do
+        local combined=current and (current .. "  •  " .. group) or group
+        if current and measure(combined)>width then
+            lines[#lines+1]=current
+            current=group
+        else current=combined end
+        if measure(current)>width then
+            lines[#lines+1]=current
+            current=nil
+        end
+    end
+    if current then lines[#lines+1]=current end
+    return lines
+end
+
 function ns.CreateBestiaryBook(journal)
-    local creatureNotes = ns.CreateCreatureNotesWindow and ns.CreateCreatureNotesWindow(journal)
-    local sharingWindow = journal.sharing and ns.CreateSharingWindow and ns.CreateSharingWindow(journal,journal.sharing)
-    local function basicInfo(id) return journal.GetBasicInfo and journal:GetBasicInfo(id) or journal.entries[id] end
     local book, selected, offset, abilityOffset = nil, nil, 0, 0
+    local creatureNotes = ns.CreateCreatureNotesWindow and ns.CreateCreatureNotesWindow(journal,function() return book end)
+    local sharingWindow = journal.sharing and ns.CreateSharingWindow and ns.CreateSharingWindow(journal,journal.sharing,function() return book end)
+    local function basicInfo(id) return journal.GetBasicInfo and journal:GetBasicInfo(id) or journal.entries[id] end
     local noteOffset, refreshDamageNotes = 0, nil
     local category, initial, reviewOnly = nil, nil, false
     local indexOpen = false
@@ -42,6 +61,38 @@ local ink = { 0.75, 0.8, 0.8 }
         font:SetShadowColor(unpack(inkShadow))
         font:SetText(text)
         return font
+    end
+    local function layoutSummary(status,combat)
+        local y=0
+        local function section(groups,rows,fontObject)
+            book.summaryMeasure:SetFontObject(fontObject)
+            local lines=ns.GroupPropertyLines(groups,574,function(text)
+                book.summaryMeasure:SetText(text)
+                return book.summaryMeasure:GetStringWidth()
+            end)
+            for i,text in ipairs(lines) do
+                local row=rows[i]
+                if not row then
+                    row=label(book.summaryArea,"",0,0,574,fontObject)
+                    row:SetWordWrap(true); row:SetIndentedWordWrap(true)
+                    row:SetJustifyV("TOP")
+                    rows[i]=row
+                end
+                row:ClearAllPoints(); row:SetPoint("TOPLEFT",0,-y)
+                row:SetText(text); row:Show()
+                y=y+row:GetStringHeight()+2
+            end
+            for i=#lines+1,#rows do rows[i]:SetText(""); rows[i]:Hide() end
+        end
+        section(status,book.summaryBasicRows,"GameFontHighlight")
+        section(combat,book.summaryCombatRows,"GameFontHighlightSmall")
+        local height=math.max(16,y)
+        book.summaryArea:SetHeight(height)
+        -- All summary text stays visible. Grow the book and move the content
+        -- below it together, preserving panel sizes and space for the footer.
+        local extra=math.max(0,84+height+5-133)
+        book.detail:ClearAllPoints(); book.detail:SetPoint("TOPLEFT",0,-extra)
+        book:SetHeight(740+extra)
     end
     local function button(parent, text, x, y, width, action)
         local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
@@ -107,6 +158,8 @@ local ink = { 0.75, 0.8, 0.8 }
     local rumoursWindow = ns.CreateRumoursWindow and ns.CreateRumoursWindow(journal,function()
         if book then refresh() end
         if sharingWindow then sharingWindow:Refresh() end
+    end,function()
+        return book, creatureNotes and creatureNotes:GetFrame()
     end)
     local function message(text) book.message:SetText(text or "") end
     local function effectsText(effects)
@@ -175,8 +228,12 @@ local ink = { 0.75, 0.8, 0.8 }
         book.ranksButton:SetText(rankCount > 0 and ("Ranks (" .. rankCount .. ")") or "Ranks")
         book.ranksButton:SetSelected(rankCount > 0)
         local unletteredRows=journal:List(category,book.search:GetText(),reviewOnly,nil,locationFilters,rankFilters)
+        local availableLetters={}
+        for _,row in ipairs(unletteredRows) do availableLetters[row.name:sub(1,1):upper()]=true end
+        if initial and not availableLetters[initial] then initial=nil; offset=0 end
         for _,letterButton in ipairs(book.letterButtons) do
             letterButton:SetShown(indexOpen)
+            letterButton:SetEnabled(availableLetters[letterButton.letter] == true)
             letterButton:SetSelected(initial == letterButton.letter)
         end
         local rows = initial and journal:List(category, book.search:GetText(), reviewOnly, initial, locationFilters, rankFilters) or unletteredRows
@@ -208,9 +265,11 @@ local ink = { 0.75, 0.8, 0.8 }
         book.killCount:SetText("Kills: " .. kills)
         book.killStar:SetShown(e ~= nil and star ~= nil)
         for _, part in ipairs(book.killStar.parts) do
+            part:SetShown(star ~= "crown")
             if star == "gold" then part:SetColorTexture(1,0.82,0.14,1)
             else part:SetColorTexture(0.78,0.82,0.88,1) end
         end
+        for _, part in ipairs(book.killStar.crownParts) do part:SetShown(star == "crown") end
         book.deleteButton:SetEnabled(e ~= nil)
         if book.deleteForm:IsShown() and book.deleteForm.entry ~= e then book.deleteForm:Hide() end
         local editable = e ~= nil and not e.confirmed
@@ -232,8 +291,7 @@ local ink = { 0.75, 0.8, 0.8 }
             book.confirm:Hide()
             book.modelCaption:SetText("")
             book.title:SetText("A field guide of your own")
-            book.subTitle:SetText("Target or mouse over an enemy to begin a new entry.")
-            book.combatStatus:SetText("")
+            layoutSummary({"Target or mouse over an enemy to begin a new entry."},{})
             return
         end
         local basic=basicInfo(selected)
@@ -260,7 +318,6 @@ local ink = { 0.75, 0.8, 0.8 }
             end
             return names
         end
-        book.subTitle:SetText(table.concat(status, "  |  "))
         local combat = {}
         local offenses = schoolSummary("offenses")
         local resistances = schoolSummary("resistances")
@@ -273,7 +330,7 @@ local ink = { 0.75, 0.8, 0.8 }
             if type(e.behaviours)=="table" and e.behaviours[name] then behaviours[#behaviours+1]=name end
         end
         if #behaviours > 0 then combat[#combat + 1] = "Behaviour: " .. table.concat(behaviours, ", ") end
-        book.combatStatus:SetText(table.concat(combat, "  |  "))
+        layoutSummary(status,combat)
         book.confirm:SetText(e.confirmed and "Unlock this entry" or "Lock this entry")
         book.confirm:SetLockedState(e.confirmed)
         book.confirm:SetEnabled(true)
@@ -302,6 +359,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 local note=ability.note or (ability.origin ~= "Your note" and ability.origin or nil)
                 row.note:SetText(effects and note and (effects.." — "..note) or effects or note or "")
                 row.accept:SetEnabled(editable and ability.state ~= "confirmed")
+                row.resolve:SetShown(linkMissing or ability.state ~= "confirmed")
                 row.resolve:SetEnabled(editable)
                 row.link:SetEnabled(editable)
                 row.reject:SetEnabled(editable)
@@ -343,7 +401,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         for i=#levels+1,#book.damageRows do book.damageRows[i]:Hide() end
         book.noDamage:SetShown(#levels==0)
-        local viewportHeight = 75
+        local viewportHeight = book.damageScroll:GetHeight()
         local damageHeight=math.max(viewportHeight,contentHeight)
         book.damageChild:SetHeight(damageHeight)
         local scrollable=contentHeight>viewportHeight
@@ -366,7 +424,10 @@ local ink = { 0.75, 0.8, 0.8 }
         -- Keep one anchor and one cursor coordinate space throughout a drag.
         -- Native StartMoving reanchors scaled frames to screen space.
         local drag
-        local function stopBookDrag() drag = nil end
+        local function stopBookDrag()
+            if drag and ns.WindowPositions then ns.WindowPositions:Save(book) end
+            drag = nil
+        end
         local function startBookDrag()
             if drag then return end
             local x,y = GetCursorPosition()
@@ -608,9 +669,9 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         button(book, "Previous", 135, -596, 84, function() cycleEntry(-1) end)
         button(book, "Next", 229, -596, 86, function() cycleEntry(1) end)
-        local deleteForm = CreateFrame("Frame", "AzerothFieldbookDeleteCreature", book, "BackdropTemplate")
+        local deleteForm = CreateFrame("Frame", "AzerothFieldbookDeleteCreature", UIParent, "BackdropTemplate")
         book.deleteForm = deleteForm
-        deleteForm:SetSize(440,210); deleteForm:SetPoint("CENTER")
+        deleteForm:SetSize(440,210); deleteForm:SetPoint("CENTER",book,"CENTER")
         deleteForm:SetFrameStrata("FULLSCREEN_DIALOG"); deleteForm:EnableMouse(true)
         deleteForm:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         deleteForm:SetBackdropColor(0.10,0.08,0.05,1)
@@ -661,6 +722,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 initial=letter; offset=0; refresh()
             end)
             tab:SetHeight(21)
+            tab:SetDisabledFontObject("GameFontDisable")
             tab.letter=letter; addSelectionOutline(tab)
             tab:Hide()
             book.letterButtons[i]=tab
@@ -682,45 +744,52 @@ local ink = { 0.75, 0.8, 0.8 }
         book.killCount:ClearAllPoints()
         book.killCount:SetPoint("RIGHT",book.rumoursButton,"LEFT",-8,0)
         book.killCount:SetJustifyH("RIGHT")
-        book.killCount:SetWidth(0) -- Fit the text so the adjacent star keeps a 3px gap.
+        book.killCount:SetWidth(0) -- Fit the text so the adjacent reward keeps a 3px gap.
         book.killStar=CreateFrame("Frame",nil,book)
         book.killStar:SetSize(14,14)
         book.killStar:SetPoint("RIGHT",book.killCount,"LEFT",-3,0)
         book.title:SetPoint("TOPRIGHT",book.killStar,"LEFT",-8,9)
         book.killStar.parts={}
-        -- Draw a five-point star with solid scanlines so silver and gold share one silhouette.
+        book.killStar.crownParts={}
+        -- Native scanlines keep both reward silhouettes crisp at the UI scale.
+        local function drawReward(vertices,parts)
+            for y=0,13 do
+                local intersections={}
+                for i,a in ipairs(vertices) do
+                    local b=vertices[i%#vertices+1]
+                    local scan=y+0.5
+                    if (a[2]<=scan and b[2]>scan) or (b[2]<=scan and a[2]>scan) then
+                        intersections[#intersections+1]=a[1]+(scan-a[2])*(b[1]-a[1])/(b[2]-a[2])
+                    end
+                end
+                table.sort(intersections)
+                for i=1,#intersections,2 do
+                    local part=book.killStar:CreateTexture(nil,"ARTWORK")
+                    part:SetPoint("TOPLEFT",intersections[i],-y)
+                    part:SetSize(intersections[i+1]-intersections[i],1)
+                    part:SetColorTexture(1,0.82,0.14,1)
+                    parts[#parts+1]=part
+                end
+            end
+        end
         local vertices={}
         for i=0,9 do
             local angle=-math.pi/2+i*math.pi/5
             local radius=i%2==0 and 7 or 3
             vertices[#vertices+1]={7+math.cos(angle)*radius,7+math.sin(angle)*radius}
         end
-        for y=0,13 do
-            local intersections={}
-            for i,a in ipairs(vertices) do
-                local b=vertices[i%10+1]
-                local scan=y+0.5
-                if (a[2]<=scan and b[2]>scan) or (b[2]<=scan and a[2]>scan) then
-                    intersections[#intersections+1]=a[1]+(scan-a[2])*(b[1]-a[1])/(b[2]-a[2])
-                end
-            end
-            table.sort(intersections)
-            for i=1,#intersections,2 do
-                local part=book.killStar:CreateTexture(nil,"ARTWORK")
-                part:SetPoint("TOPLEFT",intersections[i],-y)
-                part:SetSize(intersections[i+1]-intersections[i],1)
-                book.killStar.parts[#book.killStar.parts+1]=part
-            end
-        end
+        drawReward(vertices,book.killStar.parts)
+        drawReward({{1,3},{4,6},{7,1},{10,6},{13,3},{12,13},{2,13}},book.killStar.crownParts)
         local titlePath, titleSize, titleFlags = book.title:GetFont()
         if titlePath and titleSize then book.title:SetFont(titlePath, titleSize + 2, titleFlags) end
-        book.subTitle = label(book, "", 362, -84, 574)
-        book.subTitle:SetHeight(16); book.subTitle:SetWordWrap(false)
-        book.combatStatus = label(book, "", 362, -101, 574, "GameFontHighlightSmall")
-        book.combatStatus:SetHeight(28); book.combatStatus:SetJustifyV("TOP")
+        book.summaryArea=CreateFrame("Frame",nil,book)
+        book.summaryArea:SetPoint("TOPLEFT",362,-84); book.summaryArea:SetSize(574,45)
+        book.summaryMeasure=book:CreateFontString(nil,"OVERLAY","GameFontHighlight")
+        book.summaryMeasure:SetWordWrap(false); book.summaryMeasure:Hide()
+        book.summaryBasicRows,book.summaryCombatRows={},{}
         book.empty = label(book, "Every page begins with an encounter or an accepted report.\n\nSelect an entry from the index to review your notes.", 366, -210, 494)
         book.detail = CreateFrame("Frame", nil, book)
-        book.detail:SetAllPoints()
+        book.detail:SetPoint("TOPLEFT",0,0); book.detail:SetSize(960,740)
         local detail = book.detail
         book.sourceStatus=label(detail,"",579,-302,343,"GameFontHighlightSmall")
         book.sourceStatus:SetHeight(12); book.sourceStatus:SetWordWrap(false)
@@ -755,7 +824,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.model:SetScript("OnModelLoaded", function()
             book.modelCaption:SetText("")
         end)
-        book.confirm = CreateFrame("Button", nil, detail, "BackdropTemplate")
+        book.confirm = CreateFrame("Button", nil, book, "BackdropTemplate")
         book.confirm:SetSize(24, 24)
         book.confirm:SetPoint("TOPLEFT", 333, -51)
         book.confirm:SetFrameLevel(detail:GetFrameLevel() + 5)
@@ -842,7 +911,8 @@ local ink = { 0.75, 0.8, 0.8 }
         local abilityDivider = detail:CreateTexture(nil, "ARTWORK")
         abilityDivider:SetColorTexture(0.35,0.20,0.08,0.42)
         abilityDivider:SetPoint("TOPLEFT",352,-315); abilityDivider:SetSize(574,1)
-        label(detail, "Recorded abilities", 352, -325, 222, "GameFontNormalLarge")
+        local abilitiesHeading = label(detail, "Recorded abilities", 352, -325, 222, "GameFontNormalLarge")
+        abilitiesHeading:SetTextColor(1.00, 0.82, 0.14)
         book.abilityCount = label(detail, "", 580, -331, 346, "GameFontHighlightSmall")
         book.abilityCount:SetJustifyH("RIGHT")
         book.abilityScrollBar=CreateFrame("Slider",nil,detail,"UIPanelScrollBarTemplate")
@@ -866,6 +936,14 @@ local ink = { 0.75, 0.8, 0.8 }
             row.tooltipCheck:SetScript("OnClick",function(self)
                 if selected and row.name then journal:SetAbilityTooltip(selected,row.name,self:GetChecked() == true); refresh() end
             end)
+            row.tooltipCheck:SetMotionScriptsWhileDisabled(true)
+            row.tooltipCheck:SetScript("OnEnter",function(self)
+                if not GameTooltip then return end
+                GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+                GameTooltip:SetText("Display on tooltip")
+                GameTooltip:Show()
+            end)
+            row.tooltipCheck:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
             row.text = label(row,"",22,0,214)
             row.text:SetWordWrap(false)
             row.note = label(row,"",35,-17,201,"GameFontHighlightSmall")
@@ -909,7 +987,13 @@ local ink = { 0.75, 0.8, 0.8 }
                 if not ability or ability.state~="confirmed" or type(ability.spellID)~="number" or ability.spellID<=0 then return end
                 if GameTooltip and type(GameTooltip.SetOwner)=="function" and type(GameTooltip.SetSpellByID)=="function" then
                     pcall(GameTooltip.SetOwner,GameTooltip,self,"ANCHOR_CURSOR")
-                    pcall(GameTooltip.SetSpellByID,GameTooltip,ability.spellID)
+                    local ok=pcall(GameTooltip.SetSpellByID,GameTooltip,ability.spellID)
+                    if ok then
+                        if journal:GetSpellIDTooltips() and type(GameTooltip.AddLine)=="function" then
+                            GameTooltip:AddLine("Spell ID: " .. ability.spellID,1,0.82,0)
+                        end
+                        if type(GameTooltip.Show)=="function" then GameTooltip:Show() end
+                    end
                 end
             end)
             row:SetScript("OnLeave",function()
@@ -921,13 +1005,13 @@ local ink = { 0.75, 0.8, 0.8 }
             book.abilities[i]=row
         end
         label(detail,"Ability name you experienced",352,-549,241,"GameFontHighlightSmall")
-        label(detail,"Effects (optional)",608,-549,268,"GameFontHighlightSmall")
+        label(detail,"Effects |cff999999(optional)|r",608,-549,268,"GameFontHighlightSmall")
         book.manualName=edit(detail,358,-567,234,100)
         book.manualEffects={}
         book.effectButton=button(detail,"Choose effects",614,-567,321,function() book.effectPicker:SetShown(not book.effectPicker:IsShown()); book.refreshEffectPicker() end)
-        label(detail,"Field note (optional)",352,-600,549,"GameFontHighlightSmall")
+        label(detail,"Field note |cff999999(optional)|r",352,-600,549,"GameFontHighlightSmall")
         book.manualNote=edit(detail,358,-620,577,300)
-        label(detail,"Optional spell ID, link, or exact name (out of combat)",352,-652,549,"GameFontHighlightSmall")
+        label(detail,"Optional spell ID, link, or exact name |cff999999(out of combat)|r",352,-652,549,"GameFontHighlightSmall")
         book.spellLink=edit(detail,358,-672,274,255)
         local function resolveSpellLink()
             local spellID,spellName,errorMessage=journal:ResolveSpell(book.spellLink:GetText())
@@ -958,10 +1042,10 @@ local ink = { 0.75, 0.8, 0.8 }
         book.behaviourButton=button(detail,"Behaviour",811,-277,111,function()
             book.behaviourPicker:SetShown(not book.behaviourPicker:IsShown())
         end)
-        book.message=label(book,"",352,-704,552,"GameFontHighlightSmall")
+        book.message=label(detail,"",352,-704,552,"GameFontHighlightSmall")
         book.message:SetHeight(25); book.message:SetJustifyV("TOP")
-        local effectPicker=CreateFrame("Frame",nil,book,"BackdropTemplate")
-        effectPicker:SetSize(560,635); effectPicker:SetPoint("CENTER"); effectPicker:SetFrameStrata("FULLSCREEN_DIALOG"); effectPicker:SetFrameLevel(102)
+        local effectPicker=CreateFrame("Frame",nil,UIParent,"BackdropTemplate")
+        effectPicker:SetSize(560,635); effectPicker:SetPoint("CENTER",book,"CENTER"); effectPicker:SetFrameStrata("FULLSCREEN_DIALOG")
         effectPicker:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         effectPicker:EnableMouse(true)
         effectPicker:SetMovable(true)
@@ -975,7 +1059,7 @@ local ink = { 0.75, 0.8, 0.8 }
         effectPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         effectPaper:SetTexCoord(0,1,0,1)
         addBackgroundLayer(effectPaper, 0.504,0.504,0.48888)
-        label(effectPicker,"Effects",25,-25,350,"GameFontNormalLarge")
+        label(effectPicker,"Effects",25,-25,350,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         label(effectPicker,"Choose every effect you personally observed for this ability.",25,-54,470,"GameFontHighlightSmall")
         cornerClose(effectPicker)
         local leftX,rightX=25,290
@@ -1009,21 +1093,14 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         effectPicker:Hide(); book.effectPicker=effectPicker
 
-        local observationPickerLevel=200
         local function raiseObservationPicker(picker)
-            observationPickerLevel=observationPickerLevel+10
-            local function setLevel(frame,level)
-                frame:SetFrameLevel(level)
-                if type(frame.GetChildren)=="function" then
-                    for _,child in ipairs({frame:GetChildren()}) do setLevel(child,level+1) end
-                end
-            end
-            setLevel(picker,observationPickerLevel)
+            picker:Raise()
         end
         local observationPickers, lastObservationPicker = {}, nil
         local sharedObservationPosition
         local function rememberObservationPosition(picker)
             if not picker or not journal:GetSingleObservationWindow() then return end
+            if ns.WindowPositions then ns.WindowPositions:SaveIfMoved(picker,"ObservationPanels"); return end
             local left, top = picker:GetLeft(), picker:GetTop()
             local scale, parentScale = picker:GetEffectiveScale(), UIParent:GetEffectiveScale()
             if type(left)=="number" and type(top)=="number" and type(scale)=="number"
@@ -1032,6 +1109,7 @@ local ink = { 0.75, 0.8, 0.8 }
             end
         end
         local function applyObservationPosition(picker)
+            if ns.WindowPositions then ns.WindowPositions:Restore(picker,"ObservationPanels"); return end
             if not sharedObservationPosition then return end
             local scale, parentScale = picker:GetEffectiveScale(), UIParent:GetEffectiveScale()
             if type(scale)~="number" or scale<=0 or type(parentScale)~="number" then return end
@@ -1073,7 +1151,7 @@ local ink = { 0.75, 0.8, 0.8 }
             paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
             paper:SetTexCoord(0,1,0,1)
             addBackgroundLayer(paper,0.504,0.504,0.48888)
-            label(picker,title,25,-25,width-155,"GameFontNormalLarge")
+            label(picker,title,25,-25,width-155,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
             label(picker,description,25,-54,width-50,"GameFontHighlightSmall")
             cornerClose(picker)
             picker:SetScript("OnHide",function(self)
@@ -1083,14 +1161,14 @@ local ink = { 0.75, 0.8, 0.8 }
             return picker
         end
 
-        local offensePicker=createObservationPicker("AzerothFieldbookBestiaryOffenses","Observed offenses","Select every magic school this creature has been observed casting.",480,250)
+        local offensePicker=createObservationPicker("AzerothFieldbookBestiaryOffenses","Observed offenses","Select every magic school this creature has been observed casting.",400,250)
         offensePicker.schoolButtons={}
         local refreshOffensePicker
         for i,school in ipairs(magicSchools) do
             local schoolName,schoolColor=school.name,school.color
             local column=(i-1)%2
             local row=math.floor((i-1)/2)
-            local control=button(offensePicker,"",25+column*220,-91-row*40,200,function()
+            local control=button(offensePicker,"",25+column*185,-91-row*40,165,function()
                 local entry=selected and journal.entries[selected]
                 local enabled=entry and type(entry.offenses)=="table" and entry.offenses[schoolName] == true
                 journal:SetOffense(selected,schoolName,not enabled)
@@ -1110,20 +1188,20 @@ local ink = { 0.75, 0.8, 0.8 }
         offensePicker:HookScript("OnShow",refreshOffensePicker)
         offensePicker:Hide(); book.offensePicker=offensePicker; book.refreshOffensePicker=refreshOffensePicker
 
-        local defensePicker=createObservationPicker("AzerothFieldbookBestiaryDefenses","Observed defenses","Mark each magic school as resistant, immune, or both when personally observed.",540,335)
-        label(defensePicker,"Magic school",35,-88,180,"GameFontHighlightSmall")
-        label(defensePicker,"Resistant",285,-88,90,"GameFontHighlightSmall")
-        label(defensePicker,"Immune",415,-88,80,"GameFontHighlightSmall")
+        local defensePicker=createObservationPicker("AzerothFieldbookBestiaryDefenses","Observed defenses","Mark each magic school as resistant, immune, or both\nwhen personally observed.",360,335)
+        label(defensePicker,"Magic school",35,-88,120,"GameFontHighlightSmall")
+        label(defensePicker,"Resistant",170,-88,80,"GameFontHighlightSmall"):SetJustifyH("CENTER")
+        label(defensePicker,"Immune",265,-88,70,"GameFontHighlightSmall"):SetJustifyH("CENTER")
         defensePicker.rows={}
         local refreshDefensePicker
         for i,school in ipairs(magicSchools) do
             local schoolName,schoolColor=school.name,school.color
             local y=-112-(i-1)*34
-            local schoolLabel=label(defensePicker,"|cff"..schoolColor..schoolName.."|r",40,y-5,190)
+            local schoolLabel=label(defensePicker,"|cff"..schoolColor..schoolName.."|r",40,y-5,120)
             local resistant=CreateFrame("CheckButton",nil,defensePicker,"UICheckButtonTemplate")
-            resistant:SetPoint("TOPLEFT",305,y); resistant:SetSize(24,24)
+            resistant:SetPoint("TOPLEFT",198,y); resistant:SetSize(24,24)
             local immune=CreateFrame("CheckButton",nil,defensePicker,"UICheckButtonTemplate")
-            immune:SetPoint("TOPLEFT",430,y); immune:SetSize(24,24)
+            immune:SetPoint("TOPLEFT",288,y); immune:SetSize(24,24)
             resistant:SetScript("OnClick",function(self) journal:SetResistance(selected,schoolName,self:GetChecked()==true); refresh(); refreshDefensePicker() end)
             immune:SetScript("OnClick",function(self) journal:SetImmunity(selected,schoolName,self:GetChecked()==true); refresh(); refreshDefensePicker() end)
             defensePicker.rows[#defensePicker.rows+1]={ schoolName=schoolName, label=schoolLabel, resistant=resistant, immune=immune }
@@ -1139,7 +1217,7 @@ local ink = { 0.75, 0.8, 0.8 }
         defensePicker:HookScript("OnShow",refreshDefensePicker)
         defensePicker:Hide(); book.defensePicker=defensePicker; book.refreshDefensePicker=refreshDefensePicker
 
-        local behaviourPicker=createObservationPicker("AzerothFieldbookBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen from this creature.",540,430)
+        local behaviourPicker=createObservationPicker("AzerothFieldbookBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen\nfrom this creature.",390,430)
         local behaviourGroups={
             { "Disposition", { "Hostile", "Neutral" } },
             { "Combat style", { "Melee", "Ranged", "Caster" } },
@@ -1149,15 +1227,15 @@ local ink = { 0.75, 0.8, 0.8 }
         local refreshBehaviourPicker
         local groupY={-88,-150,-244}
         for groupIndex,group in ipairs(behaviourGroups) do
-            label(behaviourPicker,group[1],30,groupY[groupIndex],210,"GameFontHighlightSmall")
+            label(behaviourPicker,group[1],30,groupY[groupIndex],180,"GameFontHighlightSmall")
             for i,name in ipairs(group[2]) do
                 local column=(i-1)%2
                 local row=math.floor((i-1)/2)
                 local y=groupY[groupIndex]-25-row*32
                 local control=CreateFrame("CheckButton",nil,behaviourPicker,"UICheckButtonTemplate")
-                control:SetPoint("TOPLEFT",30+column*250,y); control:SetSize(24,24)
+                control:SetPoint("TOPLEFT",30+column*180,y); control:SetSize(24,24)
                 control.behaviourName=name
-                control.text=label(behaviourPicker,name,60+column*250,y-5,190,"GameFontHighlightSmall")
+                control.text=label(behaviourPicker,name,60+column*180,y-5,135,"GameFontHighlightSmall")
                 control:SetScript("OnClick",function(self)
                     journal:SetBehaviour(selected,self.behaviourName,self:GetChecked()==true)
                     refresh(); refreshBehaviourPicker()
@@ -1175,8 +1253,8 @@ local ink = { 0.75, 0.8, 0.8 }
         behaviourPicker:HookScript("OnShow",refreshBehaviourPicker)
         behaviourPicker:Hide(); book.behaviourPicker=behaviourPicker; book.refreshBehaviourPicker=refreshBehaviourPicker
 
-        local form=CreateFrame("Frame",nil,book,"BackdropTemplate")
-        form:SetSize(560,230); form:SetPoint("CENTER"); form:SetFrameStrata("FULLSCREEN_DIALOG"); form:SetFrameLevel(100)
+        local form=CreateFrame("Frame",nil,UIParent,"BackdropTemplate")
+        form:SetSize(560,230); form:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0); form:SetFrameStrata("FULLSCREEN_DIALOG")
         form:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         local formPaper=form:CreateTexture(nil,"BACKGROUND",nil,1)
         -- Run the parchment beneath the complete frame so there are no bare
@@ -1191,7 +1269,7 @@ local ink = { 0.75, 0.8, 0.8 }
         form:RegisterForDrag("LeftButton")
         form:SetScript("OnDragStart",function(self) self:StartMoving() end)
         form:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
-        label(form,"Your equal-level damage observation",22,-22,515,"GameFontNormalLarge")
+        label(form,"Your equal-level damage observation",22,-22,515,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         label(form,"Record hits you took when you and this creature were the SAME level.\nThese are personal observations, affected by your armor and buffs.",22,-55,515)
         label(form,"Both level",28,-103,125); label(form,"Smallest hit",185,-103,140); label(form,"Largest hit",350,-103,140)
         local selectedLevel
@@ -1224,8 +1302,8 @@ local ink = { 0.75, 0.8, 0.8 }
             selectedLevel=entry and entry.levelMin or nil
             if UIDropDownMenu_SetText then UIDropDownMenu_SetText(level,selectedLevel and tostring(selectedLevel) or "No observed level") end
         end)
-        local notesForm=CreateFrame("Frame","AzerothFieldbookBestiaryDamageNotes",book,"BackdropTemplate")
-        notesForm:SetSize(500,330); notesForm:SetPoint("CENTER"); notesForm:SetFrameStrata("FULLSCREEN_DIALOG"); notesForm:SetFrameLevel(101)
+        local notesForm=CreateFrame("Frame","AzerothFieldbookBestiaryDamageNotes",UIParent,"BackdropTemplate")
+        notesForm:SetSize(500,330); notesForm:SetPoint("CENTER",book,"CENTER"); notesForm:SetFrameStrata("FULLSCREEN_DIALOG")
         notesForm:SetClampedToScreen(true)
         notesForm:SetMovable(true); notesForm:EnableMouse(true); notesForm:RegisterForDrag("LeftButton")
         notesForm:SetScript("OnDragStart",function(self) self:StartMoving() end)
@@ -1278,7 +1356,7 @@ local ink = { 0.75, 0.8, 0.8 }
 
         local rankFrame=CreateFrame("Frame","AzerothFieldbookBestiaryRanks",UIParent,"BackdropTemplate")
         book.rankFrame=rankFrame
-        rankFrame:SetSize(350,270); rankFrame:SetPoint("CENTER")
+        rankFrame:SetSize(320,270); rankFrame:SetPoint("CENTER")
         rankFrame:SetFrameStrata("FULLSCREEN_DIALOG"); rankFrame:SetClampedToScreen(true)
         rankFrame:SetToplevel(true)
         rankFrame:SetScript("OnMouseDown",raiseObservationPicker)
@@ -1290,13 +1368,13 @@ local ink = { 0.75, 0.8, 0.8 }
         rankPaper:SetPoint("TOPLEFT",6,-6); rankPaper:SetPoint("BOTTOMRIGHT",-6,6)
         rankPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         addBackgroundLayer(rankPaper,0.504,0.504,0.48888)
-        label(rankFrame,"FILTER BY RANK",28,-28,290,"GameFontNormalLarge")
-        label(rankFrame,"Show any checked rank. None checked shows all.",28,-58,290,"GameFontHighlightSmall")
+        label(rankFrame,"Filter: Rank",28,-28,264,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        label(rankFrame,"Show any checked rank. None checked shows all.",28,-58,264,"GameFontHighlightSmall")
         local rankChecks={}
         for i, rank in ipairs({"Elite", "Rare", "Rare Elite", "World Boss"}) do
             local check=CreateFrame("CheckButton",nil,rankFrame,"UICheckButtonTemplate")
             check:SetSize(24,24); check:SetPoint("TOPLEFT",28,-88-(i-1)*28)
-            label(rankFrame,rank,58,-93-(i-1)*28,250)
+            label(rankFrame,rank,58,-93-(i-1)*28,234)
             check:SetScript("OnClick",function(self)
                 rankFilters[rank]=self:GetChecked() == true and true or nil
                 offset=0; refresh()
@@ -1317,7 +1395,7 @@ local ink = { 0.75, 0.8, 0.8 }
         table.insert(UISpecialFrames,"AzerothFieldbookBestiaryRanks")
 
         local locationFrame=CreateFrame("Frame","AzerothFieldbookBestiaryLocations",UIParent,"BackdropTemplate")
-        locationFrame:SetSize(440,460); locationFrame:SetPoint("CENTER"); locationFrame:SetFrameStrata("FULLSCREEN_DIALOG"); locationFrame:SetClampedToScreen(true)
+        locationFrame:SetSize(440,178); locationFrame:SetPoint("TOPRIGHT",book,"TOPLEFT",-6,0); locationFrame:SetFrameStrata("FULLSCREEN_DIALOG"); locationFrame:SetClampedToScreen(true)
         locationFrame:SetMovable(true); locationFrame:EnableMouse(true); locationFrame:RegisterForDrag("LeftButton")
         locationFrame:SetScript("OnDragStart",function(self) self:StartMoving() end)
         locationFrame:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
@@ -1328,12 +1406,13 @@ local ink = { 0.75, 0.8, 0.8 }
         locationPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         locationPaper:SetTexCoord(0,1,0,1)
         addBackgroundLayer(locationPaper,0.504,0.504,0.48888)
-        label(locationFrame,"FILTER BY LOCATIONS",28,-28,360,"GameFontNormalLarge")
+        label(locationFrame,"Filter: Locations",28,-28,360,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         label(locationFrame,"Show creatures observed in any checked location.",28,-58,370,"GameFontHighlightSmall")
         local locationScroll=CreateFrame("ScrollFrame",nil,locationFrame,"UIPanelScrollFrameTemplate")
-        locationScroll:SetPoint("TOPLEFT",28,-88); locationScroll:SetSize(370,280)
+        locationScroll:SetPoint("TOPLEFT",28,-88); locationScroll:SetSize(370,28)
         local locationChild=CreateFrame("Frame",nil,locationScroll)
-        locationChild:SetSize(350,280); locationScroll:SetScrollChild(locationChild)
+        locationChild:SetSize(350,28); locationScroll:SetScrollChild(locationChild)
+        locationFrame.scroll=locationScroll
         ns.AutoHideScrollBar(locationScroll)
         local locationRows={}
         local noLocations=label(locationChild,"No locations have been observed yet.",4,-6,330,"GameFontHighlightSmall")
@@ -1348,12 +1427,13 @@ local ink = { 0.75, 0.8, 0.8 }
                 end
             end
             table.sort(names)
+            local contentHeight, viewportHeight=0,0
             for i,location in ipairs(names) do
                 local row=locationRows[i]
                 if not row then
                     row=CreateFrame("CheckButton",nil,locationChild,"UICheckButtonTemplate")
-                    row:SetSize(24,24); row:SetPoint("TOPLEFT",0,-(i-1)*28)
-                    row.text=label(locationChild,"",30,-5-(i-1)*28,300,"GameFontHighlightSmall")
+                    row:SetSize(24,24)
+                    row.text=label(locationChild,"",30,0,300,"GameFontHighlightSmall")
                     row:SetScript("OnClick",function(self)
                         locationFilters[self.location]=self:GetChecked() == true and true or nil
                         offset=0; refresh(); refreshLocationPicker()
@@ -1363,13 +1443,23 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.location=location
                 row:SetChecked(locationFilters[location] == true)
                 row.text:SetText(location)
+                row:ClearAllPoints(); row:SetPoint("TOPLEFT",0,-contentHeight)
+                row.text:ClearAllPoints(); row.text:SetPoint("TOPLEFT",30,-contentHeight-5)
+                contentHeight=contentHeight+math.max(28,row.text:GetStringHeight()+10)
+                if i<=15 then viewportHeight=contentHeight end
                 row:Show(); row.text:Show()
             end
             for i=#names+1,#locationRows do locationRows[i]:Hide(); locationRows[i].text:Hide() end
             noLocations:SetShown(#names==0)
-            local contentHeight = math.max(280,#names*28)
-            local scrollable = contentHeight > 280
+            if #names==0 then
+                contentHeight=math.max(28,noLocations:GetStringHeight()+12)
+                viewportHeight=contentHeight
+            end
+            local scrollable = #names>15
+            locationFrame:SetHeight(88+viewportHeight+62)
+            locationScroll:SetHeight(viewportHeight)
             locationChild:SetHeight(contentHeight)
+            locationScroll:UpdateScrollChildRect()
             local scrollBar = locationScroll.ScrollBar
             if type(scrollBar) == "function" then scrollBar = nil end
             if not scrollBar and type(locationScroll.GetScrollBar) == "function" then
@@ -1378,13 +1468,16 @@ local ink = { 0.75, 0.8, 0.8 }
             if scrollBar then scrollBar:SetShown(scrollable) end
             locationScroll:EnableMouseWheel(scrollable)
             local currentScroll = locationScroll:GetVerticalScroll()
-            locationScroll:SetVerticalScroll(math.min(type(currentScroll) == "number" and currentScroll or 0, contentHeight-280))
+            locationScroll:SetVerticalScroll(math.min(type(currentScroll) == "number" and currentScroll or 0, contentHeight-viewportHeight))
         end
-        button(locationFrame,"Clear all",28,-405,170,function()
+        local clearLocations=button(locationFrame,"Clear all",28,0,170,function()
             for location in pairs(locationFilters) do locationFilters[location]=nil end
             offset=0; refresh(); refreshLocationPicker()
         end)
+        clearLocations:ClearAllPoints(); clearLocations:SetPoint("BOTTOMLEFT",28,22)
         cornerClose(locationFrame)
+        locationFrame.closeButton:SetSize(24,24)
+        ns.StyleWindowScrollBar(locationScroll,locationFrame)
         locationFrame:SetScript("OnShow",refreshLocationPicker)
         locationFrame:SetScript("OnHide",function(self) self:StopMovingOrSizing() end)
         locationFrame:Hide(); book.locationFrame=locationFrame
@@ -1392,6 +1485,7 @@ local ink = { 0.75, 0.8, 0.8 }
         local sharedBookPagePosition, lastBookPage
         local function rememberBookPagePosition(page)
             if page~=lastBookPage then return end
+            if ns.WindowPositions then ns.WindowPositions:SaveIfMoved(page,"BookPages"); return end
             local left,top=page:GetLeft(),page:GetTop()
             local scale,parentScale=page:GetEffectiveScale(),UIParent:GetEffectiveScale()
             if type(left)=="number" and type(top)=="number" and type(scale)=="number" and scale>0
@@ -1400,7 +1494,9 @@ local ink = { 0.75, 0.8, 0.8 }
             end
         end
         local function showBookPage(page)
-            if sharedBookPagePosition then
+            if ns.WindowPositions then
+                ns.WindowPositions:Restore(page,"BookPages")
+            elseif sharedBookPagePosition then
                 local scale,parentScale=page:GetEffectiveScale(),UIParent:GetEffectiveScale()
                 if type(scale)=="number" and scale>0 and type(parentScale)=="number" and parentScale>0 then
                     page:ClearAllPoints()
@@ -1417,41 +1513,121 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         local function createBookPage(name,title,bottomInset)
             local page=CreateFrame("Frame",name,UIParent,"BackdropTemplate")
-            page:SetSize(610,767); page:SetPoint("CENTER"); page:SetFrameStrata("FULLSCREEN_DIALOG")
+            page:SetSize(610,767); page:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0); page:SetFrameStrata("FULLSCREEN_DIALOG")
             page:SetClampedToScreen(true); page:SetToplevel(true)
             page:SetMovable(true); page:EnableMouse(true); page:RegisterForDrag("LeftButton")
             page:SetScript("OnDragStart",function(self) self:StartMoving() end)
             page:SetScript("OnDragStop",stopBookPageDrag)
             page:SetScript("OnHide",stopBookPageDrag)
-            page:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
             local paper=page:CreateTexture(nil,"BACKGROUND",nil,1)
             paper:SetPoint("TOPLEFT",6,-6); paper:SetPoint("BOTTOMRIGHT",-6,6)
             paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
             paper:SetTexCoord(0,1,0,1); addBackgroundLayer(paper,0.504,0.504,0.48888)
-            label(page,title,30,-30,530,"GameFontNormalLarge")
+            label(page,title,30,-30,530,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
             local scroll=CreateFrame("ScrollFrame",nil,page,"UIPanelScrollFrameTemplate")
-            scroll:SetPoint("TOPLEFT",0,-75); scroll:SetPoint("BOTTOMRIGHT",-32,bottomInset)
+            local contentTop=72
+            scroll:SetPoint("TOPLEFT",0,-contentTop); scroll:SetPoint("BOTTOMRIGHT",-32,bottomInset)
             local body=CreateFrame("Frame",nil,scroll)
             body:SetSize(570,1); scroll:SetScrollChild(body)
             ns.AutoHideScrollBar(scroll)
             cornerClose(page)
+            page.closeButton:SetSize(24,24)
+            page.scroll=scroll
+            ns.StyleWindowScrollBar(scroll,page)
+            -- Blend clipped text AND controls into the exact underlying paper.
+            -- Thin texture strips preserve its pattern and brightness without
+            -- requiring a separate gradient asset or intercepting mouse input.
+            local fadeHeight,steps=12,24
+            local function edgeFade(top)
+                local edge=CreateFrame("Frame",nil,page)
+                edge:SetFrameLevel(scroll:GetFrameLevel()+10)
+                edge:EnableMouse(false)
+                edge:SetPoint(top and "TOPLEFT" or "BOTTOMLEFT",scroll,top and "TOPLEFT" or "BOTTOMLEFT",6,0)
+                edge:SetSize(page:GetWidth()-38,fadeHeight)
+                edge.strips={}
+                for i=1,steps do
+                    local strip=edge:CreateTexture(nil,"ARTWORK")
+                    strip:SetPoint(top and "TOPLEFT" or "BOTTOMLEFT",0,(top and -1 or 1)*(i-1)*fadeHeight/steps)
+                    strip:SetSize(page:GetWidth()-38,fadeHeight/steps)
+                    strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+                    strip:SetAlpha(1-(i-1)/(steps-1))
+                    addBackgroundLayer(strip,0.504,0.504,0.48888)
+                    edge.strips[i]=strip
+                end
+                return edge
+            end
+            page.topFade,page.bottomFade=edgeFade(true),edgeFade(false)
+            -- The parchment masks sit over scrolling content, but under the
+            -- window trim. Keep this decorative layer transparent to clicks.
+            page.border=CreateFrame("Frame",nil,page,"BackdropTemplate")
+            page.border:SetAllPoints(page)
+            page.border:SetFrameLevel(page.topFade:GetFrameLevel()+1)
+            page.border:EnableMouse(false)
+            page.border:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
+            page.closeButton:SetFrameLevel(page.border:GetFrameLevel()+1)
+            local function layoutFades()
+                local width,height=page:GetWidth()-12,page:GetHeight()-12
+                local stripHeight=fadeHeight/steps
+                for _,edge in ipairs({page.topFade,page.bottomFade}) do
+                    edge:SetWidth(page:GetWidth()-38)
+                    for i,strip in ipairs(edge.strips) do
+                        local y=edge==page.topFade and (contentTop+(i-1)*stripHeight) or (page:GetHeight()-bottomInset-i*stripHeight)
+                        strip:SetWidth(page:GetWidth()-38)
+                        strip:SetTexCoord(0,(page:GetWidth()-38)/width,(y-6)/height,(y+stripHeight-6)/height)
+                    end
+                end
+            end
+            local function updateFades()
+                local range=math.max(0,scroll:GetVerticalScrollRange() or 0)
+                local offset=scroll:GetVerticalScroll() or 0
+                page.topFade:SetShown(range>0 and offset>0)
+                page.bottomFade:SetShown(range>0 and offset<range)
+            end
+            scroll:HookScript("OnVerticalScroll",updateFades)
+            scroll:HookScript("OnScrollRangeChanged",updateFades)
+            scroll:HookScript("OnShow",updateFades)
+            page:HookScript("OnSizeChanged",layoutFades)
+            layoutFades(); updateFades()
             return page,body
         end
         local help,helpBody=createBookPage("AzerothFieldbookHelp","AZEROTH FIELDBOOK - HELP",24)
-        local helpInstructions=label(helpBody,"|cffffd1001. Encounter|r\nTarget or mouse over an attackable NPC to add it to your Bestiary. Its name, creature type, location and observed level range are recorded automatically.\n\n|cffffd1002. Record|r\nReadable casts and safe post-combat observations are added as pending notes. Abilities the addon cannot observe directly can also be added manually. Damage ranges must be recorded manually from your own data. Equal-level observations are recommended so level scaling does not distort the results.\n\n|cffffd1003. Review|r\nOpen the Bestiary and select a creature to review its observations. Confirm accurate abilities, reject doubtful ones, or remove notes you no longer want.\n\n|cffffd1004. Lock Entry|r\nWhen you are satisfied with an entry, lock it to stop further changes. Confirmed abilities appear in NPC tooltips. Kill and discovery points continue, and ID Logs, Notes and received Rumours remain separate and editable. Unlock to resume recording and hide its abilities from tooltips.\n\n|cffffd1005. Browse|r\nUse creature-type filters and search to navigate the Bestiary. Click Index to reveal the A-Z tabs; click it again to hide them and clear the letter filter. Account-wide tracking is on by default in Options. Turn it off to use this character's separate journal; changes apply after /reload. Existing character journals merge once when first using account tracking.\n\n|cffffd1006. Share|r\nOutside combat, Share sends one creature to one named recipient. Basics cost 1 point; each selected rumour adds 1 point. Choose any number of existing traits within the report size limit. All received traits are unverified Rumours with the offering character's name. Click Rumours beside Creature Notes to open or close its separate window. The green tick verifies a rumour and adds it to your journal; x rejects it. Unlock an entry before verifying. Matching manual records remove rumours, and repeated rejected claims are marked Previously rejected. Receiving alone never confirms traits or abilities; verified abilities use the normal entry-lock and tooltip rules.\n\nThe book shows earned progress. Share shows available points after spending and reservations. Send reserves points; acceptance commits them. Declines and pre-commit cancellation are free. Unknown delivery keeps the cost spent: reopen Share to retry the same report, at most three times within 24 hours. Receiving earns no points; later personal discovery still can. Entry deletion preserves credited milestones and spending; full reset erases them.",35,0,535)
+        local helpInstructions=label(helpBody,"|cffffd1001. Encounter|r\nTarget or mouse over an attackable NPC to add it to your Bestiary. Its name, creature type, location and observed level range are recorded automatically.\n\n|cffffd1002. Record|r\nReadable casts and safe post-combat observations are added as pending notes. Abilities the addon cannot observe directly can also be added manually. Damage ranges must be recorded manually from your own data. Equal-level observations are recommended so level scaling does not distort the results.\n\n|cffffd1003. Review|r\nOpen the Bestiary and select a creature to review its observations. Confirm accurate abilities, reject doubtful ones, or remove notes you no longer want.\n\n|cffffd1004. Lock Entry|r\nWhen you are satisfied with an entry, lock it to stop further changes. Confirmed abilities appear in NPC tooltips. Kill and discovery points continue, and ID Logs, Notes and received Rumours remain separate and editable. Unlock to resume recording and hide its abilities from tooltips.\n\n|cffffd1005. Browse|r\nUse creature-type filters and search to navigate the Bestiary. Click Index to reveal the A-Z tabs; click it again to hide them and clear the letter filter. Account-wide tracking is on by default in Options. Turn it off to use this character's separate journal; changes apply after /reload. Existing character journals merge once when first using account tracking.\n\n|cffffd1006. Share|r\nOutside combat, Share sends one creature to one named recipient. New basics cost 1 point; already-known basics are free. Each selected rumour costs 1 point. Choose any number of existing traits within the report size limit. All received traits are unverified Rumours with the offering character's name. Click Rumours beside Creature Notes to open or close its separate window. The green tick verifies a rumour and adds it to your journal; x rejects it. Unlock an entry before verifying. Matching manual records remove rumours, and repeated rejected claims are marked Previously rejected. Receiving alone never confirms traits or abilities; verified abilities use the normal entry-lock and tooltip rules.\n\nThe book shows earned progress. Share shows available points after spending and reservations. Send reserves the maximum cost; acceptance waives the basic-information point if the recipient already knows it and commits the final cost. Declines and pre-commit cancellation are free. Unknown delivery keeps the cost spent: reopen Share to retry the same report, at most three times within 24 hours. Receiving earns no points; later personal discovery still can. Entry deletion preserves credited milestones and spending; full reset erases them.",35,0,535)
+        local pointsBlock=CreateFrame("Frame",nil,helpBody,"BackdropTemplate")
+        pointsBlock:SetPoint("TOPLEFT",helpInstructions,"BOTTOMLEFT",0,-18)
+        pointsBlock:SetWidth(535)
+        pointsBlock:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,insets={left=3,right=3,top=3,bottom=3}})
+        pointsBlock:SetBackdropColor(0.12,0.08,0.03,0.35)
+        pointsBlock:SetBackdropBorderColor(0.55,0.40,0.20,1)
+        pointsBlock.title=label(pointsBlock,"Points",14,-14,507,"GameFontNormalLarge")
+        pointsBlock.title:SetTextColor(1,0.82,0.14)
+        pointsBlock.awardHeading=label(pointsBlock,"Earning points",14,0,507,"GameFontNormal")
+        pointsBlock.awardHeading:SetTextColor(1,0.82,0.14)
+        pointsBlock.awards=label(pointsBlock,"+1 for new creature discovery\n+1 for new level discovery on an existing creature\n+1 for new location discovery on an existing creature\n\n+1 for 10 kills\n+2 for 25 kills\n+3 for 50 kills\n\nThe first level and location are included in a new discovery. A sighting that reveals both a new level and location awards +1 total.",14,0,507,"GameFontHighlightSmall")
+        pointsBlock.spendHeading=label(pointsBlock,"Spending points",14,0,507,"GameFontNormal")
+        pointsBlock.spendHeading:SetTextColor(1,0.82,0.14)
+        pointsBlock.spending=label(pointsBlock,"Use points to share creature information with another player.\n\n1 point for basic information; free if the recipient already knows it.\n1 point per selected rumour.\n\nSending reserves the maximum cost; points are spent after acceptance. Receiving information is free.",14,0,507,"GameFontHighlightSmall")
+        help.pointsBlock=pointsBlock
         local helpDetails=CreateFrame("Frame",nil,helpBody)
-        helpDetails:SetPoint("TOPLEFT",helpInstructions,"BOTTOMLEFT",-35,-14)
+        helpDetails:SetPoint("TOPLEFT",pointsBlock,"BOTTOMLEFT",-35,-18)
         helpDetails:SetWidth(570)
         label(helpDetails,"|cffffd100ABOUT|r",35,0,120,"GameFontNormal")
         local about=label(helpDetails,"Created by Spinkler\n\nDeveloped with AI-assisted coding tools.\nDesign, direction, testing and final development decisions by the author.",35,-22,535,"GameFontHighlightSmall")
         help:SetScript("OnShow",function(self)
+            local pointsHeight=14
+            for i,text in ipairs({pointsBlock.title,pointsBlock.awardHeading,pointsBlock.awards,pointsBlock.spendHeading,pointsBlock.spending}) do
+                if i>1 then pointsHeight=pointsHeight+((i==2 or i==4) and 16 or 8) end
+                text:ClearAllPoints(); text:SetPoint("TOPLEFT",14,-pointsHeight)
+                pointsHeight=pointsHeight+text:GetStringHeight()
+            end
+            pointsHeight=pointsHeight+14
+            pointsBlock:SetHeight(pointsHeight)
             helpDetails:SetHeight(22+about:GetStringHeight())
-            helpBody:SetHeight(helpInstructions:GetStringHeight()+14+22+about:GetStringHeight()+16)
+            helpBody:SetHeight(helpInstructions:GetStringHeight()+18+pointsHeight+18+22+about:GetStringHeight()+16)
             showBookPage(self)
         end)
         help:Hide(); book.help=help
         local options,optionsBody=createBookPage("AzerothFieldbookOptions","AZEROTH FIELDBOOK - OPTIONS",65)
-        optionsBody:SetHeight(682)
+        optionsBody:SetHeight(714)
         options.accountWideTracking=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
         options.accountWideTracking:SetPoint("TOPLEFT",30,0); options.accountWideTracking:SetSize(24,24)
         label(optionsBody,"Account-wide tracking",58,-6,235,"GameFontHighlightSmall")
@@ -1478,7 +1654,7 @@ local ink = { 0.75, 0.8, 0.8 }
         options.creatureAnnouncement:SetScript("OnClick",function(self) journal:SetCreatureAnnouncement(self:GetChecked() == true) end)
         options.spellIDTooltips=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
         options.spellIDTooltips:SetPoint("TOPLEFT",30,-64); options.spellIDTooltips:SetSize(24,24)
-        label(optionsBody,"Show aura spell IDs on tooltips",58,-70,460,"GameFontHighlightSmall")
+        label(optionsBody,"Show spell IDs on tooltips if possible",58,-70,460,"GameFontHighlightSmall")
         options.spellIDTooltips:SetScript("OnClick",function(self) journal:SetSpellIDTooltips(self:GetChecked() == true) end)
         options.displayCastIDs=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
         options.displayCastIDs:SetPoint("TOPLEFT",30,-96); options.displayCastIDs:SetSize(24,24)
@@ -1541,6 +1717,20 @@ local ink = { 0.75, 0.8, 0.8 }
             rememberObservationPosition(active)
             closeOtherObservationPickers(active)
         end)
+        options.blockIncomingOffers=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
+        options.blockIncomingOffers:SetPoint("TOPLEFT",30,-674); options.blockIncomingOffers:SetSize(24,24)
+        label(optionsBody,"Block incoming offers",58,-680,470,"GameFontHighlightSmall")
+        options.blockIncomingOffers:SetScript("OnClick",function(self)
+            journal:SetBlockIncomingOffers(self:GetChecked() == true)
+        end)
+        options.blockIncomingOffers:SetScript("OnEnter",function(self)
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+            GameTooltip:SetText("Block incoming offers")
+            GameTooltip:AddLine("Automatically decline new offers and close unaccepted offers. Reports already accepted can still finish.",1,1,1,true)
+            GameTooltip:Show()
+        end)
+        options.blockIncomingOffers:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         local scaleLabel=label(optionsBody,"UI scale: 100%",58,-572,460,"GameFontHighlightSmall")
         options.uiScale=CreateFrame("Slider",nil,optionsBody,"OptionsSliderTemplate")
         options.uiScale:SetPoint("TOPLEFT",30,-592); options.uiScale:SetSize(180,16)
@@ -1550,25 +1740,34 @@ local ink = { 0.75, 0.8, 0.8 }
         scaleTrack:SetPoint("TOPLEFT",2,-4); scaleTrack:SetPoint("BOTTOMRIGHT",-2,4)
         scaleTrack:SetColorTexture(0.045,0.032,0.018,1)
         local pendingScale
+        local function updateScaleControls(value)
+            scaleLabel:SetText("UI scale: " .. math.floor(value*100+0.5) .. "%")
+            options.uiScaleDecrease:SetEnabled(value>0.5)
+            options.uiScaleIncrease:SetEnabled(value<1.5)
+        end
+        local function applyScale(value)
+            value=math.max(0.5,math.min(1.5,value))
+            options.uiScale:SetValue(value)
+            pendingScale=nil
+            journal:SetUIScale(value)
+            updateScaleControls(value)
+        end
+        local function stepScale(percent)
+            applyScale((math.floor(journal:GetUIScale()*100+0.5)+percent)/100)
+        end
+        options.uiScaleDecrease=button(optionsBody,"-",230,-587,28,function() stepScale(-5) end)
+        options.uiScaleReset=button(optionsBody,"100%",264,-587,65,function() applyScale(1) end)
+        options.uiScaleIncrease=button(optionsBody,"+",335,-587,28,function() stepScale(5) end)
         options.uiScale:SetScript("OnValueChanged",function(_,value)
             pendingScale=math.max(0.5,math.min(1.5,value))
-            scaleLabel:SetText("UI scale: " .. math.floor(pendingScale*100+0.5) .. "%")
+            updateScaleControls(pendingScale)
         end)
         local function applyPendingScale()
-            if pendingScale then
-                local value=pendingScale
-                pendingScale=nil
-                journal:SetUIScale(value)
-            end
+            if pendingScale then applyScale(pendingScale) end
         end
         options.uiScale:SetScript("OnMouseUp",applyPendingScale)
         options.uiScale:EnableKeyboard(false)
         options.uiScale:SetScript("OnHide",function() pendingScale=nil end)
-        button(optionsBody,"100%",230,-587,65,function()
-            options.uiScale:SetValue(1)
-            pendingScale=nil
-            journal:SetUIScale(1)
-        end)
         options.showMinimapButton=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
         options.showMinimapButton:SetPoint("TOPLEFT",30,-529); options.showMinimapButton:SetSize(24,24)
         label(optionsBody,"Show minimap button",58,-535,470,"GameFontHighlightSmall")
@@ -1590,6 +1789,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 button1 = YES, button2 = NO,
                 OnAccept = function()
                     journal:ResetDatabase()
+                    options.blockIncomingOffers:SetChecked(journal:GetBlockIncomingOffers())
                     refreshTrackingOption()
                     for location in pairs(locationFilters) do locationFilters[location] = nil end
                     book:SetBackgroundBrightness(journal:GetBackgroundBrightness())
@@ -1606,7 +1806,9 @@ local ink = { 0.75, 0.8, 0.8 }
             showBookPage(self)
             refreshTrackingOption()
             options.singleObservationWindow:SetChecked(journal:GetSingleObservationWindow())
+            options.blockIncomingOffers:SetChecked(journal:GetBlockIncomingOffers())
             options.uiScale:SetValue(journal:GetUIScale())
+            pendingScale=nil; updateScaleControls(journal:GetUIScale())
             options.showMinimapButton:SetChecked(journal:GetMinimapButton())
             options.pointAnnouncements:SetChecked(journal:GetPointAnnouncements())
             options.creatureNotesFollowTarget:SetChecked(journal:GetNotesFollowTarget())
@@ -1627,14 +1829,50 @@ local ink = { 0.75, 0.8, 0.8 }
             if elapsed>=0.5 then elapsed=0; if revision~=journal.revision then revision=journal.revision; refresh() end end
         end)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiary"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookHelp"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookOptions"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryDamageNotes"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryLocations"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryOffenses"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryDefenses"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryBehaviour" end
+        local bookScale=1
         if UIParent.GetWidth and UIParent.GetHeight then
-            book:SetScale(math.min(1, (UIParent:GetWidth()-30)/960, (UIParent:GetHeight()-30)/740))
+            bookScale=math.min(1, (UIParent:GetWidth()-30)/960, (UIParent:GetHeight()-30)/740)
         end
+        -- Independent roots can move in front of or behind the book. Preserve
+        -- the scale formerly inherited by its child dialogs and their anchors.
+        for _, window in ipairs({book,deleteForm,effectPicker,form,notesForm}) do window:SetScale(bookScale) end
         if ns.UIScale then
-            for _, window in ipairs({book,help,options,locationFrame,rankFrame,offensePicker,defensePicker,behaviourPicker}) do
+            for _, window in ipairs({book,help,options,locationFrame,rankFrame,offensePicker,defensePicker,behaviourPicker,deleteForm,effectPicker,form,notesForm}) do
                 ns.UIScale:Register(window)
             end
         end
+        if ns.WindowFocus then ns.WindowFocus:Register(deleteForm) end
+        -- Establish the initial stacks before registering saved-position overrides.
+        for _, picker in ipairs(observationPickers) do
+            picker:ClearAllPoints()
+            picker:SetPoint("TOPLEFT",book,"TOPRIGHT",6,-(form:GetHeight()*form:GetEffectiveScale()/picker:GetEffectiveScale()+6))
+        end
+        rankFrame:ClearAllPoints()
+        local function positionRankFilter(self)
+            self:SetPoint("TOPRIGHT",book,"TOPLEFT",-6,-(locationFrame:GetHeight()*locationFrame:GetEffectiveScale()/self:GetEffectiveScale()+6))
+        end
+        positionRankFilter(rankFrame)
+        if ns.WindowPositions then
+            for _, window in ipairs({book,locationFrame,notesForm}) do
+                ns.WindowPositions:Register(window,window:GetName())
+            end
+            ns.WindowPositions:Register(rankFrame,rankFrame:GetName(),nil,positionRankFilter)
+            ns.WindowPositions:Register(effectPicker,"AbilityEffects")
+            ns.WindowPositions:Register(form,"DamageObservation")
+            for _, window in ipairs({help,options}) do
+                local page=window
+                ns.WindowPositions:Register(page,page:GetName(),function()
+                    return page==lastBookPage and "BookPages" or nil
+                end)
+            end
+            for _, window in ipairs(observationPickers) do
+                local picker=window
+                ns.WindowPositions:Register(picker,picker:GetName(),function()
+                    return journal:GetSingleObservationWindow() and picker==lastObservationPicker and "ObservationPanels" or nil
+                end)
+            end
+        end
+        if ns.SpellIDWindow and ns.SpellIDWindow.AnchorToBook then ns.SpellIDWindow:AnchorToBook(book) end
         book:Hide()
     end
     local controller = {}

@@ -81,12 +81,12 @@ def new_client(diagnostics=False, tracking=False):
         function points() return AzerothFieldbookDB.bestiary.points.earned end
         function output() return table.concat(messages, '\n') end
     ''')
-    lua.execute(ROOT.joinpath('BestiaryJournal.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
+    lua.execute(ROOT.joinpath('BestiaryJournal.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
     if tracking:
-        lua.execute(ROOT.joinpath('Tracking.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
+        lua.execute(ROOT.joinpath('Tracking.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
     if diagnostics:
-        lua.execute(ROOT.joinpath('DebugReport.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
+        lua.execute(ROOT.joinpath('DebugReport.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
         lua.execute('ns.ShowDebugReport = function(text) copiedReport = text end')
-    lua.execute(ROOT.joinpath('AzerothFieldbook.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
+    lua.execute(ROOT.joinpath('AzerothFieldbook.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
     lua.execute("fire('ADDON_LOADED', 'AzerothFieldbook')")
     return lua

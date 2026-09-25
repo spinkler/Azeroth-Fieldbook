@@ -1,9 +1,10 @@
 local addonName, ns = ...
 local schema = ns.SharingReport
 local PREFIX, DAY, OFFER_SECONDS = "AFBShare", 86400, 180
--- Protocol 3 checks the installed addon version during offers and paid retries.
+local PREFLIGHT_SECONDS = 20
+-- Protocol 4 adds the recipient's basic-information cost to acceptance replies.
 -- The literal report format stays at schema 1 so paid retries retain their data.
-local PROTOCOL = "3"
+local PROTOCOL = "4"
 local MAX_INCOMING, MAX_RECEIPTS, CHUNK = 3, 512, 180
 local function size(t) local n=0; for _ in pairs(t) do n=n+1 end; return n end
 local function key(sender,id) return sender:lower() .. "/" .. id end
@@ -18,7 +19,9 @@ function ns.CreateSharing(journal, env)
     local engine={ PREFIX=PREFIX }
     journal.sharing=engine
     local store=journal:GetSharingStorage()
-    local queue, changed, imported = {}, nil, nil
+    local queue, changed, imported, costAdjusted = {}, nil, nil, nil
+    local clock=env.clock or env.now
+    local preflightDeadline
     local nextSend, nextHello, helloWindow, helloCount = 0, {}, 0, 0
     local receiveWindow, receiveCount = 0, 0
     local function notify(reason) if changed then changed(reason) end end
@@ -36,8 +39,16 @@ function ns.CreateSharing(journal, env)
     local function finish(tx,stage,message)
         purge(tx.id,tx.recipient)
         if not tx.spent then journal:ReleaseShare(tx.id) end
+        preflightDeadline=nil
         tx.stage,tx.message=stage,message
         notify()
+    end
+    local function expirePreflight()
+        local tx=store.outgoing
+        if tx and tx.stage=="preflight" and preflightDeadline and clock()>=preflightDeadline then
+            finish(tx,"failed","No response from " .. tx.recipient .. " after " .. PREFLIGHT_SECONDS ..
+                " seconds. Azeroth Fieldbook may be missing or disabled, or the player may be offline, restricted or lagging. No points spent. Check their name and try again.")
+        end
     end
     local function unknown(tx,message)
         purge(tx.id,tx.recipient)
@@ -69,7 +80,7 @@ function ns.CreateSharing(journal, env)
     end
     local function offer(tx)
         purge(tx.id,tx.recipient)
-        if not tx.spent then tx.stage="offering" end
+        if not tx.spent then tx.stage="offering"; preflightDeadline=nil end
         tx.deadline=env.now()+OFFER_SECONDS
         tx.message="Waiting for " .. tx.recipient .. " to accept or decline."
         local count=math.ceil(#tx.payload/CHUNK)
@@ -81,9 +92,14 @@ function ns.CreateSharing(journal, env)
         end
         notify()
     end
-    local function commit(tx)
+    local function commit(tx,basicCost)
+        local adjusted=false
         if not tx.spent then
-            if not journal:CommitShare(tx.id) then finish(tx,"failed","Reservation missing; nothing sent for import."); return end
+            local ok,cost=journal:CommitShare(tx.id,basicCost==0)
+            if not ok then finish(tx,"failed","Reservation missing; nothing sent for import."); return end
+            tx.cost,tx.basicCost=cost,basicCost
+            tx.basicInfoWaived=basicCost==0
+            adjusted=tx.basicInfoWaived
             tx.spent=true
         end
         purge(tx.id,tx.recipient)
@@ -91,6 +107,7 @@ function ns.CreateSharing(journal, env)
         tx.message="Accepted. " .. tx.cost .. " points spent; awaiting import acknowledgement."
         send("C",tx.id,tx.recipient)
         notify()
+        if adjusted and costAdjusted then costAdjusted(tx) end
     end
     -- An uncommitted offer cannot import. Reload safely cancels its reservation.
     -- A committed decision remains paid and uncertain until receipt is reconciled.
@@ -110,7 +127,13 @@ function ns.CreateSharing(journal, env)
     prune()
     function engine:SetChangedCallback(callback) changed=callback end
     function engine:SetImportedCallback(callback) imported=callback end
+    function engine:SetCostAdjustedCallback(callback) costAdjusted=callback end
     function engine:GetOutgoing() return store.outgoing end
+    function engine:GetPreflightSecondsRemaining()
+        if store.outgoing and store.outgoing.stage=="preflight" and preflightDeadline then
+            return math.max(0,math.ceil(preflightDeadline-clock()))
+        end
+    end
     function engine:HasActiveOutgoing() return active(store.outgoing)==true end
     function engine:Available()
         if env.ready~=true then return false,env.error end
@@ -118,6 +141,12 @@ function ns.CreateSharing(journal, env)
         return true
     end
     function engine:Blocked() return env.blocked() end
+    function engine:ValidateRecipient(recipient)
+        recipient=schema.Character(recipient)
+        if not recipient then return nil,"Enter another character's full name, including their surname if they have one." end
+        if schema.SameCharacter(recipient,env.character) then return nil,"You cannot send an offer to yourself." end
+        return recipient
+    end
     function engine:GetIncoming()
         local list={}
         for _,item in pairs(store.incoming) do
@@ -132,8 +161,8 @@ function ns.CreateSharing(journal, env)
         local blocked,reason=env.blocked()
         if blocked then return nil,reason or "Share outside combat and messaging restrictions." end
         if active(store.outgoing) then return nil,"An outgoing report is already active. Use its status, Cancel or Retry." end
-        recipient=schema.Character(recipient)
-        if not recipient or schema.SameCharacter(recipient,env.character) then return nil,"Enter another character's full name, including their surname if they have one." end
+        recipient,err=self:ValidateRecipient(recipient)
+        if not recipient then return nil,err end
         if type(captured)~="table" then return nil,"Select a creature first." end
         local value={}
         for k,v in pairs(captured) do value[k]=v end
@@ -145,9 +174,11 @@ function ns.CreateSharing(journal, env)
         if not payload then return nil,err end
         local cost=schema.Cost(value.rumours)
         if not journal:ReserveShare(id,cost) then return nil,"Insufficient available points." end
-        local tx={id=id,recipient=recipient,payload=payload,cost=cost,created=env.now(),
-            stage="preflight",deadline=env.now()+30,retries=0,message="Checking recipient compatibility; points reserved."}
+        local tx={id=id,recipient=recipient,payload=payload,cost=cost,basicCost=1,created=env.now(),
+            stage="preflight",deadline=env.now()+PREFLIGHT_SECONDS,retries=0,
+            message="Checking recipient compatibility (up to " .. PREFLIGHT_SECONDS .. " seconds); points reserved."}
         store.outgoing=tx
+        preflightDeadline=clock()+PREFLIGHT_SECONDS
         if not send("H",id,recipient,env.addonVersion) then finish(tx,"failed","Send queue full; no points spent."); return nil,tx.message end
         notify()
         return tx
@@ -188,6 +219,7 @@ function ns.CreateSharing(journal, env)
     function engine:Accept(item)
         local ready,err=self:Available()
         if not ready then return nil,err or "Addon messaging is unavailable." end
+        if journal:GetBlockIncomingOffers() then return nil,"Incoming offers are blocked in Options." end
         if env.blocked() then return nil,"Accept outside combat and messaging restrictions." end
         if not item or store.incoming[key(item.sender,item.id)]~=item or item.state~="pending" then return false end
         if item.addonVersion~=env.addonVersion then return nil,"The sender's addon version must match yours before accepting." end
@@ -196,8 +228,10 @@ function ns.CreateSharing(journal, env)
         if size(store.receipts)>=MAX_RECEIPTS then return nil,"Receipt storage full; try after older receipts expire." end
         local preview,err=journal:PreviewReport(item.report,item.sender)
         if not preview then return nil,err end
+        -- Freeze the quote with consent so retries/reloads cannot change it.
+        item.basicCost=preview.newBasic and 1 or 0
         item.state,item.expires="accepted",item.report.created+DAY
-        send("A",item.id,item.sender)
+        send("A",item.id,item.sender,tostring(item.basicCost))
         notify()
         return true
     end
@@ -208,6 +242,19 @@ function ns.CreateSharing(journal, env)
         send("D",item.id,item.sender)
         notify()
         return true
+    end
+    function engine:ApplyIncomingOfferSetting()
+        if not journal:GetBlockIncomingOffers() then return end
+        for k,item in pairs(store.incoming) do
+            -- Accepted reports may already have cost the sender points. Allow
+            -- their commit/receipt exchange to finish, including paid retries.
+            if item.state~="accepted" then
+                store.incoming[k]=nil
+                purge(item.id,item.sender)
+                send("D",item.id,item.sender)
+            end
+        end
+        notify()
     end
     function engine:Receive(prefix,message,channel,sender)
         if not schema.Public(prefix) or not schema.Public(channel) or not schema.Public(sender)
@@ -221,7 +268,12 @@ function ns.CreateSharing(journal, env)
         if receiveCount>180 then return end
         local version,kind,id,body=message:match("^(%d+)~([A-Z])~([%d%-]+)~?(.*)$")
         if not version or #version>2 or not schema.Transaction(id) then return end
-        if kind~="O" and kind~="H" and kind~="R" and kind~="I" and body~="" then return end
+        if kind=="A" then
+            if body~="0" and body~="1" then return end
+        elseif kind~="O" and kind~="H" and kind~="R" and kind~="I" and body~="" then return end
+        -- A reply arriving after the deadline cannot revive an expired offer,
+        -- even if it arrives before the next periodic update.
+        expirePreflight()
         prune()
         local k=key(sender,id)
         local item,receipt,tx=store.incoming[k],store.receipts[k],store.outgoing
@@ -235,9 +287,14 @@ function ns.CreateSharing(journal, env)
             if version~=PROTOCOL then send("I",id,sender,nil,version); return end
             if not validVersion(body) or body~=env.addonVersion then send("I",id,sender,env.addonVersion); return end
             if receipt then send("K",id,sender); return end
+            if journal:GetBlockIncomingOffers() and not (item and item.state=="accepted") then
+                if item then self:ApplyIncomingOfferSetting() else send("D",id,sender) end
+                return
+            end
             if item then
                 item.addonVersion=body
-                send(item.state=="accepted" and "A" or "R",id,sender,item.state~="accepted" and env.addonVersion or nil)
+                send(item.state=="accepted" and "A" or "R",id,sender,
+                    item.state=="accepted" and tostring(item.basicCost or 1) or env.addonVersion)
                 return
             end
             if size(store.incoming)>=MAX_INCOMING then send("D",id,sender); return end
@@ -256,6 +313,7 @@ function ns.CreateSharing(journal, env)
             if not validVersion(body) or body~=env.addonVersion then incompatible(tx,body); return end
             offer(tx)
         elseif kind=="O" and item and (item.state=="receiving") then
+            if journal:GetBlockIncomingOffers() then self:ApplyIncomingOfferSetting(); return end
             local index,total,data=body:match("^(%d+)~(%d+)~(.*)$")
             index,total=tonumber(index),tonumber(total)
             if not schema.Integer(total,1,12) or not schema.Integer(index,1,total)
@@ -275,7 +333,7 @@ function ns.CreateSharing(journal, env)
             item.state,item.report,item.payload,item.chunks="pending",value,payload,nil
             notify()
         elseif kind=="A" and expected and (tx.stage=="offering" or tx.stage=="committed" or tx.stage=="unknown") then
-            commit(tx)
+            commit(tx,tonumber(body))
         elseif kind=="D" and expected then
             if tx.spent then unknown(tx,"Receiver declined or could not stage the retry.")
             else finish(tx,"declined","Offer declined, invalid, or receiver busy; no points spent.") end
@@ -299,12 +357,12 @@ function ns.CreateSharing(journal, env)
         end
     end
     function engine:Tick()
+        expirePreflight()
         prune()
         local now,tx=env.now(),store.outgoing
-        if active(tx) and tx.stage~="unknown" and now>tx.deadline then
+        if active(tx) and tx.stage~="unknown" and tx.stage~="preflight" and now>tx.deadline then
             if tx.spent then unknown(tx,"Delivery acknowledgement timed out.")
-            else finish(tx,"failed",tx.stage=="preflight" and "Receiver unavailable, restricted, offline or incompatible; no points spent."
-                or "Offer expired without acceptance; no points spent.") end
+            else finish(tx,"failed","Offer expired without acceptance; no points spent.") end
         end
         if env.blocked() or now<nextSend or #queue==0 then return end
         -- One small packet per second, no catch-up bursts. This is deliberately
@@ -322,7 +380,7 @@ function ns.CreateSharing(journal, env)
     end
     function engine:Reset()
         store=journal:GetSharingStorage()
-        queue={}; nextHello={}; nextSend=0
+        queue={}; nextHello={}; nextSend=0; preflightDeadline=nil
         notify("reset")
     end
     return engine
@@ -336,7 +394,10 @@ function ns.InitializeSharing(journal)
     end
     local registration=Enum and Enum.RegisterAddonMessagePrefixResult
     local results=Enum and Enum.SendAddonMessageResult
-    local env={now=function() return time() end}
+    -- Runtime elapsed time bounds the initial check independently of wall-clock
+    -- adjustments. Persisted report timestamps still use the calendar clock.
+    local runtime=0
+    local env={now=function() return time() end,clock=function() return runtime end}
     function env.blocked()
         if read(InCombatLockdown)~=false then return true,"Leave combat to send this report." end
         local restrictions=Enum and Enum.AddOnRestrictionType
@@ -400,6 +461,7 @@ function ns.InitializeSharing(journal)
     end)
     local elapsed=0
     frame:SetScript("OnUpdate",function(_,delta)
+        runtime=runtime+delta
         elapsed=elapsed+delta
         if elapsed>=0.25 then elapsed=0; engine:Tick() end
     end)

@@ -273,5 +273,12 @@ assert(panel.alpha==1)
 assert(db.spellId==nil and db.observed==nil)
 ns.SpellIDWindow:Initialize(db)
 assert(panel.point[1]=='CENTER' and panel.point[4]==12 and panel.point[5]==34)
+AzerothFieldbookBestiary={}
+ns.SpellIDWindow:AnchorToBook(AzerothFieldbookBestiary)
+assert(panel.point[1]=='CENTER','saved spell-window positions stay independent')
+db.spellIDWindowPosition=nil
+ns.SpellIDWindow:Initialize(db)
+assert(panel.point[1]=='RIGHT' and panel.point[2]==AzerothFieldbookBestiary and panel.point[3]=='LEFT',
+    'untouched spell window defaults beside the main book once it exists')
 ''')
 print('Spell ID window lifecycle checks passed (live rendering still requires WoW).')

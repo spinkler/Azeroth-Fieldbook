@@ -1,5 +1,31 @@
 local _, ns = ...
 
+-- Shared parchment-window track, spanning the window without overlapping its close button.
+function ns.StyleWindowScrollBar(scroll, window)
+    local bar = scroll.ScrollBar
+    if type(bar) == "function" then bar = nil end
+    if not bar and type(scroll.GetScrollBar) == "function" then bar = scroll:GetScrollBar() end
+    if not bar then return end
+    local up, down = bar.ScrollUpButton, bar.ScrollDownButton
+    local upHeight = up and type(up) ~= "function" and up:GetHeight() or 16
+    local downHeight = down and type(down) ~= "function" and down:GetHeight() or 16
+    bar:ClearAllPoints()
+    bar:SetPoint("TOP", window.closeButton, "BOTTOM", -1, 1-upHeight)
+    bar:SetPoint("BOTTOM", window, "BOTTOMRIGHT", -16, 6+downHeight)
+    if up and type(up) ~= "function" then
+        up:ClearAllPoints(); up:SetPoint("BOTTOM", bar, "TOP", 0, 0)
+    end
+    if down and type(down) ~= "function" then
+        down:ClearAllPoints(); down:SetPoint("TOP", bar, "BOTTOM", 0, 0)
+    end
+    bar.trackBorder = bar:CreateTexture(nil, "BACKGROUND", nil, -2)
+    bar.trackBorder:SetPoint("TOPLEFT", -2, 2); bar.trackBorder:SetPoint("BOTTOMRIGHT", 2, -2)
+    bar.trackBorder:SetColorTexture(0.37, 0.25, 0.11, 0.9)
+    bar.trackBackground = bar:CreateTexture(nil, "BACKGROUND", nil, -1)
+    bar.trackBackground:SetPoint("TOPLEFT", -1, 1); bar.trackBackground:SetPoint("BOTTOMRIGHT", 1, -1)
+    bar.trackBackground:SetColorTexture(0.045, 0.032, 0.018, 0.9)
+end
+
 -- Keep the template's scrolling behavior, but only display its controls when
 -- there is content outside the viewport. Range changes also cover EditBox text.
 function ns.AutoHideScrollBar(scroll)

@@ -65,8 +65,8 @@ are retried on login, entering the world,
 leaving combat and player name updates. The composer displays the specific
 prerequisite that currently disables sending.
 
-Compatibility requires sharing protocol **3**, literal report schema **1**, and
-the **same installed addon version** on both clients (currently 0.9.11). The native
+Compatibility requires sharing protocol **4**, literal report schema **1**, and
+the **same installed addon version** on both clients (from the current TOC). The native
 adapter reads `C_AddOns.GetAddOnMetadata(addonName, "Version")`; an unavailable or
 unreadable version disables sharing. `H` and `R` carry a bounded literal version
 string. Both ends check it before sending/staging report data, and a mismatch
@@ -78,8 +78,10 @@ handshake and time out without spending. Released 0.8.3 does not implement this
 prefix and will time out. Paid retries also recheck versions. Their original
 schema-1 data and historical cost remain intact after both clients update; a
 mismatch keeps an already-paid transaction unknown, without refund or another
-charge. Pricing remains **1 point for basics plus 1 point per rumour**, with no
-two-rumour selection cap.
+charge. Pricing is **1 point for new basics plus 1 point per selected rumour**, with
+the basic point waived when the recipient already knows the reported basics.
+There is no two-rumour selection cap. The maximum estimate is reserved until
+acceptance; the final charge and waiver survive retries without repricing.
 
 ## Transaction lifecycle
 
@@ -88,14 +90,16 @@ two-rumour selection cap.
    reserves 1 point plus the selected rumour count. Only one outgoing transaction
    is active per character.
 3. `H`/`R` exchange installed addon versions during compatibility preflight
-   (30-second deadline). Only WHISPER is used. `I` rejects incompatibility and
+   (20-second deadline). Only WHISPER is used. `I` rejects incompatibility and
    includes the receiver's addon version when supported. `O` chunks carry the validated offer for
    **preview only**; they cannot import it. Offer staging expires after 180 seconds.
 4. Recipient previews actual sender, NPC ID, basics, all selected unverified claims,
    conflicts and new-information status. `D` declines; closing a pending offer
    declines too. `X` cancels an uncommitted outgoing offer. No recipient points move.
-5. Accept saves the full validated incoming report and explicit consent before
-   sending `A`. The sender turns its reservation into persistent spending **once**,
+5. Accept rechecks the recipient's current basics and saves the full validated
+   incoming report, explicit consent and basic cost before sending `A` with a
+   literal `0` (already known) or `1` (new basics). The sender atomically turns its
+   reservation into the final spending **once**, releasing the waived point,
    records the committed decision, and queues `C` to authorize import. A timeout,
    cancellation, API failure or reload before this decision releases the reservation.
 6. Only an accepted matching `C` can import. The receiver revalidates identity,
@@ -306,7 +310,7 @@ considering another transport. Mock tests cannot establish networking or layout.
    discovery credit remain unchanged throughout review.
 
 Before a new offer, also test a deliberate addon-version mismatch between clients
-that support protocol 3: the sender must see both versions, send no report payload,
+that support protocol 4: the sender must see both versions, send no report payload,
 spend no points, and regain its reservation. Restore matching versions for later
 checks. Do this when installing/reloading test builds is practical given the
 current client persistence bug; the existing automated mismatch checks already pass.

@@ -56,8 +56,10 @@ C_DamageMeter = {
         calls=calls+1; return details(mode, guid, creatureID)
     end
 }
-saved = {}
-function record(creatureID, spellID)
+saved, savedNames = {}, {}
+function record(creatureID, spellID, creatureName)
+    assert(type(creatureName)=='string' and creatureName~='', 'every import carries its roster identity')
+    savedNames[creatureID] = creatureName
     saved[creatureID] = saved[creatureID] or {}
     if saved[creatureID][spellID] then return false end
     saved[creatureID][spellID] = true
@@ -84,6 +86,7 @@ combat = false
 reader:Scan()
 check(count() == 3, 'party incoming damage plus direct NPC damage/healing imported')
 check(saved[42][101] and saved[42][102] and saved[42][103], 'correct spell-to-caster relationships')
+check(savedNames[42]=='Test NPC', 'incoming, outgoing and healing proposals retain the creature name')
 check(not saved[42][901] and not saved[42][902] and not saved[42][903] and not saved[42][904], 'players and pets excluded')
 reader:Scan()
 check(count() == 3 and reader.status:find('0 new',1,true), 'rescanning deduplicates')
@@ -95,6 +98,12 @@ roster[2] = npc(42, 'Test NPC')
 reader:Scan()
 check(count() == 4 and saved[42][104], 'multiple instances of same NPC ID accepted')
 roster[2] = nil
+roster[2] = npc(42, 'Conflicting name')
+outgoing[#outgoing+1] = spell(107, '', false, false)
+reader:Scan()
+check(count() == 4, 'conflicting names for one ID cannot create a named entry')
+roster[2] = nil
+outgoing[#outgoing] = nil
 incoming = {spell(105, 'Unknown NPC', true, false)}
 reader:Scan()
 check(count() == 4, 'no cross-session/global name guessing')
@@ -158,6 +167,18 @@ C_DamageMeter.GetCombatSessionSourceFromID = function(sid)
 end
 reader:Scan()
 check(saved[42][201] and saved[99][202] and not saved[42][202] and not saved[99][201], 'session isolation')
+local isolatedSummary, isolatedDetails = C_DamageMeter.GetCombatSessionFromID, C_DamageMeter.GetCombatSessionSourceFromID
+C_DamageMeter.GetCombatSessionFromID = function(sid, mode)
+    if mode==10 then return {combatSources={npc(777,sid==1 and 'First name' or 'Second name')}} end
+    if mode==7 then return {combatSources={party}} end
+    return {combatSources={}}
+end
+C_DamageMeter.GetCombatSessionSourceFromID = function(sid)
+    return {combatSpells={spell(300+sid,sid==1 and 'First name' or 'Second name',true,false)}}
+end
+reader:Scan()
+check(not saved[777] and reader.stats.ambiguous>0, 'conflicting identity across sessions discards every proposal for that ID')
+C_DamageMeter.GetCombatSessionFromID, C_DamageMeter.GetCombatSessionSourceFromID = isolatedSummary, isolatedDetails
 -- Clearing the bestiary must not immediately reimport retained old encounters.
 reader:ForgetHistory()
 saved = {}

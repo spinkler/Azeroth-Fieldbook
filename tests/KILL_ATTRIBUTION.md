@@ -107,8 +107,10 @@ Raid-wide attribution is not added; the clarified policy is player/pet/party.
   fixtures now include qualifying kill evidence; their other assertions remain.
 - `README.md`, `CHANGELOG.md`, and this report document the change.
 
-As of 0.9.2, thresholds are **two kills: silver/+1; 25 kills: gold/+2 more**, 3 cumulative
-kill points. Discovery, notes, abilities, locks, spending and sharing transactions
+As of 0.9.21, thresholds are **10 kills: silver/+1; 25 kills: gold/+2 more;
+50 kills: gold crown/+3 more**, 6 cumulative kill points. Existing personal entries
+receive newly available crown credit once on load; old silver credit is preserved.
+Discovery, notes, abilities, locks, spending and sharing transactions
 are preserved. No historical counts are reset or points removed. Historical data
 cannot reliably distinguish legitimate kills from the old incorrect attribution.
 
@@ -160,7 +162,7 @@ party-assisted live test:
   timestamp. There is exactly one `accepted; killAward=1; killPointsAward=1`.
   The subsequent corpse samples show `savedKills=1; killTierPoints=1`.
   These point values describe the running build in this capture; the separately
-  updated 0.9.2 thresholds above now require two kills for silver.
+  0.9.2 update required two kills for silver; the current thresholds are listed above.
 - Corpse hover at **148686.241** reports `duplicate; killAward=0;
   killPointsAward=0`. Later targeting and repeated hovering retain one saved kill.
 - Earlier in the same capture, Forest Lurker NPC 1195, ending `0000B55B8A`, was
@@ -224,7 +226,8 @@ report revision 3 with qualified tracking active on the same client/build:
 - The squirrel's earned total increases **7 to 8 at 150045.242**, while it is
   still alive and before the kill at 150046.482. That is the discovery increase,
   not a kill reward. The total stays 8 at death. Zero kill points for these first
-  kills matches the current **two kills for silver** milestone.
+  kills matches the capture-time **two kills for silver** milestone and the current
+  ten-kill threshold.
 - A nearby Mountain Boar death, ending `0000356062`, in the ram capture has no
   qualifying `PARTY_KILL` and remains uncredited. The ram's credit is not applied
   to that unrelated GUID.

@@ -150,7 +150,7 @@ local function creditedDeath(suffix)
 end
 creditedDeath('death1'); eq(j:GetSharingBalance(),zero+4)
 j=ns.CreateBestiaryJournal(importedDB,identify); assert(not j:RecordKill('target'),'same death survives reload')
-creditedDeath('death2'); eq(j:GetSharingBalance(),zero+5)
+creditedDeath('death2'); eq(j:GetSharingBalance(),zero+4)
 for i=3,24 do creditedDeath('death'..i) end
 eq(j:GetSharingBalance(),zero+5,'silver remains the only kill reward until 25')
 creditedDeath('death25'); eq(j:GetSharingBalance(),zero+7)
@@ -222,14 +222,82 @@ end
 function setup()
     now=1000000; clients={};wire={};delivered={};drop=nil
     a=endpoint('Alice Sunstrider'); b=endpoint('Bob Stonewell')
-    local e=a.j:Ensure(42); e.name='Defias Pillager'; e.category='Humanoid'; e.levelMin=9; e.levelMax=11; e.locations.Elwynn=true
-    for i=1,9 do a.j:Ensure(100+i).name='Funding creature' end
+    local e=a.j:Ensure(42,false,'Defias Pillager'); e.category='Humanoid'; e.levelMin=9; e.levelMax=11; e.locations.Elwynn=true
+    for i=1,9 do a.j:Ensure(100+i,false,'Funding creature') end
     capture=assert(S.Capture(a.j,42))
 end
 function start(claims)
     local tx=assert(a.engine:Start(capture,'Bob Stonewell',claims or {}))
     pump(20)
     return tx,assert(b.engine:GetIncoming()[1],'no incoming preview')
+end
+do
+    setup()
+    for _,name in ipairs({'Alice Sunstrider','alice sunstrider','  ALICE   SUNSTRIDER  '}) do
+        local sequence=a.j:GetSharingStorage().sequence
+        local tx,err=a.engine:Start(capture,name,{fire})
+        assert(not tx and err=='You cannot send an offer to yourself.')
+        assert(not a.engine:GetOutgoing(),'self-offers never create a transaction')
+        eq(a.j:GetSharingStorage().sequence,sequence)
+        eq(a.j:GetSharingBalance(),10); eq(select(3,a.j:GetSharingBalance()),0)
+        eq(select(4,a.j:GetSharingBalance()),0,'self-offers never reserve points')
+    end
+    pump(5); eq(#delivered,0,'self-offers never send packets')
+    eq(a.engine:ValidateRecipient('Alice Riverwind'),'Alice Riverwind','a different surname is a different character')
+end
+-- Incoming blocking is a per-character preference, separate from transport
+-- restrictions. It must never turn a free decline into spent points.
+do
+    setup()
+    assert(not b.j:GetBlockIncomingOffers(),'incoming offers allowed by default')
+    b.j:SetBlockIncomingOffers(true)
+    assert(ns.CreateBestiaryJournal(b.db,identify):GetBlockIncomingOffers(),'setting survives reload')
+    assert(not a.j:GetBlockIncomingOffers(),'other characters are unaffected')
+    local tx=assert(a.engine:Start(capture,'Bob Stonewell',{}))
+    pump(20)
+    eq(tx.stage,'declined'); eq(a.j:GetSharingBalance(),10)
+    eq(select(3,a.j:GetSharingBalance()),0); eq(select(4,a.j:GetSharingBalance()),0)
+    assert(not next(b.j:GetSharingStorage().incoming) and not b.j.entries[42])
+    b.j:SetBlockIncomingOffers(false)
+    local resumed,item=start()
+    assert(b.engine:Accept(item)); pump(12); eq(resumed.stage,'complete')
+
+    setup()
+    local pending,item=start({fire})
+    b.j:SetBlockIncomingOffers(true)
+    eq(#b.engine:GetIncoming(),0); assert(not b.engine:Accept(item),'stale preview cannot accept')
+    pump(10); eq(pending.stage,'declined'); eq(a.j:GetSharingBalance(),10)
+    assert(not b.j.entries[42])
+
+    setup()
+    local partial=assert(a.engine:Start(capture,'Bob Stonewell',{fire,flee}))
+    pump(2) -- Hello/ready exchanged, report chunks have not arrived yet.
+    assert(next(b.j:GetSharingStorage().incoming))
+    b.j:SetBlockIncomingOffers(true); pump(20)
+    eq(partial.stage,'declined'); eq(a.j:GetSharingBalance(),10)
+    assert(not next(b.j:GetSharingStorage().incoming) and not b.j.entries[42])
+
+    setup()
+    a.j:SetBlockIncomingOffers(true) -- Outbound sharing must still work.
+    local accepted,item=start({fire})
+    assert(b.engine:Accept(item))
+    b.j:SetBlockIncomingOffers(true); pump(12)
+    eq(accepted.stage,'complete'); eq(select(3,a.j:GetSharingBalance()),2)
+    assert(b.j.entries[42])
+    b.j:ResetDatabase(); assert(not b.j:GetBlockIncomingOffers(),'full reset restores default off')
+
+    for _,packet in ipairs({'~C~','~K~'}) do
+        setup()
+        local paid,item=start()
+        drop=function(message) return message.text:find(packet,1,true) end
+        assert(b.engine:Accept(item)); b.j:SetBlockIncomingOffers(true); pump(75)
+        eq(paid.stage,'unknown')
+        b=endpoint('Bob Stonewell',b.db); drop=nil
+        assert(b.j:GetBlockIncomingOffers(),'reload keeps incoming blocking enabled')
+        assert(a.engine:Retry()); pump(15)
+        eq(paid.stage,'complete'); eq(select(3,a.j:GetSharingBalance()),1)
+        eq(#b.j.entries[42].sharedReports,1,'accepted deliveries and receipts reconcile once while blocked')
+    end
 end
 setup()
 local tx,item=start()
@@ -240,16 +308,95 @@ assert(b.engine:Accept(item)); pump(12)
 eq(tx.stage,'complete'); eq(a.j:GetSharingBalance(),9); eq(select(3,a.j:GetSharingBalance()),1)
 assert(b.j.entries[42]); eq(b.j:GetSharingBalance(),0); eq(#b.j.entries[42].sharedReports,1)
 local id=tx.id
-b.engine:Receive('AFBShare','3~C~'..id,'WHISPER','Alice Sunstrider'); pump(5)
+b.engine:Receive('AFBShare','4~C~'..id,'WHISPER','Alice Sunstrider'); pump(5)
 eq(#b.j.entries[42].sharedReports,1,'duplicate commit no duplicate import')
-a.engine:Receive('AFBShare','3~A~'..id,'WHISPER','Bob Stonewell'); eq(select(3,a.j:GetSharingBalance()),1)
+a.engine:Receive('AFBShare','4~A~'..id..'~1','WHISPER','Bob Stonewell'); eq(select(3,a.j:GetSharingBalance()),1)
 
 setup(); tx,item=start({fire,flee}); assert(b.engine:Accept(item)); pump(12)
 eq(a.j:GetSharingBalance(),7); eq(select(3,a.j:GetSharingBalance()),3); eq(#b.j:GetRumours(42),2)
 eq(b.j:GetRumours(42)[1].sender,'Alice Sunstrider'); eq(b.j:GetRumours(42)[1].source,'WHISPER')
 local second=assert(a.engine:Start(capture,'Bob Stonewell',{fire,flee})); pump(20)
 item=assert(b.engine:GetIncoming()[1]); assert(b.engine:Accept(item)); pump(12)
-eq(#b.j:GetRumours(42),2,'fresh same-source report dedups rumours'); eq(a.j:GetSharingBalance(),4)
+eq(#b.j:GetRumours(42),2,'fresh same-source report dedups rumours'); eq(a.j:GetSharingBalance(),5)
+eq(second.cost,2,'known basics are free; selected rumours retain their price')
+
+local function knownBasics()
+    local entry=b.j:Ensure(42,true,capture.name)
+    entry.category=capture.category;entry.levelMin=capture.levelMin;entry.levelMax=capture.levelMax
+    entry.locations={}
+    for _,location in ipairs(capture.locations) do entry.locations[location]=true end
+    return entry
+end
+do
+    setup();knownBasics()
+    local notices={}
+    a.engine:SetCostAdjustedCallback(function(report) notices[#notices+1]=report.cost end)
+    local tx,item=start({fire,flee})
+    eq(tx.cost,3);eq(select(4,a.j:GetSharingBalance()),3,'maximum cost stays reserved until acceptance')
+    assert(b.engine:Accept(item));eq(item.basicCost,0);eq(select(3,a.j:GetSharingBalance()),0)
+    pump(12)
+    eq(tx.stage,'complete');eq(tx.cost,2);eq(tx.basicCost,0);assert(tx.basicInfoWaived)
+    eq(a.j:GetSharingBalance(),8);eq(select(3,a.j:GetSharingBalance()),2);eq(select(4,a.j:GetSharingBalance()),0)
+    eq(#b.j:GetRumours(42),2,'new rumours import when basics match');eq(#notices,1);eq(notices[1],2)
+    a.engine:Receive('AFBShare','4~A~'..tx.id..'~0','WHISPER','Bob Stonewell')
+    pump(5);eq(select(3,a.j:GetSharingBalance()),2);eq(#notices,1,'duplicates cannot apply or announce a second waiver')
+
+    setup();knownBasics();tx,item=start();assert(b.engine:Accept(item));pump(12)
+    eq(tx.stage,'complete');eq(tx.cost,0);eq(a.j:GetSharingBalance(),10)
+    eq(select(3,a.j:GetSharingBalance()),0,'a known basics-only report has no charge')
+    eq(#b.j.entries[42].sharedReports,1,'free matching basics may still record attribution')
+
+    -- Existing broader observations also mean the report adds no new basics.
+    setup();local entry=knownBasics();entry.levelMin=1;entry.levelMax=60;entry.locations.Westfall=true
+    tx,item=start({fire});assert(b.engine:Accept(item));pump(12);eq(tx.cost,1)
+    setup();knownBasics();b.j:SetEntryConfirmed(42,true)
+    tx,item=start({fire});assert(b.engine:Accept(item));pump(12);eq(tx.cost,1)
+
+    -- Any genuinely new/conflicting basic field retains its normal one-point cost.
+    for _,change in ipairs({
+        function(entry) entry.name='Other name' end,
+        function(entry) entry.category='Beast' end,
+        function(entry) entry.levelMin=capture.levelMin+1 end,
+        function(entry) entry.levelMax=capture.levelMax-1 end,
+        function(entry) entry.locations={} end,
+    }) do
+        setup();change(knownBasics());tx,item=start({fire});assert(b.engine:Accept(item));pump(12)
+        eq(tx.cost,2);assert(not tx.basicInfoWaived)
+    end
+
+    -- Recheck at acceptance, after any observations or edits since preview.
+    setup();tx,item=start({fire});knownBasics();assert(b.engine:Accept(item));pump(12);eq(tx.cost,1)
+    setup();knownBasics();tx,item=start({fire});b.j.entries[42].locations={}
+    assert(b.engine:Accept(item));pump(12);eq(tx.cost,2)
+
+    -- Both missing import and missing receipt reconcile at the original price.
+    for _,packet in ipairs({'~C~','~K~'}) do
+        setup();knownBasics();tx,item=start({fire,flee})
+        drop=function(message) return message.text:find(packet,1,true) end
+        assert(b.engine:Accept(item));pump(75);eq(tx.stage,'unknown');eq(tx.cost,2)
+        a=endpoint('Alice Sunstrider',a.db);b=endpoint('Bob Stonewell',b.db);drop=nil
+        local repeatNotices=0;a.engine:SetCostAdjustedCallback(function() repeatNotices=repeatNotices+1 end)
+        tx=a.engine:GetOutgoing();assert(tx.basicInfoWaived);assert(a.engine:Retry());pump(15)
+        eq(tx.stage,'complete');eq(select(3,a.j:GetSharingBalance()),2);eq(#b.j:GetRumours(42),2)
+        eq(repeatNotices,0,'reload/retry preserves the settled price without another adjustment notice')
+    end
+    setup();knownBasics();tx,item=start()
+    drop=function(message) return message.text:find('~K~',1,true) end
+    assert(b.engine:Accept(item));pump(75);eq(tx.stage,'unknown');eq(tx.cost,0)
+    a=endpoint('Alice Sunstrider',a.db);b=endpoint('Bob Stonewell',b.db);drop=nil
+    tx=a.engine:GetOutgoing();assert(a.engine:Retry());pump(15)
+    eq(tx.stage,'complete');eq(select(3,a.j:GetSharingBalance()),0,'zero-cost commits also reconcile without charging')
+
+    -- Missing/invalid pricing or a forged recipient cannot consume a reservation.
+    setup();tx,item=start({fire})
+    for _,quote in ipairs({'','2','-1','00','0.5','0~junk'}) do
+        a.engine:Receive('AFBShare','4~A~'..tx.id..'~'..quote,'WHISPER','Bob Stonewell')
+        eq(tx.stage,'offering');eq(select(3,a.j:GetSharingBalance()),0)
+    end
+    a.engine:Receive('AFBShare','4~A~'..tx.id..'~0','WHISPER','Mallory Falsewind')
+    a.engine:Receive('AFBShare','3~A~'..tx.id..'~0','WHISPER','Bob Stonewell')
+    eq(tx.stage,'offering');eq(select(4,a.j:GetSharingBalance()),2)
+end
 
 setup(); tx,item=start({fire,flee,melee})
 eq(select(4,a.j:GetSharingBalance()),4,'one base point plus three rumours reserved')
@@ -263,7 +410,7 @@ setup();assert(not a.engine:Start(capture,'Bob Stonewell',many),'larger selectio
 eq(a.j:GetSharingBalance(),10);eq(select(4,a.j:GetSharingBalance()),0)
 assert(not a.engine:Start(capture,'Bob Stonewell',oversized),'oversized report rejected before reservation')
 eq(select(4,a.j:GetSharingBalance()),0)
-for i=201,230 do a.j:Ensure(i).name='Funding creature' end
+for i=201,230 do a.j:Ensure(i,false,'Funding creature') end
 tx,item=start(many);eq(#item.report.rumours,32);eq(tx.cost,33)
 assert(b.engine:Accept(item));pump(12)
 eq(tx.stage,'complete');eq(#b.j:GetRumours(42),32);eq(a.j:GetSharingBalance(),7);eq(select(3,a.j:GetSharingBalance()),33)
@@ -274,8 +421,35 @@ eq(tx.stage,'declined'); eq(a.j:GetSharingBalance(),10); assert(not b.j.entries[
 setup(); tx,item=start({fire,flee}); assert(a.engine:Cancel()); pump(5)
 eq(tx.stage,'cancelled'); eq(a.j:GetSharingBalance(),10); eq(#b.engine:GetIncoming(),0)
 setup(); a.j:Reset(); assert(not a.engine:Start(capture,'Bob Stonewell',{})); eq(a.j:GetSharingBalance(),0)
-setup(); clients['Bob Stonewell']=nil; tx=assert(a.engine:Start(capture,'Bob Stonewell',{})); pump(40)
-eq(tx.stage,'failed'); eq(a.j:GetSharingBalance(),10)
+setup(); clients['Bob Stonewell']=nil; tx=assert(a.engine:Start(capture,'Bob Stonewell',{}))
+eq(a.engine:GetPreflightSecondsRemaining(),20)
+pump(19);eq(tx.stage,'preflight');eq(a.engine:GetPreflightSecondsRemaining(),1)
+pump(1);eq(tx.stage,'failed');eq(a.j:GetSharingBalance(),10)
+eq(select(3,a.j:GetSharingBalance()),0);eq(select(4,a.j:GetSharingBalance()),0)
+assert(not a.engine:HasActiveOutgoing() and a.engine:GetPreflightSecondsRemaining()==nil)
+assert(tx.message:find('No response from Bob Stonewell after 20 seconds.',1,true))
+assert(tx.message:find('may be missing or disabled',1,true) and tx.message:find('No points spent.',1,true))
+assert(a.engine:Start(capture,'Bob Stonewell',{}),'a timed-out check allows a new attempt')
+
+-- Lagged replies inside the deadline still proceed to normal consent/import.
+setup();drop=function(m) return m.text:find('~R~',1,true) end
+tx=assert(a.engine:Start(capture,'Bob Stonewell',{}));pump(19)
+a.engine:Receive('AFBShare','4~R~'..tx.id..'~'..buildVersion,'WHISPER','Bob Stonewell')
+eq(tx.stage,'offering');assert(a.engine:GetPreflightSecondsRemaining()==nil)
+pump(10);assert(b.engine:Accept(assert(b.engine:GetIncoming()[1])));pump(10)
+eq(tx.stage,'complete')
+
+-- A late reply cannot race the periodic timer or revive its expired reservation.
+setup();tx=assert(a.engine:Start(capture,'Bob Stonewell',{}));now=now+20
+a.engine:Receive('AFBShare','4~R~'..tx.id..'~'..buildVersion,'WHISPER','Bob Stonewell')
+eq(tx.stage,'failed');eq(a.j:GetSharingBalance(),10)
+a.engine:Receive('AFBShare','4~A~'..tx.id,'WHISPER','Bob Stonewell')
+pump(5);eq(tx.stage,'failed');eq(#delivered,0,'expired queued packets are purged')
+
+-- Entering combat/restrictions after Send must not suspend the timeout.
+setup();tx=assert(a.engine:Start(capture,'Bob Stonewell',{}));a.blocked=true;pump(20)
+eq(tx.stage,'failed');eq(a.j:GetSharingBalance(),10)
+a.blocked=false;pump(5);eq(#delivered,0)
 setup(); tx=assert(a.engine:Start(capture,'Bob Stonewell',{}))
 a.engine:Receive('AFBShare','1~I~'..tx.id,'WHISPER','Bob Stonewell')
 eq(tx.stage,'failed'); eq(a.j:GetSharingBalance(),10)
@@ -295,18 +469,18 @@ setup();tx,item=start({fire});b.env.addonVersion='0.9.0'
 assert(not b.engine:Accept(item),'acceptance rechecks compatibility after a version change')
 eq(select(3,a.j:GetSharingBalance()),0);assert(not b.j.entries[42])
 setup();tx,item=start({fire});assert(b.engine:Accept(item));b.env.addonVersion='0.9.0'
-b.engine:Receive('AFBShare','3~C~'..tx.id,'WHISPER','Alice Sunstrider')
+b.engine:Receive('AFBShare','4~C~'..tx.id,'WHISPER','Alice Sunstrider')
 assert(not b.j.entries[42],'an older consent cannot import into a mismatched build')
 setup();tx=assert(a.engine:Start(capture,'Bob Stonewell',{}))
-a.engine:Receive('AFBShare','3~R~'..tx.id..'~9.9.9','WHISPER','Mallory Falsewind')
+a.engine:Receive('AFBShare','4~R~'..tx.id..'~9.9.9','WHISPER','Mallory Falsewind')
 eq(tx.stage,'preflight','version replies must come from the expected character')
-a.engine:Receive('AFBShare','3~R~'..tx.id..'~9.9.9','WHISPER','Bob Stonewell')
+a.engine:Receive('AFBShare','4~R~'..tx.id..'~9.9.9','WHISPER','Bob Stonewell')
 eq(tx.stage,'failed');eq(a.j:GetSharingBalance(),10)
 for _,peerVersion in ipairs({'','nonsense',string.rep('9',33)}) do
     setup();tx=assert(a.engine:Start(capture,'Bob Stonewell',{}))
-    a.engine:Receive('AFBShare','3~R~'..tx.id..'~'..peerVersion,'WHISPER','Bob Stonewell')
+    a.engine:Receive('AFBShare','4~R~'..tx.id..'~'..peerVersion,'WHISPER','Bob Stonewell')
     eq(tx.stage,'failed');eq(a.j:GetSharingBalance(),10,'missing or malformed version cannot consume points')
-    setup();b.engine:Receive('AFBShare','3~H~1000000-77-1~'..peerVersion,'WHISPER','Alice Sunstrider')
+    setup();b.engine:Receive('AFBShare','4~H~1000000-77-1~'..peerVersion,'WHISPER','Alice Sunstrider')
     assert(not next(b.j:GetSharingStorage().incoming),'invalid version cannot stage a report')
 end
 setup();a.env.addonVersion=nil
@@ -378,21 +552,21 @@ for i=1,3 do assert(a.engine:Retry()); pump(65); eq(tx.stage,'unknown') end
 assert(not a.engine:Retry()); assert(a.engine:CloseUnknown()); eq(tx.stage,'unresolved'); eq(a.j:GetSharingBalance(),8)
 
 setup(); tx=assert(a.engine:Start(capture,'Bob Stonewell',{}))
-a.engine:Receive('AFBShare','3~A~'..tx.id,'WHISPER','Bob Riverwind')
+a.engine:Receive('AFBShare','4~A~'..tx.id,'WHISPER','Bob Riverwind')
 eq(tx.stage,'preflight','same first name with a different surname cannot accept')
-a.engine:Receive('AFBShare','3~A~'..tx.id,'WHISPER','Mallory Falsewind')
-a.engine:Receive('AFBShare','3~K~'..tx.id,'WHISPER','Bob Stonewell')
+a.engine:Receive('AFBShare','4~A~'..tx.id,'WHISPER','Mallory Falsewind')
+a.engine:Receive('AFBShare','4~K~'..tx.id,'WHISPER','Bob Stonewell')
 eq(tx.stage,'preflight'); eq(select(3,a.j:GetSharingBalance()),0)
-b.engine:Receive('AFBShare','3~O~1000000-1-1~1~1~anything','WHISPER','Mallory Falsewind')
-b.engine:Receive('AFBShare','3~C~1000000-1-1','WHISPER','Mallory Falsewind')
+b.engine:Receive('AFBShare','4~O~1000000-1-1~1~1~anything','WHISPER','Mallory Falsewind')
+b.engine:Receive('AFBShare','4~C~1000000-1-1','WHISPER','Mallory Falsewind')
 eq(#b.engine:GetIncoming(),0); assert(not b.j.entries[42])
-for _,message in ipairs({'junk',string.rep('x',241),'3~H~bad','3~O~1000000-1-1~999~999~x','3~H~1000000-1-1\n'}) do
+for _,message in ipairs({'junk',string.rep('x',241),'4~H~bad','4~O~1000000-1-1~999~999~x','4~H~1000000-1-1\n'}) do
     b.engine:Receive('AFBShare',message,'WHISPER','Mallory Falsewind')
 end
 b.engine:Receive('AFBShare',secret,'WHISPER','Mallory Falsewind')
 b.engine:Receive(secret,'valid','WHISPER','Mallory Falsewind')
-b.engine:Receive('AFBShare','3~H~1000000-1-1',secret,'Mallory Falsewind')
-b.engine:Receive('AFBShare','3~H~1000000-1-1','GUILD','Mallory Falsewind')
+b.engine:Receive('AFBShare','4~H~1000000-1-1',secret,'Mallory Falsewind')
+b.engine:Receive('AFBShare','4~H~1000000-1-1','GUILD','Mallory Falsewind')
 eq(#b.engine:GetIncoming(),0)
 ''')
 print('PASS: simulated offers, free declines, insufficient funds, cancellation, compatibility, drops, reloads, retry limits and sender matching')
@@ -404,28 +578,28 @@ setup(); clients['Alice Sunstrider']=nil
 local payload=assert(S.Encode(report(nil,{fire,flee})))
 local function receive(text,sender) b.engine:Receive('AFBShare',text,'WHISPER',sender or 'Alice Sunstrider') end
 local id='1000000-1-1'
-receive('3~H~'..id..'~'..buildVersion)
+receive('4~H~'..id..'~'..buildVersion)
 local total=math.ceil(#payload/180)
 for i=total,1,-1 do
-    local chunk='3~O~'..id..'~'..i..'~'..total..'~'..payload:sub((i-1)*180+1,i*180)
+    local chunk='4~O~'..id..'~'..i..'~'..total..'~'..payload:sub((i-1)*180+1,i*180)
     receive(chunk); receive(chunk)
 end
 eq(#b.engine:GetIncoming(),1,'ordered assembly independent of delivery order')
-receive('3~C~'..id); assert(not b.j.entries[42],'unsolicited commit before acceptance ignored')
+receive('4~C~'..id); assert(not b.j.entries[42],'unsolicited commit before acceptance ignored')
 b.engine:Decline(b.engine:GetIncoming()[1]); pump(16)
-id='1000000-2-1'; receive('3~H~'..id..'~'..buildVersion)
-receive('3~O~'..id..'~1~2~'..string.rep('x',180))
-receive('3~O~'..id..'~1~2~'..string.rep('y',180))
+id='1000000-2-1'; receive('4~H~'..id..'~'..buildVersion)
+receive('4~O~'..id..'~1~2~'..string.rep('x',180))
+receive('4~O~'..id..'~1~2~'..string.rep('y',180))
 eq(#b.engine:GetIncoming(),0,'conflicting duplicate rejected')
-pump(16); id='1000000-3-1'; receive('3~H~'..id..'~'..buildVersion)
-receive('3~O~'..id..'~2~2~x'); pump(185); eq(#b.engine:GetIncoming(),0)
+pump(16); id='1000000-3-1'; receive('4~H~'..id..'~'..buildVersion)
+receive('4~O~'..id..'~2~2~x'); pump(185); eq(#b.engine:GetIncoming(),0)
 local r=report('1000000-4-1'); r.recipient='Carol Riverwind'; payload=assert(S.Encode(r))
-receive('3~H~'..r.transaction..'~'..buildVersion)
-receive('3~O~'..r.transaction..'~1~1~'..payload)
+receive('4~H~'..r.transaction..'~'..buildVersion)
+receive('4~O~'..r.transaction..'~1~1~'..payload)
 eq(#b.engine:GetIncoming(),0,'recipient binding')
 setup(); clients['Alice Sunstrider']=nil
 for _,sender in ipairs({'One Person','Two Person','Three Person','Four Person','Five Person'}) do
-    receive('3~H~1000000-1-1~'..buildVersion,sender)
+    receive('4~H~1000000-1-1~'..buildVersion,sender)
 end
 local n=0; for _ in pairs(b.j:GetSharingStorage().incoming) do n=n+1 end
 eq(n,3,'bounded incoming transfers'); pump(185)
@@ -452,16 +626,22 @@ assert(not capacity:ImportReport(report('1000000-99-1',{{kind='ability',value='O
 eq(capacity.revision,revision)
 -- In-flight reservations cannot overlap into a negative available balance.
 local budget=ns.CreateBestiaryJournal({},identify)
-budget:Ensure(1); budget:Ensure(2); budget:Ensure(3)
+budget:Ensure(1,false,'First creature'); budget:Ensure(2,false,'Second creature'); budget:Ensure(3,false,'Third creature')
 assert(budget:ReserveShare('first',2)); assert(not budget:ReserveShare('second',2))
 assert(budget:ReserveShare('second',1)); eq(budget:GetSharingBalance(),0)
 assert(budget:CommitShare('second')); assert(budget:CommitShare('first')); eq(budget:GetSharingBalance(),0)
-for i=4,8 do budget:Ensure(i) end
+for i=4,8 do budget:Ensure(i,false,'Funding creature') end
 for _,cost in ipairs({0,-1,1.5,math.huge,0/0,'4',secret}) do
     assert(not budget:ReserveShare('invalid',cost),'reservations require readable positive finite integers')
 end
 assert(budget:ReserveShare('larger',4));assert(budget:ReserveShare('larger',4))
 assert(not budget:ReserveShare('larger',3));assert(not budget:ReserveShare('overspend',2))
 eq(budget:GetSharingBalance(),1);assert(budget:CommitShare('larger'));eq(budget:GetSharingBalance(),1)
+local beforeSpent=select(3,budget:GetSharingBalance())
+assert(budget:ReserveShare('waived',1));eq(budget:GetSharingBalance(),0)
+local ok,charged=budget:CommitShare('waived',true)
+assert(ok);eq(charged,0);eq(budget:GetSharingBalance(),1)
+eq(select(3,budget:GetSharingBalance()),beforeSpent);eq(select(4,budget:GetSharingBalance()),0)
+assert(not budget:CommitShare('waived',true),'a removed reservation cannot be discounted or committed again')
 ''')
 print('PASS: chunk ordering/duplicates, recipient binding, bounded queues, expiry, storage caps and full reset')

@@ -205,14 +205,13 @@ function ns.InstallSharingRecords(journal)
         local entry=self.entries[id]
         if not entry then return end
         local localBasic=entry.confirmed and entry.lockedBasic or entry
-        local basic={name=localBasic.name,category=localBasic.category,levelMin=localBasic.levelMin,levelMax=localBasic.levelMax,locations={}}
+        local basic={name=self:GetCreatureName(id),category=localBasic.category,levelMin=localBasic.levelMin,levelMax=localBasic.levelMax,locations={}}
         for location in pairs(localBasic.locations or {}) do basic.locations[location]=true end
         for _,shared in ipairs(entry.sharedReports or {}) do
             basic.hasShared=true
             -- A locked personal page keeps exactly its local metadata. Reports
             -- remain separately available in Rumours and after unlocking.
             if not entry.confirmed then
-                basic.name=basic.name or shared.name
                 if not basic.category or basic.category=="Unclassified" then basic.category=shared.category end
                 if shared.levelMin then
                     basic.levelMin=math.min(basic.levelMin or shared.levelMin,shared.levelMin)

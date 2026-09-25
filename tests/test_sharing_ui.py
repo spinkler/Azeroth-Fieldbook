@@ -31,7 +31,26 @@ Enum={RegisterAddonMessagePrefixResult={Success=0,DuplicatePrefix=1,InvalidPrefi
     AddOnRestrictionType={Chat=5},AddOnRestrictionState={Inactive=0,Activating=1,Active=2}}
 C_RestrictedActions={GetAddOnRestrictionState=function(kind) assert(kind==5); return chatState end}
 local methods={}
-function methods:SetScript(event,fn) self.scripts[event]=fn end
+function methods:SetScript(event,fn)
+    self.scripts[event]=fn
+    if fn and (event=='OnMouseDown' or event=='OnMouseUp' or event=='OnEnter' or event=='OnLeave') then
+        self:EnableMouse(true) -- WoW mouse scripts implicitly enable mouse input.
+    end
+end
+function methods:HookScript(event,fn)
+    local previous=self.scripts[event]
+    self:SetScript(event,function(self,...)
+        if previous then previous(self,...) end
+        fn(self,...)
+    end)
+end
+function methods:EnableMouse(value) self.mouseClick=value; self.mouseMotion=value end
+function methods:EnableMouseWheel(value) self.mouseWheel=value end
+function methods:IsMouseEnabled() return self.mouseClick or self.mouseMotion end
+function methods:IsMouseClickEnabled() return self.mouseClick end
+function methods:IsMouseMotionEnabled() return self.mouseMotion end
+function methods:SetMouseClickEnabled(value) self.mouseClick=value end
+function methods:SetMouseMotionEnabled(value) self.mouseMotion=value end
 function methods:SetText(text)
     assert(type(text)=='string' or type(text)=='number','UI received nonliteral text: '..type(text))
     self.text=tostring(text)
@@ -41,11 +60,40 @@ function methods:GetText() return rawget(self,'text') or '' end
 function methods:SetSize(w,h) self.width=w;self.height=h end
 function methods:SetWidth(w) self.width=w end
 function methods:SetHeight(h) self.height=h end
-function methods:SetPoint(...) self.point={...} end
+function methods:SetPoint(...)
+    self.point={...};self.points=self.points or {};self.points[#self.points+1]=self.point
+end
+function methods:ClearAllPoints() self.point=nil;self.points={} end
+function methods:SetAlpha(value) self.alpha=value end
+function methods:SetTexCoord(...) self.texCoord={...} end
+function methods:GetPoint() return unpack(self.point or {'CENTER',UIParent,'CENTER',0,0}) end
+function methods:GetName() return self.name end
+function methods:GetLeft() return self.left end
+function methods:GetTop() return self.top end
+function methods:GetEffectiveScale() return self:GetScale()*(self.parent and self.parent:GetEffectiveScale() or 1) end
 function methods:GetWidth() return rawget(self,'width') or 100 end
 function methods:GetHeight() return rawget(self,'height') or 100 end
 function methods:GetStringHeight() return math.max(14,math.ceil(#self:GetText()/math.max(1,math.floor(self:GetWidth()/7)))*14) end
-function methods:GetFrameLevel() return 10 end
+function methods:GetStringWidth()
+    local text=self:GetText():gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','')
+    local _,characters=text:gsub('[^\128-\191]','')
+    return characters*6
+end
+function methods:SetIndentedWordWrap(value) self.indentedWrap=value end
+function methods:GetFrameLevel() return rawget(self,'frameLevel') or 10 end
+function methods:SetFrameLevel(value) self.frameLevel=value end
+function methods:SetFrameStrata(value) self.strata=value end
+function methods:SetToplevel(value) self.toplevel=value end
+function methods:Raise() focusedWindow=self end
+function methods:GetChildren()
+    local children={}
+    for _,object in ipairs(objects) do
+        if object.parent==self and object.kind~='Texture' and object.kind~='FontString' then
+            children[#children+1]=object
+        end
+    end
+    return unpack(children)
+end
 function methods:Show() self.shown=true end
 function methods:Hide() self.shown=false; if self.scripts.OnHide then self.scripts.OnHide(self) end end
 function methods:SetShown(v) self.shown=v end
@@ -63,19 +111,29 @@ function methods:GetVerticalScroll() return rawget(self,'scroll') or 0 end
 function methods:GetVerticalScrollRange() return 0 end
 function methods:CreateTexture() return CreateFrame('Texture',nil,self) end
 function methods:CreateFontString() return CreateFrame('FontString',nil,self) end
-function CreateFrame(kind,name,parent)
-    local f={kind=kind,parent=parent,scripts={},shown=true,enabled=true}
+function CreateFrame(kind,name,parent,template)
+    local f={kind=kind,name=name,parent=parent,scripts={},shown=true,enabled=true}
+    local interactive=kind=='Button' or kind=='CheckButton' or kind=='EditBox' or kind=='Slider'
+    f.mouseClick=interactive; f.mouseMotion=interactive
     setmetatable(f,{__index=function(_,k)
         if methods[k] then return methods[k] end
         if k:match('^%u') then return function() end end
     end})
     objects[#objects+1]=f; if name then _G[name]=f end
+    if template=='UIPanelScrollFrameTemplate' then
+        f.ScrollBar=CreateFrame('Slider',nil,f)
+        f.ScrollBar:SetWidth(16)
+        f.ScrollBar.ScrollUpButton=CreateFrame('Button',nil,f.ScrollBar)
+        f.ScrollBar.ScrollDownButton=CreateFrame('Button',nil,f.ScrollBar)
+        f.ScrollBar.ScrollUpButton:SetSize(16,16)
+        f.ScrollBar.ScrollDownButton:SetSize(16,16)
+    end
     return f
 end
 UIParent=CreateFrame('Frame'); UIParent:SetSize(1920,1080)
 function eq(a,b,label) assert(a==b,(label or '')..': '..tostring(a)..' ~= '..tostring(b)) end
 ''')
-for name in ['Scrollbars.lua','UIScale.lua','SharingReport.lua','BestiaryJournal.lua','Sharing.lua','SharingWindow.lua','CreatureNotes.lua','RumoursWindow.lua','BestiaryBook.lua']:
+for name in ['Scrollbars.lua','WindowFocus.lua','WindowPositions.lua','UIScale.lua','SharingReport.lua','BestiaryJournal.lua','Sharing.lua','SharingWindow.lua','CreatureNotes.lua','RumoursWindow.lua','BestiaryBook.lua','DebugReport.lua']:
     lua.execute((root/name).read_text(encoding='utf-8'),'AzerothFieldbook',lua.globals().ns)
 
 lua.execute(r'''
@@ -89,8 +147,8 @@ function native(registerResult,sendResult)
             calls=calls+1; return sendResult
         end}
     local j=ns.CreateBestiaryJournal({},function() return nil end)
-    local e=j:Ensure(42); e.name='Defias Pillager';e.category='Humanoid';e.levelMin=9;e.levelMax=11;e.locations.Elwynn=true
-    j:Ensure(43).name='Another creature'
+    local e=j:Ensure(42,false,'Defias Pillager');e.category='Humanoid';e.levelMin=9;e.levelMax=11;e.locations.Elwynn=true
+    j:Ensure(43,false,'Another creature')
     local engine=ns.InitializeSharing(j)
     return j,engine,function() return calls end,objects[#objects]
 end
@@ -139,6 +197,45 @@ end
 metadataVersion=nil
 local _,missing=native(0,0);assert(not missing:Available())
 metadataVersion=buildVersion
+
+-- Exercise the real OnUpdate -> timeout -> composer path with a successful
+-- native send but no addon reply. A stalled/backward wall clock cannot keep
+-- the initial check pending, and the visible controls recover automatically.
+do
+    local j,e,calls,driver=native(0,0)
+    local ui=ns.CreateSharingWindow(j,e)
+    local refreshDriver=objects[#objects]
+    ui:Open(42)
+    local window=AzerothFieldbookShare
+    window.recipient:SetText('Bob Stonewell');window.send.scripts.OnClick()
+    local pending=e:GetOutgoing()
+    assert(window.status.text:find('20s remaining',1,true) and not window.send.enabled)
+    now=now-120
+    for i=1,79 do
+        driver.scripts.OnUpdate(driver,0.25)
+        refreshDriver.scripts.OnUpdate(refreshDriver,0.25)
+    end
+    eq(pending.stage,'preflight');eq(e:GetPreflightSecondsRemaining(),1)
+    assert(window.status.text:find('1s remaining',1,true))
+    driver.scripts.OnUpdate(driver,0.25)
+    eq(pending.stage,'failed');eq(calls(),1)
+    eq(j:GetSharingBalance(),2);eq(select(3,j:GetSharingBalance()),0);eq(select(4,j:GetSharingBalance()),0)
+    assert(window.send.enabled and window.recipient.enabled,'timeout restores send and recipient controls')
+    assert(window.status.text==pending.message and window.status.text:find('No response from Bob Stonewell',1,true))
+    assert(-window.send.point[3]>=-window.status.point[3]+window.status:GetStringHeight()+12,
+        'the complete timeout explanation fits above the footer')
+    window.send.scripts.OnClick()
+    assert(e:GetOutgoing()~=pending and window.status.text:find('20s remaining',1,true),'fresh attempt resets the countdown')
+    local accepted=e:GetOutgoing()
+    e:Receive('AFBShare','4~R~'..accepted.id..'~'..buildVersion,'WHISPER','Bob Stonewell')
+    e:Receive('AFBShare','4~A~'..accepted.id..'~0','WHISPER','Bob Stonewell')
+    assert(window.cost.text:find('Basic info: 0',1,true) and window.cost.text:find('Total cost: 0 points',1,true))
+    assert(window.status.text:find('1-point cost was waived',1,true),'accepted discount is visible to the sender')
+    e:Receive('AFBShare','4~K~'..accepted.id,'WHISPER','Bob Stonewell')
+    assert(window.status.text:find('This report cost 0 points.',1,true),'completed report retains the actual discounted cost')
+    eq(select(3,j:GetSharingBalance()),0)
+    window.cancel.scripts.OnClick()
+end
 ''')
 print('PASS: Forever enum handling, unreadable results, bounded throttle retries, combat, Chat restrictions, full names and login readiness')
 
@@ -148,7 +245,7 @@ local db={}
 ns.UIScale:Initialize(db)
 local j=ns.CreateBestiaryJournal(db,function() return npcID end)
 j:Observe('target')
-for i=1,5 do j:Ensure(100+i).name='Funding '..i end
+for i=1,5 do j:Ensure(100+i,false,'Funding '..i) end
 j:AddManual(42,'Fireball','A long private ability note',nil,{Fear=true,Stun=true})
 j:AddManual(42,'Arcane Volley With A Long Ability Name That Wraps Across Several Lines','',nil,{})
 j:SetResistance(42,'Fire',true);j:SetBehaviour(42,'Flees at low health',true)
@@ -158,14 +255,52 @@ local engine=ns.CreateSharing(j,env)
 local book=ns.CreateBestiaryBook(j)
 book:OpenAtUnit('target')
 local main=AzerothFieldbookBestiary
+assert(not main.titleIcon:IsMouseClickEnabled() and not main.detail:IsMouseClickEnabled(),
+    'full-book decorative overlays must not intercept clicks on the journal controls')
+assert(not main.titleIcon.scripts.OnMouseDown and not main.detail.scripts.OnMouseDown,
+    'focus must not install mouse handlers on decorative containers')
+main.options.scripts.OnShow(main.options)
+local blockOffers=main.options.blockIncomingOffers
+assert(blockOffers:GetChecked()==false,'incoming-offer checkbox defaults off')
+blockOffers:SetChecked(true); blockOffers.scripts.OnClick(blockOffers)
+assert(j:GetBlockIncomingOffers() and db.blockIncomingOffers,'checkbox immediately saves setting')
+main.options.scripts.OnShow(main.options)
+assert(blockOffers:GetChecked(),'reopening Options reflects the saved preference')
+blockOffers:SetChecked(false); blockOffers.scripts.OnClick(blockOffers)
+assert(not j:GetBlockIncomingOffers(),'checkbox can allow offers again')
 assert(main.windowTitle.text:find(buildVersion,1,true),'book displays the installed TOC version')
 assert(main.shareButton.enabled)
 main.shareButton.scripts.OnClick()
 local composer=AzerothFieldbookShare
 assert(composer.shown and composer.clamped)
+local function checkShareLayout()
+    local function top(widget) return -widget.point[3] end
+    assert(top(composer.rumourHeading)>=124+composer.basicArea:GetHeight()+12)
+    assert(top(composer.cost)>=top(composer.rumourArea)+composer.rumourArea:GetHeight()+12)
+    assert(top(composer.balance)>=top(composer.cost)+composer.cost:GetStringHeight()+8)
+    assert(top(composer.status)>=top(composer.balance)+composer.balance:GetStringHeight()+12)
+    assert(top(composer.send)>=top(composer.status)+composer.status:GetStringHeight()+12)
+    assert(top(composer.send)+composer.send:GetHeight()+20<=composer:GetHeight())
+    if composer.resolve:IsShown() then
+        assert(top(composer.resolve)>=top(composer.status)+composer.status:GetStringHeight()+12)
+        assert(top(composer.send)>=top(composer.resolve)+composer.resolve:GetHeight())
+    end
+end
+checkShareLayout()
+assert(composer.basic.text=='Creature 42 |cff999999[#42]|r')
+assert(composer.details.text:find('Humanoid • Level 9',1,true))
 eq(j:GetSharingBalance(),6,'opening composer free')
 assert(composer.cost.text:find('Total cost: 1',1,true))
 assert(composer.send.enabled,'funded report ready outside combat')
+for _,selfName in ipairs({'Alice Sunstrider','alice sunstrider','  ALICE   SUNSTRIDER  '}) do
+    composer.recipient:SetText(selfName)
+    assert(not composer.send.enabled and composer.status.text=='You cannot send an offer to yourself.')
+    checkShareLayout()
+    composer.send.scripts.OnClick() -- The backend must reject a bypassed disabled control too.
+    assert(not engine:GetOutgoing()); eq(select(4,j:GetSharingBalance()),0)
+end
+composer.recipient:SetText('Bob Stonewell')
+assert(composer.send.enabled and not composer.status.text:find('yourself',1,true),'editing recipient clears self-offer error')
 combat=true;main.shareButton.scripts.OnClick()
 assert(not composer.send.enabled and composer.status.text:find('combat',1,true))
 combat=false;env.ready=false;env.error='Messaging initialization failed';main.shareButton.scripts.OnClick()
@@ -218,6 +353,9 @@ eq(main.killCount.point[2],main.rumoursButton,'Rumours is between Kills and Crea
 main.rumoursButton.scripts.OnClick()
 local rumours=AzerothFieldbookRumours
 assert(rumours.shown and rumours.clamped and notes.shown)
+eq(rumours.point[2],main,'resizing Rumours preserves its book-relative default')
+eq(main.offensePicker.point[2],main,'observation defaults use the main window, not a moved damage dialog')
+eq(main.rankFrame.point[2],main,'rank default uses the main window, not a moved location dialog')
 local escapeRegistered=false
 for _,name in ipairs(UISpecialFrames) do if name=='AzerothFieldbookRumours' then escapeRegistered=true end end
 assert(escapeRegistered,'Escape closes the separate Rumours window')
@@ -267,8 +405,8 @@ rumours.closeButton.scripts.OnClick();assert(not rumours.shown)
 main:Show();main.rumoursButton.scripts.OnClick();assert(rumours.shown)
 notes.pinButton.scripts.OnClick();notes.closeButton.scripts.OnClick();assert(notes.shown,'notes pin remains effective')
 notes.pinButton.scripts.OnClick()
-npcID=43;book:FollowNotesTarget();eq(notes.creature.text,'Creature 43')
-book:Refresh();eq(notes.creature.text,'Creature 43','unchanged book refresh preserves notes target')
+npcID=43;book:FollowNotesTarget();eq(notes.creature.text,'Creature 43 |cff999999[#43]|r')
+book:Refresh();eq(notes.creature.text,'Creature 43 |cff999999[#43]|r','unchanged book refresh preserves notes target')
 eq(rumours.creature.text,'Creature 42','Rumours follows the book independently of Notes target')
 book:OpenAtUnit('target');eq(rumours.creature.text,'Creature 43','changing book selection updates Rumours')
 assert(rumours.rows[1].text.text:find('No unverified rumours',1,true))
@@ -285,37 +423,253 @@ local offered={version=1,transaction='1000000-44-1',created=now,recipient='Bob S
     name='Defias Pillager',category='Humanoid',levelMin=9,levelMax=11,locations={'Elwynn'},
     rumours={{kind='ability',value='Fireball'},{kind='behaviour',value='Melee'},{kind='behaviour',value='Hostile'}}}
 local encoded=assert(S.Encode(offered))
-b:Receive('AFBShare','3~H~'..offered.transaction..'~'..buildVersion,'WHISPER','Alice Sunstrider')
+b:Receive('AFBShare','4~H~'..offered.transaction..'~'..buildVersion,'WHISPER','Alice Sunstrider')
 local n=math.ceil(#encoded/180)
-for i=1,n do b:Receive('AFBShare','3~O~'..offered.transaction..'~'..i..'~'..n..'~'..encoded:sub((i-1)*180+1,i*180),'WHISPER','Alice Sunstrider') end
+for i=1,n do b:Receive('AFBShare','4~O~'..offered.transaction..'~'..i..'~'..n..'~'..encoded:sub((i-1)*180+1,i*180),'WHISPER','Alice Sunstrider') end
 local receiver=AzerothFieldbookReceive
 assert(receiver.shown and receiver.clamped and receiver.accept.enabled)
 assert(receiver.from.text:find('Alice Sunstrider',1,true))
 assert(receiver.preview.text:find('unverified rumour',1,true) and receiver.preview.text:find('Adds new information',1,true))
 assert(not bob.entries[42]);receiver.accept.scripts.OnClick();assert(not bob.entries[42] and not receiver.accept.enabled)
-b:Receive('AFBShare','3~C~'..offered.transaction,'WHISPER','Alice Sunstrider')
+b:Receive('AFBShare','4~C~'..offered.transaction,'WHISPER','Alice Sunstrider')
 assert(bob.entries[42] and not receiver.shown);eq(bob:GetSharingBalance(),0)
 eq(#bob:GetRumours(42),3,'receive UI accepts and imports more than two rumours')
 assert(bob:DismissRumour(42,bob:GetRumours(42)[1]))
 now=now+16;offered.transaction='1000000-45-1';encoded=assert(S.Encode(offered))
-b:Receive('AFBShare','3~H~'..offered.transaction..'~'..buildVersion,'WHISPER','Alice Sunstrider')
+b:Receive('AFBShare','4~H~'..offered.transaction..'~'..buildVersion,'WHISPER','Alice Sunstrider')
 n=math.ceil(#encoded/180)
-for i=1,n do b:Receive('AFBShare','3~O~'..offered.transaction..'~'..i..'~'..n..'~'..encoded:sub((i-1)*180+1,i*180),'WHISPER','Alice Sunstrider') end
+for i=1,n do b:Receive('AFBShare','4~O~'..offered.transaction..'~'..i..'~'..n..'~'..encoded:sub((i-1)*180+1,i*180),'WHISPER','Alice Sunstrider') end
 assert(receiver.shown and receiver.preview.text:find('Previously rejected',1,true),'incoming preview warns before acceptance')
+assert(receiver.preview.text:find('basic-information cost will be waived',1,true),'receiver sees that matching basics are free')
 receiver.accept.scripts.OnClick()
-b:Receive('AFBShare','3~C~'..offered.transaction,'WHISPER','Alice Sunstrider')
+b:Receive('AFBShare','4~C~'..offered.transaction,'WHISPER','Alice Sunstrider')
 assert(bob:GetRumours(42)[1].previouslyRejected)
 assert(bob:AddManual(42,'Fireball',''))
 now=now+16;offered.transaction='1000000-46-1';encoded=assert(S.Encode(offered))
-b:Receive('AFBShare','3~H~'..offered.transaction..'~'..buildVersion,'WHISPER','Alice Sunstrider')
+b:Receive('AFBShare','4~H~'..offered.transaction..'~'..buildVersion,'WHISPER','Alice Sunstrider')
 n=math.ceil(#encoded/180)
-for i=1,n do b:Receive('AFBShare','3~O~'..offered.transaction..'~'..i..'~'..n..'~'..encoded:sub((i-1)*180+1,i*180),'WHISPER','Alice Sunstrider') end
+for i=1,n do b:Receive('AFBShare','4~O~'..offered.transaction..'~'..i..'~'..n..'~'..encoded:sub((i-1)*180+1,i*180),'WHISPER','Alice Sunstrider') end
 assert(receiver.preview.text:find('Already in your journal',1,true));receiver.decline.scripts.OnClick()
 
--- Full reset clears in-flight composition as well as saved accounting.
+-- Every movable journal dialog is registered, including unnamed child forms.
+-- Help/Options fade only the clipped edges. The decorative overlays must never
+-- enable mouse input or cover the close button/extended scrollbar.
+for _,page in ipairs({main.help,main.options}) do
+    local scroll,bar=page.scroll,page.scroll.ScrollBar
+    local range=200
+    scroll.GetVerticalScrollRange=function() return range end
+    scroll:SetVerticalScroll(0);scroll.scripts.OnScrollRangeChanged(scroll)
+    assert(not page.topFade:IsShown() and page.bottomFade:IsShown(),'topmost content stays fully legible')
+    scroll:SetVerticalScroll(50);scroll.scripts.OnVerticalScroll(scroll,50)
+    assert(page.topFade:IsShown() and page.bottomFade:IsShown(),'both clipped edges fade while scrolling')
+    scroll:SetVerticalScroll(range);scroll.scripts.OnVerticalScroll(scroll,range)
+    assert(page.topFade:IsShown() and not page.bottomFade:IsShown(),'bottommost content stays fully legible')
+    range=0;scroll:SetVerticalScroll(0);scroll.scripts.OnScrollRangeChanged(scroll)
+    assert(not page.topFade:IsShown() and not page.bottomFade:IsShown() and not bar:IsShown(),'fades and scrollbar hide when content fits')
+    for _,edge in ipairs({page.topFade,page.bottomFade}) do
+        assert(not edge:IsMouseClickEnabled() and not edge:IsMouseMotionEnabled() and not edge.scripts.OnMouseDown,
+            'focus registration leaves fade overlays click-through')
+        eq(edge.strips[1].alpha,1);eq(edge.strips[#edge.strips].alpha,0)
+        local previous=1
+        for _,strip in ipairs(edge.strips) do
+            assert(strip.alpha<=previous);previous=strip.alpha
+            assert(strip.texCoord[3]>=0 and strip.texCoord[4]<=1 and strip.texCoord[3]<strip.texCoord[4],
+                'fade samples stay aligned within the parchment')
+        end
+    end
+    local top,bottom=bar.points[1],bar.points[2]
+    eq(top[2],page.closeButton);eq(top[3],'BOTTOM')
+    eq(top[4],-1,'scrollbar top shifts one pixel left')
+    eq(1-top[5],bar.ScrollUpButton:GetHeight(),'upper arrow rises one pixel to close the visual gap')
+    eq(bottom[2],page);eq(bottom[3],'BOTTOMRIGHT')
+    eq(bottom[4],-16,'scrollbar bottom shifts one pixel left')
+    eq(bottom[5]-bar.ScrollDownButton:GetHeight(),6,'lower arrow reaches the inside of the bottom border')
+    assert(bar.trackBackground and bar.trackBorder,'scrollbar has a contrasting track')
+    assert(page.border:GetFrameLevel()>page.topFade:GetFrameLevel() and page.border:GetFrameLevel()>page.bottomFade:GetFrameLevel(),
+        'window border draws above both fade overlays')
+    assert(not page.border:IsMouseClickEnabled() and not page.border:IsMouseMotionEnabled() and not page.border.scripts.OnMouseDown,
+        'border overlay never blocks window controls')
+    assert(page.closeButton:GetFrameLevel()>page.border:GetFrameLevel(),'close button remains above the border')
+    eq(scroll.points[1][3],-72,'top clipping edge and its fade move up three pixels together')
+end
+-- Location filters fit their contents and keep at most fifteen rows visible.
+do
+    local frame=main.locationFrame
+    local scroll=frame.scroll
+    local entries,getBasic=j.entries,j.GetBasicInfo
+    local locations={}
+    j.entries={[999]={locations=locations}}
+    j.GetBasicInfo=function(self,id) return self.entries[id] end
+    local function refreshLocations() frame.scripts.OnShow(frame) end
+    refreshLocations()
+    assert(frame:GetHeight()<200 and not scroll.ScrollBar.shown,'empty location picker stays compact')
+    for i=1,15 do
+        locations[string.format('Location %02d',i)]=true
+        refreshLocations()
+        eq(scroll:GetHeight(),i*28,'viewport fits every row up to fifteen')
+        eq(frame:GetHeight(),150+i*28,'window follows content height')
+        assert(not scroll.ScrollBar.shown and not scroll.mouseWheel,'no scrolling when all rows fit')
+    end
+    locations['Location 16']=true;refreshLocations()
+    eq(scroll:GetHeight(),15*28,'sixteenth row does not enlarge the window')
+    assert(scroll.ScrollBar.shown and scroll.mouseWheel,'overflow enables scrollbar and wheel')
+    scroll:SetVerticalScroll(999);refreshLocations()
+    eq(scroll:GetVerticalScroll(),28,'offset is clamped to the overflow')
+    locations['Location 16']=nil;refreshLocations()
+    eq(scroll:GetVerticalScroll(),0,'shrinking below the cap restores the top')
+    assert(not scroll.ScrollBar.shown and not scroll.mouseWheel)
+    locations[string.rep('A long location ',8)]=true;refreshLocations()
+    assert(scroll:GetHeight()>15*28,'wrapped names keep enough row height for legibility')
+    local bar=scroll.ScrollBar
+    assert(bar.trackBackground and bar.trackBorder,'Locations uses the shared parchment scrollbar track')
+    eq(bar.points[1][2],frame.closeButton,'Locations top arrow follows the close button')
+    eq(bar.points[2][2],frame,'Locations scrollbar follows the resized window')
+    j.entries,j.GetBasicInfo=entries,getBasic
+    refreshLocations()
+end
+-- Both points sections contribute to the Help scroll content and cannot overlap About.
+do
+    main.help.scripts.OnShow(main.help)
+    local block=main.help.pointsBlock
+    eq(block.title.text,'Points')
+    assert(block.awards.text:find('+3 for 50 kills',1,true))
+    assert(block.spending.text:find('1 point per selected rumour',1,true))
+    assert(block.spending.text:find('free if the recipient already knows it',1,true))
+    local bottom=0
+    for _,text in ipairs({block.title,block.awardHeading,block.awards,block.spendHeading,block.spending}) do
+        local top=-text.point[3]
+        assert(top>bottom,'Points subsections are separated and grow with their text')
+        bottom=top+text:GetStringHeight()
+    end
+    eq(block:GetHeight(),bottom+14,'Points block includes both sections and bottom padding')
+end
+ns.ShowDebugReport('Position test')
+local windows={main,main.help,main.options,main.locationFrame,main.rankFrame,
+    main.offensePicker,main.defensePicker,main.behaviourPicker,AzerothFieldbookBestiaryDamageNotes,
+    notes,rumours,composer,receiver,AzerothFieldbookDebugReport}
+for _,frame in ipairs({main,main.help,main.options,main.locationFrame,main.rankFrame,
+    main.offensePicker,main.defensePicker,main.behaviourPicker,main.notesForm,
+    main.effectPicker,main.damageForm,main.deleteForm,notes,rumours,composer,receiver,AzerothFieldbookDebugReport}) do
+    assert(frame.parent==UIParent and frame.strata=='DIALOG' and frame.toplevel,
+        'each independent window must be able to raise above every other addon window')
+    frame.scripts.OnMouseDown(frame); eq(focusedWindow,frame)
+end
+composer.recipient.scripts.OnMouseDown(composer.recipient)
+eq(focusedWindow,composer,'clicking a text field raises its own window')
+notes.notesArea.scripts.OnMouseDown(notes.notesArea,'LeftButton')
+eq(focusedWindow,notes); assert(notes.notes.focus,'focus hooks preserve the original control handler')
+main.titleBar.scripts.OnMouseDown(main.titleBar)
+eq(focusedWindow,main,'the book can return to the front after its independent dialogs')
+local lateControl=CreateFrame('Button',nil,composer)
+local decoration=CreateFrame('Frame',nil,composer)
+local hoverOnly=CreateFrame('Frame',nil,decoration)
+hoverOnly:SetMouseMotionEnabled(true)
+local disabledControl=CreateFrame('Button',nil,decoration)
+disabledControl:SetMouseClickEnabled(false)
+local clickOnly=CreateFrame('Button',nil,decoration)
+local originalClicks=0
+clickOnly:SetScript('OnMouseDown',function() originalClicks=originalClicks+1 end)
+clickOnly:SetMouseMotionEnabled(false)
+composer.scripts.OnShow(composer)
+assert(not decoration:IsMouseClickEnabled() and not decoration.scripts.OnMouseDown)
+assert(not hoverOnly:IsMouseClickEnabled() and hoverOnly:IsMouseMotionEnabled() and not hoverOnly.scripts.OnMouseDown,
+    'hover-only containers retain their original mouse behavior')
+assert(not disabledControl:IsMouseClickEnabled() and not disabledControl.scripts.OnMouseDown)
+assert(clickOnly:IsMouseClickEnabled() and not clickOnly:IsMouseMotionEnabled(),
+    'adding a focus hook must preserve click-only controls')
+clickOnly.scripts.OnMouseDown(clickOnly,'LeftButton')
+eq(originalClicks,1); eq(focusedWindow,composer,'interactive children still focus through decorative containers')
+disabledControl:SetMouseClickEnabled(true)
+composer.scripts.OnShow(composer)
+disabledControl.scripts.OnMouseDown(disabledControl,'LeftButton')
+eq(focusedWindow,composer,'controls enabled later gain focus handling on reopening')
+clickOnly.scripts.OnMouseDown(clickOnly,'LeftButton'); eq(originalClicks,2,'reopening does not duplicate original handlers')
+lateControl.scripts.OnMouseDown(lateControl)
+eq(focusedWindow,composer,'reopening also hooks newly added controls')
+ns.WindowFocus:Register(composer) -- Repeated registration must not replace handlers.
+composer.recipient.scripts.OnMouseDown(composer.recipient); eq(focusedWindow,composer)
+for _,frame in pairs(windows) do
+    frame.left=320; frame.top=700
+    frame.scripts.OnDragStop(frame)
+    assert(db.windowPositions[frame:GetName()],frame:GetName()..' must save its position')
+end
+for key,frame in pairs({AbilityEffects=main.effectPicker,DamageObservation=main.damageForm}) do
+    frame.left=240; frame.top=600; frame.scripts.OnDragStop(frame)
+    assert(db.windowPositions[key],key..' must save its position')
+end
+GetCursorPosition=function() return 10,20 end
+main.titleBar.scripts.OnDragStart()
+main.left=360; main.top=740; main.titleBar.scripts.OnDragStop()
+eq(db.windowPositions.AzerothFieldbookBestiary.left,360*main:GetEffectiveScale(),'titlebar drag saves the book')
+
+-- Short reports shrink; long metadata and many wrapped claims keep scrolling
+-- without allowing footer controls to overlap the report contents.
+npcID=43;book:OpenAtUnit('target');main.shareButton.scripts.OnClick()
+checkShareLayout()
+local compactHeight=composer:GetHeight()
+assert(compactHeight<500,'an empty report no longer reserves a full-height rumour list')
+assert(composer.empty:IsShown())
+local shortLocations=j.entries[43].locations
+j.entries[43].locations={}
+for i=1,12 do
+    if i<=8 then j.entries[43].locations['Long observed location '..i..string.rep(' far away',3)]=true end
+    j:AddManual(43,'Spell '..i..string.rep(' wide name',6),'')
+end
+main.shareButton.scripts.OnClick();checkShareLayout()
+assert(composer:GetHeight()>compactHeight)
+assert(composer.basicBody:GetHeight()>composer.basicArea:GetHeight(),'long locations scroll')
+assert(composer.rumourBody:GetHeight()>composer.rumourArea:GetHeight(),'long rumour lists scroll')
+assert(composer.rumourArea:GetHeight()<=166 and composer.basicArea:GetHeight()<=112)
+j.entries[43].locations=shortLocations
+j.entries[43].abilities={}
+main.shareButton.scripts.OnClick();checkShareLayout()
+eq(composer:GetHeight(),compactHeight,'reopening a short report removes the old empty space')
+
+-- Reproduce the crowded creature summary: Behaviour moves intact to its own
+-- hanging-indent paragraph, and extra details never cover the lower panels.
+local entry=j.entries[43]
+entry.offenses={Nature=true};entry.resistances={Arcane=true};entry.immunities={Fire=true}
+entry.behaviours={}
+for _,name in ipairs({'Hostile','Melee','Flees at low health','Calls allies','Patrols','Summons','Heals','Enrages','Stealths'}) do
+    entry.behaviours[name]=true
+end
+book:Refresh()
+assert(main.summaryCombatRows[1].text:find('Casts: |cff72d65bNature|r',1,true))
+assert(not main.summaryCombatRows[1].text:find('Behaviour:',1,true))
+assert(main.summaryCombatRows[2].text:find('Behaviour:',1,true)==1 and main.summaryCombatRows[2].indentedWrap)
+local function checkSummaryPanels()
+    local bottom=84+main.summaryArea:GetHeight()
+    local extra=-main.detail.point[3]
+    assert(extra-main.modelBorder.point[3]>=bottom+5,'summary stays above the illustration')
+    assert(extra-main.damageBorder.point[3]>=bottom+5,'summary stays above the damage panel')
+    eq(main.damageScroll:GetHeight(),75,'expanded summary preserves the damage viewport')
+    eq(main.model:GetHeight(),164,'expanded summary preserves the illustration size')
+    eq(main:GetHeight(),740+extra,'the book grows to include its shifted content')
+    assert(main.confirm.parent==main,'entry lock stays alongside the creature title')
+    assert(main.message.parent==main.detail,'footer status follows the shifted controls')
+    assert(main.summaryArea.kind=='Frame' and not main.summaryArea:IsMouseClickEnabled(),
+        'summary is a plain container without scrollbars or intercepted clicks')
+end
+checkSummaryPanels()
+entry.locations={}
+for i=1,8 do entry.locations['Long observed location '..i..string.rep(' far away',5)]=true end
+book:Refresh();checkSummaryPanels()
+assert(main.summaryArea:GetHeight()>85 and main:GetHeight()>740,
+    'extensive location and trait lists grow the summary and book without scrolling')
+local last=main.summaryCombatRows[2]
+assert(main.summaryArea:GetHeight()>=-last.point[3]+last:GetStringHeight(),'even the final wrapped line fits in the summary')
+entry.locations=shortLocations;entry.offenses={};entry.resistances={};entry.immunities={};entry.behaviours={}
+book:Refresh();checkSummaryPanels()
+assert(not main.summaryCombatRows[1]:IsShown() and not main.summaryCombatRows[2]:IsShown(),'cleared groups leave no stale text')
+eq(-main.modelBorder.point[3],133,'short summary restores the original panel layout')
+eq(main.damageScroll:GetHeight(),75)
+eq(main:GetHeight(),740,'clearing the expanded summary restores the original book height')
+
+-- Full reset clears in-flight composition as well as saved accounting and positions.
 main.shareButton.scripts.OnClick();assert(composer.shown)
 main.rumoursButton.scripts.OnClick();assert(rumours.shown)
 j:ResetDatabase();assert(not composer.shown);eq(j:GetSharingBalance(),0)
+assert(next(db.windowPositions)==nil,'full reset clears saved positions')
 rumours.scripts.OnUpdate();assert(rumours.rows[1].text.text:find('No unverified rumours',1,true))
 assert(rumours.rows[1].claim==nil and rumours.message.text=='','reset clears the open review window')
 ''')

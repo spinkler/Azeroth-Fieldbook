@@ -22,7 +22,7 @@ local function clear()
     end
 end
 local function capture(tooltip, unit, kind, filter)
-    if not db or db.displayHoveredAuraSnapshots == false then return end
+    if not db or db.displayHoveredAuraSnapshots ~= true then return end
     if not public(unit) or type(unit) ~= "string" then status = "hover unit unavailable"; return end
     if kind == "aura" then
         if not public(filter) then status = "hover filter unavailable"; return end
@@ -94,11 +94,11 @@ end
 function snapshot:ApplySettings()
     if not panel then return end
     panel:SetBackdropColor(0,0,0,db.spellIDWindowAlpha or 0.35)
-    if db.displayHoveredAuraSnapshots == false then clear() end
+    if db.displayHoveredAuraSnapshots ~= true then clear() end
 end
 function snapshot:Initialize(settings, anchor, eligibility)
     db, eligible = settings, eligibility
-    db.displayHoveredAuraSnapshots = db.displayHoveredAuraSnapshots ~= false
+    db.displayHoveredAuraSnapshots = db.displayHoveredAuraSnapshots == true
     if not panel then
         panel = CreateFrame("Frame", "AzerothFieldbookAuraSnapshot", UIParent, "BackdropTemplate")
         if ns.UIScale then ns.UIScale:Register(panel) end
@@ -118,6 +118,7 @@ function snapshot:Initialize(settings, anchor, eligibility)
             if observed and not db.spellIDWindowIndefinite and GetTime()-observed >= 120 then clear() end
         end)
     end
+    if ns.WindowFocus then ns.WindowFocus:Register(panel) end
     clear(); self:ApplySettings()
     if not GameTooltip or type(hooksecurefunc) ~= "function" then status = "tooltip hooks unavailable"; return end
     for method, kind in pairs({SetUnitBuff="buff",SetUnitDebuff="debuff",SetUnitAura="aura",

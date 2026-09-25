@@ -87,11 +87,11 @@ eq(select(4,a:GetSharingBalance()),0,'Alice reload cancels her uncommitted offer
 -- Opt-out is sticky and only takes effect after selecting storage on reload.
 a:SetAccountWideTracking(false)
 assert(a:IsTrackingChangePending() and a:IsAccountWideTrackingActive())
-a:Ensure(99).name='Account-only observation'
+a:Ensure(99,false,'Account-only observation')
 local personal,personalDB=open(alice)
 assert(personalDB==alice and not personal:IsAccountWideTrackingActive())
 eq(personal.entries[42].kills,12);assert(not personal.entries[99])
-personal:Ensure(98).name='Personal-only observation'
+personal:Ensure(98,false,'Personal-only observation')
 assert(not account.bestiary.entries[98])
 personal:SetAccountWideTracking(true)
 a=open(alice)
@@ -134,6 +134,17 @@ ns.CreateBestiaryJournal=realCreate
 assert(account.bestiary==before and not account.importedCharacters[broken.accountTrackingKey])
 eq(account.bestiary.entries[42].kills,2)
 open(broken);eq(account.bestiary.entries[42].kills,5,'retry imports only once after failure')
+
+-- Combined account kills can cross the crown tier; award only its new credit.
+AzerothFieldbookAccountDB=nil
+local crownAlice=character(25,'Fireball',9,'Elwynn')
+local crownBob=character(25,'Frostbolt',9,'Elwynn')
+open(crownAlice)
+local crown=open(crownBob)
+eq(crown.entries[42].kills,50);eq(select(2,crown:GetKillReward(42)),'crown')
+eq(select(2,crown:GetTotals()),11,'two historical four-point journals plus the new three-point crown')
+crown=open(crownBob)
+eq(select(2,crown:GetTotals()),11,'account crown is not credited again on reload')
 ''')
 print('PASS: default account tracking, merging, credit, migration replay protection, character preferences, transport ownership, opt-out and scoped resets')
 

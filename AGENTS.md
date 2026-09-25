@@ -85,7 +85,8 @@ The normal release sequence is:
 
 1. Verify the version already recorded in `AzerothFieldbook.toc` and `README.md`.
    Do not increment it again solely to publish an already-versioned batch.
-2. Finalize the matching changelog entry and run the required checks.
+2. Finalize the cumulative changelog for the entire batch since the previous
+   push, following Changelog coverage below, and run the required checks.
 3. Commit the accumulated changes to `main`.
 4. Push `main`.
 5. Verify the working tree is clean and `main` matches `origin/main`.
@@ -102,6 +103,35 @@ The tag push automatically:
 
 Do not manually create a GitHub Release or manually upload a CurseForge build
 unless explicitly requested or recovering from automation failure.
+
+## Changelog coverage
+
+Every push must include changelog coverage for **all changes since the previous
+push**, not just the latest local version or the most recent user request. Local
+iteration often spans many version increments before one public push.
+
+Before committing and pushing a batch:
+
+- Verify and record the current remote `origin/main` commit as the previous-push
+  baseline **before** updating it. Review all commits and intended working-tree
+  changes since that baseline, including staged, unstaged and new files.
+- Cross-check that complete change set against every intervening local changelog
+  entry. Include features, fixes, UI changes, behavior/default changes, tests,
+  documentation and workflow changes; group related items for readability.
+- Make the latest version's release entry a self-contained cumulative summary
+  of the whole batch. Do not rely on readers finding older local-version entries
+  to learn what the new release contains. Preserve historical entries and do not
+  invent changes or describe superseded intermediate behavior as current.
+- If any push since the last public release was push-only, the next published
+  release must also cover those still-unreleased changes. Use the last published
+  release tag as the additional baseline so they are not omitted.
+- Ensure the changelog actually supplied to the packager, GitHub Release and
+  CurseForge contains this complete summary. Check the publication configuration
+  rather than assuming it includes every local entry automatically.
+
+Changelog completeness is a required pre-push check, including for push-only
+requests. A version bump or a final small fix must never hide the rest of the
+accumulated batch. This requirement does not itself authorize a push or release.
 
 ## Packaging
 
@@ -155,6 +185,8 @@ Before a release, ensure:
 
 - TOC version matches the intended release version
 - README current-version references are correct
+- cumulative changelog covers the complete batch since the previous push and
+  any earlier changes not yet included in a public release
 - tests pass
 - working tree is clean
 - `main` is synchronized with `origin/main`

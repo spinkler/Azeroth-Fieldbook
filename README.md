@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.11 (Beta)
+# Azeroth Fieldbook 0.9.42 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,11 +6,11 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.11 includes sharing, addon-version compatibility
+spell databases. Version 0.9.42 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.11.
+are not part of version 0.9.42.
 
 ## Installation and opening
 
@@ -25,12 +25,29 @@ Install the addon as `Interface/AddOns/AzerothFieldbook` and enable
 
 No existing keybinding is overwritten. Escape closes the primary and secondary
 windows. The book and its dialogs can be dragged and are clamped to the screen.
+Dragged windows remember their position per character across reloads and game
+sessions. Untouched dialogs retain their book-relative defaults instead of saving
+screen coordinates when closed. Full reset clears saved positions along with other settings.
+Initial positions sit beside the book: damage observation, Help/Options and ID
+Logs and Notes start on the right; observation panels sit below damage and
+Rumours below ID Logs. Locations starts on the left, with Ranks beneath it and
+their right edges aligned. The narrower Share window starts on the right with
+its bottom edge aligned to the book. Default dialogs follow the book and stay
+inside the screen; restored positions are clamped for the current screen size.
+Saved positions override these defaults. Clicking an
+addon window or one of its controls brings that window to the front of the other
+addon windows.
 
 The gold cog immediately left of **?** opens **Options**, containing all settings
 and **Reset Bestiary**. **?** opens instructions and About. Both buttons toggle
 their page and close the other page when switching between Help and Options.
 Both pages share the last top-left position, so dragging either page also sets
-where the other opens.
+where the other opens. Help includes a separate **Points** block with sections
+for earning points through discovery and kills, and spending them on sharing.
+
+**Filter: Locations** fits its content up to 15 rows, then scrolls using the same
+parchment scrollbar styling as Help and Options. **Filter: Rank** and **Observed
+offenses** use compact windows with comfortably spaced controls.
 
 ## Bestiary
 
@@ -56,7 +73,9 @@ The index supports creature-type, location, rank, review-state, text and A-Z fil
 The **Index** button starts red with the letters hidden and no letter filter.
 Click it to highlight the button and reveal all 26 letter buttons. Click it again
 to hide the letters and clear the letter filter, restoring the full creature list
-within any other active filters.
+within any other active filters. Letters without entries matching the current
+filters are grey and unclickable. If filtering empties the selected letter, its
+letter filter clears automatically.
 Filters combine. Totems, gas clouds and entries with unreadable or unspecified
 creature types share the **Other** filter.
 
@@ -79,6 +98,13 @@ Locking freezes the creature's recorded abilities, traits, damage observations,
 and metadata. Kill and discovery-point progress continue while locked. Unlock to resume recording.
 Personal ID Logs and Notes remain editable while locked.
 
+On an unlocked entry, **Resolve** beside an ability looks up its recorded spell
+ID (or exact name) outside combat and confirms it in one step. The ability adopts
+the spell's canonical name and tooltip, removing its pending and automatic-origin
+labels while preserving personal notes, effects and tooltip visibility choices.
+Unreadable spells leave the record unchanged. Resolve is hidden once the ability
+is confirmed with a spell ID; pending or unlinked abilities retain it.
+
 Delete removes the selected creature and its saved records after you type
 `delete` and press Enter. Future encounters can record it again. Previously
 credited milestones and spending survive deletion, so deleting and rediscovering
@@ -87,29 +113,41 @@ school-specific resistance and immunity tags.
 
 Each personal creature discovery awards 1 point, including its initial level and zone. Later
 sightings revealing a new level, zone, or both award 1 discovery point per sighting.
-Repeat sightings award nothing. Two kills award 1 additional point (silver);
-25 kills award 2 more (gold), for 3 kill points total. Already-earned kill points
-remain credited when thresholds change and cannot be earned twice. Existing
+Repeat sightings award nothing. Ten kills award a silver star and 1 additional
+point; 25 kills award a gold star and 2 more points; 50 kills award a gold crown
+and 3 more points, for 6 kill points total. The crown replaces the star beside
+the kill count. Existing personal entries with 50 or more kills receive any
+uncredited crown points on load. Already-earned kill points remain credited when
+thresholds change and cannot be earned twice, including earlier silver credit. Existing
 entries retain their previous legitimate total through a one-time migration,
 including saved discovery progress and legacy recorded level endpoints. The
 book shows lifetime **earned** points. Sharing shows **available** points:
 earned minus spending and active reservations. Spending never removes kills,
-stars or discovery progress.
+stars, crowns or discovery progress.
 
 ## Sharing and Rumours (development)
 
+Options includes **Block incoming offers**, off by default and saved per character.
+Enable it to automatically decline new offers and close unaccepted offers, with
+no points spent by the sender. Outgoing sharing and already accepted deliveries
+continue normally. Turn it off to receive offers again.
+
 Select a creature, press **Share**, enter one recipient's **full character name**
 (including their surname if they have one), and select any existing traits you
-want to share from the two-column list. Each selected rumour costs one additional
+want to share from the two-column list. Self-offers are rejected before any
+points are reserved; matching ignores capitalization and extra spaces. Each selected rumour costs one additional
 point; there is no two-rumour selection cap. Names are realm-free; no realm is required or
 appended. Spaces, localized letters, apostrophes and hyphens in names are preserved.
 The composer captures the creature when opened; changing targets or book pages
 does not change the report. Both players need this compatible development build
 and must be outside combat and chat restrictions. Both players must have the
-**same installed addon version**. Sharing protocol 3 exchanges the TOC version
+**same installed addon version**. Sharing protocol 4 exchanges the TOC version
 before offering a report and when retrying a paid transaction. A version mismatch
 shows both version numbers when available, sends no report data and spends no
-points on a new offer; older unsupported builds can time out without spending.
+points on a new offer. The initial compatibility check shows a **20-second
+countdown**. With no reply, it explains that the addon may be missing/disabled or
+the player offline, restricted or lagging, releases reserved points, and enables
+a fresh send attempt. Silence alone is not treated as proof of a missing addon.
 Native delivery to a recipient with a surname, acknowledgement,
 and separate attributed imports were confirmed in game under the earlier pricing.
 The new pricing and larger selections have automated coverage; remaining live checks are listed in
@@ -124,7 +162,7 @@ self-sharing and receiver compatibility are checked when sending.
 
 | Report | Sender cost |
 | --- | ---: |
-| Name, NPC ID, creature type, recorded levels and locations | 1 point |
+| Name, NPC ID, creature type, recorded levels and locations | 1 point if new; otherwise free |
 | Those basics plus one unverified rumour | 2 points |
 | Those basics plus two unverified rumours | 3 points |
 | Those basics plus three unverified rumours | 4 points |
@@ -143,14 +181,20 @@ claim, its personal journal record is eligible for sharing like your other recor
 A spell ID identifies a spell; it is not proof that this creature casts it.
 
 Opening, previewing and cancelling the composer are free. **Send offer** reserves
-the cost. An unavailable or incompatible receiver, decline, cancellation, or
+the maximum cost (1 basic-information point plus the selected rumours). An unavailable or incompatible receiver, decline, cancellation, or
 timeout **before commit** releases that reservation. After the recipient accepts,
-the sender commits the cost before authorizing import. A receipt acknowledgement
+their current journal determines whether the report adds any new basic information.
+If those basics are already known, the sender commits one point less, releases
+the unused reservation, and receives a chat notice and a Share status explanation.
+This also applies when the recipient has broader levels or more locations; new
+or conflicting basic information retains its one-point cost. Each selected rumour
+still costs one point. A matching basics-only report settles at zero points.
+The sender commits the final cost before authorizing import. A receipt acknowledgement
 completes the report; an API success alone does not. A missing acknowledgement
 leaves delivery **unknown**, with the points still spent. Reopen Share and use
 **Retry status**: the same transaction can be reconciled at most three times
 within 24 hours, without a second charge. After that it can be closed as
-unresolved, with no refund. A new report is a new paid transaction.
+unresolved, with no refund. A new report is priced separately.
 
 Recipients see the sender, creature, claims, conflicts and whether the report
 adds information before choosing **Accept — free** or **Decline**. Acceptance
@@ -200,9 +244,17 @@ its existing source record and is flagged for review. There is no copy/paste exp
 SavedVariables cannot provide crash-proof delivery or resist edited saves/clients.
 
 The ? menu includes UI scale (50–150%, default 100%), applied when the slider
-is released. Offenses, Defenses and Behaviour share a position and replace
+is released. The minus and plus buttons beside **100%** apply five-percentage-point
+changes immediately, so you can adjust scale without dragging the slider.
+Offenses, Defenses and Behaviour share a position and replace
 one another by default; disable that option to keep multiple windows open.
-Point award chat messages are enabled by default and can be disabled.
+Point award chat messages are enabled by default and can be disabled. Discoveries
+and their point awards share one Bestiary announcement, using the creature's
+resolved name and observed type, level and location; unavailable details are
+omitted. Kill rewards show the name and type with 10/25/50-kill milestones.
+The addon prefix is cyan, bracketed rewards are yellow and parenthesized details
+are grey. With point messages disabled, the separate discovery setting can still
+show a discovery notice without its point amount.
 
 ## Spell IDs and personal notes
 
@@ -216,7 +268,9 @@ NPC target. It starts enabled and unlocked with 35% background opacity. Entries
 expire after two minutes unless **Display Spell IDs in the ID window indefinitely**
 is enabled. Aura effect types are shown when available.
 
-**Retain hovered aura tooltips** keeps a compact historical snapshot of accessible
+**Retain hovered aura tooltips** is off by default and available as an optional
+fallback; existing saved choices are preserved. When enabled, it keeps a compact
+historical snapshot of accessible
 buff/debuff tooltips after hovering. Right-click to dismiss it; durations are
 historical text, not a countdown. This option is enabled by default and shares
 the ID window's expiry setting. Combat restrictions can block enemy aura queries
@@ -225,10 +279,13 @@ Displayable secret values are passed directly to UI text; they are not inspected
 or saved as observations.
 
 Use **Creature Notes** beside the selected creature's name, or `/fieldbook notes`,
-to open its **ID Logs and Notes**. Enter up to ten spell IDs to create spell links;
+to open its **ID Logs and Notes**. Its heading includes the creature ID in grey,
+for example `Elder Black Bear [#1234]`. Enter up to ten spell IDs to create spell links;
 remove rows with the red x. Each creature also has a 400-character personal notes
 box. These records persist per creature and do not automatically confirm abilities.
-The aura spell-ID tooltip option also controls IDs appended to these spell links.
+**Show spell IDs on tooltips if possible** controls IDs on supported aura tooltips,
+journal ability tooltips and these spell links. Turning it off keeps the spell
+tooltips themselves available.
 Creature notes follow eligible target selections by default, without opening
 a closed window or changing the selected Bestiary page. Disable this in Options
 to follow only manual selections. Pin prevents Close and Escape from dismissing
@@ -240,8 +297,16 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 Readable target or mouseover casts become pending field notes. Supported
 post-combat damage-meter records may also contribute abilities when an NPC can be
-attributed safely within the same encounter. Ambiguous, incomplete, secret or
-unreadable records fail closed.
+attributed safely within the same encounter, even without targeting or hovering
+over it. These entries retain the meter's readable creature name; level, type and
+location still require direct observation. Automatic abilities require a usable
+name and a journal entry. Ambiguous, incomplete, secret or unreadable records
+fail closed.
+
+Old nameless entries stay hidden from the index and entry count until a direct
+observation or attributed encounter identifies them. Their observations, notes,
+review decisions and previously earned credit are preserved. Legacy ability-only
+records wait for identification before creating a creature entry.
 
 The addon does not inspect hidden spell data, ship a spell list, change damage
 meter settings, or read disk combat logs.
@@ -266,7 +331,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.11 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.42 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode and one-time migration markers.

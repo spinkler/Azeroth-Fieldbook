@@ -81,6 +81,7 @@ local function Setup()
     panel:SetFrameStrata("HIGH")
     panel:SetPoint("BOTTOM", bar, "TOP", 0, 5)
     panel:EnableMouse(true)
+    if ns.WindowFocus then ns.WindowFocus:Register(panel) end
     panel:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then
             dismissed = true

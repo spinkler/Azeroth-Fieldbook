@@ -96,14 +96,21 @@ function ns.CreateBestiaryEncounterReader(record)
             end
             return row.sourceCreatureID
         end
-        local function propose(npcID, spell)
+        local function propose(npcID, name, spell)
             -- creatureName denotes pet contribution in Blizzard's spell rows.
-            if not id(spell.spellID) or not empty(spell.creatureName) then
+            if not text(name) or not id(spell.spellID) or not empty(spell.creatureName) then
                 stats.excluded = stats.excluded + 1; return
             end
             stats.candidates = stats.candidates + 1
-            proposals[npcID] = proposals[npcID] or {}
-            proposals[npcID][spell.spellID] = true
+            local proposal = proposals[npcID]
+            if not proposal then
+                proposal = { name = name, spells = {} }
+                proposals[npcID] = proposal
+            elseif proposal.name ~= name then
+                proposal.name = false
+                stats.ambiguous = stats.ambiguous + 1
+            end
+            proposal.spells[spell.spellID] = true
         end
         local function details(sessionID, mode, source)
             if not public(source.sourceGUID) or not public(source.sourceCreatureID) then
@@ -140,7 +147,9 @@ function ns.CreateBestiaryEncounterReader(record)
                     if not creatureID or not text(source.name) then
                         stats.excluded = stats.excluded + 1; completeRoster = false; return
                     end
-                    enemies[creatureID] = true
+                    local previousName = enemies[creatureID]
+                    if previousName == nil then enemies[creatureID] = source.name
+                    elseif previousName ~= source.name then enemies[creatureID] = false end
                     stats.roster = stats.roster + 1
                     local previous = names[source.name]
                     if previous == nil then names[source.name] = creatureID
@@ -167,7 +176,7 @@ function ns.CreateBestiaryEncounterReader(record)
                         end
                         local creatureID = names[actor.unitName]
                         if not creatureID then stats.ambiguous = stats.ambiguous + 1; return end
-                        propose(creatureID, spell)
+                        propose(creatureID, enemies[creatureID], spell)
                     end) end
                 end) end
 
@@ -183,7 +192,7 @@ function ns.CreateBestiaryEncounterReader(record)
                             if not creatureID or not enemies[creatureID] then return end
                             local result = details(sessionID, mode, source)
                             if result then each(result.combatSpells, 500, function(spell)
-                                propose(creatureID, spell)
+                                propose(creatureID, enemies[creatureID], spell)
                             end) end
                         end) end
                     end
@@ -197,9 +206,11 @@ function ns.CreateBestiaryEncounterReader(record)
             return
         end
         local added = 0
-        for creatureID, spells in pairs(proposals) do
-            for spellID in pairs(spells) do
-                if record(creatureID, spellID) then added = added + 1 end
+        for creatureID, proposal in pairs(proposals) do
+            if proposal.name then
+                for spellID in pairs(proposal.spells) do
+                    if record(creatureID, spellID, proposal.name) then added = added + 1 end
+                end
             end
         end
         self.status = "Last scan: " .. stats.sessions .. " sessions; " .. added .. " new NPC/ability pairs."

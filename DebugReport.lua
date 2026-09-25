@@ -142,7 +142,7 @@ end
 function ns.ShowDebugReport(report)
     if not panel then
         panel = CreateFrame("Frame", "AzerothFieldbookDebugReport", UIParent, "BackdropTemplate")
-        panel:SetSize(740, 540); panel:SetPoint("CENTER")
+        panel:SetSize(740, 540); panel:SetPoint("CENTER", AzerothFieldbookBestiary or UIParent, "CENTER")
         panel:SetFrameStrata("DIALOG"); panel:SetClampedToScreen(true)
         panel:SetMovable(true); panel:EnableMouse(true); panel:RegisterForDrag("LeftButton")
         panel:SetScript("OnDragStart", panel.StartMoving)
@@ -183,7 +183,7 @@ function ns.ShowDebugReport(report)
             panel:SetScale(math.min(1, (UIParent:GetWidth()-30)/740, (UIParent:GetHeight()-30)/540))
         end
     end
-    if ns.UIScale then ns.UIScale:Register(panel) end
+    if ns.UIScale then ns.UIScale:Register(panel,"AzerothFieldbookDebugReport") end
     panel:Show()
     edit:SetText(report); edit:SetCursorPosition(0)
     scroll:SetVerticalScroll(0)

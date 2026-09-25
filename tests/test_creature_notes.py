@@ -41,8 +41,8 @@ function GameTooltip:Hide() end
 for name in ['Scrollbars.lua','BestiaryJournal.lua','CreatureNotes.lua']:
     lua.execute((root/name).read_text(),'AzerothFieldbook',lua.globals().ns)
 lua.execute(r'''journal=ns.CreateBestiaryJournal(db,function() return nil end)
-journal:Ensure(1).name='Mountain Boar'
-journal:Ensure(2).name='Geomancer'
+journal:Ensure(1,false,'Mountain Boar')
+journal:Ensure(2,false,'Geomancer')
 assert(not journal:AddNoteSpell(nil,'6268'))
 for _,input in ipairs({'abc','-1','0','1.5','2147483648','1e3'}) do assert(not journal:AddNoteSpell(1,input)) end
 assert(not journal:AddNoteSpell(1,secret))
@@ -62,7 +62,7 @@ assert(restored:GetIDNotes(1).spells[1]==6268 and restored:GetIDNotes(2).text=='
 local notes=ns.CreateCreatureNotesWindow(journal)
 notes:Open(1)
 local frame=AzerothFieldbookCreatureNotes
-assert(frame.shown and frame.creature.text=='Mountain Boar')
+assert(frame.shown and frame.creature.text=='Mountain Boar |cff999999[#1]|r')
 assert(frame.notes.limit==400 and frame.notesBorder.shown and frame.notesArea.shown)
 journal:SetEntryConfirmed(1,true)
 notes:Open(1)
@@ -81,7 +81,7 @@ frame.spellInput:SetText('134');frame.spellInput.scripts.OnEnterPressed(frame.sp
 assert(frame.count.text=='10/10' and frame.spellInput.text=='')
 frame.notes:SetText('Saved automatically.\nSecond line.')
 notes:SetCreature(2)
-assert(frame.creature.text=='Geomancer' and frame.count.text=='0/10' and frame.notes.text=='Uses wards.')
+assert(frame.creature.text=='Geomancer |cff999999[#2]|r' and frame.count.text=='0/10' and frame.notes.text=='Uses wards.')
 frame.spellInput:SetText('4979');frame.spellInput.scripts.OnEnterPressed(frame.spellInput)
 assert(journal:GetIDNotes(2).spells[1]==4979)
 notes:SetCreature(1)
@@ -97,18 +97,18 @@ local originalObserve=journal.Observe
 local targetID=2
 journal.Observe=function() return targetID end
 notes:FollowTarget()
-assert(frame.creature.text=='Geomancer' and frame.notes.text=='Uses wards.')
+assert(frame.creature.text=='Geomancer |cff999999[#2]|r' and frame.notes.text=='Uses wards.')
 notes:Refresh()
-assert(frame.creature.text=='Geomancer') -- Book refresh must not undo target following.
+assert(frame.creature.text=='Geomancer |cff999999[#2]|r') -- Book refresh must not undo target following.
 frame.notes:SetText('Target-follow note')
 targetID=nil; notes:FollowTarget()
-assert(frame.creature.text=='Geomancer')
+assert(frame.creature.text=='Geomancer |cff999999[#2]|r')
 journal:SetNotesFollowTarget(false); targetID=1; notes:FollowTarget()
-assert(frame.creature.text=='Geomancer')
+assert(frame.creature.text=='Geomancer |cff999999[#2]|r')
 local restoredSettings=ns.CreateBestiaryJournal(db,function() return nil end)
 assert(not restoredSettings:GetNotesFollowTarget())
 journal:SetNotesFollowTarget(true); notes:FollowTarget()
-assert(frame.creature.text=='Mountain Boar' and journal:GetIDNotes(2).text=='Target-follow note')
+assert(frame.creature.text=='Mountain Boar |cff999999[#1]|r' and journal:GetIDNotes(2).text=='Target-follow note')
 local function escapeRegistered()
     for _,name in ipairs(UISpecialFrames) do if name=='AzerothFieldbookCreatureNotes' then return true end end
     return false
@@ -117,12 +117,17 @@ assert(escapeRegistered())
 frame.pinButton.scripts.OnClick()
 assert(not frame.closeButton.enabled and not escapeRegistered())
 frame.closeButton.scripts.OnClick(); assert(frame.shown)
-targetID=2; notes:FollowTarget(); assert(frame.creature.text=='Geomancer')
+targetID=2; notes:FollowTarget(); assert(frame.creature.text=='Geomancer |cff999999[#2]|r')
 frame.pinButton.scripts.OnClick()
 assert(frame.closeButton.enabled and escapeRegistered())
 frame.closeButton.scripts.OnClick(); assert(not frame.shown)
 targetID=1; notes:FollowTarget(); assert(not frame.shown)
 journal.Observe=originalObserve
+journal:Offer(1176,'Bottle of Poison','Automatic observation',7365,'Tunnel Rat Forager')
+notes:Open(1176)
+assert(frame.creature.text=='Tunnel Rat Forager |cff999999[#1176]|r' and frame.notes.enabled and frame.spellInput.shown)
+frame.notes:SetText('Encounter-only creature notes')
+assert(journal:GetIDNotes(1176).text=='Encounter-only creature notes')
 notes:Open(nil)
 assert(frame.count.text=='0/10'  and not frame.spellInput.shown and frame.notes.text=='')
 notes:Open(1)
