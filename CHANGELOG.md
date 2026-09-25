@@ -1,5 +1,101 @@
 # Changelog
 
+## v0.9.78-beta - 2026-09-25
+
+This release includes all changes since v0.9.74-beta (local iterations v0.9.75
+through v0.9.78). The previous-push and previous-release baseline is commit
+821e9fcc7a14cb3293ffaa6c1479eed317d7cd82. Both players must use the same addon
+version to share creatures.
+
+### Automatic locking
+
+- Add an enabled-by-default auto-lock checkbox in Options with an editable
+  threshold of 10 kills without changes to recorded creature information,
+  abilities, traits, damage or notes.
+- Reset the streak on content changes, manual unlock or toggling auto-lock.
+  Repeated sightings and unchanged edits retain progress; kills and points alone
+  do not reset it. Streaks persist across sessions, existing entries start without
+  retroactive credit, and automatic locks appear in Event log. Pending abilities
+  remain pending.
+
+### Bestiary backups
+
+- Add Backup Bestiary and Restore Bestiary beside Reset Bestiary, separated by
+  a small gap. Keep five dated manual backups for the active account or character
+  Bestiary, surviving resets, plus a separate recovery copy saved before restore.
+- Preview backup dates, sources and creature/ability/note counts before confirming
+  replacement. Restore immediately outside combat and refresh the creature views.
+  Preserve settings, Event log, earned milestones, spending and active offers;
+  never replay old transactions or refund points already spent.
+- Support copy/paste export and import, including personal notes, with instructions
+  for keeping a separate copy outside the game. Validate a bounded literal format
+  before restoring; incomplete or unsupported input changes nothing and is never
+  executed as Lua. In-game backups share the addon's saved files and are written
+  to disk on normal logout or reload.
+- Use the existing parchment, title bar, scrollbar, scale, focus and saved-position
+  styling in a backup window sized to its content. Reset confirmation explains
+  that saved backups and Event log are retained.
+
+### Ability effects
+
+- Add Heal immediately above Heal over Time. Move following sections down and
+  extend the Effects window to retain their existing spacing.
+
+### First encounter dates
+
+- Record the date and time of each creature's first personal encounter and show
+  it below the creature name in Creature Notes, using local time and grey styling.
+  Expand the window slightly to preserve spacing around the spell-ID controls.
+- Recover older dates from scored discovery events where available. Leave
+  undated personal entries as Unknown, and shared-only entries as Not personally
+  encountered until an actual observation. Repeated sightings never replace the date.
+- Keep the earliest known date through account migration, deletion/re-encounter,
+  reloads and backup export/import/restore. Add regression coverage for these
+  paths, missing or restricted timestamps, and the Creature Notes display.
+
+### Documentation and validation
+
+- Update usage documentation for auto-locking, backups and encounter dates, and
+  keep the TOC and README version references synchronized.
+- Add tests for persistent auto-lock streaks, backup isolation and retention,
+  export/import validation, recovery, point continuity and live sharing state,
+  encounter timestamps and account migration. Extend mocked UI coverage for
+  restore preview/confirmation and Creature Notes. All 23 test files pass;
+  live in-game rendering remains a separate verification step.
+
+## v0.9.77 - Unreleased
+
+- Add Heal immediately above Heal over Time in the ability effects list. Move the
+  following sections down and extend the window to retain their existing spacing.
+
+## v0.9.76 - Unreleased
+
+- Add Backup Bestiary and Restore Bestiary beside Reset Bestiary in the Options
+  footer, with a small gap separating reset from the backup controls.
+- Save five dated manual backups per active account or character Bestiary.
+  Keep backups through resets and show creature, ability and note counts before
+  restoring. Require confirmation and automatically save a separate recovery
+  copy of the records being replaced.
+- Add copy/paste export and import with clear instructions, a read-only preview
+  before restoration, and validation for incomplete or unsupported data. Imported
+  text is a bounded literal format and is never executed as Lua.
+- Restore records immediately outside combat, preserving settings, Event log,
+  earned milestones, spending and live sharing state. Refresh open creature
+  views; never restore old transactions or refund points already spent.
+- Match the backup window to the existing title bars, parchment, scrolling,
+  scaling, focus and saved-position rules, sizing it to its content. Add regression
+  coverage for persistence, recovery, scope isolation, imports and confirmation.
+
+## v0.9.75 - Unreleased
+
+- Add an enabled-by-default auto-lock option under Tracking with an editable
+  threshold of 10 kills. Lock after that many credited kills without changes to
+  recorded creature information, abilities, traits, damage or notes.
+- Reset progress on content changes, manual unlock or toggling auto-lock. Repeated
+  sightings and unchanged setters do not reset it; kills/points alone are excluded.
+  Persist streaks across sessions, start existing entries without retroactive kill
+  credit, and record automatic locks in Event log. Pending abilities stay pending.
+
 ## v0.9.74-beta - 2026-09-25
 
 This release includes all changes since v0.9.56-beta (local iterations v0.9.57

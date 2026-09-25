@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.74 (Beta)
+# Azeroth Fieldbook 0.9.78 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,13 +6,19 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.74 includes sharing, addon-version compatibility
+spell databases. Version 0.9.78 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.74.
+are not part of version 0.9.78.
 
 ## Installation and opening
+
+Options → Tracking includes **Auto-lock after X kills without changes**, enabled
+by default at 10. Only credited kills count. Recorded-information changes and manual
+unlocking restart the count; repeated sightings do not. Progress persists across
+sessions, and automatic locking does not confirm pending abilities. Existing kills
+are not counted retroactively. Automatic locks appear in the Event log.
 
 Install the addon as `Interface/AddOns/AzerothFieldbook` and enable
 **Azeroth Fieldbook** in the addon list.
@@ -53,11 +59,34 @@ addon windows.
 The list button left of Options opens the **Event log**. It records timestamped discoveries, point awards and observed-cast alerts even with chat announcements disabled. This per-character history starts on first use, survives reloads and Bestiary resets, and keeps all events with newest-first pages of 50. Earlier events cannot be reconstructed.
 
 The gold cog immediately left of **?** opens **Options**, containing all settings
-and **Reset Bestiary**. **?** opens instructions and About. Both buttons toggle
+and **Reset Bestiary**, **Backup Bestiary** and **Restore Bestiary**. **?** opens instructions and About. Both buttons toggle
 their page and close the other page when switching between Help and Options.
 Both pages share the last top-left position, so dragging either page also sets
 where the other opens. Help includes a separate **Points** block with sections
 for earning points through discovery and kills, and spending them on sharing.
+
+**Backup Bestiary** saves a dated copy immediately and opens the backup window.
+It keeps the five most recent manual backups for the active account-wide or
+character Bestiary; saving another replaces the oldest. Backups survive Reset
+Bestiary. They include creature records, abilities, damage observations, notes,
+locks, rumours and point history.
+
+For a separate copy outside the game, select **Export selected**, press Ctrl+C,
+and paste into a text document to save. This includes personal creature notes.
+In-game backups use the addon's saved files and cannot protect against losing
+those files; log out or reload normally to save them to disk.
+
+**Restore Bestiary** opens the dated list. Select a backup and review its date,
+source and record counts, then choose **Restore this backup** and confirm.
+To use an exported copy, choose **Import a backup**, paste with Ctrl+V, and click
+**Preview import** first. Invalid, incomplete or unsupported text is rejected
+without changing the journal. Portable backups support up to 4 MiB of text.
+
+Restore replaces creature records and saves the displaced records as **Before
+last restore**, a separate recovery copy that can be selected to undo a mistake.
+Current settings, Event log and active offers remain intact. Point history is
+combined without repeating credited milestones or refunding spent points.
+Restores are available outside combat and need no reload to take effect.
 
 **Filter: Locations** fits its content up to 15 rows, then scrolls using the same
 parchment scrollbar styling as Help and Options. **Filter: Rank** and **Observed
@@ -294,7 +323,15 @@ or saved as observations.
 
 Use **Creature Notes** beside the selected creature's name, or `/fieldbook notes`,
 to open its **ID Logs and Notes**. Its heading includes the creature ID in grey,
-for example `Elder Black Bear [#1234]`. Enter up to ten spell IDs to create spell links;
+for example `Elder Black Bear [#1234]`. **First encountered** appears beneath the
+name, showing the earliest recorded personal encounter in your local date and
+time. This date survives repeat sightings, locking, reloads, deletion/re-encounter,
+account migration and backup restores. Older dates are recovered from scored
+discovery events when available; otherwise existing personal records show
+**Unknown**. Received reports show **Not personally encountered** until you
+observe the creature yourself.
+
+Enter up to ten spell IDs to create spell links;
 remove rows with the red x. Each creature also has a 400-character personal notes
 box. These records persist per creature and do not automatically confirm abilities.
 **Show spell IDs on tooltips if possible** controls IDs on supported aura tooltips,
@@ -345,10 +382,12 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.74 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.78 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
-character's settings, preserving the tracking mode and one-time migration markers.
+character's settings, preserving the tracking mode, one-time migration markers,
+Event log and backups. Backup archives live alongside `bestiary` in the active
+database, so account and character backups remain separate.
 
 The previous binding action IDs remain registered behind the newly branded
 binding labels, preserving assigned keys across the rename.
@@ -360,6 +399,9 @@ legacy migration, encounter attribution, filters, manual notes, damage records,
 creature traits, kill counting, tooltips and mocked native UI construction.
 Account-tracking tests cover migration, replay protection, separate character
 journals, shared event recording, point balances, transfer ownership and resets.
+Backup tests cover literal export/import, Unicode notes, malformed data, snapshot
+isolation, retention, reset/reload recovery, tracking scopes, point continuity,
+live transfers and the preview/confirmation UI workflow.
 Sharing adds simulated two-client protocol tests, enum/error handling, migration,
 credit preservation, import isolation, malformed reports, consent, retries and
 rumour verification, manual matching, rejection history and mocked window interactions. In-game rendering, real Forever WHISPER

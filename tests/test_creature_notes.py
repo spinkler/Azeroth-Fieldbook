@@ -6,6 +6,11 @@ root=Path(__file__).resolve().parents[1]
 lua=LuaRuntime(unpack_returned_tuples=True)
 lua.execute(r'''ns,db,objects,UISpecialFrames,UIParent={},{},{},{},{}
 secret={}
+function time() return 1790300000 end
+function date(format,stamp)
+    assert(format=='%d %b %Y, %H:%M:%S' and stamp==1790300000)
+    return '25 Sep 2026, 15:43:20'
+end
 function issecretvalue(v) return rawequal(v,secret) end
 function InCombatLockdown() return true end
 C_Spell={GetSpellName=function(id) return id==6268 and 'Rushing Charge' or secret end}
@@ -63,6 +68,7 @@ local notes=ns.CreateCreatureNotesWindow(journal)
 notes:Open(1)
 local frame=AzerothFieldbookCreatureNotes
 assert(frame.shown and frame.creature.text=='Mountain Boar |cff999999[#1]|r')
+assert(frame.firstEncountered.text=='First encountered: 25 Sep 2026, 15:43:20' and frame.firstEncountered.shown)
 assert(frame.notes.limit==400 and frame.notesBorder.shown and frame.notesArea.shown)
 journal:SetEntryConfirmed(1,true)
 notes:Open(1)
@@ -130,6 +136,13 @@ frame.notes:SetText('Encounter-only creature notes')
 assert(journal:GetIDNotes(1176).text=='Encounter-only creature notes')
 notes:Open(nil)
 assert(frame.count.text=='0/10'  and not frame.spellInput.shown and frame.notes.text=='')
+assert(not frame.firstEncountered.shown and frame.firstEncountered.text=='')
+local shared=journal:Ensure(3,true)
+shared.name='Shared creature';notes:Open(3)
+assert(frame.firstEncountered.text=='First encountered: Not personally encountered')
+local undated=journal:Ensure(4,false,'Older creature')
+undated.firstEncounteredAt=nil;db.bestiary.points.credits[4].firstEncounteredAt=nil
+notes:Open(4);assert(frame.firstEncountered.text=='First encountered: Unknown')
 notes:Open(1)
 journal:Reset()
 notes:SetCreature(1)

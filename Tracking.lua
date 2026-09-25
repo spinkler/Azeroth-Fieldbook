@@ -61,6 +61,7 @@ end
 
 local ranks = { Rare = 1, Elite = 2, ["Rare Elite"] = 3, ["World Boss"] = 4 }
 local function mergeEntry(target, source)
+    target.firstEncounteredAt=ns.EarliestEncounterTime(target.firstEncounteredAt,source.firstEncounteredAt)
     target.kills = (tonumber(target.kills) or 0) + (tonumber(source.kills) or 0)
     target.sightings = (tonumber(target.sightings) or 0) + (tonumber(source.sightings) or 0)
     target.levelMin = minimum(target.levelMin, source.levelMin)
@@ -142,7 +143,7 @@ function ns.InitializeTracking(settings)
     if not account.importedCharacters[key] then
         -- Normalize copies with the journal's existing migrations. No live
         -- observations, announcements or messaging occur during this import.
-        local sourceDB = {bestiary=copy(settings.bestiary or {})}
+        local sourceDB = {bestiary=copy(settings.bestiary or {}),eventLog=settings.eventLog}
         ns.CreateBestiaryJournal(sourceDB, function() end)
         local mergedDB = {bestiary=copy(account.bestiary or {})}
         local combined = ns.CreateBestiaryJournal(mergedDB, function() end)
@@ -159,6 +160,7 @@ function ns.InitializeTracking(settings)
             local existing = target.points.credits[id]
             if not existing then target.points.credits[id] = copy(credit)
             else
+                existing.firstEncounteredAt=ns.EarliestEncounterTime(existing.firstEncounteredAt,credit.firstEncounteredAt)
                 existing.discovered = existing.discovered or credit.discovered
                 existing.initial = existing.initial and credit.initial
                 existing.points = (existing.points or 0) + (credit.points or 0)

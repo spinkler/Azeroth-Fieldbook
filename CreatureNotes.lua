@@ -39,6 +39,14 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         local basic=entry and journal.GetBasicInfo and journal:GetBasicInfo(selected) or entry
         frame.creature:SetText(basic and basic.name and (basic.name .. " |cff999999[#" .. selected .. "]|r")
             or "Select a creature in the Bestiary.")
+        local stamp,personal=journal:GetFirstEncounteredAt(selected)
+        local encountered=personal and "Unknown" or "Not personally encountered"
+        if stamp and type(date)=="function" then
+            local ok,formatted=pcall(date,"%d %b %Y, %H:%M:%S",stamp)
+            if ok and public(formatted) and type(formatted)=="string" then encountered=formatted end
+        end
+        frame.firstEncountered:SetText(entry and ("First encountered: "..encountered) or "")
+        frame.firstEncountered:SetShown(entry~=nil)
         frame.spellInput:SetShown(entry ~= nil)
         frame.inputLabel:SetShown(entry ~= nil)
         frame.notesToggle:SetEnabled(entry ~= nil)
@@ -56,7 +64,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
             else row:Hide() end
         end
         frame.count:SetText(count .. "/10")
-        local bottom = 130 + count*26
+        local bottom = 152 + count*26
         frame.notesToggle:ClearAllPoints(); frame.notesToggle:SetPoint("TOPLEFT",16,-bottom)
         frame.notesToggle:SetText(expanded and "Notes −" or "Notes +")
         frame.notesArea:ClearAllPoints(); frame.notesArea:SetPoint("TOPLEFT",18,-bottom-30)
@@ -71,13 +79,13 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         if frame then return end
         frame=CreateFrame("Frame","AzerothFieldbookCreatureNotes",UIParent,"BackdropTemplate")
         frame.afbPreferBookEdge=true
-        frame:SetSize(400,176)
+        frame:SetSize(400,198)
         local book=getBook and getBook()
         if book then frame:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0)
         else frame:SetPoint("CENTER",UIParent,"CENTER",200,0) end
         frame:SetFrameStrata("DIALOG"); frame:SetClampedToScreen(true)
         if UIParent.GetWidth and UIParent.GetHeight then
-            frame:SetScale(math.min(1,(UIParent:GetWidth()-30)/(400*1.5),(UIParent:GetHeight()-30)/(570*1.5)))
+            frame:SetScale(math.min(1,(UIParent:GetWidth()-30)/(400*1.5),(UIParent:GetHeight()-30)/(592*1.5)))
         end
         frame:SetMovable(true); frame:EnableMouse(true); frame:RegisterForDrag("LeftButton")
         frame:SetScript("OnDragStart",frame.StartMoving); frame:SetScript("OnDragStop",frame.StopMovingOrSizing)
@@ -88,6 +96,8 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         label(frame,"ID Logs and Notes",18,-18,280,"GameFontNormalLarge")
         frame.creature=label(frame,"",18,-43,360,"GameFontNormal")
         frame.creature:SetHeight(28)
+        frame.firstEncountered=label(frame,"",18,-73,360)
+        frame.firstEncountered:SetTextColor(0.6,0.6,0.6)
         local close=CreateFrame("Button",nil,frame,"UIPanelCloseButton")
         close:SetSize(24,24); close:SetPoint("TOPRIGHT",-3,-3); close:SetScript("OnClick",function() if not pinned then frame:Hide() end end)
         frame.closeButton=close
@@ -129,13 +139,13 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
                 if not pinned then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookCreatureNotes" end
             end
         end)
-        frame.inputLabel=label(frame,"Spell ID — press Enter to record",18,-77,300)
+        frame.inputLabel=label(frame,"Spell ID — press Enter to record",18,-99,300)
         frame.spellInput=CreateFrame("EditBox",nil,frame,"InputBoxTemplate")
-        frame.spellInput:SetSize(145,22); frame.spellInput:SetPoint("TOPLEFT",23,-94)
+        frame.spellInput:SetSize(145,22); frame.spellInput:SetPoint("TOPLEFT",23,-116)
         frame.spellInput:SetAutoFocus(false); frame.spellInput:SetMaxLetters(10)
         frame.spellInput:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
-        frame.count=label(frame,"0/10",180,-100,45)
-        frame.message=label(frame,"",230,-91,150)
+        frame.count=label(frame,"0/10",180,-122,45)
+        frame.message=label(frame,"",230,-113,150)
         frame.message:SetHeight(36); frame.message:SetTextColor(1,0.65,0.45)
         frame.spellInput:SetScript("OnEnterPressed",function(self)
             local ok, message=journal:AddNoteSpell(selected,self:GetText())
@@ -145,7 +155,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         frame.rows={}
         for index=1,10 do
             local row=CreateFrame("Button",nil,frame)
-            row:SetPoint("TOPLEFT",18,-128-(index-1)*26); row:SetSize(364,24)
+            row:SetPoint("TOPLEFT",18,-150-(index-1)*26); row:SetSize(364,24)
             row.text=label(row,"",0,-4,335); row.text:SetWordWrap(false)
             row:SetScript("OnEnter",function() tooltip(row) end)
             row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)

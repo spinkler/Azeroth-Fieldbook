@@ -1,5 +1,15 @@
 local _, ns = ...
 
+function ns.EarliestEncounterTime(left, right)
+    local function valid(value)
+        return not (issecretvalue and issecretvalue(value)) and type(value)=="number"
+            and value>0 and value<=9999999999 and value==math.floor(value)
+    end
+    left=valid(left) and left or nil
+    right=valid(right) and right or nil
+    return left and right and math.min(left,right) or left or right
+end
+
 function ns.CreateBestiaryJournal(db, identify, trackingDB)
     trackingDB = trackingDB or db
     trackingDB.bestiary = type(trackingDB.bestiary) == "table" and trackingDB.bestiary or {}
@@ -140,7 +150,15 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         log.entries[#log.entries+1]={timestamp=read(time),message=message,details=details}
         if onEventLogChanged then onEventLogChanged() end
     end
-    journal:GetEventLog()
+    local firstEncounterHistory={}
+    for _,event in ipairs(journal:GetEventLog().entries) do
+        local details=event.details
+        -- Only a scored personal discovery identifies a first encounter. Casts,
+        -- later levels/locations and received reports cannot supply this date.
+        if type(details)=="table" and details.title=="New discovery!" and details.points==1 and number(details.creatureID) then
+            firstEncounterHistory[details.creatureID]=ns.EarliestEncounterTime(firstEncounterHistory[details.creatureID],event.timestamp)
+        end
+    end
     local function award(self, entry, amount, reason, observation)
         if amount > 0 then ledger.earned = ledger.earned + amount end
         if amount > 0 and onPointsRecorded then onPointsRecorded(entry,amount,reason,observation) end
@@ -189,13 +207,19 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         end
         -- Reconcile newly available tiers for existing personal records. Keep
         -- earlier credit when a threshold rises; never repeat a paid milestone.
-        for id in pairs(journal.entries) do
+        for id,entry in pairs(journal.entries) do
             local credit = ledger.credits[id]
             if credit and credit.discovered then
                 local reward = journal:GetKillReward(id)
                 local previous = credit.killPoints or 0
                 ledger.earned = ledger.earned + math.max(0, reward - previous)
                 credit.killPoints = math.max(previous, reward)
+            end
+            if entry.personalEncountered or (credit and credit.discovered) then
+                local stamp=ns.EarliestEncounterTime(entry.firstEncounteredAt,credit and credit.firstEncounteredAt)
+                stamp=ns.EarliestEncounterTime(stamp,firstEncounterHistory[id])
+                entry.firstEncounteredAt=stamp
+                if credit then credit.firstEncounteredAt=stamp end
             end
         end
     end
@@ -288,6 +312,14 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         return trackingDB.bestiary.sharing
     end
     function journal:Touch() self.revision = self.revision + 1 end
+    function journal:GetFirstEncounteredAt(id)
+        if not number(id) then return end
+        local entry=self.entries[id]
+        if not entry then return end
+        local credit=ledger.credits[id]
+        return ns.EarliestEncounterTime(entry.firstEncounteredAt,credit and credit.firstEncounteredAt),
+            entry.personalEncountered==true or (credit and credit.discovered==true) or false
+    end
     function journal:SetEntryAddedCallback(callback)
         onEntryAdded = type(callback) == "function" and callback or nil
     end
@@ -302,6 +334,42 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:GetSingleObservationWindow()
         return db.singleObservationWindow ~= false
+    end
+    function journal:GetAutoLockEnabled() return db.autoLockEnabled~=false end
+    function journal:GetAutoLockKills() return number(db.autoLockKills) and db.autoLockKills or 10 end
+    function journal:SetAutoLockEnabled(enabled)
+        if self:GetAutoLockEnabled()~=(enabled==true) then
+            for _,entry in pairs(self.entries) do entry.unchangedKills=0 end
+        end
+        db.autoLockEnabled=enabled==true
+    end
+    function journal:SetAutoLockKills(value)
+        value=tonumber(value)
+        if not number(value) then return false end
+        db.autoLockKills=value;return true
+    end
+    local function contentSignature(value)
+        if type(value)~="table" then return type(value)..":"..tostring(value) end
+        local parts={}
+        for key,item in pairs(value) do
+            local part=contentSignature(key).."="..contentSignature(item)
+            parts[#parts+1]=#part..":"..part
+        end
+        table.sort(parts)
+        return "{"..table.concat(parts).."}"
+    end
+    function journal:TrackStableContent(id)
+        local entry=self.entries[id]
+        if not entry then return end
+        local content={}
+        for _,key in ipairs({"name","category","rank","levelMin","levelMax","locations","abilities","ignoredAbilities",
+            "offenses","resistances","immunities","behaviours","damage","idNotes","tameable","discoveryProgress"}) do
+            content[key]=entry[key]
+        end
+        local signature=contentSignature(content)
+        if entry.autoLockSignature~=signature then
+            entry.autoLockSignature=signature;entry.unchangedKills=0
+        end
     end
     function journal:GetAlwaysAnchorToMain()
         return db.alwaysAnchorToMain ~= false
@@ -433,6 +501,13 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local discovered = false
         if not sharedOnly then
             local credit = creditFor(id)
+            local stamp=ns.EarliestEncounterTime(entry.firstEncounteredAt,credit.firstEncounteredAt)
+            stamp=ns.EarliestEncounterTime(stamp,firstEncounterHistory[id])
+            if not credit.discovered and not entry.personalEncountered then
+                stamp=ns.EarliestEncounterTime(stamp,read(time))
+            end
+            entry.firstEncounteredAt,credit.firstEncounteredAt=stamp,stamp
+            firstEncounterHistory[id]=stamp
             if not entry.personalEncountered then entry.personalEncountered = true; self:Touch() end
             if not credit.discovered then
                 credit.discovered, credit.initial = true, true
@@ -634,6 +709,15 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if #credit.killGUIDs > 16 then table.remove(credit.killGUIDs, 1) end
         self:Ensure(id)
         entry.kills = math.max(0, tonumber(entry.kills) or 0) + 1
+        self:TrackStableContent(id)
+        if not entry.confirmed then
+            entry.unchangedKills=self:GetAutoLockEnabled() and ((entry.unchangedKills or 0)+1) or 0
+            if entry.unchangedKills>=self:GetAutoLockKills() then
+                self:SetEntryConfirmed(id,true)
+                self:RecordEvent("Auto-locked: "..(self:GetCreatureName(id) or "Creature").." after "..entry.unchangedKills.." kills without changes.",
+                    {kind="autoLock",creatureID=id})
+            end
+        end
         self:Touch()
         local points, star = self:GetKillReward(id)
         local newlyEarned = math.max(0, points - credit.killPoints)
@@ -721,7 +805,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not entry then return false end
         if confirmed==true and not entry.confirmed and self.GetBasicInfo then
             entry.lockedBasic = self:GetBasicInfo(id)
-        elseif confirmed~=true then entry.lockedBasic=nil end
+        elseif confirmed~=true then entry.lockedBasic=nil;entry.unchangedKills=0 end
         entry.confirmed = confirmed == true
         self:Touch()
         return true
@@ -1010,8 +1094,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:ResetDatabase()
         local personalBestiary, trackingKey, eventLog = db.bestiary, db.accountTrackingKey, self:GetEventLog()
+        local savedBackups = db.bestiaryBackups
         for key in pairs(db) do db[key] = nil end
         db.eventLog=eventLog
+        db.bestiaryBackups=savedBackups
         db.version, db.announce, db.creatureAnnouncements = 1, false, true
         db.accountTrackingKey, db.accountWideTracking = trackingKey, activeAccountWideTracking
         if trackingDB ~= db then db.bestiary = personalBestiary end
@@ -1024,6 +1110,26 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         -- Closing sharing dialogs during Reset can save their final positions.
         if ns.WindowPositions then ns.WindowPositions:Reset() end
     end
+    if ns.InstallBestiaryBackups then
+        ns.InstallBestiaryBackups(journal,db,trackingDB,function(restored)
+            -- Keep current transfer state and receipt identities. No transaction
+            -- is loaded from a backup, queued again, or silently cancelled.
+            restored.sharing=trackingDB.bestiary.sharing
+            restored.sharingCharacters=trackingDB.bestiary.sharingCharacters
+            for _,guid in ipairs(recentKills) do restored.recentKills[#restored.recentKills+1]=guid end
+            trackingDB.bestiary=restored
+            journal.entries=restored.entries
+            initializePoints()
+            initializeRecentKills()
+            seenGUIDs,killInstances={},{}
+            for id,e in pairs(journal.entries) do
+                local unchanged=e.unchangedKills
+                journal:TrackStableContent(id)
+                e.unchangedKills=unchanged or 0
+            end
+            journal:Touch()
+        end)
+    end
     -- Unknown legacy spell records wait in their original store until a live
     -- observation or an attributed encounter supplies the creature's name.
     restoreObservations = function(self, id)
@@ -1035,6 +1141,25 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         for name in pairs(creature.names or {}) do self:Offer(id, name, "Previous observations") end
     end
     if ns.InstallSharingRecords then ns.InstallSharingRecords(journal) end
+    -- Compare recorded content, not kill totals, sightings, timestamps or points.
+    -- No-op setters and repeated sightings therefore keep the current streak.
+    for _,name in ipairs({"Ensure","Offer","SetAbility","SetAbilityTooltip","RemoveAbility","AddManual","ResolveAbility",
+        "SetResistance","SetImmunity","SetOffense","SetBehaviour","AddDamage","RemoveDamageNote",
+        "AddNoteSpell","RemoveNoteSpell","SetCreatureNotes"}) do
+        local original=journal[name]
+        journal[name]=function(self,id,...)
+            local a,b,c=original(self,id,...)
+            self:TrackStableContent(id)
+            return a,b,c
+        end
+    end
+    local originalObserve=journal.Observe
+    function journal:Observe(unit)
+        local id=originalObserve(self,unit)
+        if id then self:TrackStableContent(id) end
+        return id
+    end
+    for id in pairs(journal.entries) do journal:TrackStableContent(id) end
     for id in pairs(trackingDB.bestiary.creatures) do restoreObservations(journal, id) end
     return journal
 end

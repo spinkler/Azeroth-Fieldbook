@@ -3,7 +3,7 @@ BINDING_NAME_CLASSICBESTIARY_BOOK = "Open / close Azeroth Fieldbook Bestiary"
 BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK = "Open Azeroth Fieldbook Bestiary at mouseover"
 local effectGroups = {
     { "Control", { "Stun", "Root/Immobilize", "Slow/Snare", "Daze", "Fear", "Horror", "Disorient", "Sleep/Incapacitate", "Polymorph/Transform", "Charm/Possession", "Banish", "Knockback/Pull", "Disarm", "Silence" } },
-    { "Combat", { "Interrupt", "School Lockout", "Damage over Time", "Heal over Time", "Shield/Absorb", "Damage Reduction", "Damage Vulnerability", "Enrage", "Immunity/Invulnerability" } },
+    { "Combat", { "Interrupt", "School Lockout", "Damage over Time", "Heal", "Heal over Time", "Shield/Absorb", "Damage Reduction", "Damage Vulnerability", "Enrage", "Immunity/Invulnerability" } },
     { "Dispel type", { "Magic", "Curse", "Disease", "Poison" } },
 }
 
@@ -1160,7 +1160,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.message=label(detail,"",352,-704,552,"GameFontHighlightSmall")
         book.message:SetHeight(25); book.message:SetJustifyV("TOP")
         local effectPicker=CreateFrame("Frame",nil,UIParent,"BackdropTemplate")
-        effectPicker:SetSize(560,635); effectPicker:SetPoint("CENTER",book,"CENTER"); effectPicker:SetFrameStrata("FULLSCREEN_DIALOG")
+        effectPicker:SetSize(560,658); effectPicker:SetPoint("CENTER",book,"CENTER"); effectPicker:SetFrameStrata("FULLSCREEN_DIALOG")
         effectPicker:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         effectPicker:EnableMouse(true)
         effectPicker:SetMovable(true)
@@ -1190,13 +1190,13 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         for i,name in ipairs(effectGroups[1][2]) do addEffect(name,leftX,-105-(i-1)*23) end
         for i,name in ipairs(effectGroups[2][2]) do addEffect(name,rightX,-105-(i-1)*23) end
-        label(effectPicker,"Dispel type",rightX,-315,220,"GameFontHighlightSmall")
-        for i,name in ipairs(effectGroups[3][2]) do addEffect(name,rightX,-337-(i-1)*23) end
-        label(effectPicker,"School resistance",leftX,-447,235,"GameFontHighlightSmall")
-        label(effectPicker,"School immunity",rightX,-447,235,"GameFontHighlightSmall")
+        label(effectPicker,"Dispel type",rightX,-338,220,"GameFontHighlightSmall")
+        for i,name in ipairs(effectGroups[3][2]) do addEffect(name,rightX,-360-(i-1)*23) end
+        label(effectPicker,"School resistance",leftX,-470,235,"GameFontHighlightSmall")
+        label(effectPicker,"School immunity",rightX,-470,235,"GameFontHighlightSmall")
         for i, school in ipairs(magicSchools) do
-            addEffect(school.name .. " Resistance",leftX,-469-(i-1)*23)
-            addEffect(school.name .. " Immunity",rightX,-469-(i-1)*23)
+            addEffect(school.name .. " Resistance",leftX,-492-(i-1)*23)
+            addEffect(school.name .. " Immunity",rightX,-492-(i-1)*23)
         end
         book.refreshEffectPicker=function()
             for _,control in ipairs(effectPicker.effectButtons) do
@@ -1840,6 +1840,20 @@ local ink = { 0.75, 0.8, 0.8 }
             GameTooltip:Show()
         end)
         options.accountWideTracking:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        options.autoLockEnabled=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
+        options.autoLockEnabled:SetPoint("TOPLEFT",30,-58);options.autoLockEnabled:SetSize(24,24)
+        label(optionsBody,"Auto-lock after",58,-64,100,"GameFontHighlightSmall")
+        options.autoLockKills=edit(optionsBody,166,-60,45,5)
+        options.autoLockKills:SetNumeric(true)
+        label(optionsBody,"kills without changes",226,-64,300,"GameFontHighlightSmall")
+        options.autoLockEnabled:SetScript("OnClick",function(self)
+            journal:SetAutoLockEnabled(self:GetChecked()==true)
+            options.autoLockKills:SetEnabled(journal:GetAutoLockEnabled())
+        end)
+        options.autoLockKills:SetScript("OnEditFocusLost",function(self)
+            journal:SetAutoLockKills(self:GetText())
+            self:SetText(tostring(journal:GetAutoLockKills()))
+        end)
         options.creatureAnnouncement=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
         options.creatureAnnouncement:SetPoint("TOPLEFT",30,-116); options.creatureAnnouncement:SetSize(24,24)
         label(optionsBody,"Show a chat message when a new creature entry is added",58,-122,460,"GameFontHighlightSmall")
@@ -1983,10 +1997,13 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         if type(StaticPopupDialogs) == "table" then
             StaticPopupDialogs.AZEROTHFIELDBOOK_BESTIARY_RESET_CONFIRM = {
-                text = "Reset the " .. (journal:IsAccountWideTrackingActive() and "account-wide" or "character") .. " Azeroth Fieldbook Bestiary? This permanently deletes its creature entries, notes, abilities, damage records and sharing points/history, plus this character's settings.",
+                text = "Reset the " .. (journal:IsAccountWideTrackingActive() and "account-wide" or "character") .. " Azeroth Fieldbook Bestiary? This deletes its creature entries, notes, abilities, damage records and sharing points/history, plus this character's settings. Saved backups and the Event log are kept.",
                 button1 = YES, button2 = NO,
                 OnAccept = function()
                     journal:ResetDatabase()
+                    options.autoLockEnabled:SetChecked(journal:GetAutoLockEnabled())
+                    options.autoLockKills:SetText(tostring(journal:GetAutoLockKills()))
+                    options.autoLockKills:SetEnabled(journal:GetAutoLockEnabled())
                     options.blockIncomingOffers:SetChecked(journal:GetBlockIncomingOffers())
                     options.alwaysAnchorToMain:SetChecked(journal:GetAlwaysAnchorToMain())
                     refreshTrackingOption()
@@ -2001,10 +2018,32 @@ local ink = { 0.75, 0.8, 0.8 }
         button(options,"Reset Bestiary",30,-722,160,function()
             if StaticPopup_Show then StaticPopup_Show("AZEROTHFIELDBOOK_BESTIARY_RESET_CONFIRM") end
         end)
+        if ns.CreateBackupWindow and journal.CreateBackup then
+            local backupWindow=ns.CreateBackupWindow(journal,{page=createBookPage,label=label,button=button},function()
+                category,initial,reviewOnly,offset=nil,nil,false,0
+                for key in pairs(locationFilters) do locationFilters[key]=nil end
+                for key in pairs(rankFilters) do rankFilters[key]=nil end
+                book.search:SetText("")
+                book.notesForm:Hide();book.effectPicker:Hide()
+                book.offensePicker:Hide();book.defensePicker:Hide();book.behaviourPicker:Hide()
+                if not selected or not journal.entries[selected] then
+                    local rows=journal:List()
+                    selected=rows[1] and rows[1].id
+                end
+                choose(selected)
+                if sharingWindow then sharingWindow:Refresh() end
+            end)
+            book.backupWindow=backupWindow
+            options.backupButton=button(options,"Backup Bestiary",208,-722,160,function() backupWindow:Open(true) end)
+            options.restoreButton=button(options,"Restore Bestiary",378,-722,160,function() backupWindow:Open(false) end)
+        end
         options:SetScript("OnShow",function(self)
             showBookPage(self)
             refreshTrackingOption()
             options.singleObservationWindow:SetChecked(journal:GetSingleObservationWindow())
+            options.autoLockEnabled:SetChecked(journal:GetAutoLockEnabled())
+            options.autoLockKills:SetText(tostring(journal:GetAutoLockKills()))
+            options.autoLockKills:SetEnabled(journal:GetAutoLockEnabled())
             options.alwaysAnchorToMain:SetChecked(journal:GetAlwaysAnchorToMain())
             options.blockIncomingOffers:SetChecked(journal:GetBlockIncomingOffers())
             options.uiScale:SetValue(journal:GetUIScale())

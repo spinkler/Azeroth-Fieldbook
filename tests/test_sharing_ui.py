@@ -133,7 +133,7 @@ end
 UIParent=CreateFrame('Frame'); UIParent:SetSize(1920,1080)
 function eq(a,b,label) assert(a==b,(label or '')..': '..tostring(a)..' ~= '..tostring(b)) end
 ''')
-for name in ['Scrollbars.lua','WindowFocus.lua','WindowPositions.lua','UIScale.lua','SharingReport.lua','BestiaryJournal.lua','Sharing.lua','SharingWindow.lua','CreatureNotes.lua','RumoursWindow.lua','BestiaryBook.lua','DebugReport.lua']:
+for name in ['Scrollbars.lua','WindowFocus.lua','WindowPositions.lua','UIScale.lua','SharingReport.lua','BestiaryBackups.lua','BestiaryJournal.lua','Sharing.lua','SharingWindow.lua','CreatureNotes.lua','RumoursWindow.lua','BackupWindow.lua','BestiaryBook.lua','DebugReport.lua']:
     lua.execute((root/name).read_text(encoding='utf-8'),'AzerothFieldbook',lua.globals().ns)
 
 lua.execute(r'''
@@ -701,5 +701,42 @@ j:ResetDatabase();assert(not composer.shown);eq(j:GetSharingBalance(),0)
 assert(next(db.windowPositions)==nil,'full reset clears saved positions')
 rumours.scripts.OnUpdate();assert(rumours.rows[1].text.text:find('No unverified rumours',1,true))
 assert(rumours.rows[1].claim==nil and rumours.message.text=='','reset clears the open review window')
+
+-- Backup buttons use the fixed Options footer; restore is previewed and requires
+-- a separate confirmation. Native widgets are mocked, not visually rendered.
+StaticPopupDialogs={}
+local popup
+function StaticPopup_Show(key,text,_,data) popup={key=key,text=text,data=data} end
+local options=main.options
+eq(options.backupButton.point[2],208);eq(options.restoreButton.point[2],378)
+eq(options.backupButton.point[3],-722,'backup shares the reset footer baseline')
+j:Ensure(43,false,'Saved creature');j:SetCreatureNotes(43,'A private note')
+options.backupButton.scripts.OnClick()
+local backups=main.backupWindow.frame
+assert(backups:IsShown() and backups.restoreButton.enabled)
+eq(#j:GetBackups().saved,1)
+assert(backups.status.text:find('Backup saved',1,true))
+assert(backups:GetHeight()<600,'one saved backup keeps the window compact')
+backups.exportButton.scripts.OnClick()
+assert(backups.text:GetText():sub(1,5)=='AFB1:' and not backups.restoreButton.enabled)
+local exported=backups.text:GetText()
+j:DeleteEntry(43)
+backups.importButton.scripts.OnClick()
+assert(not backups.restoreButton.enabled)
+backups.text:SetText(exported:sub(1,-2));backups.previewButton.scripts.OnClick()
+assert(not backups.restoreButton.enabled and not j.entries[43],'invalid import leaves the journal untouched')
+backups.text:SetText(exported);backups.previewButton.scripts.OnClick()
+assert(backups.restoreButton.enabled and not j.entries[43],'preview is read-only')
+backups.restoreButton.scripts.OnClick()
+assert(popup.key=='AZEROTHFIELDBOOK_RESTORE_CONFIRM' and popup.data)
+assert(not j.entries[43],'clicking Restore still waits for the confirmation')
+StaticPopupDialogs[popup.key].OnAccept(nil,popup.data)
+eq(j.entries[43].idNotes.text,'A private note')
+assert(j:GetBackups().recovery and not j:GetBackups().recovery.bestiary.entries[43])
+assert(backups.status.text:find('Bestiary restored',1,true))
+assert(backups.rows[1].text.text:find('Before last restore',1,true))
+backups:Hide();options.restoreButton.scripts.OnClick()
+assert(backups:IsShown() and backups.preview.text:find('creatures',1,true))
+eq(#j:GetBackups().saved,1,'opening Restore does not create another manual backup')
 ''')
 print('PASS: Share button, captured selection, unrestricted rumour selection, per-rumour costs, balances, native controls, receive consent, separate Rumours toggle, verification/rejection, manual refresh, Notes input, pinning and scaling')
