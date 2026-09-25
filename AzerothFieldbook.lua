@@ -352,15 +352,14 @@ local function initialize()
     if journal then
         journal:SetPointsRecordedCallback(function(entry, amount, reason, observation)
             local killTitles = { ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
-            local discoveryTitles = { level = "New observed level", location = "New observed location",
-                levelAndLocation = "New observed level and location" }
+            local discoveryTitles = { location = "New observed location" }
             local title = killTitles[reason] or (reason == "new creature entry" and "New discovery!")
                 or (observation and discoveryTitles[observation.kind])
             if title then announceBestiary(entry, title, amount, observation, killTitles[reason] ~= nil,journal:GetPointAnnouncements()) end
         end)
         journal:SetEntryAddedCallback(function(entry, discovered, observation)
             local chatEnabled=journal:GetCreatureAnnouncement() and not (discovered and journal:GetPointAnnouncements())
-            announceBestiary(entry,"New discovery!",nil,observation,false,chatEnabled,discovered)
+            announceBestiary(entry,discovered and "New discovery!" or "Entry restored",nil,observation,false,chatEnabled,discovered)
         end)
     end
     if journal and ns.InitializeSharing then ns.InitializeSharing(journal) end

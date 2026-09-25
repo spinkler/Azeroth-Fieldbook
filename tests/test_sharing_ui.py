@@ -11,10 +11,17 @@ lua.globals().buildVersion = re.search(r"^## Version: (\S+)", (root / "AzerothFi
 lua.execute(r'''
 ns,objects,UISpecialFrames={},{},{}
 secret={}; now=1000000; combat=false; chatState=0; npcID=42; playerName='Alice Sunstrider'
+playerSurname=nil
 function issecretvalue(value) return rawequal(value,secret) end
 function time() return now end
 function InCombatLockdown() return combat end
-function UnitName(unit) if unit=='player' then return playerName end; return 'Creature '..npcID end
+function UnitName(unit) if unit=='player' then return playerName,playerSurname end; return 'Creature '..npcID end
+function UnitNameUnmodified(unit) return UnitName(unit) end
+-- Forever's Camelot helper, unlike retail, preserves the surname.
+NameUtil={GetFullNameWithoutRealm=function(first,surname)
+    if first and first~='' and surname and surname~='' then return first..' '..surname end
+    return first
+end}
 function UnitCreatureType() return 'Humanoid' end
 function UnitLevel() return 9 end
 function UnitGUID() return 'Creature-0-1-2-3-'..npcID..'-1' end
@@ -65,6 +72,7 @@ function methods:SetPoint(...)
 end
 function methods:ClearAllPoints() self.point=nil;self.points={} end
 function methods:SetAlpha(value) self.alpha=value end
+function methods:SetTextColor(...) self.textColor={...} end
 function methods:SetTexCoord(...) self.texCoord={...} end
 function methods:GetPoint() return unpack(self.point or {'CENTER',UIParent,'CENTER',0,0}) end
 function methods:GetName() return self.name end
@@ -130,10 +138,19 @@ function CreateFrame(kind,name,parent,template)
     end
     return f
 end
+function CreateFont(name)
+    local font={}
+    function font:CopyFontObject() end
+    function font:GetFont() return 'test-font',12,'' end
+    function font:SetFont(path,size,flags) self.size=size end
+    _G[name]=font
+    return font
+end
 UIParent=CreateFrame('Frame'); UIParent:SetSize(1920,1080)
 function eq(a,b,label) assert(a==b,(label or '')..': '..tostring(a)..' ~= '..tostring(b)) end
+function plain(text) return text:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','') end
 ''')
-for name in ['Scrollbars.lua','WindowFocus.lua','WindowPositions.lua','UIScale.lua','SharingReport.lua','BestiaryBackups.lua','BestiaryJournal.lua','Sharing.lua','SharingWindow.lua','CreatureNotes.lua','RumoursWindow.lua','BackupWindow.lua','BestiaryBook.lua','DebugReport.lua']:
+for name in ['Scrollbars.lua','ActionButtons.lua','WindowFocus.lua','WindowPositions.lua','UIScale.lua','SharingReport.lua','PlayerNames.lua','BestiaryBackups.lua','BestiaryJournal.lua','Sharing.lua','SharingWindow.lua','CreatureNotes.lua','RumoursWindow.lua','BackupWindow.lua','BestiaryBook.lua','DebugReport.lua']:
     lua.execute((root/name).read_text(encoding='utf-8'),'AzerothFieldbook',lua.globals().ns)
 
 lua.execute(r'''
@@ -181,13 +198,13 @@ local _,early,_,frame=native(0,0)
 local ready,reason=early:Available();assert(not ready and reason:find('full name',1,true))
 playerName='Alice Sunstrider';frame.scripts.OnEvent(frame,'PLAYER_LOGIN')
 assert(early:Available())
-playerName='Alice'
-UnitFullName=function() return 'Alice Sunstrider','NotASurname' end
+playerName='Alice';playerSurname='Sunstrider'
+UnitFullName=function() return 'Alice','NotASurname' end
 local j,e,calls=native(0,0)
 assert(not e:Start(S.Capture(j,42),'  alice  sunstrider  ',{}),'full client name identifies self')
 local tx=assert(e:Start(S.Capture(j,42),'  Bob   Stonewell  ',{}));now=now+1;e:Tick()
 eq(tx.recipient,'Bob Stonewell');eq(calls(),1,'native target preserves the surname without a realm')
-UnitFullName=nil;playerName='Alice Sunstrider'
+UnitFullName=nil;playerName='Alice Sunstrider';playerSurname=nil
 for _,value in ipairs({'unknown','',secret}) do
     metadataVersion=value
     local j,e,calls=native(0,0);local ready,reason=e:Available()
@@ -197,6 +214,73 @@ end
 metadataVersion=nil
 local _,missing=native(0,0);assert(not missing:Available())
 metadataVersion=buildVersion
+
+-- Split surname identity: native APIs must preserve the same full name used
+-- by whisper routing, self-offer checks and the receiving report binding.
+do
+    local savedUnmodified=UnitNameUnmodified
+    local formatter=NameUtil.GetFullNameWithoutRealm
+    for _,parts in ipairs({{'Peww','Pewz'},{'Erna','Lionguard'},{"Élan","O'Connor-Smith"}}) do
+        playerName,playerSurname=parts[1],parts[2]
+        local j,e=native(0,0)
+        assert(not e:ValidateRecipient(parts[1]..' '..parts[2]),'split full name rejects self-offers')
+        assert(e:ValidateRecipient(parts[1]..' Different'),'same first name is not the same character')
+    end
+    playerName,playerSurname='Peww','Pewz'
+    local _,e,_,driver=native(0,0)
+    playerSurname='Updated';driver.scripts.OnEvent(driver,'UNIT_NAME_UPDATE','player')
+    assert(not e:ValidateRecipient('Peww Updated'))
+    assert(e:ValidateRecipient('Peww Pewz'),'name updates replace the cached identity')
+    playerSurname=secret;local _,restricted=native(0,0);assert(not restricted:Available())
+    playerName=secret;playerSurname='Pewz';local _,restricted=native(0,0);assert(not restricted:Available())
+    playerName,playerSurname='Peww','Pewz'
+    UnitNameUnmodified=function() error('unavailable name') end
+    local _,restricted=native(0,0);assert(not restricted:Available())
+    UnitNameUnmodified=nil;local _,fallback=native(0,0)
+    assert(not fallback:ValidateRecipient('Peww Pewz'),'UnitName fallback retains surname')
+    UnitNameUnmodified=savedUnmodified
+    NameUtil.GetFullNameWithoutRealm=nil
+    local _,missing=native(0,0);assert(not missing:Available(),'missing formatter never drops the surname')
+    NameUtil.GetFullNameWithoutRealm=formatter
+    playerName='Alice Sunstrider';playerSurname=nil
+end
+-- Two real native adapters exchanging the reported names over simulated whispers.
+do
+    local wire,peers={},{}
+    local activeSender
+    C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,
+        SendAddonMessage=function(prefix,text,channel,target)
+            wire[#wire+1]={sender=activeSender,prefix=prefix,text=text,channel=channel,target=target};return 0
+        end}
+    local function peer(first,surname,id,name)
+        playerName,playerSurname=first,surname
+        local j=ns.CreateBestiaryJournal({},function() return nil end)
+        local entry=j:Ensure(id,false,name);entry.category='Humanoid';entry.levelMin=8;entry.levelMax=8;entry.locations['Elwynn Forest']=true
+        for i=1,4 do j:Ensure(id+100+i,false,'Funding creature') end
+        local e=ns.InitializeSharing(j)
+        local p={j=j,e=e,driver=objects[#objects]};peers[first..' '..surname]=p;return p
+    end
+    local erna=peer('Erna','Lionguard',327,'Goldtooth')
+    local peww=peer('Peww','Pewz',328,'Creature 328')
+    local function pump(count)
+        for _=1,count do
+            now=now+1
+            for name,p in pairs(peers) do activeSender=name;p.driver.scripts.OnUpdate(p.driver,1) end
+            local pending=wire;wire={}
+            for _,m in ipairs(pending) do
+                local p=assert(peers[m.target]);p.driver.scripts.OnEvent(p.driver,'CHAT_MSG_ADDON',m.prefix,m.text,m.channel,m.sender)
+            end
+        end
+    end
+    local traits={{kind='behaviour',value='Flees at low health'},{kind='behaviour',value='Hostile'},{kind='behaviour',value='Melee'}}
+    local tx=assert(erna.e:Start(S.Capture(erna.j,327),'Peww Pewz',traits));pump(12)
+    local incoming=assert(peww.e:GetIncoming()[1],'Peww Pewz receives the offer when the game returns separate name parts')
+    eq(incoming.sender,'Erna Lionguard');assert(peww.e:Accept(incoming));pump(10)
+    eq(tx.stage,'complete');eq(tx.cost,4);eq(#peww.j:GetRumours(327),3)
+    local reverse=assert(peww.e:Start(S.Capture(peww.j,328),'Erna Lionguard',{}));pump(12)
+    assert(erna.e:Accept(assert(erna.e:GetIncoming()[1])));pump(10);eq(reverse.stage,'complete')
+    playerName='Alice Sunstrider';playerSurname=nil
+end
 
 -- Exercise the real OnUpdate -> timeout -> composer path with a successful
 -- native send but no addon reply. A stalled/backward wall clock cannot keep
@@ -368,6 +452,11 @@ composer.cancel.scripts.OnClick();eq(tx.stage,'cancelled');eq(select(4,j:GetShar
 
 npcID=42;book:OpenAtUnit('target');book:OpenNotes()
 local notes=AzerothFieldbookCreatureNotes
+notes.scripts.OnShow(notes) -- Native Show dispatch, before any pin interaction.
+assert(main.creatureNotesButton.afbSelected,'first notes opening highlights its launcher without pinning')
+notes:Hide()
+assert(not main.creatureNotesButton.afbSelected,'first notes close clears its launcher')
+notes:Show();notes.scripts.OnShow(notes)
 main.creatureNotesButton.scripts.OnClick();assert(not notes.shown,'Creature Notes button closes its open window')
 main.creatureNotesButton.scripts.OnClick();assert(notes.shown,'Creature Notes button reopens its window')
 notes.pinButton.scripts.OnClick()
@@ -396,9 +485,9 @@ local value={version=1,transaction='1000000-1-1',created=now,recipient='Alice Su
 assert(j:ImportReport(value,'Bob Stonewell',now));book:Refresh()
 eq(notes.notes.text,'Unsaved widget input');assert(notes.notes.focus)
 eq(notes.spellInput:GetText(),'Unsubmitted ID');assert(not notes.notesArea.shown and rumours.shown)
-assert(rumours.rows[1].text.text:find('Reported by Bob Stonewell',1,true))
-assert(rumours.rows[2].text.text:find('Shared basics:',1,true),'attributed basics remain inspectable')
-eq(rumours.area.height,300,'bounded scrolling')
+assert(plain(rumours.rows[1].text.text):find('Reported by Bob Stonewell',1,true))
+assert(plain(rumours.rows[2].text.text):find('Shared basics from Bob Stonewell:',1,true),'attributed basics remain inspectable')
+eq(rumours.area.height,rumours.body.height,'one rumour and its basics fit without empty space')
 local baseScale=rumours:GetScale()/j:GetUIScale()
 j:SetUIScale(1.5);eq(rumours:GetScale(),baseScale*1.5)
 assert(rumours.height*rumours:GetScale()<=UIParent:GetHeight()-30)
@@ -738,5 +827,188 @@ assert(backups.rows[1].text.text:find('Before last restore',1,true))
 backups:Hide();options.restoreButton.scripts.OnClick()
 assert(backups:IsShown() and backups.preview.text:find('creatures',1,true))
 eq(#j:GetBackups().saved,1,'opening Restore does not create another manual backup')
+-- Simulate native visibility scripts (this mock's Show does not dispatch OnShow).
+for _,pair in ipairs({
+    {main.rumoursButton,rumours},{main.creatureNotesButton,notes},{main.shareButton,composer},
+    {main.damageButton,main.damageForm},{main.offenseButton,main.offensePicker},
+    {main.defenseButton,main.defensePicker},{main.behaviourButton,main.behaviourPicker},
+    {main.effectButton,main.effectPicker},{main.locationsButton,main.locationFrame},
+    {main.ranksButton,main.rankFrame},
+}) do
+    local control,window=pair[1],pair[2]
+    window:Hide()
+    assert(not control.afbSelected,'closed window clears its launcher border')
+    window:Show();window.scripts.OnShow(window)
+    assert(control.afbSelected,'opening a window selects its launcher border')
+    book:Refresh()
+    assert(control.afbSelected,'journal refresh preserves the open-window indicator')
+    window:Hide()
+    assert(not control.afbSelected,'closing without clicking the launcher clears its border')
+end
+main.offensePicker:Show();main.offensePicker.scripts.OnShow(main.offensePicker)
+main.defensePicker:Show();main.defensePicker.scripts.OnShow(main.defensePicker)
+assert(not main.offenseButton.afbSelected and main.defenseButton.afbSelected,
+    'switching the shared observation panel updates both launchers')
+main.defensePicker:Hide()
+''')
+lua.execute(r'''
+do
+    local j=ns.CreateBestiaryJournal({},function() return nil end)
+    for i=1,35 do local entry=j:Ensure(i,false,string.format('Creature %02d',i));entry.category='Beast' end
+    local book=ns.CreateBestiaryBook(j);book:Toggle()
+    local main=AzerothFieldbookBestiary
+    eq(#main.rows,16);assert(main.creatureScrollBar.shown)
+    eq(-main.rows[16].point[3]+main.rows[16]:GetHeight(),588,'list fills space to eight pixels above navigation')
+    local width=main.rows[1]:GetWidth()
+    local left=main.rows[1].point[2]
+    assert(left+width<main.creatureScrollBar.point[2],'scrollbar has a reserved gutter')
+    main.creatureScrollBar.scripts.OnValueChanged(main.creatureScrollBar,19)
+    eq(main.rows[16].id,35,'dragging reaches the last entry')
+    main.rows[1].scripts.OnMouseWheel(main.rows[1],1);eq(main.rows[1].id,17,'wheel and slider use the same offset')
+    main.search:SetText('Creature 01');main.search.scripts.OnTextChanged(main.search)
+    assert(not main.creatureScrollBar.shown and main.rows[1].id==1)
+    eq(main.rows[1]:GetWidth(),width,'hiding scrollbar never moves the row edge')
+    main.search:SetText('');main.search.scripts.OnTextChanged(main.search)
+    assert(main.creatureScrollBar.shown)
+    local review=ns.CreateRumoursWindow(j,nil,function() return main end)
+    review:Toggle(1)
+    local frame=AzerothFieldbookRumours
+    frame.area.GetVerticalScrollRange=function() return math.max(0,frame.body:GetHeight()-frame.area:GetHeight()) end
+    local empty=frame:GetHeight()
+    local base={creatureID=1,name='Creature 01',category='Beast',levelMin=8,levelMax=8,locations={'Elwynn Forest'},
+        sender='Erna Lionguard',received=now,transaction='1-1-1',source='WHISPER'}
+    j.entries[1].sharedReports={base}
+    j.entries[1].rumours={}
+    local previous=empty
+    for count=1,5 do
+        j.entries[1].rumours[count]={creatureID=1,kind='ability',value='Rumour '..count,sender='Erna Lionguard',received=now,transaction='1-1-1',source='WHISPER'}
+        review:Refresh()
+        if count<=4 then
+            eq(frame.area:GetHeight(),frame.body:GetHeight(),'up to four rumours plus basics fit')
+            assert(not frame.area.ScrollBar.shown)
+            assert(frame:GetHeight()>previous);previous=frame:GetHeight()
+        else
+            assert(frame.area.ScrollBar.shown and frame.area:GetHeight()<frame.body:GetHeight())
+            eq(frame:GetHeight(),previous,'fifth rumour uses scrolling instead of growing')
+        end
+    end
+    local compactWidth=frame:GetWidth()
+    local shortText=j.entries[1].rumours[1].value
+    j.entries[1].rumours[1].value=string.rep('Long rumour ',8)
+    review:Refresh()
+    assert(frame:GetWidth()>compactWidth and frame:GetWidth()<=420,'long content grows to a bounded width')
+    assert(frame.rows[1].text:GetStringHeight()>28,'long text wraps inside the bounded column')
+    j.entries[1].rumours[1].value=shortText
+    review:Refresh()
+    eq(frame:GetWidth(),compactWidth,'short content shrinks the window again')
+    assert(frame.area.ScrollBar.trackBackground and frame.area.ScrollBar.trackBorder)
+    eq(frame.area.ScrollBar.points[1][2],frame.closeButton,'Rumours uses the shared window scrollbar anchors')
+    for i=1,5 do
+        local row=frame.rows[i]
+        eq(row.divider.shown,i>1)
+        if i>1 then assert(-row.text.point[3]>=12,'divider has padding below it') end
+        eq(row.verify.point[3],row.remove.point[3],'tick and cross share a baseline')
+        eq(row.verify.point[1],'TOPLEFT');eq(row.remove.point[1],'TOPLEFT')
+        assert(row.verify.point[2]+row.verify:GetWidth()<row.remove.point[2],'verify precedes reject with a gap')
+        assert(row.remove.point[2]+row.remove:GetWidth()<row.text.point[2],'rumour follows both buttons with padding')
+        assert(row.text.point[2]+row.text:GetWidth()<=row:GetWidth(),'text stays inside the row')
+        assert(row.verify.cover and row.verify.check,'Rumours uses the framed confirm style')
+    end
+    j:SetEntryConfirmed(1,true);review:Refresh();assert(not frame.rows[1].verify.enabled)
+    j:SetEntryConfirmed(1,false);j.entries[1].rumours={};j.entries[1].sharedReports={};review:Refresh()
+    assert(not frame.area.ScrollBar.shown);eq(frame:GetHeight(),empty,'empty page collapses again')
+end
+''')
+lua.execute(r'''
+do
+    local j=ns.CreateBestiaryJournal({},function(unit) if unit=="mouseover" then return 42 end end)
+    local e=j:Ensure(42,true)
+    e.sharedReports={
+        {name='Shared creature',category='Beast',locations={},sender='Erna Lionguard'},
+        {name='Shared creature',category='Beast',locations={},sender='erna lionguard'},
+        {name='Shared creature',category='Beast',locations={},sender='Peww Pewz'},
+    }
+    local sources=j:GetSharedSources(42)
+    eq(#sources,2);eq(sources[1],'Erna Lionguard');eq(sources[2],'Peww Pewz')
+    eq(#j:GetSharedSources(99),0)
+    local book=ns.CreateBestiaryBook(j);book:Toggle()
+    local main=AzerothFieldbookBestiary
+    main.rows[1].scripts.OnClick(main.rows[1])
+    assert(main.sourceStatus.text:find('Erna Lionguard',1,true))
+    assert(main.sourceTooltip.text:find('Peww Pewz',1,true) and main.sourceTooltip.text:find('Not personally encountered',1,true))
+    local tooltip=GameTooltip
+    GameTooltip={SetOwner=function() end,SetText=function() end,Show=function() end,
+        AddLine=function(self,text) self.line=text end,Hide=function() end}
+    main.sourceTooltip.scripts.OnEnter(main.sourceTooltip)
+    assert(GameTooltip.line:find('Erna Lionguard',1,true) and GameTooltip.line:find('Peww Pewz',1,true))
+    GameTooltip=tooltip
+    for _,name in ipairs({'Another Longsurname','Someone Longsurname','Yet Anothername','Very Longname'}) do
+        e.sharedReports[#e.sharedReports+1]={name='Shared creature',category='Beast',locations={},sender=name}
+    end
+    book:Refresh()
+    assert(main.sourceStatus.text:find('+5 others',1,true),'many sources use a compact label')
+    for _,name in ipairs(j:GetSharedSources(42)) do assert(main.sourceTooltip.text:find(name,1,true)) end
+    main.rumoursButton.scripts.OnClick()
+    local rumours=AzerothFieldbookRumours
+    assert(plain(rumours.rows[2].text.text):find('Shared basics from Erna Lionguard:',1,true))
+    assert(main.sourceStatus.text:find('|cff8c9494',1,true),'unknown names are grey')
+    local oldPlayer,oldName,oldClass=UnitIsPlayer,UnitNameUnmodified,UnitClass
+    local oldColours=RAID_CLASS_COLORS
+    UnitIsPlayer=function(unit) return unit=='party1' end
+    UnitNameUnmodified=function(unit) if unit=='party1' then return 'Erna','Lionguard' end end
+    UnitClass=function() return 'Mage','MAGE' end
+    RAID_CLASS_COLORS={MAGE={r=0.25,g=0.78,b=0.92}}
+    ns.PlayerNames:Observe('party1')
+    main.scripts.OnUpdate(main,0.5);rumours.scripts.OnUpdate(rumours)
+    assert(main.sourceTooltip.text:find('|cff40c7ebErna Lionguard|r',1,true),'open book refreshes when the class is verified')
+    assert(rumours.rows[2].text.text:find('|cff40c7ebErna Lionguard|r',1,true),'Rumours also refreshes its attribution')
+    eq(e.sharedReports[1].sender,'Erna Lionguard','stored sender stays plain')
+    eq(main.sourceStatus.textColor[1],0.55,'Shared by text stays grey outside name markup')
+    UnitIsPlayer,UnitNameUnmodified,UnitClass=oldPlayer,oldName,oldClass
+    RAID_CLASS_COLORS=oldColours
+
+    j:Observe('mouseover');book:Refresh()
+    eq(main.sourceStatus.text,'');assert(not main.sourceTooltip.shown,'personal encounter hides portrait attribution')
+    j:SetEntryConfirmed(42,true);book:Refresh()
+    eq(main.sourceStatus.text,'');assert(not main.sourceTooltip.shown,'locking does not restore attribution')
+    assert(e.lockedBasic.sources==nil,'source display never changes the saved basic-info schema')
+
+    local options=main.options
+    options.scripts.OnShow(options)
+    assert(options.lockNewCritters:GetChecked())
+    options.lockNewCritters:SetChecked(false);options.lockNewCritters.scripts.OnClick(options.lockNewCritters)
+    options.scripts.OnShow(options)
+    assert(not j:GetLockNewCritters() and not options.lockNewCritters:GetChecked())
+    e.sharedReports={};book:Refresh()
+    eq(main.sourceStatus.text,'');assert(not main.sourceTooltip.shown)
+    -- Only outstanding rumours colour a name; shared basics/history alone do not.
+    local function rowFor(id)
+        for _,row in ipairs(main.rows) do if row.id==id then return row end end
+        error('missing creature row')
+    end
+    local function isGreen(row)
+        local colour=row.text.textColor
+        return colour[1]==114/255 and colour[2]==214/255 and colour[3]==91/255
+    end
+    assert(not isGreen(rowFor(42)))
+    j:SetEntryConfirmed(42,false)
+    local rejected={kind='behaviour',value='Melee',sender='Erna Lionguard'}
+    local verified={kind='offense',value='Fire',sender='Erna Lionguard'}
+    e.rumours={rejected,verified,
+        {kind='ability',value='Old report',sender='Erna Lionguard',resolved=true},
+        {kind='ability',value='Dismissed report',sender='Erna Lionguard',dismissed=true}}
+    j:Touch();book:Refresh()
+    assert(isGreen(rowFor(42)),'selected entries keep the outstanding-rumour colour')
+    j:Ensure(43,false,'Another creature');book:Refresh()
+    local other=rowFor(43);other.scripts.OnClick(other)
+    assert(isGreen(rowFor(42)) and not isGreen(rowFor(43)))
+    assert(j:DismissRumour(42,rejected));book:Refresh()
+    assert(isGreen(rowFor(42)),'one remaining rumour keeps the name green')
+    assert(j:ConfirmRumour(42,verified));book:Refresh()
+    assert(not isGreen(rowFor(42)) and #j:GetRumours(42)==0)
+    eq(rowFor(42).text.textColor[1],0.75,'unselected name returns to normal ink')
+    local row=rowFor(42);row.scripts.OnClick(row)
+    eq(row.text.textColor[1],1,'selected name returns to gold')
+end
 ''')
 print('PASS: Share button, captured selection, unrestricted rumour selection, per-rumour costs, balances, native controls, receive consent, separate Rumours toggle, verification/rejection, manual refresh, Notes input, pinning and scaling')

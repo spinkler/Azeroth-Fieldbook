@@ -247,26 +247,20 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     local function recordDiscovery(self, entry, level, zone, observation)
         local progress = creditFor(entry.id)
-        local reasons = {}
-        if number(level) and not progress.levels[level] then
-            progress.levels[level] = true
-            reasons[#reasons+1] = "new observed level " .. level
-        end
-        if str(zone) and not progress.zones[zone] then
-            progress.zones[zone] = true
-            reasons[#reasons+1] = "new zone: " .. zone
-        end
+        local newLevel=number(level) and not progress.levels[level]
+        local newZone=str(zone) and not progress.zones[zone]
+        if newLevel then progress.levels[level]=true end
+        if newZone then progress.zones[zone]=true end
         if progress.initial then
-            -- The entry point covers its first observed level and zone together.
-            progress.initial = nil
-        elseif #reasons > 0 then
-            progress.points = progress.points + 1
-            observation = observation or {}
-            observation.kind = #reasons == 2 and "levelAndLocation"
-                or (reasons[1]:find("new observed level", 1, true) and "level" or "location")
-            award(self, entry, 1, table.concat(reasons, "; "), observation)
+            -- Discovery includes its first location; levels carry no reward.
+            progress.initial=nil
+        elseif newZone then
+            progress.points=progress.points+1
+            observation=observation or {}
+            observation.kind="location"
+            award(self,entry,1,"new zone: " .. zone,observation)
         end
-        if #reasons > 0 then self:Touch() end
+        if newLevel or newZone then self:Touch() end
     end
     function journal:GetTotals()
         local count = 0
@@ -326,6 +320,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:DeleteEntry(id)
         if not number(id) or not self.entries[id] then return false end
         self.entries[id] = nil
+        -- Forget transient sightings, but keep the durable discovery/kill credit.
+        for guid, observed in pairs(seenGUIDs) do if observed.id == id then seenGUIDs[guid] = nil end end
         for guid, observed in pairs(killInstances) do if observed.id == id then killInstances[guid] = nil end end
         -- Remove legacy observations too, so reload cannot migrate the entry back.
         trackingDB.bestiary.creatures[id] = nil
@@ -335,6 +331,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:GetSingleObservationWindow()
         return db.singleObservationWindow ~= false
     end
+    function journal:GetLockNewCritters() return db.lockNewCritters~=false end
+    function journal:SetLockNewCritters(enabled) db.lockNewCritters=enabled==true end
     function journal:GetAutoLockEnabled() return db.autoLockEnabled~=false end
     function journal:GetAutoLockKills() return number(db.autoLockKills) and db.autoLockKills or 10 end
     function journal:SetAutoLockEnabled(enabled)
@@ -584,6 +582,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local name = creatureName(read(UnitName, unit))
         if not name then return end
         local wasNamed = self.entries[id] and creatureName(self.entries[id].name)
+        local unclassified = not self.entries[id] or self.entries[id].category == "Unclassified"
         local entry, discovered = self:Ensure(id, false, name, observation)
         if not entry then return end
         self:ObserveTameability(unit)
@@ -619,6 +618,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
                 changed = true
             end
             seenGUIDs[guid] = { id = id, level = number(level) and level or nil }
+        end
+        -- Snapshot the complete first observation before locking. Do not relock
+        -- existing critters after a manual unlock or a later option change.
+        if unclassified and entry.category == "Critter" and self:GetLockNewCritters() then
+            self:SetEntryConfirmed(id,true)
         end
         if not wasNamed and onEntryAdded then onEntryAdded(entry, discovered, observation) end
         if changed then self:Touch() end

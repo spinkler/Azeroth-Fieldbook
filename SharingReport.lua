@@ -201,6 +201,19 @@ local function basicKey(value)
     return table.concat({value.name,value.category,value.levelMin or 0,value.levelMax or 0,table.concat(value.locations,"\n")},"\n")
 end
 function ns.InstallSharingRecords(journal)
+    function journal:GetSharedSources(id)
+        local entry=self.entries[id]
+        local names,seen={},{}
+        for _,shared in ipairs(entry and entry.sharedReports or {}) do
+            local name=report.Character(shared.sender)
+            if name and not seen[name:lower()] then
+                names[#names+1]=name
+                seen[name:lower()]=true
+            end
+        end
+        table.sort(names,function(a,b) return a:lower()<b:lower() end)
+        return names
+    end
     function journal:GetBasicInfo(id)
         local entry=self.entries[id]
         if not entry then return end

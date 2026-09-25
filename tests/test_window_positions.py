@@ -381,6 +381,34 @@ class WindowPositionTests(unittest.TestCase):
         ''')
 
 
+    def test_observation_windows_prefer_bottom_alignment_without_leaving_screen(self):
+        self.lua.execute("""
+            UIParent.width=1800;UIParent.height=1000
+            local book=CreateFrame()
+            book.left=100;book.top=900;book.width=800;book.height=700;book.shown=true
+            AzerothFieldbookBestiary=book
+            local dialog=CreateFrame()
+            dialog.left=900;dialog.top=900;dialog.width=300;dialog.height=250
+            dialog.afbPreferBookEdge=true;dialog.afbAnchorRule='right';dialog.afbAlignBookBottom=true
+            ns.WindowPositions:AvoidWindowOverlap(dialog)
+            near(dialog.left,900);near(dialog.top,450)
+            dialog.height=400
+            ns.WindowPositions:AvoidWindowOverlap(dialog)
+            near(dialog.left,900);near(dialog.top,600)
+            dialog.afbPinned=true;dialog.top=800
+            ns.WindowPositions:AvoidWindowOverlap(dialog);near(dialog.top,800)
+            dialog.afbPinned=false
+            local blocker=CreateFrame()
+            blocker.left=900;blocker.top=1000;blocker.width=300;blocker.height=1000;blocker.shown=true
+            ns.WindowPositions:Track(blocker)
+            ns.WindowPositions:AvoidWindowOverlap(dialog);near(dialog.left,1200)
+            UIParent.width=1000;UIParent.height=500
+            ns.WindowPositions:AvoidWindowOverlap(dialog)
+            assert(dialog.left>=0 and dialog.left+dialog.width<=1000)
+            assert(dialog.top<=500 and dialog.top-dialog.height>=0)
+        """)
+
+
     def test_secret_geometry_on_show_is_neither_calculated_nor_saved(self):
         self.lua.execute('''
             UIParent.width=1400;UIParent.height=900

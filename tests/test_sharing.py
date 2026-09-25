@@ -97,8 +97,8 @@ reload:DeleteEntry(42); eq(reload:GetSharingBalance(),3,'delete keeps credit and
 assert(reload:ImportReport(report(), 'Alice Sunstrider',now))
 eq(reload:GetSharingBalance(),3,'reimport no points')
 reload:Observe('target'); eq(reload:GetSharingBalance(),3,'already credited level no points')
-level=10; reload:Observe('target'); eq(reload:GetSharingBalance(),4,'new intermediate level earns once')
-reload:DeleteEntry(42); reload:Observe('target'); eq(reload:GetSharingBalance(),4,'rediscover same milestones no points')
+level=10; reload:Observe('target'); eq(reload:GetSharingBalance(),3,'new intermediate level is recorded without a reward')
+reload:DeleteEntry(42); reload:Observe('target'); eq(reload:GetSharingBalance(),3,'rediscover same milestones no points')
 
 local importedDB={}
 local j=ns.CreateBestiaryJournal(importedDB,identify)
@@ -129,13 +129,13 @@ eq(#j:GetRumours(42),3,'a new report can repeat a rejected claim for review')
 assert(j:GetRumours(42)[1].previouslyRejected,'repeated claim remembers rejection')
 local zero=j:GetSharingBalance()
 level=9; j:Observe('target'); eq(j:GetSharingBalance(),zero+1,'first genuine discovery is still earned')
-level=11; j:Observe('target'); eq(j:GetSharingBalance(),zero+2,'shared level does not preempt real credit')
-zone='Westfall'; j:Observe('target'); eq(j:GetSharingBalance(),zero+3,'new real location')
+level=11; j:Observe('target'); eq(j:GetSharingBalance(),zero+1,'personally observing a shared level awards no knowledge')
+zone='Westfall'; j:Observe('target'); eq(j:GetSharingBalance(),zero+2,'new real location')
 local r=report('1000000-5-1'); r.locations={'Westfall','Duskwood'}
-assert(j:ImportReport(r,'Alice Sunstrider',now)); eq(j:GetSharingBalance(),zero+3)
-zone='Duskwood'; j:Observe('target'); eq(j:GetSharingBalance(),zero+4,'imported location still earns real credit')
+assert(j:ImportReport(r,'Alice Sunstrider',now)); eq(j:GetSharingBalance(),zero+2)
+zone='Duskwood'; j:Observe('target'); eq(j:GetSharingBalance(),zero+3,'imported location still earns real credit')
 j:DeleteEntry(42); j:ImportReport(r,'Alice Sunstrider',now); j:Observe('target')
-eq(j:GetSharingBalance(),zero+4,'delete/reimport/rediscover cannot mint points')
+eq(j:GetSharingBalance(),zero+3,'delete/reimport/rediscover cannot mint points')
 local oldGUID,oldExists,oldControlled,oldTap,oldTime=UnitGUID,UnitExists,UnitPlayerControlled,UnitIsTapDenied,GetTime
 UnitGUID=function(unit) if unit=='player' then return 'Player-1-1' elseif unit=='target' then return guid end end
 UnitExists=function() return true end
@@ -148,15 +148,15 @@ local function creditedDeath(suffix)
     j:RecordPartyKill('Player-1-1',guid)
     dead=true; j:RecordUnitDeath(guid)
 end
-creditedDeath('death1'); eq(j:GetSharingBalance(),zero+4)
+creditedDeath('death1'); eq(j:GetSharingBalance(),zero+3)
 j=ns.CreateBestiaryJournal(importedDB,identify); assert(not j:RecordKill('target'),'same death survives reload')
-creditedDeath('death2'); eq(j:GetSharingBalance(),zero+4)
+creditedDeath('death2'); eq(j:GetSharingBalance(),zero+3)
 for i=3,24 do creditedDeath('death'..i) end
-eq(j:GetSharingBalance(),zero+5,'silver remains the only kill reward until 25')
-creditedDeath('death25'); eq(j:GetSharingBalance(),zero+7)
+eq(j:GetSharingBalance(),zero+4,'silver remains the only kill reward until 25')
+creditedDeath('death25'); eq(j:GetSharingBalance(),zero+6)
 j:DeleteEntry(42); j:Observe('target')
 for i=1,25 do creditedDeath('repeated'..i) end
-eq(j:GetSharingBalance(),zero+7,'already credited kill stars cannot pay twice')
+eq(j:GetSharingBalance(),zero+6,'already credited kill stars cannot pay twice')
 dead=false
 UnitGUID,UnitExists,UnitPlayerControlled,UnitIsTapDenied,GetTime=oldGUID,oldExists,oldControlled,oldTap,oldTime
 
@@ -244,6 +244,51 @@ do
     end
     pump(5); eq(#delivered,0,'self-offers never send packets')
     eq(a.engine:ValidateRecipient('Alice Riverwind'),'Alice Riverwind','a different surname is a different character')
+end
+-- Reproduce the live Goldtooth report with a surname and three behaviour rumours.
+do
+    setup(); clients['Bob Stonewell']=nil; b=endpoint('Erna Lionguard')
+    local gold={version=1,creatureID=327,name='Goldtooth',category='Humanoid',levelMin=8,levelMax=8,
+        locations={'Elwynn Forest'},rumours={}}
+    local traits={flee,{kind='behaviour',value='Hostile'},melee}
+    local tx=assert(a.engine:Start(gold,'Erna Lionguard',traits));pump(20)
+    local item=assert(b.engine:GetIncoming()[1],'Goldtooth reaches the preview before acceptance')
+    eq(item.report.name,'Goldtooth');eq(#item.report.rumours,3);eq(select(3,a.j:GetSharingBalance()),0)
+    assert(b.engine:Accept(item));pump(12);eq(tx.stage,'complete')
+    eq(select(3,a.j:GetSharingBalance()),4);eq(#b.j:GetRumours(327),3)
+end
+-- Every pre-preview rejection reports a specific cause and releases the reservation.
+do
+    for _,case in ipairs({
+        {'blocked',function() b.j:SetBlockIncomingOffers(true) end},
+        {'busy',function()
+            for i=1,3 do b.j:GetSharingStorage().incoming['held'..i]={id='1-1-'..i,sender='Other',state='receiving',expires=now+180} end
+        end},
+        {'recipient',function() b.env.character='Bob' end},
+        {'future',function() b.env.now=function() return now-600 end end},
+        {'expired',function() b.env.now=function() return now+86401 end end},
+        {'malformed',function(tx) tx.payload='1:9'..tx.payload:sub(4) end},
+        {'transaction',function(tx)
+            local value=assert(S.Decode(tx.payload));value.transaction='1-1-1';tx.payload=assert(S.Encode(value))
+        end},
+        {'identity',function() b.j:Ensure(42,true,'Defias Pillager').id=43 end},
+    }) do
+        setup(); local tx=assert(a.engine:Start(capture,'Bob Stonewell',{}));case[2](tx);pump(20)
+        eq(tx.stage,'declined',case[1]);eq(select(3,a.j:GetSharingBalance()),0)
+        eq(select(4,a.j:GetSharingBalance()),0);eq(a.j:GetSharingBalance(),10)
+        local events=b.j:GetEventLog().entries
+        eq(events[#events].details.reason,case[1],'recipient event log identifies rejection')
+        assert(tx.message:find('No knowledge spent.',1,true))
+        assert(not tx.message:find('Offer declined, invalid, or receiver busy',1,true))
+        eq(#b.engine:GetIncoming(),0)
+    end
+    setup();local tx,item=start();assert(b.engine:Decline(item));pump(5)
+    assert(tx.message:find('The recipient declined the offer.',1,true))
+    setup();tx=assert(a.engine:Start(capture,'Bob Stonewell',{}))
+    a.engine:Receive('AFBShare','4~D~'..tx.id..'~untrusted error text','WHISPER','Bob Stonewell')
+    eq(tx.stage,'preflight','unknown reason codes cannot change the transaction')
+    a.engine:Receive('AFBShare','4~D~'..tx.id,'WHISPER','Bob Stonewell')
+    eq(tx.stage,'declined','legacy empty declines remain supported')
 end
 -- Incoming blocking is a per-character preference, separate from transport
 -- restrictions. It must never turn a free decline into spent points.
@@ -645,3 +690,34 @@ eq(select(3,budget:GetSharingBalance()),beforeSpent);eq(select(4,budget:GetShari
 assert(not budget:CommitShare('waived',true),'a removed reservation cannot be discounted or committed again')
 ''')
 print('PASS: chunk ordering/duplicates, recipient binding, bounded queues, expiry, storage caps and full reset')
+
+lua.execute(r'''
+local function events(client,stage)
+    local result={}
+    for _,event in ipairs(client.j:GetEventLog().entries) do
+        if event.details and event.details.kind=='sharing_transfer' and (not stage or event.details.stage==stage) then result[#result+1]=event end
+    end
+    return result
+end
+setup();a.db.pointAnnouncements=false;a.db.creatureAnnouncements=false
+local tx,item=start({fire,flee,melee});eq(#events(a,'offered'),1);eq(#events(b,'received'),0)
+assert(b.engine:Accept(item));pump(12)
+eq(#events(a,'accepted'),1);eq(#events(a,'complete'),1);eq(#events(b,'received'),1)
+local sent=events(a,'complete')[1]
+eq(sent.details.peer,'Bob Stonewell');eq(sent.details.creatureID,42);eq(sent.details.rumours,3);eq(sent.details.knowledge,4)
+assert(sent.message:find('Defias Pillager',1,true) and sent.message:find('4 knowledge',1,true))
+local received=events(b,'received')[1];eq(received.details.peer,'Alice Sunstrider');eq(received.details.knowledge,0)
+a.engine:Receive('AFBShare','4~K~'..tx.id,'WHISPER','Bob Stonewell')
+b.engine:Receive('AFBShare','4~C~'..tx.id,'WHISPER','Alice Sunstrider');pump(4)
+eq(#events(a,'complete'),1);eq(#events(b,'received'),1,'duplicate commit never duplicates the receipt log')
+setup();tx,item=start();assert(a.engine:Cancel());pump(4)
+eq(#events(a,'cancelled'),1);eq(#events(a,'complete'),0);eq(#events(b,'received'),0)
+setup();tx,item=start({fire});drop=function(m) return m.text:find('~K~',1,true) end
+assert(b.engine:Accept(item));pump(75)
+eq(#events(a,'delivery unknown'),1);eq(#events(b,'received'),1)
+drop=nil;assert(a.engine:Retry());pump(12)
+eq(#events(a,'retrying'),1);eq(#events(a,'accepted'),1);eq(#events(a,'complete'),1)
+eq(#events(b,'received'),1,'paid retry logs no second import')
+b=endpoint('Bob Stonewell',b.db);eq(#events(b,'received'),1,'received account persists across reload')
+''')
+print('PASS: transfer history, costs, cancellation, retries and duplicate receipt suppression')

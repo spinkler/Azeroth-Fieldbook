@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.82 (Beta)
+# Azeroth Fieldbook 0.9.99 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,11 +6,11 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.82 includes sharing, addon-version compatibility
+spell databases. Version 0.9.99 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.82.
+are not part of version 0.9.99.
 
 ## Installation and opening
 
@@ -19,6 +19,11 @@ by default at 10. Only credited kills count. Recorded-information changes and ma
 unlocking restart the count; repeated sightings do not. Progress persists across
 sessions, and automatic locking does not confirm pending abilities. Existing kills
 are not counted retroactively. Automatic locks appear in the Event log.
+
+**Lock newly encountered critters** is also on by default under Tracking. It
+records their first basic information, then locks the page. Turn it off to start
+new critter pages unlocked. Existing pages and manual unlocks are respected;
+shared-only pages stay available for review until a personal encounter.
 
 Install the addon as `Interface/AddOns/AzerothFieldbook` and enable
 **Azeroth Fieldbook** in the addon list.
@@ -56,7 +61,7 @@ windows shrink to fit the screen. Clicking an
 addon window or one of its controls brings that window to the front of the other
 addon windows.
 
-The list button left of Options opens the **Event log**. It records timestamped discoveries, knowledge awards and observed-cast alerts even with chat announcements disabled. This per-character history starts on first use, survives reloads and Bestiary resets, and keeps all events with newest-first pages of 50. Earlier events cannot be reconstructed.
+The list button left of Options opens the **Event log**. It records timestamped discoveries, knowledge awards, observed-cast alerts and sharing activity even with chat announcements disabled. This per-character history starts on first use, survives reloads and Bestiary resets, and keeps all events with newest-first pages of 50. Earlier events cannot be reconstructed. Transfer entries record the other character, creature, rumour count, Knowledge cost and outcome, including retries and failed delivery.
 
 The gold cog immediately left of **?** opens **Options**, containing all settings
 and **Reset Bestiary**, **Backup Bestiary** and **Restore Bestiary**. **?** opens instructions and About. Both buttons toggle
@@ -149,13 +154,15 @@ Unreadable spells leave the record unchanged. Resolve is hidden once the ability
 is confirmed with a spell ID; pending or unlinked abilities retain it.
 
 Delete removes the selected creature and its saved records after you type
-`delete` and press Enter. Future encounters can record it again. Previously
+`delete` and press Enter. Hover over the creature again to add a fresh entry;
+the Event log calls this **Entry restored**, with no repeat discovery award. Previously
 credited milestones and spending survive deletion, so deleting and rediscovering
 an entry cannot repeatedly earn its knowledge. Ability effects include
 school-specific resistance and immunity tags.
 
-Each personal creature discovery awards 1 knowledge, including its initial level and zone. Later
-sightings revealing a new level, zone, or both award 1 knowledge per sighting.
+Each personal creature discovery awards 1 knowledge, including its initial zone.
+Discovering a new location for an existing creature awards 1 knowledge. New levels
+are still recorded but award no knowledge. Previously earned balances are kept.
 Repeat sightings award nothing. Ten kills award a silver star and 1 additional
 knowledge; 25 kills award a gold star and 2 more knowledge; 50 kills award a gold crown
 and 3 more knowledge, for 6 knowledge from kills in total. The crown replaces the star beside
@@ -242,7 +249,14 @@ unresolved, with no refund. A new report is priced separately.
 Recipients see the sender, creature, claims, conflicts and whether the report
 adds information before choosing **Accept — free** or **Decline**. Acceptance
 alone does not import: the sender must subsequently commit. Shared basic reports
-are stored separately from personal records and marked in the book. Local names
+are stored separately from personal records. The book names their sender with
+**Shared by** inside the viewer until you personally encounter the creature;
+hover that label for every sender and the encounter/lock status.
+Each shared report in Rumours also names its source. Sender names use their
+class colour after the game identifies them as a player through your target,
+mouseover or party/raid roster. Full surnames must match. Verified classes are
+remembered for the session; unknown classes stay grey, as does the Shared by
+label. Received reports never supply class identity. Local names
 and creature types win conflicts. A locked page retains its displayed basics;
 additional reports remain available in Rumours and after unlocking.
 
@@ -298,6 +312,25 @@ omitted. Kill rewards show the name and type with 10/25/50-kill milestones.
 The addon prefix is cyan, bracketed rewards are yellow and parenthesized details
 are grey. With knowledge messages disabled, the separate discovery setting can still
 show a discovery notice without its knowledge amount.
+
+Sharing combines the first name and surname returned separately by Forever's
+character-name API, keeping the full name for self-offer and recipient checks.
+
+If an incoming report is rejected before its preview appears, the sender now sees
+which check failed: incoming blocking, a full queue, report chunks/data, recipient
+identity, timestamps or storage limits. The recipient's Event log records the
+reason, including local validation details. Rejection before acceptance spends no
+Knowledge. Both players need the updated build for these diagnostic replies.
+
+The creature list displays sixteen rows down to Previous/Next, with a scrollbar
+in a reserved gutter when more entries match. Its track is 70% transparent.
+Green creature names indicate outstanding rumours, including on a selected page;
+verifying or rejecting the last rumour restores the usual name colour. The grey
+legend beneath the list explains the green indicator and review asterisk.
+The Rumours window sizes its width to the report text, wrapping long lines at a
+comfortable maximum. Each rumour starts with a green verify tick, then a reject
+cross, then its text. It fits up to four rumours and their shared basic
+information before scrolling longer lists; subtle dividers separate records.
 
 ## Spell IDs and personal notes
 
@@ -382,7 +415,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.82 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.99 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,

@@ -212,6 +212,8 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         frame:SetScript("OnHide",function()
             frame.spellInput:ClearFocus(); frame.notes:ClearFocus(); frame:StopMovingOrSizing()
         end)
+        frame:HookScript("OnShow",function() if controller.visibilityCallback then controller.visibilityCallback(true) end end)
+        frame:HookScript("OnHide",function() if controller.visibilityCallback then controller.visibilityCallback(false) end end)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookCreatureNotes" end
         if ns.UIScale then ns.UIScale:Register(frame,"AzerothFieldbookCreatureNotes") end
         frame:Hide()
@@ -251,6 +253,10 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         else
             self:Open(id)
         end
+    end
+    function controller:SetVisibilityCallback(callback)
+        self.visibilityCallback=callback
+        callback(frame~=nil and frame:IsShown())
     end
     return controller
 end

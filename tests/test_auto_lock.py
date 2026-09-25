@@ -1,6 +1,6 @@
 """Auto-lock uses credited kills and persistent recorded-content changes."""
 import unittest
-from kill_test_harness import new_client
+from kill_test_harness import new_client, ROOT
 
 
 class AutoLockTests(unittest.TestCase):
@@ -46,6 +46,59 @@ class AutoLockTests(unittest.TestCase):
             j:SetAutoLockEnabled(true)
             for i=1,3 do beginKill('enabled'..i);finishKill() end
             assert(e.confirmed)
+        ''')
+
+    def test_new_critter_default_snapshot_and_manual_unlock(self):
+        lua = new_client()
+        lua.execute(ROOT.joinpath('SharingReport.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
+        lua.execute('''
+            local create=ns.CreateBestiaryJournal
+            ns.CreateBestiaryJournal=function(...)
+                activeJournal=create(...);return activeJournal
+            end
+            fire('ADDON_LOADED','AzerothFieldbook')
+            function UnitCreatureType() return 'Critter' end
+            units.mouseover=spawn('critter',false)
+            fire('UPDATE_MOUSEOVER_UNIT')
+            local e=activeJournal.entries[42]
+            assert(activeJournal:GetLockNewCritters() and e.confirmed)
+            assert(e.lockedBasic.category=='Critter' and e.lockedBasic.levelMin==5)
+            assert(e.lockedBasic.locations['Test zone'] and points()==1)
+            assert(not activeJournal:Offer(42,'New ability','Automatic observation',123))
+            activeJournal:SetEntryConfirmed(42,false)
+            fire('UPDATE_MOUSEOVER_UNIT');tick()
+            assert(not e.confirmed,'manual unlock is respected')
+            assert(activeJournal:Offer(42,'New ability','Automatic observation',123))
+            activeJournal:SetLockNewCritters(false)
+            assert(activeJournal:DeleteEntry(42))
+            fire('ADDON_LOADED','AzerothFieldbook')
+            fire('UPDATE_MOUSEOVER_UNIT')
+            assert(not activeJournal:GetLockNewCritters() and not activeJournal.entries[42].confirmed)
+            activeJournal:SetLockNewCritters(true)
+            tick()
+            assert(not activeJournal.entries[42].confirmed,'enabling does not relock an existing critter')
+            assert(points()==1,'re-adding this critter never repeats discovery credit')
+            activeJournal:ResetDatabase()
+            assert(activeJournal:GetLockNewCritters(),'full reset restores the enabled default')
+        ''')
+
+    def test_unreadable_type_retries_classification_without_affecting_beasts(self):
+        lua = new_client()
+        lua.execute('''
+            units.mouseover=spawn('unknown-type',false)
+            function UnitCreatureType() return secret end
+            fire('UPDATE_MOUSEOVER_UNIT')
+            local e=AzerothFieldbookDB.bestiary.entries[42]
+            assert(not e.confirmed and e.category=='Unclassified')
+            function UnitCreatureType() return 'Critter' end
+            fire('UPDATE_MOUSEOVER_UNIT')
+            assert(e.confirmed and e.category=='Critter' and points()==1)
+        ''')
+        lua = new_client()
+        lua.execute('''
+            units.mouseover=spawn('beast',false)
+            fire('UPDATE_MOUSEOVER_UNIT')
+            assert(not AzerothFieldbookDB.bestiary.entries[42].confirmed)
         ''')
 
 

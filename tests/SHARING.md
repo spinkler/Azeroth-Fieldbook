@@ -55,15 +55,20 @@ support is made. First verify two same-faction players; record group and ungroup
 results separately.
 
 Character identity is realm-free and retains surnames, including spaces,
-apostrophes, hyphens and localized letters. The native adapter reads the first
-return of `UnitFullName("player")`, falling back to `UnitName`; the documented
-second return is a server, not a surname, and is not appended. Received attribution
-uses the actual sender's complete name. Different surnames are distinct identities.
-The live receipt below confirms full-name targeting and acknowledgement for one
-pair of characters; other name variants still need coverage. Identity/registration
-are retried on login, entering the world,
-leaving combat and player name updates. The composer displays the specific
-prerequisite that currently disables sending.
+apostrophes, hyphens and localized letters. The native adapter reads both values
+from `UnitNameUnmodified("player")` (or `UnitName` when the unmodified API is
+unavailable) and joins them with `NameUtil.GetFullNameWithoutRealm`, following
+[Forever's Camelot NameUtil](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_FrameXMLUtil/Camelot/NameUtil.lua).
+The shared generated API docs still label the second return as a server; this
+previously led the addon to discard the surname. A live rejection addressed to
+**Peww Pewz** while the adapter reported **Peww** exposed that error on 2026-09-26.
+Do not infer surnames from incoming payloads or weaken matching to first names.
+Unavailable/restricted name parts leave sharing unavailable until they can be
+read. Received attribution uses the actual sender's complete name. Identity and
+registration refresh on login, entering the world, leaving combat and player
+name updates. Simulated native-adapter tests now exchange reports in both
+directions between split-name Erna Lionguard and Peww Pewz; live confirmation
+of the correction is still required.
 
 Compatibility requires sharing protocol **4**, literal report schema **1**, and
 the **same installed addon version** on both clients (from the current TOC). The native
@@ -234,8 +239,10 @@ The operator then supplied receiving-side screenshots for a report from
   Dun Morogh, and the sender's full name.
 - **Casts Rushing Charge** and **Melee** are presented as two unverified rumours,
   each attributed to Erna Lionguard, with explicit Accept — free / Decline controls.
-- After import, the book shows the reported basic details and **Shared basics •
+- After import, the screenshot shows the reported basic details and **Shared basics •
   not personally encountered**. Kills remain 0 and Recorded abilities is empty.
+  Current builds name the sender with **Shared by**; hovering lists every source
+  and the personal-encounter status.
 - Creature Notes shows both rumours as **Unverified**, each with the sender's
   full name, plus a separately attributed basic report. Notes and Rumours are
   both expanded in the screenshot.

@@ -145,6 +145,8 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             composer.recipient:ClearFocus(); composer:StopMovingOrSizing()
             if transaction and not transaction.spent then engine:Cancel() end
         end)
+        composer:HookScript("OnShow",function() if controller.visibilityCallback then controller.visibilityCallback(true) end end)
+        composer:HookScript("OnHide",function() if controller.visibilityCallback then controller.visibilityCallback(false) end end)
         composer.recipient:SetScript("OnTextChanged",function()
             composer.notice=nil
             controller:Refresh()
@@ -328,5 +330,9 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         elapsed=elapsed+delta
         if elapsed>=1 then elapsed=0; controller:Refresh() end
     end)
+    function controller:SetVisibilityCallback(callback)
+        self.visibilityCallback=callback
+        callback(composer~=nil and composer:IsShown())
+    end
     return controller
 end

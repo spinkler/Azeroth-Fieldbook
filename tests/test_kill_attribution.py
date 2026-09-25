@@ -64,7 +64,7 @@ class KillAttribution(unittest.TestCase):
                 # tests identical no-XP policy, not an unperformed live cap test.
                 lua.execute(f"beginKill('{scenario}'); units.target.level=1; finishKill()")
                 self.assertEqual(lua.eval('kills()'), 1)
-                self.assertEqual(lua.eval('points()'), 2, 'initial discovery and the new level')
+                self.assertEqual(lua.eval('points()'), 1, 'only initial discovery; new levels award nothing')
                 self.assertNotIn('10 kills!', lua.eval('output()'))
 
     def test_pet_and_party_policy_with_no_personal_final_blow(self):

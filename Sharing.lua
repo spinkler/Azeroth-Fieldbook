@@ -6,6 +6,30 @@ local PREFLIGHT_SECONDS = 20
 -- The literal report format stays at schema 1 so paid retries retain their data.
 local PROTOCOL = "4"
 local MAX_INCOMING, MAX_RECEIPTS, CHUNK = 3, 512, 180
+-- Optional bounded decline reasons. Empty replies from older builds still work;
+-- never display arbitrary peer-supplied text as an error message.
+local rejectionReasons = {
+    declined="The recipient declined the offer.",
+    blocked="The recipient has Block incoming offers enabled.",
+    busy="The recipient's incoming queue is full (three reports). Decline pending reports or wait for them to expire.",
+    chunks="The recipient received incomplete or inconsistent report chunks.",
+    malformed="The recipient could not decode or validate the report data.",
+    transaction="The report's transaction ID did not match the offer.",
+    recipient="The report's recipient name did not match the recipient's name reported by the game.",
+    future="The report timestamp is over five minutes ahead of the recipient's clock. Check both computers' date and time.",
+    expired="The report timestamp is over 24 hours old according to the recipient's clock. Check both computers' date and time.",
+    identity="The recipient has an inconsistent creature ID in their journal.",
+    basic_full="The recipient already holds sixteen basic reports for this creature.",
+    rumours_full="The recipient's rumour storage for this creature is full.",
+    creatures_full="The recipient's shared creature storage is full.",
+    preview="The recipient could not validate this report for preview.",
+}
+local previewReasons = {
+    ["Creature identity mismatch."]="identity",
+    ["This creature already holds sixteen basic reports."]="basic_full",
+    ["This creature's rumour storage is full."]="rumours_full",
+    ["Shared creature storage is full."]="creatures_full",
+}
 local function size(t) local n=0; for _ in pairs(t) do n=n+1 end; return n end
 local function key(sender,id) return sender:lower() .. "/" .. id end
 local function committed(tx) return tx and tx.spent==true end
@@ -36,11 +60,32 @@ function ns.CreateSharing(journal, env)
         queue[#queue+1]={text=text,id=id,target=target,attempts=0}
         return true
     end
+    local function reject(id,sender,reason,detail)
+        send("D",id,sender,reason)
+        journal:RecordEvent("Incoming report from " .. sender .. ": " .. rejectionReasons[reason]
+            .. (detail and (" " .. detail) or ""),
+            {kind="sharing_rejection",reason=reason,transaction=id})
+    end
+    local function recordTransfer(direction,stage,peer,value,message,cost)
+        if not value then return end
+        local rumours=#value.rumours
+        local labels={offered=direction=="sent" and "Offer sent" or "Offer received",expired="Offer expired",accepted="Offer accepted",complete="Delivery confirmed",received="Report received",
+            cancelled="Offer cancelled",declined="Offer declined",failed="Transfer failed",unresolved="Delivery unresolved",
+            ["delivery unknown"]="Delivery uncertain",unknown="Delivery uncertain",retrying="Retry started"}
+        journal:RecordEvent("Sharing: " .. (labels[stage] or stage) .. " • " .. (direction=="sent" and "To " or "From ") .. peer .. ": " .. value.name
+            .. " (" .. rumours .. (rumours==1 and " rumour" or " rumours") .. "). " .. message,
+            {kind="sharing_transfer",direction=direction,stage=stage,transaction=value.transaction,
+                creatureID=value.creatureID,creatureName=value.name,peer=peer,rumours=rumours,knowledge=cost})
+    end
+    local function recordOutgoing(tx,stage,message)
+        recordTransfer("sent",stage,tx.recipient,schema.Decode(tx.payload),message,tx.spent and tx.cost or 0)
+    end
     local function finish(tx,stage,message)
         purge(tx.id,tx.recipient)
         if not tx.spent then journal:ReleaseShare(tx.id) end
         preflightDeadline=nil
         tx.stage,tx.message=stage,message
+        recordOutgoing(tx,stage,message)
         notify()
     end
     local function expirePreflight()
@@ -52,7 +97,9 @@ function ns.CreateSharing(journal, env)
     end
     local function unknown(tx,message)
         purge(tx.id,tx.recipient)
+        local wasUnknown=tx.stage=="unknown"
         tx.stage,tx.message="unknown",message .. " Knowledge remains spent; retry this transaction."
+        if not wasUnknown then recordOutgoing(tx,"delivery unknown",tx.message) end
         notify()
     end
     local function incompatible(tx,version)
@@ -69,6 +116,7 @@ function ns.CreateSharing(journal, env)
         end
         for k,item in pairs(store.incoming) do
             if now>item.expires then
+                recordTransfer("received","expired",item.sender,item.report,"Offer expired before import; no knowledge earned or spent.",0)
                 store.incoming[k]=nil
                 purge(item.id,item.sender)
                 notify()
@@ -93,6 +141,7 @@ function ns.CreateSharing(journal, env)
         notify()
     end
     local function commit(tx,basicCost)
+        local firstCommit=not tx.spent
         local adjusted=false
         if not tx.spent then
             local ok,cost=journal:CommitShare(tx.id,basicCost==0)
@@ -105,6 +154,9 @@ function ns.CreateSharing(journal, env)
         purge(tx.id,tx.recipient)
         tx.stage,tx.deadline="committed",env.now()+60
         tx.message="Accepted. " .. tx.cost .. " knowledge spent; awaiting import acknowledgement."
+        if firstCommit then
+            recordOutgoing(tx,"accepted",tx.message .. (tx.basicInfoWaived and " Known basic information was free." or ""))
+        end
         send("C",tx.id,tx.recipient)
         notify()
         if adjusted and costAdjusted then costAdjusted(tx) end
@@ -120,6 +172,7 @@ function ns.CreateSharing(journal, env)
             store.outgoing.stage="cancelled"
             store.outgoing.message="Reload cancelled the uncommitted offer; no knowledge spent."
         end
+        recordOutgoing(store.outgoing,store.outgoing.stage,store.outgoing.message)
     end
     for k,item in pairs(store.incoming) do
         if item.state~="accepted" then store.incoming[k]=nil end
@@ -178,6 +231,7 @@ function ns.CreateSharing(journal, env)
             stage="preflight",deadline=env.now()+PREFLIGHT_SECONDS,retries=0,
             message="Checking recipient compatibility (up to " .. PREFLIGHT_SECONDS .. " seconds); knowledge reserved."}
         store.outgoing=tx
+        recordOutgoing(tx,"offered",cost .. " knowledge reserved pending acceptance.")
         preflightDeadline=clock()+PREFLIGHT_SECONDS
         if not send("H",id,recipient,env.addonVersion) then finish(tx,"failed","Send queue full; no knowledge spent."); return nil,tx.message end
         notify()
@@ -203,6 +257,7 @@ function ns.CreateSharing(journal, env)
         tx.retries=tx.retries+1
         tx.stage,tx.deadline="committed",env.now()+60
         tx.message="Reconciling the same paid report (attempt " .. tx.retries .. "/3)."
+        recordOutgoing(tx,"retrying",tx.message .. " No additional knowledge spent.")
         purge(tx.id,tx.recipient)
         -- Re-check installed versions before reconciling a saved receipt or
         -- consent; either player may have updated since the original offer.
@@ -231,6 +286,7 @@ function ns.CreateSharing(journal, env)
         -- Freeze the quote with consent so retries/reloads cannot change it.
         item.basicCost=preview.newBasic and 1 or 0
         item.state,item.expires="accepted",item.report.created+DAY
+        recordTransfer("received","accepted",item.sender,item.report,"Waiting for the sender's transfer. Receiving is free.",0)
         send("A",item.id,item.sender,tostring(item.basicCost))
         notify()
         return true
@@ -239,7 +295,7 @@ function ns.CreateSharing(journal, env)
         if not item or store.incoming[key(item.sender,item.id)]~=item or item.state~="pending" then return false end
         store.incoming[key(item.sender,item.id)]=nil
         purge(item.id,item.sender)
-        send("D",item.id,item.sender)
+        reject(item.id,item.sender,"declined")
         notify()
         return true
     end
@@ -251,7 +307,7 @@ function ns.CreateSharing(journal, env)
             if item.state~="accepted" then
                 store.incoming[k]=nil
                 purge(item.id,item.sender)
-                send("D",item.id,item.sender)
+                reject(item.id,item.sender,"blocked")
             end
         end
         notify()
@@ -268,7 +324,9 @@ function ns.CreateSharing(journal, env)
         if receiveCount>180 then return end
         local version,kind,id,body=message:match("^(%d+)~([A-Z])~([%d%-]+)~?(.*)$")
         if not version or #version>2 or not schema.Transaction(id) then return end
-        if kind=="A" then
+        if kind=="D" then
+            if body~="" and not rejectionReasons[body] then return end
+        elseif kind=="A" then
             if body~="0" and body~="1" then return end
         elseif kind~="O" and kind~="H" and kind~="R" and kind~="I" and body~="" then return end
         -- A reply arriving after the deadline cannot revive an expired offer,
@@ -288,7 +346,7 @@ function ns.CreateSharing(journal, env)
             if not validVersion(body) or body~=env.addonVersion then send("I",id,sender,env.addonVersion); return end
             if receipt then send("K",id,sender); return end
             if journal:GetBlockIncomingOffers() and not (item and item.state=="accepted") then
-                if item then self:ApplyIncomingOfferSetting() else send("D",id,sender) end
+                if item then self:ApplyIncomingOfferSetting() else reject(id,sender,"blocked") end
                 return
             end
             if item then
@@ -297,7 +355,7 @@ function ns.CreateSharing(journal, env)
                     item.state=="accepted" and tostring(item.basicCost or 1) or env.addonVersion)
                 return
             end
-            if size(store.incoming)>=MAX_INCOMING then send("D",id,sender); return end
+            if size(store.incoming)>=MAX_INCOMING then reject(id,sender,"busy"); return end
             store.incoming[k]={id=id,sender=sender,addonVersion=body,state="receiving",expires=now+OFFER_SECONDS,chunks={}}
             send("R",id,sender,env.addonVersion)
             return
@@ -319,25 +377,38 @@ function ns.CreateSharing(journal, env)
             if not schema.Integer(total,1,12) or not schema.Integer(index,1,total)
                 or #data<1 or #data>CHUNK or (index<total and #data~=CHUNK)
                 or (item.total and item.total~=total) or (item.chunks[index] and item.chunks[index]~=data) then
-                store.incoming[k]=nil; send("D",id,sender); return
+                store.incoming[k]=nil; reject(id,sender,"chunks"); return
             end
             item.total=total; item.chunks[index]=data
             if size(item.chunks)~=total then return end
             local payload=table.concat(item.chunks)
-            local value=schema.Decode(payload)
-            if not value or value.transaction~=id or not schema.SameCharacter(value.recipient,env.character) or not fresh(value) then
-                store.incoming[k]=nil; send("D",id,sender); return
+            local value,decodeError=schema.Decode(payload)
+            local reason,detail
+            if not value then reason,detail="malformed",decodeError
+            elseif value.transaction~=id then reason="transaction"
+            elseif not schema.SameCharacter(value.recipient,env.character) then
+                reason="recipient"
+                detail="Report addressed to " .. value.recipient .. "; game reports your name as " .. env.character .. "."
+            elseif value.created>now+300 then reason="future"
+            elseif now-value.created>DAY then reason="expired" end
+            if reason then
+                store.incoming[k]=nil; reject(id,sender,reason,detail); return
             end
-            local preview=journal:PreviewReport(value,sender)
-            if not preview then store.incoming[k]=nil; send("D",id,sender); return end
+            local preview,previewError=journal:PreviewReport(value,sender)
+            if not preview then
+                store.incoming[k]=nil; reject(id,sender,previewReasons[previewError] or "preview",previewError); return
+            end
             item.state,item.report,item.payload,item.chunks="pending",value,payload,nil
+            recordTransfer("received","offered",sender,value,"Waiting for your decision. No knowledge earned or spent.",0)
             notify()
         elseif kind=="A" and expected and (tx.stage=="offering" or tx.stage=="committed" or tx.stage=="unknown") then
             commit(tx,tonumber(body))
         elseif kind=="D" and expected then
-            if tx.spent then unknown(tx,"Receiver declined or could not stage the retry.")
-            else finish(tx,"declined","Offer declined, invalid, or receiver busy; no knowledge spent.") end
+            local reason=rejectionReasons[body] or "Offer declined, invalid, or receiver busy."
+            if tx.spent then unknown(tx,reason)
+            else finish(tx,"declined",reason .. " No knowledge spent.") end
         elseif kind=="X" and item then
+            recordTransfer("received","cancelled",sender,item.report,"The sender cancelled the offer before import.",0)
             store.incoming[k]=nil; purge(id,sender); notify()
         elseif kind=="C" then
             if receipt then send("K",id,sender); return end
@@ -346,6 +417,7 @@ function ns.CreateSharing(journal, env)
             local ok=journal:ImportReport(item.report,sender,now)
             if not ok then send("E",id,sender); return end
             store.receipts[k]={received=now,creatureID=item.report.creatureID}
+            recordTransfer("received","received",sender,item.report,"Imported into your Bestiary. Receiving is free; no knowledge earned or spent.",0)
             store.incoming[k]=nil
             send("K",id,sender)
             if imported then imported(item.report.creatureID) end
@@ -413,11 +485,26 @@ function ns.InitializeSharing(journal)
         end
         return false
     end
+    local function playerFullName()
+        -- Forever's Camelot NameUtil joins first name and surname. The shared
+        -- API docs still call the second value a server; discarding it loses
+        -- surnames on characters whose names are returned as separate parts.
+        local getName=UnitNameUnmodified or UnitName
+        if type(getName)~="function" then return end
+        local ok,first,surname=pcall(getName,"player")
+        if not ok or not schema.Public(first) or not schema.Public(surname) then return end
+        if not schema.Character(first) then return end
+        if surname~=nil and surname~="" and not schema.Character(surname) then return end
+        if NameUtil and type(NameUtil.GetFullNameWithoutRealm)=="function" then
+            return schema.Character(read(NameUtil.GetFullNameWithoutRealm,first,surname))
+        end
+        -- A complete single value remains usable if the helper is unavailable.
+        -- Never silently discard a separate surname or infer it from a report.
+        if surname==nil or surname=="" then return schema.Character(first) end
+    end
     local registered=false
     local function initialize()
-        -- UnitFullName's first return is the character name; its second is a
-        -- server, not a surname. Preserve the full literal name from the client.
-        env.character=schema.Character(read(UnitFullName,"player")) or schema.Character(read(UnitName,"player"))
+        env.character=playerFullName()
         env.addonVersion=read(C_AddOns and C_AddOns.GetAddOnMetadata,addonName,"Version")
         env.ready=false
         if not env.character then

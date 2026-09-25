@@ -1,5 +1,33 @@
 local _, ns = ...
 
+function ns.StyleScrollBarTrack(bar, backgroundAlpha)
+    if backgroundAlpha then
+        -- A translucent track needs a hollow border: an opaque rectangle behind
+        -- the fill would prevent the parchment from showing through it.
+        bar.trackEdges={}
+        for _,edge in ipairs({
+            {"TOPLEFT",-2,2,"TOPRIGHT",2,2},
+            {"BOTTOMLEFT",-2,-2,"BOTTOMRIGHT",2,-2},
+            {"TOPLEFT",-2,1,"BOTTOMLEFT",-2,-1},
+            {"TOPRIGHT",2,1,"BOTTOMRIGHT",2,-1},
+        }) do
+            local texture=bar:CreateTexture(nil,"BACKGROUND",nil,-2)
+            texture:SetPoint(edge[1],edge[2],edge[3]);texture:SetPoint(edge[4],edge[5],edge[6])
+            if edge[3]==edge[6] then texture:SetHeight(1) else texture:SetWidth(1) end
+            texture:SetColorTexture(0.37,0.25,0.11,backgroundAlpha)
+            bar.trackEdges[#bar.trackEdges+1]=texture
+        end
+        bar.trackBorder=bar.trackEdges[1]
+    else
+        bar.trackBorder = bar:CreateTexture(nil, "BACKGROUND", nil, -2)
+        bar.trackBorder:SetPoint("TOPLEFT", -2, 2); bar.trackBorder:SetPoint("BOTTOMRIGHT", 2, -2)
+        bar.trackBorder:SetColorTexture(0.37, 0.25, 0.11, 0.9)
+    end
+    bar.trackBackground = bar:CreateTexture(nil, "BACKGROUND", nil, -1)
+    bar.trackBackground:SetPoint("TOPLEFT", -1, 1); bar.trackBackground:SetPoint("BOTTOMRIGHT", 1, -1)
+    bar.trackBackground:SetColorTexture(0.045, 0.032, 0.018, backgroundAlpha or 0.9)
+end
+
 -- Shared parchment-window track, spanning the window without overlapping its close button.
 function ns.StyleWindowScrollBar(scroll, window)
     local bar = scroll.ScrollBar
@@ -18,12 +46,7 @@ function ns.StyleWindowScrollBar(scroll, window)
     if down and type(down) ~= "function" then
         down:ClearAllPoints(); down:SetPoint("TOP", bar, "BOTTOM", 0, 0)
     end
-    bar.trackBorder = bar:CreateTexture(nil, "BACKGROUND", nil, -2)
-    bar.trackBorder:SetPoint("TOPLEFT", -2, 2); bar.trackBorder:SetPoint("BOTTOMRIGHT", 2, -2)
-    bar.trackBorder:SetColorTexture(0.37, 0.25, 0.11, 0.9)
-    bar.trackBackground = bar:CreateTexture(nil, "BACKGROUND", nil, -1)
-    bar.trackBackground:SetPoint("TOPLEFT", -1, 1); bar.trackBackground:SetPoint("BOTTOMRIGHT", 1, -1)
-    bar.trackBackground:SetColorTexture(0.045, 0.032, 0.018, 0.9)
+    ns.StyleScrollBarTrack(bar)
 end
 
 -- Keep the template's scrolling behavior, but only display its controls when
@@ -44,5 +67,6 @@ function ns.AutoHideScrollBar(scroll)
         self:UpdateScrollChildRect()
         update(self)
     end)
+    scroll.RefreshScrollBar=update
     update(scroll)
 end

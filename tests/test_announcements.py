@@ -45,7 +45,6 @@ class AnnouncementTests(unittest.TestCase):
             zone='The Twisting Nether'; observe(); observe()
         ''')
         self.assertEqual(self.messages(), [
-            announcement('New observed level', 'Beast • Lvl10 • Loch Modan'),
             announcement('New observed location', 'Beast • Lvl10 • The Twisting Nether'),
         ])
         self.assertEqual(self.lua.eval('AzerothFieldbookDB.bestiary.entries[42].levelMin'), 11)
@@ -53,9 +52,27 @@ class AnnouncementTests(unittest.TestCase):
     def test_level_and_location_together_keep_one_point(self):
         self.lua.execute("observe(); messages={}; units.target.level=10; zone='The Twisting Nether'; observe()")
         self.assertEqual(self.messages(), [
-            announcement('New observed level and location', 'Beast • Lvl10 • The Twisting Nether')
+            announcement('New observed location', 'Beast • Lvl10 • The Twisting Nether')
         ])
         self.assertEqual(self.lua.eval('points()'), 2)
+
+    def test_levels_update_without_rewards_and_preserve_old_balances(self):
+        self.lua.execute('''
+            observe();messages={}
+            local ledger=AzerothFieldbookDB.bestiary.points
+            -- Simulate an already-earned level reward from an earlier release.
+            ledger.earned=ledger.earned+1;ledger.credits[42].points=1
+            ledger.credits[42].levels[12]=true
+            for level=10,15 do units.target.level=level;observe() end
+            assert(points()==2 and #messages==0)
+            local entry=AzerothFieldbookDB.bestiary.entries[42]
+            assert(entry.levelMin==10 and entry.levelMax==15)
+            fire('ADDON_LOADED','AzerothFieldbook')
+            units.target.level=16;observe()
+            assert(points()==2 and #messages==0)
+            zone='New place';observe();observe()
+            assert(points()==3 and #messages==1)
+        ''')
 
     def test_kill_milestones_have_exact_punctuation_and_no_level_or_zone(self):
         self.lua.execute("for i=1,51 do beginKill('kill'..i); finishKill() end")
@@ -77,7 +94,7 @@ class AnnouncementTests(unittest.TestCase):
                     self.lua.execute('observe(); observe()')
                     expected = [announcement('New discovery!', 'Beast • Lvl11 • Loch Modan', 1 if points else None)] if points or discoveries else []
                     self.assertEqual(self.messages(), expected)
-                    self.lua.execute('messages={}; units.target.level=10; observe()')
+                    self.lua.execute("messages={}; units.target.level=10; zone='New location'; observe()")
                     self.assertEqual(len(self.messages()), 1 if points else 0)
                     self.assertEqual(self.lua.eval('#AzerothFieldbookDB.eventLog.entries'), 2)
                     self.assertEqual(self.lua.eval('AzerothFieldbookDB.eventLog.entries[1].details.points'), 1)
@@ -115,6 +132,47 @@ class AnnouncementTests(unittest.TestCase):
             observe()
         ''')
         self.assertEqual(self.messages(), [announcement('New discovery!', 'Unclassified')])
+
+
+    def test_deleted_creature_returns_on_hover_without_duplicate_knowledge(self):
+        self.lua.execute('''
+            local create=ns.CreateBestiaryJournal
+            ns.CreateBestiaryJournal=function(...)
+                activeJournal=create(...);return activeJournal
+            end
+            fire('ADDON_LOADED','AzerothFieldbook')
+            units.mouseover=spawn('same-mob',false)
+            fire('UPDATE_MOUSEOVER_UNIT')
+            local original=activeJournal.entries[42]
+            local before=points()
+            assert(before==1 and original.sightings==1)
+            assert(activeJournal:DeleteEntry(42))
+            assert(not activeJournal.entries[42])
+            messages={}
+            fire('UPDATE_MOUSEOVER_UNIT')
+            local restored=activeJournal.entries[42]
+            assert(restored and restored~=original and restored.sightings==1)
+            assert(points()==before and #messages==1)
+            assert(messages[1]:find('Entry restored',1,true) and not messages[1]:find('+1 knowledge',1,true))
+            fire('UPDATE_MOUSEOVER_UNIT');tick()
+            assert(points()==before and #messages==1,'repeat hover does not announce or award twice')
+            activeJournal:DeleteEntry(42)
+            fire('ADDON_LOADED','AzerothFieldbook')
+            assert(not activeJournal.entries[42],'reload alone keeps the entry deleted')
+            fire('UPDATE_MOUSEOVER_UNIT')
+            assert(activeJournal.entries[42] and points()==before)
+            -- Levels are recorded without rewards; new locations still earn once.
+            units.mouseover.level=12;fire('UPDATE_MOUSEOVER_UNIT')
+            assert(points()==before and activeJournal.entries[42].levelMax==12)
+            zone='New location';fire('UPDATE_MOUSEOVER_UNIT')
+            assert(points()==before+1)
+            for i=1,50 do beginKill('credited'..i);finishKill() end
+            local milestoneBalance=points()
+            assert(milestoneBalance==before+7)
+            activeJournal:DeleteEntry(42)
+            for i=1,50 do beginKill('after-delete'..i);finishKill() end
+            assert(points()==milestoneBalance,'previously credited kill milestones survive deletion')
+        ''')
 
     def test_sharing_waiver_notifies_sender_with_actual_cost(self):
         self.lua.execute('''

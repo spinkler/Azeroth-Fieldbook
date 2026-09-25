@@ -188,6 +188,7 @@ function methods:GetEffectiveScale()
     local parent=rawget(self,'parent')
     return self:GetScale()*(parent and parent:GetEffectiveScale() or 1)
 end
+function methods:SetNormalFontObject(value) self.normalFont=value end
 function methods:SetIndentedWordWrap(value) self.indentedWrap=value end
 function methods:GetStringWidth()
     local text=self:GetText():gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','')
@@ -220,10 +221,19 @@ function CreateFrame(kind,name,parent)
     if name then _G[name]=o end
     return o
 end
+function CreateFont(name)
+    local font={}
+    function font:CopyFontObject() end
+    function font:GetFont() return 'test-font',12,'' end
+    function font:SetFont(path,size,flags) self.size=size end
+    _G[name]=font
+    return font
+end
 UIParent=CreateFrame('Frame'); UIParent:SetSize(1920,1080)
 UISpecialFrames={}
 ''')
-lua.execute(root.joinpath('Scrollbars.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
+for name in ['Scrollbars.lua','ActionButtons.lua']:
+    lua.execute(root.joinpath(name).read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(root.joinpath('CreatureNotes.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(root.joinpath('BestiaryBook.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(r'''
@@ -259,11 +269,17 @@ check(click('Record damage taken'),'damage form opens')
 check(click('Cancel'),'damage form closes')
 check(click('All'),'category selection')
 local indexBook=AzerothFieldbookBestiary
+do
+    local control=indexBook.typeButtons['All creatures']
+    for _,control in ipairs({indexBook.locationsButton,indexBook.ranksButton}) do
+        control:SetSelected(false)
+        check(control.normalFont=='AzerothFieldbookFilterGameFontNormal','window-opening buttons retain yellow text')
+    end
+end
 local function checkIndex(open)
     check(indexBook.indexButton.enabled,'Index always remains clickable')
-    for _,line in ipairs(indexBook.indexButton.selectionOutline) do
-        check(line:IsShown()==open,'Index highlights only while open')
-    end
+    check(indexBook.indexButton.normalFont==(open and 'AzerothFieldbookFilterGameFontNormal' or 'AzerothFieldbookFilterGameFontDisable'),'Index highlights only while open')
+    check(rawget(indexBook.indexButton,'selectionOutline')==nil,'selection has no extra border overlay')
     check(#indexBook.letterButtons==26,'Index contains all letters')
     for _,tab in ipairs(indexBook.letterButtons) do
         check(tab:IsShown()==open,'letters follow Index visibility')
@@ -286,7 +302,9 @@ check(click('D') and click('Index'),'close Index after a matching filter')
 checkIndex(false)
 check(click('Next') and click('Previous'),'entry navigation buttons')
 check(click('Pending'),'review filter')
-check(click('All entries'),'review filter clears')
+check(indexBook.review.afbSelected and indexBook.review.normalFont=='AzerothFieldbookFilterGameFontNormal','pending filter visibly selected')
+check(click('Pending'),'review filter clears using the same label')
+check(not indexBook.review.afbSelected and indexBook.review.normalFont=='AzerothFieldbookFilterGameFontDisable','pending filter returns to grey text')
 check(click('Locations') and AzerothFieldbookBestiaryLocations:IsShown(),'location filter window opens')
 for _,control in ipairs({AzerothFieldbookBestiary.offenseButton,AzerothFieldbookBestiary.defenseButton,
     AzerothFieldbookBestiary.behaviourButton,AzerothFieldbookBestiary.effectButton,
@@ -543,11 +561,11 @@ local _,repeatPoints=discovery:GetTotals(); check(repeatPoints==1,'repeat observ
 level=7; discovery:Observe('target')
 level=6; discovery:Observe('target')
 zone='Second zone'; discovery:Observe('target')
-local _,newPoints=discovery:GetTotals(); check(newPoints==4,'distinct intermediate level and new zone each award one')
+local _,newPoints=discovery:GetTotals(); check(newPoints==2,'new levels award nothing; a new zone awards one')
 discovery:SetEntryConfirmed(900,true); level=8; discovery:Observe('target')
 level=9; zone='Third zone'; discovery:Observe('target')
 local reloadedDiscovery=ns.CreateBestiaryJournal(discoveryDB,function() return 900 end)
-local _,savedPoints=reloadedDiscovery:GetTotals(); check(savedPoints==6,'simultaneous new level and zone award one point; progress persists while locked')
+local _,savedPoints=reloadedDiscovery:GetTotals(); check(savedPoints==3,'only new zones award points; progress persists while locked')
 local legacy=ns.CreateBestiaryJournal({bestiary={entries={[1]={id=1,levelMin=3,levelMax=6,locations={Old=true},abilities={}}},creatures={}}},function() end)
 local _,legacyPoints=legacy:GetTotals(); check(legacyPoints==2,'legacy credit uses only observed endpoints and zones')
 local awardsDB={}

@@ -230,7 +230,11 @@ function positions:AvoidWindowOverlap(frame)
             -- A free position touching the launching book wins over a nearer
             -- unrelated window. Screen bounds and avoiding overlap still win.
             local priority=priorityAt(x,y)
-            local distance = (x-box.left)^2+(y-box.top)^2
+            local preferredLeft,preferredTop=box.left,box.top
+            if main and frame.afbAlignBookBottom==true then
+                preferredLeft,preferredTop=clamp(main.left+main.width,main.top-main.height+box.height)
+            end
+            local distance = (x-preferredLeft)^2+(y-preferredTop)^2
             if not bestArea or area < bestArea or (area == bestArea and
                 (priority < bestPriority or (priority == bestPriority and distance < bestDistance))) then
                 left, top, bestArea, bestPriority, bestDistance = x, y, area, priority, distance

@@ -1,5 +1,250 @@
 # Changelog
 
+## v0.9.99-beta - 2026-09-26
+
+This release covers every change since v0.9.82-beta, including local iterations
+v0.9.83 through v0.9.99. The previous-push and previous-release baseline is
+commit e7dd44f05ddf0373669a5cbe950bf43af0cc3008. Both players must use the same
+addon version to share creatures.
+
+- Fix Forever sharing with separate first-name and surname API values. Preserve
+  exact recipient identity, self-offer prevention and explicit consent.
+- Replace ambiguous sharing failures with specific rejection reasons, including
+  blocked offers, full queues, malformed reports, name mismatches, timestamps
+  and storage limits. Log detailed local reasons without displaying arbitrary
+  error text supplied by another player.
+- Record incoming and outgoing sharing activity in Event log even when chat
+  announcements are disabled: offers, acceptance, delivery, cancellations,
+  expiry, failures and retries, with the creature, other player, rumour count
+  and Knowledge outcome. Retries do not duplicate imports or spending. Earlier
+  transfer history cannot be reconstructed.
+- Display source names for shared information. Place grey Shared by text inside
+  the creature viewer's bottom-left corner; hide it after a personal encounter.
+  Compact long source lists and show full attribution on hover. Keep source
+  history available in Rumours, including on locked pages.
+- Colour source names by player class only when verified through public game
+  data from targets, mouseovers or group members. Match full surnames and cache
+  classes for the session; unknown names remain grey. Reports cannot establish
+  a class identity, and stored names and sharing/backup formats are unchanged.
+- Allow deleted creatures to be recorded again on hover while retaining the
+  durable Knowledge ledger and credited kill milestones. Announce Entry restored
+  without granting repeat discovery rewards, including after reload.
+- Add Lock newly encountered critters under Tracking, enabled by default. Record
+  initial basic information before locking; respect manual unlocks and existing
+  pages. Shared-only pages stay reviewable until personally encountered.
+- Stop awarding Knowledge for new levels on existing creatures. Continue recording
+  levels and awarding Knowledge for new locations; preserve historical balances.
+  Update Help, README and scoring/announcement checks.
+- Extend the creature list to sixteen rows above Previous/Next. Add a synchronized
+  scrollbar in a reserved gutter without shifting other controls, with a 70%
+  transparent track. Lower creature names and review markers within their rows.
+- Show creature names in green while rumours remain outstanding, including the
+  selected creature; explain this in the grey legend with one green example word.
+- Fit Rumours to its text with a capped width and height. Show up to four rumours
+  before scrolling when screen space permits; use the Options/Event log scrollbar
+  styling only when needed. Add subtle dividers and padding between records.
+- Put a framed green verify tick, then the themed reject cross, to the left of
+  each rumour. Share confirmation artwork with Recorded Abilities and retain
+  framed grey disabled controls with green ticks.
+- Use bright yellow native bevels and text for selected filters while preserving
+  the original red button faces. Unselected direct filters use grey text;
+  Locations and Ranks retain yellow labels. Reduce filter fonts by 1pt, keep
+  Pending as a fixed-label toggle, and lower the Search placeholder.
+- Highlight Rumours, Creature Notes, Record damage taken, Offenses, Defenses,
+  Behaviour, Choose effects, Locations, Ranks and Share while their windows are
+  open, without changing their actions or text styling. Locations and Ranks also
+  stay highlighted while filters are active. Fix Creature Notes highlighting on
+  first opening independently of pinning; clear closed-window indicators reliably.
+- Prefer bottom-left to bottom-right docking beside the main window for Offenses,
+  Defenses and Behaviour. Preserve pinning, overlap avoidance and screen bounds.
+  Refine Creature level dropdown alignment and keep the missing-model caption
+  inside the viewer.
+- Update usage/API research documentation and extend regression coverage for
+  sharing rejection/delivery/retry logs, surname identity, verified class colours,
+  restored creatures without repeat rewards, critter locking, Knowledge rules,
+  adaptive lists, window indicators, pinning and bounded window placement.
+
+## v0.9.98 - Unreleased
+
+- Show the selected-filter yellow border on Rumours, Creature Notes, Record
+  damage taken, Offenses, Defenses, Behaviour, Choose effects, Locations, Ranks
+  and Share while their windows are open. Keep their existing actions and text
+  styling; clear the border whenever the corresponding window closes.
+- Move the Creature level dropdown another 1px down and 2px left.
+
+## v0.9.97 - Unreleased
+
+- Restore the Pending toggle’s native red face, with grey text when off and
+  yellow border and text when on.
+- Lower the Search placeholder by 1px and the Creature level dropdown by
+  another 3px. Move Shared by 1px down and 1px left inside the viewer.
+
+## v0.9.96 - Unreleased
+
+- Lower the viewer’s Shared by attribution by 2px.
+- Keep the Pending filter label fixed on an enabled grey button; use the common
+  yellow border and text to show when the filter is active.
+- Move the damage observation Creature level dropdown 3px left and 3px down.
+
+## v0.9.95 - Unreleased
+
+- Limit yellow selection styling to the native button bevel and text, keeping
+  the original red face unchanged.
+- Place Shared by inside the creature viewer at the bottom left; hide it after
+  a personal encounter while retaining source history in Rumours.
+- Prefer bottom-aligned docking on the main window’s right edge for Offenses,
+  Defenses and Behaviour, preserving overlap avoidance, pinned positions and
+  screen containment.
+
+## v0.9.94 - Unreleased
+
+- Brighten selected filters with pure-yellow additive colour on the native
+  button artwork; restore normal blending when deselected. No separate outline.
+- Align Shared by with the creature viewer's left edge and use the available
+  width beneath the panels. Put the missing-illustration caption inside the
+  viewer so the two labels cannot overlap.
+- Keep Locations and reduce filter-button fonts by 1pt in every state, including
+  category, alphabet, Index, Locations, Ranks and Pending controls.
+
+## v0.9.93 - Unreleased
+
+- Restore yellow text on Locations and Ranks, which open filter windows rather
+  than selecting a filter directly.
+- Remove separate selection-border textures. Tint the native button artwork
+  yellow when selected, preserving its bevel and pressed state; unselected
+  direct filters retain grey text on red.
+- Stop awarding Knowledge for new levels on existing creatures. Continue
+  recording levels, awarding +1 for new locations, and preserving all previously
+  earned balances and deletion/reload credit. Update Help and README rules.
+- Update scoring, sharing and announcement regressions for location-only rewards;
+  check historical balance preservation and native selection artwork.
+
+## v0.9.92 - Unreleased
+
+- Use verified player class colours for names in Shared by and Rumours source
+  labels/tooltips. Keep the surrounding Shared by text and unknown names grey.
+- Learn classes only from public game data for players you target, mouse over,
+  or group with. Match complete names including surnames; reject restricted
+  identity/class values. Retain verified classes for the session and refresh
+  open windows when a class becomes known.
+- Keep stored names and the sharing/backup formats unchanged; received reports
+  never establish a sender's class.
+- Add class-colour checks for surname mismatches, non-player units, unavailable
+  or restricted APIs, session caching, colour validation and live UI refresh.
+
+## v0.9.91 - Unreleased
+
+- Make the main creature page's Shared by attribution grey, matching the
+  understated list legend.
+
+## v0.9.90 - Unreleased
+
+- Replace the glowing filter selection outlines with one crisp yellow border
+  and yellow text. Unselected filters keep their red button and use grey text;
+  unavailable filters retain their disabled appearance. Apply this consistently
+  to creature types, alphabet tabs and the Index/Locations/Ranks controls.
+- Remove the filter hover glow so it cannot obscure the selected border or turn
+  unselected text yellow. Native pressed-button feedback remains available.
+
+## v0.9.89 - Unreleased
+
+- Put the green verify tick first on the left of each rumour, followed by the
+  reject cross and then the text, with consistent gaps and divider padding.
+- Fit the Rumours window width to its creature name and report text, retaining a
+  comfortable minimum, a capped width for long lines, and room for its scrollbar.
+  Recalculate wrapping and height as content changes; keep four rumours visible
+  before scrolling when screen space permits.
+- Check control order, text bounds, wrapping and shrinking after long content in
+  the Rumours UI regression checks.
+
+## v0.9.88 - Unreleased
+
+- Lower creature-list names by another 1px, keeping their review asterisks aligned.
+
+## v0.9.87 - Unreleased
+
+- Colour creature-list names green while they have outstanding rumours, including
+  selected entries. Return to the normal colour once all rumours are resolved or
+  rejected. Extend the grey legend with a single green example word.
+- Make the creature-list scrollbar track 70% transparent, with a hollow border
+  so its background cannot obscure the parchment through another filled layer.
+- Narrow Rumours from 480 to 420 UI units, bringing its action buttons closer to
+  the text while preserving wrapping and the four-rumour scrolling threshold.
+- Lower creature-list names and their review asterisks by 1px within their rows.
+- Cover selected/unselected rumour colours and clearing the final outstanding
+  rumour through verification or rejection in the UI regression checks.
+
+## v0.9.86 - Unreleased
+
+- Name the sender in the main Shared indicator and each shared basic report in
+  Rumours. Deduplicate source names; long sender lists use a compact label with
+  every source and the encounter/lock status available on hover.
+- Clear transient sighting history when deleting an entry so a subsequent hover
+  records a fresh sighting. Keep the durable Knowledge ledger and report
+  rediscovery as Entry restored. Previously awarded discovery and kill milestones
+  remain credited, including after reload; genuinely new facts can still earn
+  Knowledge normally.
+- Add Lock newly encountered critters under Options → Tracking, enabled by
+  default. Capture the first basic observation before locking. Respect existing
+  entries, manual unlocks and an explicit disabled setting; shared-only pages
+  remain reviewable until personally encountered.
+- Add regressions for source attribution, delete/hover/reload without repeat
+  rewards, critter defaults and overrides, and the options control.
+
+## v0.9.85 - Unreleased
+
+- Extend the creature list to sixteen rows, ending just above Previous/Next. Add
+  a scroll thumb and themed track in a permanently reserved gutter; filtering,
+  mouse-wheel movement and selection navigation keep the scrollbar synchronized.
+- Record outgoing and incoming transfer activity in Event log, independent of
+  chat announcements: offers, acceptance, delivery, cancellations, expiry,
+  failures and retries. Include the creature, other character, rumour count and
+  Knowledge outcome. Duplicate packets and paid retries never log a second import.
+  Existing completed transfers cannot be reconstructed retroactively.
+- Match Rumours verification/rejection to the Recorded Abilities framed green tick
+  and themed cross, with the tick on the far right and a grey frame while locked.
+  Add subtle horizontal dividers and padding between records.
+- Fit Rumours to its wrapped text and status messages through four rumours, then
+  scroll longer lists. Keep shared basic information available. Extremely tall
+  text is bounded by the screen. Use the shared Options/Event log scrollbar style
+  and hide scrolling controls when all content fits.
+- Share confirm-button artwork and scrollbar track helpers. Add regressions for
+  list reach/gutter stability, compact and overflowing Rumours, and transfer
+  history including retry/duplicate handling.
+
+
+## v0.9.84 - Unreleased
+
+- Fix the sharing surname mismatch exposed by a report addressed to Peww Pewz
+  being compared with Peww. Read both name parts from UnitNameUnmodified and use
+  Forever's NameUtil.GetFullNameWithoutRealm helper, falling back to UnitName only
+  when the unmodified API is unavailable. The prior adapter incorrectly assumed
+  the first return already contained the surname.
+- Preserve exact full-name recipient binding and self-offer prevention. Restricted
+  name parts remain unavailable; never infer a surname from an incoming report.
+- Correct the API research notes and add native-adapter regression coverage for
+  separate surnames, name changes, unavailable/restricted data, and reports sent
+  in both directions between Erna Lionguard and Peww Pewz. Live confirmation is
+  still required; no sharing costs, report format or consent rules change.
+
+
+## v0.9.83 - Unreleased
+
+- Replace the combined sharing rejection message with specific reasons for blocked
+  offers, full queues, malformed/inconsistent reports, recipient or transaction
+  mismatches, timestamp failures and journal storage limits. Distinguish these
+  automatic rejections from a recipient declining an offer.
+- Record incoming rejection details in the recipient's Event log, including the
+  names involved in a recipient mismatch and local decoding/preview errors.
+  Only recognized reason codes cross the network; arbitrary remote error text
+  is never displayed. Legacy empty decline replies remain supported.
+- Reproduce the reported Goldtooth report with three behaviour rumours in the
+  simulated two-client tests and verify delivery, consent and the four-Knowledge
+  charge. Add coverage for rejection causes, reservation release and legacy/
+  unrecognized replies. The live failure's exact cause remains unconfirmed until
+  a retry returns the new diagnostic; no validation or consent checks are relaxed.
+
+
 ## v0.9.82-beta - 2026-09-26
 
 This release includes all changes since v0.9.79-beta (local iterations v0.9.80
