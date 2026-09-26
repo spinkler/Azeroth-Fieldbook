@@ -20,7 +20,9 @@ function methods:SetWidth(w) self.width=w end
 function methods:SetHeight(h) self.height=h end
 function methods:GetHeight() return self.height or 415 end
 function methods:SetPoint() end
-function methods:SetFrameStrata() end
+function methods:SetFrameStrata(value) self.strata=value end
+function methods:SetToplevel(value) self.toplevel=value end
+function methods:Raise() self.raises=(self.raises or 0)+1 end
 function methods:SetClampedToScreen() end
 function methods:SetMovable() end
 function methods:EnableMouse() end
@@ -57,6 +59,7 @@ local report=string.rep('A long diagnostic line\n',500)
 ns.ShowDebugReport(report)
 local panel, scroll, edit=frames[1],frames[4],frames[5]
 assert(panel.shown and edit.text==report and edit.selected and edit.focus)
+assert(panel.strata=="DIALOG" and panel.toplevel and panel.raises==1)
 assert(edit.multiline and edit.maxLetters==0 and scroll.child==edit)
 assert(#UISpecialFrames==1)
 edit.scripts.OnCursorChanged(edit,0,-800,0,14)
@@ -66,6 +69,7 @@ assert(not panel.shown and not edit.focus)
 local count=#frames
 ns.ShowDebugReport('Replacement report')
 assert(#frames==count and edit.text=='Replacement report' and scroll.offset==0)
+assert(panel.raises==2, 'an already-open report is raised again')
 edit.selected=false
 frames[6].scripts.OnClick()
 assert(edit.selected)
@@ -73,3 +77,27 @@ frames[7].scripts.OnClick()
 assert(not panel.shown)
 ''')
 print('PASS: debug report selection, scrolling, close, reuse and untruncated text')
+
+# Exercise the real slash dispatcher as well as the report widget.
+from kill_test_harness import new_client
+client = new_client(diagnostics=True)
+client.execute(r'''
+    function DEFAULT_CHAT_FRAME:AddMessage() error('chat must not block report creation') end
+    ns.CastIDs={Report=function(_,say)
+        say('Cast evidence before failure')
+        error('PRIVATE_ERROR_PAYLOAD')
+    end}
+    ns.SpellIDWindow={Report=function(_,say) say('Spell window evidence survived') end}
+    SlashCmdList.AZEROTHFIELDBOOK('debug')
+    assert(copiedReport:find('Cast evidence before failure',1,true))
+    assert(copiedReport:find('Cast ID display: diagnostic collection failed',1,true))
+    assert(copiedReport:find('Spell window evidence survived',1,true))
+    assert(copiedReport:find('Last cast check:',1,true))
+    assert(not copiedReport:find('PRIVATE_ERROR_PAYLOAD',1,true))
+    C_AddOns={GetAddOnMetadata=function() error('PRIVATE_METADATA_ERROR') end}
+    SlashCmdList.AZEROTHFIELDBOOK('debug')
+    assert(copiedReport:find('Report interrupted by a diagnostic error',1,true))
+    assert(copiedReport:find('Spell window evidence survived',1,true))
+    assert(not copiedReport:find('PRIVATE_METADATA_ERROR',1,true))
+''')
+print('PASS: slash report window delivery survives chat and diagnostic failures')

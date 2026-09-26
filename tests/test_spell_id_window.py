@@ -15,7 +15,9 @@ function issecrettable(v) return secretTables[v] == true or rawequal(v,secret) e
 function canaccesstable(v) return not forbiddenTables[v] end
 local methods = {}
 function methods:SetScript(k,f) self.scripts[k]=f end
-function methods:SetSize() end
+function methods:GetScript(k) return self.scripts[k] end
+function methods:SetShown(v) self.shown=v end
+function methods:SetSize(w,h) self.width=w;self.height=h end
 function methods:SetFrameStrata() end
 function methods:SetClampedToScreen() end
 function methods:SetMovable(v) self.movable=v end
@@ -92,7 +94,7 @@ assert(not cast.shown and not buff.shown)
 panel.scripts.OnDragStart(panel); assert(panel.moving)
 panel:SetPoint('CENTER',UIParent,'CENTER',12,34)
 panel.scripts.OnDragStop(panel)
-assert(db.spellIDWindowPosition.x==12 and db.spellIDWindowPosition.y==34)
+assert(db.spellIDWindowPosition.point=='BOTTOM' and db.spellIDWindowPosition.x==12 and db.spellIDWindowPosition.y==12)
 db.spellIDWindowLocked=true; db.spellIDWindowAlpha=0.6
 ns.SpellIDWindow:ApplySettings()
 panel.scripts.OnDragStart(panel)
@@ -274,19 +276,19 @@ assert(panel.alpha==1)
 -- Only settings, never observed IDs/names, go into the saved database.
 assert(db.spellId==nil and db.observed==nil)
 ns.SpellIDWindow:Initialize(db)
-assert(panel.point[1]=='CENTER' and panel.point[4]==12 and panel.point[5]==34)
+assert(panel.point[1]=='BOTTOM' and panel.point[4]==12 and panel.point[5]==12)
 AzerothFieldbookBestiary={}
 ns.SpellIDWindow:AnchorToBook(AzerothFieldbookBestiary)
-assert(panel.point[1]=='CENTER','saved spell-window positions stay independent')
+assert(panel.point[1]=='BOTTOM','saved spell-window positions stay independent')
 db.spellIDWindowPosition=nil
 ns.SpellIDWindow:Initialize(db)
-assert(panel.point[1]=='RIGHT' and panel.point[2]==AzerothFieldbookBestiary and panel.point[3]=='LEFT',
+assert(panel.point[1]=='BOTTOMRIGHT' and panel.point[2]==AzerothFieldbookBestiary and panel.point[3]=='BOTTOMLEFT',
     'untouched spell window defaults beside the main book once it exists')
 ''')
 lua.execute(r'''
 local panel=AzerothFieldbookSpellIDWindow
 db.spellIDWindowLocked=false; ns.SpellIDWindow:ApplySettings()
-assert(panel.hint.text=='Drag to move / Shift+Click to hide')
+assert(panel.hint.text=='Right-click: hide / Ctrl+Right-click: blacklist')
 assert(panel.hint.color[1]==0.6)
 shiftDown=false; panel.scripts.OnMouseUp(panel,'LeftButton'); assert(panel.shown)
 shiftDown=true; panel.scripts.OnMouseUp(panel,'RightButton'); assert(panel.shown)
@@ -294,3 +296,72 @@ panel.scripts.OnMouseUp(panel,'LeftButton'); assert(not panel.shown)
 ns.SpellIDWindow:ApplySettings(); assert(not panel.shown,'hide persists through settings refresh')
 ''')
 print('Spell ID window lifecycle checks passed (live rendering still requires WoW).')
+
+lua.execute(r'''
+local window=ns.SpellIDWindow
+local panel=AzerothFieldbookSpellIDWindow
+local cast,instant,debuff,buff=frames[3],frames[4],frames[5],frames[6]
+local function id(row) return row.strings[2].text end
+function IsControlKeyDown() return ctrlDown==true end
+function UnitName(unit)
+    if unit=='target' then return casterName end
+    if unit=='friend' then return 'Helpful friend' end
+    if unit=='hidden' then return secret end
+end
+C_UnitAuras.GetAuraSlots=nil
+auras={player={},target={}};casting=false;channel=false;enemy=true;controlled=false;exists=true
+shiftDown=false;ctrlDown=false;casterName='Kobold Geomancer'
+db={displaySpellIDWindow=true}
+window:Initialize(db)
+assert(panel.height==44 and not cast.shown and not instant.shown and not debuff.shown and not buff.shown)
+local anchor=panel.point
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,20793,101)
+assert(cast.shown and panel.height==122 and cast.strings[7].text=='Kobold Geomancer')
+assert(panel.point==anchor,'height changes retain the bottom anchor')
+assert(cast.point[5]==-48)
+auras.player={{auraInstanceID=901,spellId=888,name='Curse',sourceUnit='target'}}
+fire('UNIT_AURA','player',{})
+assert(debuff.shown and panel.height==194 and debuff.point[5]==-120)
+cast.scripts.OnMouseUp(cast,'RightButton')
+assert(not cast.shown and debuff.shown and panel.height==122 and debuff.point[5]==-48)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,20793,101)
+assert(not cast.shown,'dismissed cast token stays hidden')
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,20793,102)
+assert(cast.shown,'new cast can display again')
+ctrlDown=true;cast.scripts.OnMouseUp(cast,'RightButton');ctrlDown=false
+assert(window:IsBlacklisted(20793) and not cast.shown)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,20793,103);assert(not cast.shown)
+window:Initialize(db);assert(window:IsBlacklisted(20793),'blacklist survives reload')
+assert(window:AddBlacklist(' 12544 '))
+auras.target={{auraInstanceID=902,spellId=12544,name='Frost Armor',sourceUnit='friend'}}
+fire('UNIT_AURA','target',{});assert(not buff.shown)
+window:RemoveBlacklist(12544);fire('UNIT_AURA','target',{})
+assert(buff.shown and buff.strings[7].text=='Helpful friend')
+ctrlDown=true;buff.scripts.OnMouseUp(buff,'RightButton');ctrlDown=false
+assert(not buff.shown and window:IsBlacklisted(12544))
+window:RemoveBlacklist(12544);fire('UNIT_AURA','target',{})
+assert(buff.shown,'removing blacklist also clears its dismissal token')
+auras.target={{auraInstanceID=903,spellId=900,name='Unknown caster buff'}}
+fire('UNIT_AURA','target',{})
+assert(not buff.strings[6].shown and not buff.strings[7].shown and buff.height==52)
+auras.target={{auraInstanceID=904,spellId=901,name='Hidden caster buff',sourceUnit='hidden'}}
+fire('UNIT_AURA','target',{})
+assert(buff.strings[6].shown and rawequal(buff.strings[7].text,secret) and buff.height==68)
+local managerMessage
+window.OpenBlacklist=function(_,message) managerMessage=message end
+auras.target={{auraInstanceID=905,spellId=secret,name=secret,sourceUnit=secret}}
+fire('UNIT_AURA','target',{})
+ctrlDown=true;buff.scripts.OnMouseUp(buff,'RightButton');ctrlDown=false
+assert(not buff.shown and managerMessage:find('restricted',1,true))
+assert(not window:IsBlacklisted(secret))
+for _,value in ipairs({'bad','-1','0','1.5','2147483648',secret}) do assert(not window:AddBlacklist(value)) end
+for key,value in pairs(db.spellIDWindowBlacklist) do
+    assert(type(key)=='number' and not issecretvalue(key) and value==true)
+end
+local ids=window:GetBlacklist();assert(#ids==1 and ids[1]==20793)
+-- Legacy anchors migrate to a bottom point, preserving the former bottom edge.
+db.spellIDWindowPosition={point='TOPLEFT',relativePoint='TOPLEFT',x=50,y=-40}
+window:Initialize(db)
+assert(panel.point[1]=='BOTTOMLEFT' and panel.point[5]==-326)
+''')
+print('PASS: collapsing rows, caster attribution, dismissal, blacklist persistence and anchor migration')

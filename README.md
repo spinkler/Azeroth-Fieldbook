@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.137 (Beta)
+# Azeroth Fieldbook 0.9.150 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,11 +6,11 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.137 includes sharing, addon-version compatibility
+spell databases. Version 0.9.150 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.137. Development will continue through 0.x Beta
+are not part of version 0.9.150. Development will continue through 0.x Beta
 milestones as those sections are added. Stable 1.0 is reserved until Beast Lore
 has been tested in game; it does not require every future section to be complete.
 
@@ -101,6 +101,37 @@ offenses** use compact windows with comfortably spaced controls.
 
 ## Bestiary
 
+**Locations**, beside **Notes**, opens the selected creature's zone map.
+It starts at the book's right edge with aligned tops and follows **Always attempt
+to anchor to main window**. Its greyscale parchment and zone dropdown stay 66% darker than UI background
+brightness; the separate map slider changes only terrain brightness.
+A single known zone appears as a heading; multiple zones use a dropdown. The map
+uses the client's own artwork and explored terrain. Kill locations begin with
+new credited kills after this update; old totals have no coordinates to recover.
+
+Readable creature coordinates are preferred. When those are unavailable, the
+addon uses your position when the kill is credited and labels it **approximate**.
+Hover a dot to see its coordinates and whether it is approximate. If neither
+position is readable, the kill still counts but receives no map marker.
+
+One or two distinct positions remain dots. Three or more nearby positions can
+form translucent violet triangles with a soft pink glow around their outer
+boundary, with every edge limited to **180 yards**. The window's **Map brightness**
+slider adjusts only the terrain underneath (20–100%, default 80%); markers and
+areas retain their brightness. This preference is saved per character.
+Distant groups and isolated points stay separate; points in a straight line
+remain dots. Areas estimate where kills occurred, rather than an exact spawn
+boundary. Repeated kills at the same coordinate share one marker. The journal
+keeps up to 256 recent distinct positions per creature per map, across 64 maps.
+Maps without a readable yard scale display dots only.
+
+Location history follows the active account/character Bestiary, is included in
+backups, and is removed with its creature entry. It is not sent in shared reports.
+Older zone names use the client's map hierarchy when the name is unique. An
+ambiguous or unavailable map may need another observation in that zone. Close
+with Escape or the window's X; closing
+the Bestiary also closes its Locations window.
+
 **Account-wide tracking** is enabled by default in Options. It shares the Bestiary
 across characters while keeping display preferences per character. Turning it off
 uses the current character's separate journal. Changes apply after `/reload`.
@@ -157,7 +188,55 @@ Each creature entry can contain:
 Magic schools are color-coded in the creature summary. Creature observations
 remain manual where the client does not expose reliable addon-readable evidence.
 
+**Automatically record verified creature abilities** is on by default under
+Options → **Ability recording**. Enemy casts with readable spell IDs are confirmed
+automatically, including during combat, for an attackable target or mouseover.
+Cast starts, channels, empowered casts, successful instant casts and ongoing casts
+provide evidence. An interrupted cast still shows that the creature attempted
+the ability. Readable buffs are also recorded, outside combat. Both receive their
+spell IDs and a light-blue **[A]** marker with a tooltip explaining the source.
+Pending matches become confirmed; manual notes and tooltip choices are preserved.
+For buffs, the marker means the buff was present on the creature; its caster may
+be unknown. Buffs with a known different caster are skipped.
+
+Buff capture requires both you and the creature outside combat. Locked entries,
+player-controlled units and restricted data are skipped. While enabled, a fresh
+verified observation restores a removed or rejected ability, including old
+name-only removal flags. Turn the option off to keep a verified ability removed.
+Each newly recorded or restored ability produces a chat message and an Event log
+entry with its creature, name and spell ID; repeated scans and reloads are silent.
+Existing records and the setting persist across reloads; disabling the option
+leaves records intact. A previously disabled buff-recording preference also disables
+automatic cast confirmation. Name-only casts, historical encounter imports and
+casts seen with the option off retain the existing pending-review behavior.
+An ID visible in the spell window can still be restricted to display only; the
+addon cannot save it or infer it from hidden data. Capture works with the window
+hidden. Buff capture retries
+after combat, on target/mouseover and aura changes, and once a second while watching
+a creature. Editing and saving an automatic entry makes it a personal note.
+
 Only confirmed abilities from a locked creature entry appear in NPC tooltips.
+
+The **last detected enemy ability** hint beneath the optional spell ID field
+shows the latest cast's name, ID and local date/time for that creature. It remains
+when changing targets or pages until another cast replaces it or you record the
+ability. Hover attempts to show its spell tooltip where the client permits it.
+Readable IDs already recorded are hidden. For restricted IDs, saving a linked
+ability clears the current hint, but a later cast can show it again because the
+addon cannot compare restricted IDs against saved spells. Hints last for the
+current session only and disappear on reload/logout. They work with the Spell ID
+window hidden and automatic recording off.
+
+The **Spell ID window** shows only populated sections and grows upward from its
+bottom edge. Caster names appear when available; unknown casters leave no extra
+line. Right-click a section to dismiss it. Ctrl+Right-click also adds a readable
+ID to this character's blacklist. Manage the list, remove entries or add numeric
+IDs through **Options → Tooltips and cast IDs → Spell ID window blacklist**.
+Blacklisting affects this display only, leaving journal recording unchanged.
+Restricted IDs cannot be compared against the blacklist, even when entered
+manually; Ctrl+Right-click dismisses the section and opens the manager with that
+limitation explained. Empty windows retain the header unless auto-faded.
+
 Locking freezes the creature's recorded abilities, traits, damage observations,
 and metadata. Knowledge from kills and discoveries continues while locked. Unlock to resume recording.
 Personal ID Logs and Notes remain editable while locked.
@@ -304,7 +383,7 @@ the rest of the page and all non-beast layouts retain their positions. Beast Lor
 progression rewards remain future work. See [in-game checks](tests/BEAST_LORE.md)
 for the capture and delivery checks still required on the live Forever client.
 
-Click **Rumours** between the kill counter and **Creature Notes** to open a
+Click **Rumours** between the kill counter and **Notes** to open a
 separate window for the selected creature. Click it again to close the window.
 It uses the book's parchment, brightness and scale settings, with dragging,
 screen clamping, a top-right Close button, Escape and a bounded scrolling list.
@@ -398,7 +477,7 @@ or protected native tooltips, so not every buff or instant ability can be shown.
 Displayable secret values are passed directly to UI text; they are not inspected
 or saved as observations.
 
-Use **Creature Notes** beside the selected creature's name, or `/fieldbook notes`,
+Use **Notes** beside the selected creature's name, or `/fieldbook notes`,
 to open its **ID Logs and Notes**. Its heading includes the creature ID in grey,
 for example `Elder Black Bear [#1234]`. **First encountered** appears beneath the
 name, showing the earliest recorded personal encounter in your local date and
@@ -446,7 +525,7 @@ meter settings, or read disk combat logs.
 - `/fieldbook encounters`: show encounter import diagnostics.
 - `/fieldbook scan`: retry encounter imports outside combat.
 - `/fieldbook notes`: open personal ID logs and notes for a creature.
-- `/fieldbook debug`: show diagnostics in chat and a selectable copy window.
+- `/fieldbook debug`: open diagnostics in a foreground window with all text selected; press Ctrl+C to copy.
 - `/fieldbook debug on|off`: enable or disable additional diagnostics.
 - `/fieldbook alerts`: toggle local discovery messages.
 - `/fieldbook wipe`: begin the destructive reset confirmation.
@@ -459,7 +538,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.137 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.150 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,

@@ -105,6 +105,7 @@ end
 local function record(fields, required) return {fields=fields,required=required or {}} end
 local function map(key,value) return {key=key,value=value} end
 local function array(value) return {key=positive,value=value,array=true} end
+local function boundedMap(key,value,limit) return {key=key,value=value,limit=limit} end
 local names, words, prose = text(256), text(1024), text(4096,true)
 local flags=map(names,boolean)
 local levels=map(positive,boolean)
@@ -121,6 +122,10 @@ local rumour=record({creatureID=positive,kind=enum({ability=true,offense=true,re
     value=names,spellID=positive,sender=names,transaction=names,received=natural,source=names,
     previouslyRejected=boolean,dismissed=boolean,resolved=boolean,rejected=boolean},{"kind","value","sender"})
 local entry=record({id=positive,name=names,category=names,rank=names,levelMin=positive,levelMax=positive,
+    killLocations=boundedMap(positive,record({name=names,width=positive,height=positive,
+        points=boundedMap(positive,record({x=function(v) return integer(v,0,10000) end,
+            y=function(v) return integer(v,0,10000) end,approximate=boolean,seenAt=natural},
+            {"x","y","approximate","seenAt"}),256)},{"name","points"}),64),
     firstEncounteredAt=timestamp,
     kills=natural,sightings=natural,confirmed=boolean,personalEncountered=boolean,lockedBasic=basic,
     locations=flags,offenses=flags,resistances=flags,immunities=flags,behaviours=flags,
@@ -154,6 +159,7 @@ local function project(value, rule, importing, budget, depth)
         for key,child in pairs(value) do
             if not rule.key(key) then error("key") end
             result[key]=project(child,rule.value,importing,budget,depth+1);count=count+1
+            if rule.limit and count>rule.limit then error("limit") end
         end
         if rule.array then for index=1,count do if result[index]==nil then error("array") end end end
     end
@@ -168,6 +174,10 @@ local function normalize(snapshot)
     saved.recentKills=saved.recentKills or {}
     for id,e in pairs(saved.entries) do
         if e.id~=id then error("identity") end
+        for _,map in pairs(e.killLocations or {}) do
+            if (map.width==nil)~=(map.height==nil) or (map.width and (map.width>100000 or map.height>100000)) then error("map size") end
+            for key,p in pairs(map.points) do if key~=1+p.x*10001+p.y then error("coordinate key") end end
+        end
         range(e,"levelMin","levelMax")
         e.category=e.category or "Unclassified";e.kills=e.kills or 0
         for _,field in ipairs({"abilities","locations","offenses","resistances","immunities","behaviours","damage"}) do e[field]=e[field] or {} end

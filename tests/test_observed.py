@@ -401,11 +401,8 @@ check(#GameTooltip.lines==0,'journal still excludes players')
 book_namespace.ShowDebugReport = lua.eval('function(text) copiedDebugReport=text end')
 lua.execute(r'''messages={}
 SlashCmdList.AZEROTHFIELDBOOK('debug')
-local lines={}
-for _,message in ipairs(messages) do
-    lines[#lines+1]=message:gsub('^|cff80d0ffAzeroth Fieldbook:|r ', '')
-end
-check(copiedDebugReport==table.concat(lines,'\n'),'copy window receives the entire chat diagnostic snapshot')
+check(#messages==0,'copyable report does not flood chat')
+check(copiedDebugReport:find('Last cast check:',1,true),'copy window receives the cast diagnostics')
 check(copiedDebugReport:find('Equal-hit automation',1,true),'final diagnostic line included')
 ''')
 print('PASS: Lua 5.1 observation, spoiler boundaries, restricted input, tooltip, journal integration, reload and reset tests')

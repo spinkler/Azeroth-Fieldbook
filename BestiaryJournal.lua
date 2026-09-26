@@ -59,6 +59,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     local function clearTerminal(guid, observed)
         if observed.deadline then decision(guid, "stale: living reset or combat state unknown") end
         observed.dead, observed.eligible, observed.rejected, observed.deadline = nil, nil, nil, nil
+        observed.killLocation=nil
     end
     local function pruneInstances(at)
         for guid, observed in pairs(killInstances) do
@@ -334,6 +335,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:GetLockNewCritters() return db.lockNewCritters~=false end
     function journal:SetLockNewCritters(enabled) db.lockNewCritters=enabled==true end
+    -- Retain the original saved key, including an existing OFF preference.
+    function journal:GetAutoRecordAbilities() return db.autoRecordBuffs~=false end
+    function journal:SetAutoRecordAbilities(enabled) db.autoRecordBuffs=enabled==true end
+    journal.GetAutoRecordBuffs = journal.GetAutoRecordAbilities
+    journal.SetAutoRecordBuffs = journal.SetAutoRecordAbilities
     function journal:GetAutoLockEnabled() return db.autoLockEnabled~=false end
     function journal:GetAutoLockKills() return number(db.autoLockKills) and db.autoLockKills or 10 end
     function journal:SetAutoLockEnabled(enabled)
@@ -474,6 +480,15 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not value then return 1 end
         return math.max(0.5, math.min(1.5, value))
     end
+    function journal:GetLocationMapBrightness()
+        local value=db.locationMapBrightness
+        if not public(value) or type(value)~="number" or value~=value then return 0.8 end
+        return math.max(0.2,math.min(1,value))
+    end
+    function journal:SetLocationMapBrightness(value)
+        if not public(value) or type(value)~="number" or value~=value then return end
+        db.locationMapBrightness=math.max(0.2,math.min(1,value))
+    end
     function journal:SetBackgroundBrightness(value)
         value = tonumber(value)
         if not value then return end
@@ -572,9 +587,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             location = clean(location, 200),
         }
         local liveGUID = read(UnitGUID, unit)
+        local locationMap = ns.CreatureLocations and ns.CreatureLocations.CurrentMap()
         if str(liveGUID) and read(UnitIsDead, unit) == false then
             observeInstance(id, liveGUID, now())
             local observed = killInstances[liveGUID]
+            if observed and locationMap then observed.locationMapID=locationMap.mapID end
             if observed and read(UnitAffectingCombat, unit) ~= true then
                 clearTerminal(liveGUID, observed)
             end
@@ -583,6 +600,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             self:ObserveTameability(unit)
             self:Ensure(id, false, nil, observation)
             recordDiscovery(self, self.entries[id], level, location, observation)
+            if ns.CreatureLocations then
+                local _, changed=ns.CreatureLocations.RememberMap(self.entries[id],locationMap)
+                if changed then self:Touch() end
+            end
             return id
         end
         local name = creatureName(read(UnitName, unit))
@@ -591,6 +612,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local unclassified = not self.entries[id] or self.entries[id].category == "Unclassified"
         local entry, discovered = self:Ensure(id, false, name, observation)
         if not entry then return end
+        if ns.CreatureLocations then
+            local _, mapChanged=ns.CreatureLocations.RememberMap(entry,locationMap)
+            if mapChanged then self:Touch() end
+        end
         self:ObserveTameability(unit)
         recordDiscovery(self, entry, level, location, observation)
         if entry.confirmed then return id end
@@ -684,6 +709,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local exists, controlled = read(UnitExists, unit), read(UnitPlayerControlled, unit)
         local denied = read(UnitIsTapDenied, unit)
         if read(UnitGUID, unit) ~= guid then return end
+        if ns.CreatureLocations and (not observed.killLocation or observed.killLocation.point.approximate) then
+            local sample=ns.CreatureLocations.Sample(unit,guid,observed.locationMapID)
+            if sample and (not observed.killLocation or not sample.point.approximate) then observed.killLocation=sample end
+        end
         if controlled == true or denied == true then
             observed.rejected, observed.eligible = true, nil
         elseif exists == true and controlled == false and denied == false then
@@ -714,6 +743,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if #credit.killGUIDs > 16 then table.remove(credit.killGUIDs, 1) end
         self:Ensure(id)
         entry.kills = math.max(0, tonumber(entry.kills) or 0) + 1
+        if ns.CreatureLocations then
+            local sample=observed.killLocation or ns.CreatureLocations.Sample(nil,nil,observed.locationMapID)
+            if sample then ns.CreatureLocations.Record(entry,sample) end
+        end
         self:TrackStableContent(id)
         if not entry.confirmed then
             entry.unchangedKills=self:GetAutoLockEnabled() and ((entry.unchangedKills or 0)+1) or 0
@@ -794,11 +827,18 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local entry, discovered = self:Ensure(id, false, observedCreatureName)
         if not entry or entry.confirmed then return end
         if entry.ignoredAbilities and entry.ignoredAbilities[name] then return end
-        -- Rejected observations stay rejected when automatic scans repeat.
-        if not entry.abilities[name] then
+        local knownByID = false
+        if number(spellID) then
+            for _, ability in pairs(entry.abilities) do
+                if ability.spellID == spellID then knownByID = true; break end
+            end
+        end
+        -- Rejected observations stay rejected, and a cast cannot duplicate an
+        -- existing buff/manual record with the same ID under a different name.
+        if not knownByID and not entry.abilities[name] then
             entry.abilities[name] = { state = "pending", origin = origin or "Observed", spellID = number(spellID) and spellID or nil }
             self:Touch()
-        elseif number(spellID) and not entry.abilities[name].spellID then
+        elseif not knownByID and number(spellID) and not entry.abilities[name].spellID then
             entry.abilities[name].spellID = spellID
             self:Touch()
         end
@@ -820,6 +860,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not entry or entry.confirmed or not entry.abilities[name] then return false end
         if state ~= "confirmed" and state ~= "rejected" and state ~= "pending" then return false end
         entry.abilities[name].state = state
+        if state=="confirmed" and self.AcknowledgeDetectedAbility then self:AcknowledgeDetectedAbility(id,entry.abilities[name].spellID) end
         if state=="confirmed" and self.ResolveRumours then
             self:ResolveRumours(id,{kind="ability",value=name,spellID=entry.abilities[name].spellID})
         end
@@ -947,6 +988,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if existing and existing.showInTooltip == false then ability.showInTooltip = false end
         entry.abilities[linkedName] = ability
         self:SetAbility(id, linkedName, "confirmed")
+        if self.AcknowledgeDetectedAbility then self:AcknowledgeDetectedAbility(id,spellID) end
         return true, "Ability confirmed: " .. linkedName .. " (ID " .. spellID .. ")."
     end
     function journal:AddManual(id, name, note, reference, effects)
@@ -975,6 +1017,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         entry.abilities[name] = { state = "confirmed", origin = "Your note", note = cleaned, effects = savedEffects, spellID = spellID }
         if self.ResolveRumours then self:ResolveRumours(id,{kind="ability",value=name,spellID=spellID}) end
         self:Touch()
+        if self.AcknowledgeDetectedAbility then self:AcknowledgeDetectedAbility(id,spellID) end
         return true, "Ability confirmed. Lock in the entry to show it in tooltips."
     end
     function journal:AddDamage(id, level, low, high, playerLevel)
@@ -1177,6 +1220,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     if ns.InstallSharingRecords then ns.InstallSharingRecords(journal) end
     if ns.InstallBeastLore then ns.InstallBeastLore(journal,identify) end
+    if ns.InstallDetectedAbilities then ns.InstallDetectedAbilities(journal) end
+    if ns.InstallBestiaryBuffs then ns.InstallBestiaryBuffs(journal,identify) end
     -- Compare recorded content, not kill totals, sightings, timestamps or points.
     -- No-op setters and repeated sightings therefore keep the current streak.
     for _,name in ipairs({"Ensure","Offer","SetAbility","SetAbilityTooltip","RemoveAbility","AddManual","ResolveAbility",

@@ -25,7 +25,7 @@ def validate_addon():
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
     changelog = (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
     assert readme.startswith(f'# Azeroth Fieldbook {version} '), 'README version mismatch'
-    assert re.search(r'^## v' + re.escape(version) + r'(?:\s|\-)', changelog, re.MULTILINE), 'Missing current changelog'
+    assert re.search(r'^## v(?:[0-9.]+ - v)?' + re.escape(version) + r'(?:\s|\-)', changelog, re.MULTILINE), 'Missing current changelog'
     tag = os.environ.get('GITHUB_REF', '')
     if tag.startswith('refs/tags/'):
         assert tag.removeprefix('refs/tags/') in {

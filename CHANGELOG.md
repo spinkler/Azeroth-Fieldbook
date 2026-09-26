@@ -1,5 +1,194 @@
 # Changelog
 
+## v0.9.150-beta - 2026-09-27
+
+This release includes the complete unpublished batch from v0.9.138 through
+v0.9.150. The previous-push and previous-release baseline is
+be1016c4824b7fa77d1d1c571ff14c6aa0ac561c (v0.9.137-beta). Both players must use
+the same installed addon version to share creature records or Beast Lore.
+
+- Add default-on automatic recording of verified creature abilities: readable
+  buffs outside combat and enemy casts with readable spell IDs, including combat.
+  Mark automatic records with a light-blue [A], show their provenance, and announce
+  new/restored abilities once in chat and the Event log. Fresh verified evidence
+  restores removed or rejected abilities while enabled; entry locks and manual
+  notes remain protected. Resolve names from IDs and deduplicate by spell ID.
+- Show Last observed ability beneath the manual spell reference field, with a
+  yellow spell name, white ID, grey labels/timestamp and a guarded hover tooltip.
+  Keep the latest hint per creature for the session, clear readable recorded IDs
+  and acknowledge linked manual confirmations. Restricted IDs can be displayed
+  but cannot be compared, saved automatically or matched against recorded spells;
+  a subsequent restricted cast can show its hint again.
+- Collapse empty Spell ID window sections and grow upward from the bottom edge,
+  preserving saved anchors, dragging, locks, expiry and fade settings. Show caster
+  names when available, omitting unknown caster lines. Right-click dismisses a
+  section; Ctrl+Right-click blacklists a readable ID. Add a saved per-character
+  blacklist manager in Options with removal, pagination and manual ID entry.
+  Restricted IDs require manual entry and cannot be automatically filtered.
+- Add Locations beside Notes, with the client's zone artwork, explored terrain
+  and a dropdown for multiple zones. New credited kills record readable creature
+  positions or an explicitly approximate player-position fallback. Old kill totals
+  have no coordinates to recover. History follows account/character tracking,
+  merges across characters, survives reloads/backups, and stays out of sharing.
+- Display isolated positions as dots and nearby groups as translucent violet
+  triangles with a soft pink outer glow. Every triangle edge is limited to 180
+  yards so distant groups stay separate. Collinear points or maps without a yard
+  scale remain dots. Keep up to 256 recent distinct positions per creature/map
+  across 64 maps, and validate the added fields when importing backups.
+- Anchor Locations to the book's right/top edge through the existing anchoring
+  preference. Use greyscale parchment at 34% of shared UI brightness, independent
+  of the saved Map brightness slider (20–100%, default 80%). Match Options slider
+  styling and add footer padding. Keep the kill counter left of Rumours, rename
+  Creature Notes to Notes, narrow its button, scroll overflowing creature headings
+  on hover, grey automatic buff provenance, and raise tooltip checkboxes 3px.
+- Make /fieldbook debug open a foreground report with text selected for Ctrl+C,
+  without chat duplication. Keep partial reports useful after diagnostic failures.
+- Expand automated coverage for recording, restricted values, hints, window input,
+  maps/geometry, persistence, backups and positioning. All 32 test files pass and
+  all 32 runtime Lua files compile. Allow grouped version headings in the release
+  validator. Update verification records and live checklists: map areas have been
+  seen live, while final rendering, precise NPC coordinates and remaining client
+  behavior need live verification. Beast Lore testing still gates stable 1.0.
+
+## v0.9.148 - v0.9.150 - Local development (included in v0.9.150-beta)
+
+- Narrow Notes to 58px, returning 54px to the creature heading. Overflowing creature
+  headings scroll gently on hover, resetting on leave, selection change or close.
+- Rename the Creature Notes button and its window title to Notes.
+- Desaturate the Locations parchment and zone dropdown, keeping them 66% darker
+  than shared UI brightness. Match the Map brightness slider to the Options
+  sliders with the same track, dimensions and thumb template, and add 16px of
+  bottom padding. Terrain and location overlays retain their separate brightness.
+
+## v0.9.147 - Local development (included in v0.9.150-beta)
+
+- Return Kills and its reward marker to the left of Rumours in the creature header.
+- Place Locations at the main book’s right edge with aligned tops by default, and
+  apply Always attempt to anchor to main window to restored positions. With the
+  option disabled, retain saved positions subject to normal overlap/screen rules.
+- Give Locations and its zone dropdown the shared parchment background, following
+  UI brightness independently of the map brightness slider. Verify anchoring
+  preferences and independent parchment/map brightness in the regression suite.
+
+## v0.9.146 - Local development (included in v0.9.150-beta)
+
+- Rename the main-window hint to Last observed ability and move the recorded
+  ability's Display on tooltip checkbox up 3px.
+- Replace the low-contrast orange location fill with brighter violet shading and
+  a soft pink glow around each area's outer boundary, excluding internal triangle
+  seams. Add a saved per-character Map brightness slider (20–100%, default 80%)
+  that dims terrain and explored artwork without dimming markers or areas.
+- Verify boundary rendering, independent brightness and persistence; update the
+  live visual checklist. The supplied screenshot confirms the previous triangles
+  render in-game; the new contrast and glow still need live visual acceptance.
+
+## v0.9.145 - Local development (included in v0.9.150-beta)
+
+- Add a creature Locations window beside Creature Notes, with the game's zone
+  map artwork, explored areas, and a zone selector for creatures seen in multiple
+  locations. Move the kill counter below the model to preserve title space.
+- Save positions from newly credited kills, preferring readable creature
+  coordinates and explicitly labelling the player-position fallback approximate.
+  Existing kill totals are not converted into invented positions. Samples follow
+  the selected tracking scope, persist across reloads, and survive backup/restore.
+- Draw isolated kills as dots and nearby groups as translucent orange triangles.
+  All triangle edges must be at most 180 yards; distant groups and outliers stay
+  separate. Keep at most 256 recent distinct positions per creature/map across
+  up to 64 maps. Collinear points and maps without a readable yard scale stay dots.
+- Cover kill-credit integration, restricted/unavailable APIs, triangulation,
+  tracking merges, backups and window controls with automated regressions, and
+  add a live Locations checklist. Native map rendering remains to be tested.
+
+## v0.9.144 - Local development (included in v0.9.150-beta)
+
+- Show Automatic buff observation in grey beneath recorded abilities.
+- Collapse empty Spell ID window sections and grow upward from a fixed bottom
+  edge. Migrate existing window anchors and preserve drag, lock, expiry and fade
+  settings. Show caster names from cast targets or reported aura sources; omit
+  the caster line and its space when unavailable.
+- Right-click a section to dismiss it; Ctrl+Right-click also blacklists a readable
+  spell ID. Repeated observations of the same public cast/aura token stay dismissed.
+- Add an Options blacklist manager with pagination, removal and manual ID entry.
+  The per-character blacklist affects only the Spell ID window. Restricted IDs
+  cannot be matched or saved automatically; Ctrl+Right-click dismisses them and
+  opens the manager with an explanation. Add layout, caster, input and persistence
+  regressions and refresh the live checklist.
+
+## v0.9.143 - Local development (included in v0.9.150-beta)
+
+- Refine the hint heading to Last detected ability, remove the display-only suffix,
+  put the grey
+  timestamp beside the heading, and place the grey Spell ID label and white ID
+  immediately after the yellow spell name using native secret-safe formatting.
+
+## v0.9.142 - Local development (included in v0.9.150-beta)
+
+- Show the latest detected enemy ability beneath the selected creature's spell
+  reference field, with separate name/ID labels, local date/time and a guarded
+  hover tooltip. Capture works independently of the Spell ID window and the
+  automatic-recording checkbox.
+- Keep one hint per creature throughout the session, overwrite it on the next
+  cast, and suppress readable IDs already present in Recorded abilities. Public
+  cast-bar IDs deduplicate polling and alias events without comparing secret IDs.
+- Clear a restricted hint when a linked ability is manually saved for that
+  creature. Restricted casts cannot be checked against recorded spells, so a
+  subsequent cast can show the hint again. Hints are not saved across reloads.
+- Add event, polling, storage-isolation, acknowledgement, reset and UI regression
+  tests; adjust form spacing and document the live verification steps and limits.
+
+## v0.9.141 - Local development (included in v0.9.150-beta)
+
+- Bring the copyable debug report to the foreground, with text selected for
+  Ctrl+C. `/fieldbook debug` opens the report without duplicating it in chat.
+- Preserve a copyable partial report if diagnostic collection fails, and allow
+  remaining sections to continue after a display-module report failure. Add
+  regression coverage for foreground behavior and report delivery failures.
+- Record the live Fireball (20793) investigation: cast events reached an eligible
+  NPC, but the client marked their IDs and active-cast names secret. Display is
+  possible; automatic journal storage remains unavailable for those payloads.
+
+## v0.9.140 - Local development (included in v0.9.150-beta)
+
+- Extend the default-on recording option to enemy casts with readable spell IDs,
+  including in combat. Observe cast starts, channels, empowered and instant casts,
+  and ongoing target/mouseover casts. Buff capture still requires being out of combat.
+- Confirm verified casts with the light-blue [A] marker and cast-specific hover
+  text. Share the buff recorder's restoration, deduplication and once-per-change
+  chat/Event log announcements while preserving manual notes and entry locks.
+- Rename the option to Automatically record verified creature abilities, preserving
+  existing disabled preferences. Name-only casts and historical imports remain
+  pending; display-only restricted spell IDs are never looked up or saved.
+- Add combat-cast regressions for events, polling, restricted data, restoration,
+  persistence, backup/sharing and UI provenance. Document the remaining live check.
+
+## v0.9.139 - Local development (included in v0.9.150-beta)
+
+- Fix verified buff capture being blocked by saved name-only removal flags,
+  including the reported Frost Armor (12544) on Defias Rogue Wizard. With the
+  option enabled, fresh verified buff observations restore removed or rejected
+  abilities on unlocked entries. Turning the option off stops restoration.
+- Resolve the spell's name from its observed public ID; missing or restricted
+  optional aura name/caster fields no longer discard a usable ID. Preserve
+  combat, creature ownership, entry locks and known-caster checks.
+- Announce each newly recorded or restored buff in chat and the Event log,
+  naming the creature, ability and spell ID. Repeated scans and reloads are
+  silent. Include automatic-buff recording status in `/fieldbook debug`.
+- Add regressions for the reported saved wizard state, ID-based name resolution,
+  automatic restoration, announcements and diagnostic output; refresh the live
+  verification checklist with the actual failure and its cause.
+
+## v0.9.138 - Local development (included in v0.9.150-beta)
+
+- Add a default-on Options checkbox to automatically record readable creature
+  buffs outside combat, independently of the Spell ID window. Save spell IDs,
+  confirm pending matches and mark automatically recorded abilities with a
+  light-blue [A] and a tooltip explaining their source. Preserve manual notes,
+  locked entries, rejected/removed abilities and existing records when disabled.
+- Observe only the watched target/mouseover using public aura data, skipping
+  combat, player-controlled units and known different casters. Retry after combat
+  and on aura/target changes; deduplicate repeated observations by name and ID.
+  Add capture, restriction, persistence, sharing, backup and UI regression tests.
+
 ## v0.9.137-beta - 2026-09-27
 
 This release includes all changes since v0.9.128-beta, covering local versions

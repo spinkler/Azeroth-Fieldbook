@@ -231,7 +231,9 @@ function positions:AvoidWindowOverlap(frame)
             -- unrelated window. Screen bounds and avoiding overlap still win.
             local priority=priorityAt(x,y)
             local preferredLeft,preferredTop=box.left,box.top
-            if main and frame.afbAlignBookBottom==true then
+            if alwaysAnchor and frame.afbAlignBookTop==true then
+                preferredLeft,preferredTop=clamp(main.left+main.width,main.top)
+            elseif main and frame.afbAlignBookBottom==true then
                 preferredLeft,preferredTop=clamp(main.left+main.width,main.top-main.height+box.height)
             end
             local distance = (x-preferredLeft)^2+(y-preferredTop)^2

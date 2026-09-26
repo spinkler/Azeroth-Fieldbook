@@ -478,6 +478,29 @@ class WindowPositionTests(unittest.TestCase):
             assert(cast.left~=100 or cast.top~=600,'public geometry resumes overlap placement')
         ''')
 
+    def test_locations_anchors_right_and_top_but_respects_disabled_option(self):
+        self.lua.execute('''
+            UIParent.width=2000;UIParent.height=1100
+            local book=CreateFrame()
+            book.left=100;book.top=1000;book.width=800;book.height=700;book.shown=true
+            AzerothFieldbookBestiary=book
+            local map=CreateFrame();map.width=600;map.height=600
+            map.afbPreferBookEdge=true;map.afbAnchorRule='right';map.afbAlignBookTop=true
+            db.windowPositions.Locations={left=1200,top=700}
+            ns.WindowPositions:Register(map,'Locations')
+            ns.WindowPositions:AvoidWindowOverlap(map)
+            near(map.anchor[4],800);near(map.anchor[5],0);assert(map.anchor[2]==book)
+            db.alwaysAnchorToMain=false
+            ns.WindowPositions:Restore(map);ns.WindowPositions:AvoidWindowOverlap(map)
+            near(map.left,1200);near(map.top,700);assert(map.anchor[2]==UIParent)
+            db.alwaysAnchorToMain=true
+            local blocker=CreateFrame()
+            blocker.left=900;blocker.top=1100;blocker.width=300;blocker.height=1100;blocker.shown=true
+            ns.WindowPositions:Track(blocker)
+            ns.WindowPositions:AvoidWindowOverlap(map)
+            near(map.anchor[4],1100);near(map.anchor[5],0);assert(map.anchor[2]==book)
+        ''')
+
 
 if __name__ == '__main__':
     unittest.main()

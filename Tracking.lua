@@ -64,6 +64,7 @@ local function mergeEntry(target, source)
     target.firstEncounteredAt=ns.EarliestEncounterTime(target.firstEncounteredAt,source.firstEncounteredAt)
     target.kills = (tonumber(target.kills) or 0) + (tonumber(source.kills) or 0)
     target.sightings = (tonumber(target.sightings) or 0) + (tonumber(source.sightings) or 0)
+    if ns.CreatureLocations then ns.CreatureLocations.Merge(target,source.killLocations) end
     target.levelMin = minimum(target.levelMin, source.levelMin)
     target.levelMax = maximum(target.levelMax, source.levelMax)
     if (ranks[source.rank] or 0) > (ranks[target.rank] or 0) then target.rank = source.rank end

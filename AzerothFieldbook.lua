@@ -214,13 +214,24 @@ local function storeObserved(id, spellID, observedName, creatureName)
     return true
 end
 
-local function remember(unit, spellID, observedName)
+local function remember(unit, spellID, observedName, castBarID)
     if afterWipeHold then return end
     local id, reason = watchedEnemy(unit)
     if not id then diagnostics.last = reason; return end
     -- Instant cast events may arrive before target/mouseover discovery. Resolve
     -- the watched unit's identity before either observation store is written.
     if journal then journal:Observe(unit) end
+    if journal and journal.DetectAbility then journal:DetectAbility(id,spellID,observedName,castBarID) end
+    -- Only fresh, directly attributed casts qualify for automatic confirmation.
+    -- Historical encounter imports and readable names without an ID stay pending.
+    -- Public spell IDs may be usable in combat. The storage path never looks
+    -- up a secret ID; the separate hint above only relays it for display.
+    if journal and journal.RecordVerifiedCast and journal:GetAutoRecordAbilities() and positiveID(spellID) then
+        local added, reason = journal:RecordVerifiedCast(id, spellID, observedName)
+        diagnostics.last = "Automatic cast: " .. reason
+        if added then diagnostics.learned = diagnostics.learned + 1 end
+        return added
+    end
     return storeObserved(id, spellID, observedName)
 end
 
@@ -230,6 +241,7 @@ local function observeCurrent(unit)
     if journal then journal:RecordKill(unit) end
     if not watchedEnemy(unit) then return end
     if journal then journal:Observe(unit) end
+    local castPresent=false
     local function inspect(label, fn, channel)
         local source = unit .. " " .. label
         if type(fn) ~= "function" then
@@ -237,7 +249,7 @@ local function observeCurrent(unit)
             diagnostics.last = source .. ": API MISSING."
             return
         end
-        local ok, name, _, _, _, _, _, _, eighth, ninth = pcall(fn, unit)
+        local ok, name, _, _, _, _, _, _, eighth, ninth, tenth, eleventh = pcall(fn, unit)
         if not ok then
             noteProbe(source, "API ERROR (pcall failed)", true)
             diagnostics.last = source .. ": API ERROR; this does not establish a secret value."
@@ -250,16 +262,22 @@ local function observeCurrent(unit)
             noteProbe(source, "IDLE (no active cast returned)", false)
             return
         end
+        castPresent=true
         local status = "name " .. nameState .. "; ID " .. idState
         noteProbe(source, status, nameState ~= "READABLE" or idState ~= "READABLE")
-        if publicString(name) or positiveID(spellID) then
-            remember(unit, spellID, name)
-        else
+        local castBarID=tenth
+        if channel then castBarID=eleventh end
+        remember(unit, spellID, name, castBarID)
+        if not publicString(name) and not positiveID(spellID) then
             diagnostics.last = source .. ": " .. status .. "; neither field identifies the spell."
         end
     end
     inspect("UnitCastingInfo", UnitCastingInfo, false)
     inspect("UnitChannelInfo", UnitChannelInfo, true)
+    if not castPresent and journal and journal.FinishDetectedCast then
+        local id=watchedEnemy(unit)
+        if id then journal:FinishDetectedCast(id) end
+    end
 end
 
 local function addTooltip(tooltip)
@@ -355,6 +373,7 @@ local function initialize()
     if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
     if journal then
+        if journal.SetAutomaticAbilityRecordedCallback then journal:SetAutomaticAbilityRecordedCallback(say) end
         journal:SetPointsRecordedCallback(function(entry, amount, reason, observation)
             local killTitles = { ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
             local discoveryTitles = { location = "New observed location" }
@@ -429,16 +448,28 @@ frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID, sentSpell
     elseif event == "PLAYER_TARGET_CHANGED" then
         afterWipeHold = false
         observeCurrent("target")
+        if journal and journal.ObserveBuffs then journal:ObserveBuffs("target") end
         if book then book:FollowNotesTarget() end
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
         afterWipeHold = false
         observeCurrent("mouseover")
+        if journal and journal.ObserveBuffs then journal:ObserveBuffs("mouseover") end
     elseif event == "PARTY_KILL" then
         if journal and not afterWipeHold then journal:RecordPartyKill(unit, castGUID) end
     elseif event == "UNIT_DIED" then
         if journal and not afterWipeHold then journal:RecordUnitDeath(unit) end
     elseif event == "PLAYER_ENTERING_WORLD" then
         if journal then journal:ClearKillEvidence() end
+        if journal and not afterWipeHold and journal.ObserveBuffs then
+            journal:ObserveBuffs("target"); journal:ObserveBuffs("mouseover")
+        end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        if journal and not afterWipeHold and journal.ObserveBuffs then
+            journal:ObserveBuffs("target"); journal:ObserveBuffs("mouseover")
+        end
+    elseif event == "UNIT_AURA" then
+        local watched = watchedAlias(unit)
+        if watched and journal and not afterWipeHold and journal.ObserveBuffs then journal:ObserveBuffs(watched) end
     elseif event == "UNIT_HEALTH" then
         local watched = watchedAlias(unit)
         if watched and journal then journal:RecordKill(watched) end
@@ -452,7 +483,7 @@ frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID, sentSpell
             matchedEvents = matchedEvents + 1
             local state = valueState(spellID, "id")
             noteProbe("Matched cast event", "spell ID " .. state, state ~= "READABLE")
-            remember(watched, spellID)
+            remember(watched, spellID, nil, sentSpellID)
             -- Use the actual active cast name if the spell cache is not ready.
             observeCurrent(watched)
         elseif not publicString(unit) then
@@ -467,6 +498,7 @@ end)
 local elapsedSinceScan = 0
 frame:SetScript("OnUpdate", function(_, elapsed)
     if journal and not afterWipeHold and journal.PollBeastLore then journal:PollBeastLore(elapsed) end
+    if journal and not afterWipeHold and journal.PollBuffs then journal:PollBuffs(elapsed) end
     if encounters then encounters:Update(elapsed) end
     elapsedSinceScan = elapsedSinceScan + elapsed
     if elapsedSinceScan < 0.2 then return end
@@ -476,7 +508,7 @@ frame:SetScript("OnUpdate", function(_, elapsed)
 end)
 
 for _, event in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT",
-    "UNIT_HEALTH",
+    "UNIT_HEALTH", "UNIT_AURA",
     "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_EMPOWER_START",
     "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED", "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD",
     "DAMAGE_METER_COMBAT_SESSION_UPDATED", "DAMAGE_METER_CURRENT_SESSION_UPDATED", "DAMAGE_METER_RESET" }) do
@@ -556,46 +588,63 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         say("/fieldbook debug kills on | off controls the temporary kill evidence recorder; /fieldbook debug kills opens its report.")
     elseif command == "debug" then
         local lines = {}
-        local chatSay = say
         local function say(line)
             lines[#lines + 1] = line
-            chatSay(line)
         end
-        if ns.CastIDs then ns.CastIDs:Report(say) end
-        if ns.SpellIDWindow then ns.SpellIDWindow:Report(say) end
-        if ns.KillDiagnostics then
-            say("Kill evidence recorder: " .. (ns.KillDiagnostics.enabled and "ON" or "OFF")
-                .. ". /fieldbook debug kills opens its separate report.")
+        local function section(label, source, method)
+            if not source or type(source[method]) ~= "function" then return end
+            local ok = pcall(source[method], source, say)
+            if not ok then say(label .. ": diagnostic collection failed; other sections follow.") end
         end
-        local version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "unknown"
-        say("Version " .. version .. "; all cast events: " .. diagnostics.events .. "; new observations: " .. diagnostics.learned
-            .. "; tooltip callbacks: " .. diagnostics.tooltips)
-        say("Last cast check: " .. diagnostics.last)
-        say("Events matched to target/mouseover: " .. matchedEvents .. ". All-event count includes unrelated units.")
-        say("Last tooltip: " .. tooltipStatus)
-        if encounters then say("Encounter learning: " .. encounters.status .. " (/fieldbook encounters for details)") end
-        for _, unit in ipairs({ "target", "mouseover" }) do
-            local id, reason = watchedEnemy(unit)
-            say(unit .. ": " .. (id and "eligible NPC" or reason))
+        local function collect()
+            section("Cast ID display", ns.CastIDs, "Report")
+            section("Spell ID window", ns.SpellIDWindow, "Report")
+            section("Automatic abilities", journal, "ReportBuffs")
+            if ns.KillDiagnostics then
+                say("Kill evidence recorder: " .. (ns.KillDiagnostics.enabled and "ON" or "OFF")
+                    .. ". /fieldbook debug kills opens its separate report.")
+            end
+            local version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "unknown"
+            say("Version " .. version .. "; all cast events: " .. diagnostics.events .. "; new observations: " .. diagnostics.learned
+                .. "; tooltip callbacks: " .. diagnostics.tooltips)
+            say("Last cast check: " .. diagnostics.last)
+            say("Events matched to target/mouseover: " .. matchedEvents .. ". All-event count includes unrelated units.")
+            say("Last tooltip: " .. tooltipStatus)
+            if encounters then say("Encounter learning: " .. encounters.status .. " (/fieldbook encounters for details)") end
+            for _, unit in ipairs({ "target", "mouseover" }) do
+                local id, reason = watchedEnemy(unit)
+                say(unit .. ": " .. (id and "eligible NPC" or reason))
+            end
+            local keys = {}
+            for key in pairs(probes) do keys[#keys + 1] = key end
+            table.sort(keys)
+            for _, key in ipairs(keys) do
+                local probe = probes[key]
+                say(key .. ": " .. probe.latest .. " [" .. probe.samples .. " checks]")
+                if probe.problem and probe.problem ~= probe.latest then
+                    say("  Earlier non-readable result: " .. probe.problem)
+                end
+            end
+            if #keys == 0 then say("No eligible NPC cast API checks yet. Target an enemy and witness a cast.") end
+            say("SECRET = issecretvalue confirmed hidden data. UI may display it, but this addon cannot inspect it.")
+            say("API ERROR = call threw an error; it may be an API/access problem, not necessarily secret data.")
+            say("MISSING/INVALID = no usable value. API MISSING = function absent. IDLE is normal between casts.")
+            say("Readable name OR ID can identify a spell; NPC identity must also pass. Checks are samples, not unique casts.")
+            say("Earlier results are session-wide, may belong to a previous target, and survive idle polls until /reload.")
+            say("Equal-hit automation unavailable: Forever blocks addon combat-log events; C_DamageMeter exposes totals, not individual hits or crit flags.")
         end
-        local keys = {}
-        for key in pairs(probes) do keys[#keys + 1] = key end
-        table.sort(keys)
-        for _, key in ipairs(keys) do
-            local probe = probes[key]
-            say(key .. ": " .. probe.latest .. " [" .. probe.samples .. " checks]")
-            if probe.problem and probe.problem ~= probe.latest then
-                say("  Earlier non-readable result: " .. probe.problem)
+        -- A diagnostic failure must leave a copyable partial report. Error
+        -- payloads can contain restricted data, so never append them verbatim.
+        local ok = pcall(collect)
+        if not ok then say("Report interrupted by a diagnostic error; available snapshot is shown above.") end
+        if ns.ShowDebugReport then
+            ns.ShowDebugReport(table.concat(lines, "\n"))
+        else
+            -- Degraded hosts can still expose the report if the UI module failed.
+            for _, line in ipairs(lines) do
+                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage(line) end
             end
         end
-        if #keys == 0 then say("No eligible NPC cast API checks yet. Target an enemy and witness a cast.") end
-        say("SECRET = issecretvalue confirmed hidden data. UI may display it, but this addon cannot inspect it.")
-        say("API ERROR = call threw an error; it may be an API/access problem, not necessarily secret data.")
-        say("MISSING/INVALID = no usable value. API MISSING = function absent. IDLE is normal between casts.")
-        say("Readable name OR ID can identify a spell; NPC identity must also pass. Checks are samples, not unique casts.")
-        say("Earlier results are session-wide, may belong to a previous target, and survive idle polls until /reload.")
-        say("Equal-hit automation unavailable: Forever blocks addon combat-log events; C_DamageMeter exposes totals, not individual hits or crit flags.")
-        if ns.ShowDebugReport then ns.ShowDebugReport(table.concat(lines, "\n")) end
     elseif command == "alerts" then
         db.announce = not db.announce
         say(db.announce and "Discovery messages on." or "Discovery messages off.")

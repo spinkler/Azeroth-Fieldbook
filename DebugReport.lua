@@ -143,7 +143,7 @@ function ns.ShowDebugReport(report)
     if not panel then
         panel = CreateFrame("Frame", "AzerothFieldbookDebugReport", UIParent, "BackdropTemplate")
         panel:SetSize(740, 540); panel:SetPoint("CENTER", AzerothFieldbookBestiary or UIParent, "CENTER")
-        panel:SetFrameStrata("DIALOG"); panel:SetClampedToScreen(true)
+        panel:SetFrameStrata("DIALOG"); panel:SetToplevel(true); panel:SetClampedToScreen(true)
         panel:SetMovable(true); panel:EnableMouse(true); panel:RegisterForDrag("LeftButton")
         panel:SetScript("OnDragStart", panel.StartMoving)
         panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
@@ -153,7 +153,7 @@ function ns.ShowDebugReport(report)
         title:SetPoint("TOPLEFT", 18, -18); title:SetText("Azeroth Fieldbook — Debug report")
         local hint = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         hint:SetPoint("TOPLEFT", 18, -43)
-        hint:SetText("Select text and press Ctrl+C to copy. Run /fieldbook debug again for a fresh snapshot.")
+        hint:SetText("Press Ctrl+C to copy the selected report. Run /fieldbook debug again to refresh.")
         scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
         scroll:SetPoint("TOPLEFT", 18, -70); scroll:SetPoint("BOTTOMRIGHT", -38, 55)
         edit = CreateFrame("EditBox", nil, scroll)
@@ -182,9 +182,11 @@ function ns.ShowDebugReport(report)
         if UIParent.GetWidth and UIParent.GetHeight then
             panel:SetScale(math.min(1, (UIParent:GetWidth()-30)/740, (UIParent:GetHeight()-30)/540))
         end
+        if ns.WindowFocus then ns.WindowFocus:Register(panel,"DIALOG") end
     end
     if ns.UIScale then ns.UIScale:Register(panel,"AzerothFieldbookDebugReport") end
     panel:Show()
+    panel:Raise()
     edit:SetText(report); edit:SetCursorPosition(0)
     scroll:SetVerticalScroll(0)
     edit:SetFocus(); edit:HighlightText()

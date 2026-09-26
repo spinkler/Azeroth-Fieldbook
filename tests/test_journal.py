@@ -430,7 +430,7 @@ selectEntry(43)
 check(notes.creature.text=='Other creature |cff999999[#43]|r' and notes.count.text=='0/10','book selection switches notes')
 selectEntry(42)
 check(notes.count.text=='1/10' and notes.notes.text=='Boar field notes','book selection restores notes')
-check(click('Creature Notes'),'creature notes button opens window')
+check(click('Notes'),'creature notes button opens window')
 local abilityBook=AzerothFieldbookBestiarySection
 local savedAbilities=journal.entries[42].abilities
 local savedLock=journal.entries[42].confirmed

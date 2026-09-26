@@ -66,7 +66,7 @@ local function createKillReward(parent,crownOffset)
     return reward
 end
 
-local function addNameScroller(row)
+local function addNameScroller(row,heading)
     local viewport=CreateFrame("ScrollFrame",nil,row)
     viewport:SetPoint("TOPLEFT",17,0);viewport:SetSize(140,28);viewport:EnableMouse(false)
     local body=CreateFrame("Frame",nil,viewport)
@@ -74,6 +74,13 @@ local function addNameScroller(row)
     local text=body:CreateFontString(nil,"OVERLAY","GameFontHighlight")
     text:SetPoint("TOPLEFT",0,-8);text:SetJustifyH("LEFT");text:SetWordWrap(false)
     text:SetShadowColor(0.05,0.05,0.05)
+    if heading then
+        viewport:ClearAllPoints();viewport:SetAllPoints(row)
+        text:ClearAllPoints();text:SetPoint("TOPLEFT",0,0)
+        text:SetFontObject("GameFontNormalLarge")
+        local path,size,flags=row.text:GetFont()
+        if path then text:SetFont(path,size,flags) end
+    end
     row.nameViewport,row.scrollingName=viewport,text
     function row:StopNameScroll()
         self:SetScript("OnUpdate",nil)
@@ -86,12 +93,14 @@ local function addNameScroller(row)
         if not self.id or type(width)~="number" or width<=visible then return end
         width=math.ceil(width)+1
         viewport:SetWidth(visible);body:SetWidth(width);text:SetWidth(width)
+        if heading then body:SetHeight(self:GetHeight()) end
         text:SetText(self.text:GetText());text:SetTextColor(self.text:GetTextColor())
         text:SetAlphaGradient(visible-20,20)
         self.text:Hide();viewport:Show();viewport:SetHorizontalScroll(0)
         local elapsed,distance=0,width-visible
         local travel=distance/24 -- Gentle movement in UI pixels per second.
         self:SetScript("OnUpdate",function(_,dt)
+            if heading and self.text:GetWidth()~=visible then self:StopNameScroll();return end
             elapsed=(elapsed+dt)%(travel*2+2)
             local position
             if elapsed<0.8 then position=0
@@ -117,6 +126,7 @@ function ns.CreateBestiaryBook(journal,shell)
     local book, selected, offset, abilityOffset = nil, nil, 0, 0
     local creaturePageSize = 16
     local creatureNotes = ns.CreateCreatureNotesWindow and ns.CreateCreatureNotesWindow(journal,function() return shell:GetFrame() end)
+    local creatureLocations = ns.CreateCreatureLocationsWindow and ns.CreateCreatureLocationsWindow(journal,function() return shell:GetFrame() end)
     local sharingWindow = journal.sharing and ns.CreateSharingWindow and ns.CreateSharingWindow(journal,journal.sharing,function() return shell:GetFrame() end)
     local function basicInfo(id) return journal.GetBasicInfo and journal:GetBasicInfo(id) or journal.entries[id] end
     local noteOffset, refreshDamageNotes = 0, nil
@@ -273,6 +283,7 @@ local ink = { 0.75, 0.8, 0.8 }
         return count>0 and ("Effects ("..count..")") or "Choose effects"
     end
     local function choose(id)
+        if book.titleHover then book.titleHover:StopNameScroll() end
         if book.deleteForm then book.deleteForm:Hide() end
         if book.beastLore then
             book.beastLore.area:SetVerticalScroll(0)
@@ -280,6 +291,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         selected, abilityOffset = id, 0
         if creatureNotes then creatureNotes:SetCreature(id) end
+        if creatureLocations then creatureLocations:SetCreature(id) end
         if rumoursWindow then rumoursWindow:SetCreature(id) end
         book.manualName:SetText(""); book.manualNote:SetText(""); book.spellLink:SetText("")
         book.manualEffects={}; if book.effectButton then book.effectButton:SetText("Choose effects") end
@@ -405,8 +417,10 @@ local ink = { 0.75, 0.8, 0.8 }
             book.beastLore.send:SetEnabled(valid and journal.sharing~=nil)
         else book.beastLore:Hide() end
         if creatureNotes then creatureNotes:Refresh() end
+        if creatureLocations then creatureLocations:Refresh() end
         if rumoursWindow then rumoursWindow:Refresh() end
         book.creatureNotesButton:SetEnabled(e ~= nil)
+        book.creatureLocationsButton:SetEnabled(e ~= nil and creatureLocations ~= nil)
         book.rumoursButton:SetEnabled(rumoursWindow ~= nil and (e ~= nil or rumoursWindow:IsShown()))
         book.shareButton:SetEnabled(sharingWindow~=nil and (e~=nil or journal.sharing:HasActiveOutgoing()))
         book.killCount:SetShown(e ~= nil)
@@ -454,6 +468,7 @@ local ink = { 0.75, 0.8, 0.8 }
             book.offensePicker:Hide(); book.defensePicker:Hide(); book.behaviourPicker:Hide()
             book.effectPicker:Hide(); book.damageForm:Hide(); book.notesForm:Hide()
         end
+        if ns.CreateDetectedAbilityHint and book.detectedAbility then book.detectedAbility:Refresh(selected) end
         book.detail:SetShown(e ~= nil)
         book.empty:SetShown(e == nil)
         if not e then
@@ -461,12 +476,16 @@ local ink = { 0.75, 0.8, 0.8 }
             book.tameableBadge:Hide()
             book.confirm:Hide()
             book.modelCaption:SetText("")
+            book.titleHover:StopNameScroll();book.titleHover.id=nil
             book.title:SetText("A field guide of your own")
             layoutSummary({"Target or mouse over an enemy to begin a new entry."},{})
             return
         end
         if book.modelEntryID~=selected or book.modelPersonal~=(e.personalEncountered==true) then safeModel(selected) end
-        book.title:SetText(basic.name or ("Encountered creature #" .. selected))
+        local title=basic.name or ("Encountered creature #" .. selected)
+        if book.title:GetText()~=title then book.titleHover:StopNameScroll() end
+        book.titleHover.id=selected
+        book.title:SetText(title)
         local levels = "Level Range: not yet observed"
         if basic.levelMin then levels = "Level Range: " .. basic.levelMin
             if basic.levelMax ~= basic.levelMin then levels = levels .. "-" .. basic.levelMax end
@@ -538,9 +557,11 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.name = name
                 row.tooltipCheck:SetChecked(ability.showInTooltip ~= false)
                 local linkMissing = type(ability.spellID) ~= "number" or ability.spellID <= 0
-                row.text:SetText(name .. (linkMissing and "  [?]" or "") .. (ability.state == "confirmed" and "" or "  [" .. ability.state .. "]"))
+                local automatic = ability.origin == "Automatic buff observation" or ability.origin == "Automatic cast observation"
+                row.text:SetText(name .. (automatic and "  |cff80d0ff[A]|r" or "") .. (linkMissing and "  [?]" or "") .. (ability.state == "confirmed" and "" or "  [" .. ability.state .. "]"))
                 local effects=effectsText(ability.effects)
                 local note=ability.note or (ability.origin ~= "Your note" and ability.origin or nil)
+                if not ability.note and ability.origin=="Automatic buff observation" then note="|cff999999"..note.."|r" end
                 row.note:SetText(effects and note and (effects.." — "..note) or effects or note or "")
                 row.accept:SetEnabled(editable and ability.state ~= "confirmed")
                 row.accept.cover:SetColorTexture(unpack((editable and ability.state ~= "confirmed") and {0.13,0.025,0.015,1} or {0.22,0.22,0.22,1}))
@@ -856,16 +877,21 @@ local ink = { 0.75, 0.8, 0.8 }
         book.title = label(book, "", 362, -55, 264, "GameFontNormalLarge")
         book.title:SetTextColor(1,0.82,0.14)
         book.title:SetWordWrap(false)
-        book.creatureNotesButton=button(book,"Creature Notes",806,-52,130,function()
+        book.creatureNotesButton=button(book,"Notes",806,-52,58,function()
             if creatureNotes then creatureNotes:Toggle(selected) end
         end)
         book.creatureNotesButton:ClearAllPoints()
         book.creatureNotesButton:SetPoint("TOPRIGHT",book,"TOPRIGHT",-24,-52)
-        book.rumoursButton=button(book,"Rumours",710,-52,88,function()
+        book.creatureLocationsButton=button(book,"Locations",710,-52,82,function()
+            if creatureLocations then creatureLocations:Toggle(selected) end
+        end)
+        book.creatureLocationsButton:ClearAllPoints()
+        book.creatureLocationsButton:SetPoint("RIGHT",book.creatureNotesButton,"LEFT",-6,0)
+        book.rumoursButton=button(book,"Rumours",710,-52,76,function()
             if rumoursWindow then rumoursWindow:Toggle(selected) end
         end)
         book.rumoursButton:ClearAllPoints()
-        book.rumoursButton:SetPoint("RIGHT",book.creatureNotesButton,"LEFT",-8,0)
+        book.rumoursButton:SetPoint("RIGHT",book.creatureLocationsButton,"LEFT",-6,0)
         book.killCount=label(book,"",720,-57,78,"GameFontHighlightSmall")
         book.killCount:ClearAllPoints()
         book.killCount:SetPoint("RIGHT",book.rumoursButton,"LEFT",-8,0)
@@ -876,6 +902,13 @@ local ink = { 0.75, 0.8, 0.8 }
         book.title:SetPoint("TOPRIGHT",book.killStar,"LEFT",-8,9)
         local titlePath, titleSize, titleFlags = book.title:GetFont()
         if titlePath and titleSize then book.title:SetFont(titlePath, titleSize + 2, titleFlags) end
+        book.titleHover=CreateFrame("Frame",nil,book)
+        book.titleHover:SetPoint("TOPLEFT",book.title,"TOPLEFT",0,0)
+        book.titleHover:SetPoint("TOPRIGHT",book.title,"TOPRIGHT",0,0)
+        book.titleHover:SetHeight(24);book.titleHover.text=book.title
+        addNameScroller(book.titleHover,true)
+        book.titleHover:SetMouseClickEnabled(false)
+        book.titleHover:SetMouseMotionEnabled(true)
         book.summaryArea=CreateFrame("Frame",nil,book)
         book.summaryArea:SetPoint("TOPLEFT",362,-84); book.summaryArea:SetSize(574,45)
         book.summaryMeasure=book:CreateFontString(nil,"OVERLAY","GameFontHighlight")
@@ -1088,7 +1121,7 @@ local ink = { 0.75, 0.8, 0.8 }
             row.divider:SetPoint("TOPLEFT",0,7);row.divider:SetPoint("TOPRIGHT",-9,7)
             row.divider:SetHeight(1)
             row.tooltipCheck=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate")
-            row.tooltipCheck:SetPoint("TOPLEFT",-2,0); row.tooltipCheck:SetSize(20,20)
+            row.tooltipCheck:SetPoint("TOPLEFT",-2,3); row.tooltipCheck:SetSize(20,20)
             row.tooltipCheck:SetScript("OnClick",function(self)
                 if selected and row.name then journal:SetAbilityTooltip(selected,row.name,self:GetChecked() == true); refresh() end
             end)
@@ -1179,6 +1212,11 @@ local ink = { 0.75, 0.8, 0.8 }
                     pcall(GameTooltip.SetOwner,GameTooltip,self,"ANCHOR_CURSOR")
                     local ok=pcall(GameTooltip.SetSpellByID,GameTooltip,ability.spellID)
                     if ok then
+                        if ability.origin == "Automatic buff observation" and type(GameTooltip.AddLine)=="function" then
+                            GameTooltip:AddLine("[A] Automatically recorded from a readable buff outside combat. Observed on this creature; caster may be unknown.",0.5,0.82,1,true)
+                        elseif ability.origin == "Automatic cast observation" and type(GameTooltip.AddLine)=="function" then
+                            GameTooltip:AddLine("[A] Automatically recorded from this creature's readable cast spell ID. A cast may be interrupted before completion.",0.5,0.82,1,true)
+                        end
                         if journal:GetSpellIDTooltips() and type(GameTooltip.AddLine)=="function" then
                             GameTooltip:AddLine("Spell ID: " .. ability.spellID,1,0.82,0)
                         end
@@ -1201,10 +1239,14 @@ local ink = { 0.75, 0.8, 0.8 }
         book.manualName=edit(detail,358,-567,234,100)
         book.manualEffects={}
         book.effectButton=button(detail,"Choose effects",614,-567,321,function() book.effectPicker:SetShown(not book.effectPicker:IsShown()); book.refreshEffectPicker() end)
-        label(detail,"Field note |cff999999(optional)|r",352,-600,549,"GameFontHighlightSmall")
-        book.manualNote=edit(detail,358,-620,577,300)
-        label(detail,"Optional spell ID, link, or exact name |cff999999(out of combat)|r",352,-652,549,"GameFontHighlightSmall")
-        book.spellLink=edit(detail,358,-672,274,255)
+        label(detail,"Field note |cff999999(optional)|r",352,-590,549,"GameFontHighlightSmall")
+        book.manualNote=edit(detail,358,-609,577,300)
+        label(detail,"Optional spell ID, link, or exact name |cff999999(out of combat)|r",352,-637,549,"GameFontHighlightSmall")
+        book.spellLink=edit(detail,358,-656,274,255)
+        if ns.CreateDetectedAbilityHint then
+            book.detectedAbility=ns.CreateDetectedAbilityHint(detail,journal)
+            book.detectedAbility:SetPoint("TOPLEFT",352,-684)
+        end
         local function resolveSpellLink()
             local spellID,spellName,errorMessage=journal:ResolveSpell(book.spellLink:GetText())
             if errorMessage then message(errorMessage); return end
@@ -1216,8 +1258,8 @@ local ink = { 0.75, 0.8, 0.8 }
             message("Exact match: "..spellName.." (ID "..spellID..").")
         end
         book.spellLink:SetScript("OnEnterPressed",function(self) resolveSpellLink(); self:ClearFocus() end)
-        book.resolveButton=button(detail,"Resolve",640,-672,92,resolveSpellLink)
-        book.confirmAbilityButton=button(detail,"Confirm this ability",740,-672,195,function()
+        book.resolveButton=button(detail,"Resolve",640,-656,92,resolveSpellLink)
+        book.confirmAbilityButton=button(detail,"Confirm this ability",740,-656,195,function()
             local ok,msg=journal:AddManual(selected,book.manualName:GetText(),book.manualNote:GetText(),book.spellLink:GetText(),book.manualEffects)
             message(msg)
             if ok then book.manualName:SetText(""); book.manualNote:SetText(""); book.spellLink:SetText(""); book.manualEffects={}; book.effectButton:SetText("Choose effects"); refresh() end
@@ -1280,8 +1322,8 @@ local ink = { 0.75, 0.8, 0.8 }
         book.behaviourButton=button(detail,"Behaviour",811,-277,111,function()
             book.behaviourPicker:SetShown(not book.behaviourPicker:IsShown())
         end)
-        book.message=label(detail,"",352,-704,552,"GameFontHighlightSmall")
-        book.message:SetHeight(25); book.message:SetJustifyV("TOP")
+        book.message=label(detail,"",352,-716,583,"GameFontHighlightSmall")
+        book.message:SetHeight(18); book.message:SetJustifyV("TOP")
         local effectPicker=CreateFrame("Frame",nil,UIParent,"BackdropTemplate")
         effectPicker:SetSize(560,658); effectPicker:SetPoint("CENTER",book,"CENTER"); effectPicker:SetFrameStrata("FULLSCREEN_DIALOG")
         effectPicker:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
@@ -1780,6 +1822,7 @@ local ink = { 0.75, 0.8, 0.8 }
         watchWindow(book.ranksButton,rankFrame,true,rankFilters)
         for _,pair in ipairs({
             {book.rumoursButton,rumoursWindow},{book.creatureNotesButton,creatureNotes},
+            {book.creatureLocationsButton,creatureLocations},
             {book.shareButton,sharingWindow},
         }) do
             local control,controller=pair[1],pair[2]
@@ -1791,6 +1834,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book:SetScript("OnHide",function() rankFrame:Hide(); deleteForm:Hide(); book.search:ClearFocus(); book.manualName:ClearFocus(); book.manualNote:ClearFocus(); book.spellLink:ClearFocus(); form:Hide(); notesForm:Hide(); effectPicker:Hide(); locationFrame:Hide(); offensePicker:Hide(); defensePicker:Hide(); behaviourPicker:Hide() end)
         book:HookScript("OnHide",function() beastLore:Hide() end)
         book:HookScript("OnHide",function() sortDismiss:Hide() end)
+        book:HookScript("OnHide",function() if creatureLocations then creatureLocations:Hide() end end)
         local elapsed, revision, nameRevision = 0, -1, -1
         book:SetScript("OnUpdate",function(_,dt)
             elapsed=elapsed+dt

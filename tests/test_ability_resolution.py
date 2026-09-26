@@ -88,9 +88,9 @@ class AbilityResolutionTests(unittest.TestCase):
     def test_duplicate_canonical_record_merges_without_losing_notes_or_effects(self):
         lua = journal()
         lua.execute(r'''
-            journal:Offer(42,'Canonical Spell','Automatic observation',123)
-            entry.abilities['Canonical Spell'].note='Second note'
-            entry.abilities['Canonical Spell'].effects={Slow=true}
+            -- Legacy journals may already contain duplicate names for one ID.
+            entry.abilities['Canonical Spell']={state='pending',origin='Automatic observation',
+                spellID=123,note='Second note',effects={Slow=true}}
             assert(journal:ResolveAbility(42,'Observed Spell'))
             assert(not entry.abilities['Observed Spell'])
             assert(ability.note=='Keep this note\nSecond note' and ability.effects.Poison and ability.effects.Slow)
