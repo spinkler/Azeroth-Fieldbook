@@ -1,5 +1,64 @@
 # Changelog
 
+## v0.9.137-beta - 2026-09-27
+
+This release includes all changes since v0.9.128-beta, covering local versions
+v0.9.129 through v0.9.137. The previous-push and previous-release baseline is
+commit e72f37fa9825e15855129178e7bcdcd15bf277fa. Both players must use the same
+addon version to share creatures or Beast Lore.
+
+- Extract the shared Fieldbook window, title controls, page frames and section
+  navigation into FieldbookShell. Register the Bestiary as its first lazily
+  built section, with independent content and size, while preserving its layout,
+  bindings, existing saved-position keys and journal data.
+- Move Bestiary Help, Options and Event log content into BestiaryPages. Keep
+  shared-window focus, brightness and scaling available to later sections;
+  route the minimap and general book command through the shared shell.
+- Add a reproducible Python/Lua 5.1 test runner with a pinned dependency, syntax,
+  TOC, binding and version checks. Run all test scripts on main pushes and pull
+  requests; require the tagged commit to pass before packaging or publication
+  to GitHub and CurseForge. Add section navigation/lifecycle regression tests
+  and update existing UI checks for the separated content frame.
+- Refresh verification documentation: pet kill credit and persistence are
+  confirmed working in game by the author. Retain historical research results
+  with their original scope. Beast Lore still awaits live testing after the
+  beta level cap rises; stable 1.0 is reserved until that testing is complete.
+- Show question marks for shared-only creatures in the portrait and list reward
+  position until a personal encounter, including while their page is open.
+  Reserve and fade name space around the list marker.
+- Disable observation controls until a personal encounter and explain the
+  requirement on hover. Explain locked controls with an unlock tooltip.
+- Match Locations to the Ranks filter's 320px width and resize its contents.
+- Keep observation windows attached to the main window when Always attempt to
+  anchor is enabled, including restored positions already at the correct edge.
+- Hide the keybinding hint once either Fieldbook action is bound and update it
+  immediately when bindings change.
+- Show Damage taken and Beast Lore scrollbars only when content exceeds their
+  viewport, refreshing after content changes and template layout updates.
+
+### Earlier local changes included in this release
+
+## v0.9.129 - v0.9.136 - Included in v0.9.137-beta
+
+- Show a large question mark instead of a portrait for creatures known only
+  through sharing. Reveal the portrait when personally encountered, including
+  while the creature's page is already open.
+- Show a question mark in the creature list's reward-icon position until a
+  personal encounter, reserving and fading the name space around it.
+- Disable observation controls for creatures not personally encountered and
+  explain the requirement in a hover tooltip. Enable them upon encounter when
+  the entry is unlocked.
+- Match the Locations filter window to the Ranks window's 320px width and
+  resize its text and scrolling content to fit.
+- Keep observation windows attached to the main window when Always attempt to
+  anchor is enabled, including restored positions already at the correct edge.
+- Hide the book's keybinding hint when either Fieldbook action is bound, updating
+  immediately when bindings change.
+- Explain locked observation controls with a short tooltip prompting the user
+  to unlock the creature before editing.
+- Show Damage taken and Beast Lore scrollbars only when their content exceeds
+  the viewport, refreshing after content changes and template layout updates.
+
 ## v0.9.128-beta - 2026-09-26
 
 This release includes all changes since v0.9.99-beta, covering local iterations

@@ -241,7 +241,12 @@ function positions:AvoidWindowOverlap(frame)
             end
         end end
     end
-    if math.abs(left-box.left)<0.01 and math.abs(top-box.top)<0.01 then return end
+    local registration = frames[frame]
+    local anchorToBook = main and registration and frame.afbPinned~=true
+        and (alwaysAnchor or not registration.moved)
+    -- A restored screen position can already be correctly placed beside the
+    -- book. The option still requires replacing its UIParent anchor so it follows.
+    if math.abs(left-box.left)<0.01 and math.abs(top-box.top)<0.01 and not anchorToBook then return end
     -- Opening the book can otherwise drag its already-visible default dialogs
     -- along with it, invalidating their rectangles (including pinned Notes).
     for _, other in ipairs(obstacles) do
@@ -260,8 +265,7 @@ function positions:AvoidWindowOverlap(frame)
         end
     end
     frame:ClearAllPoints()
-    local registration = frames[frame]
-    if main and registration and not registration.moved and frame.afbPinned~=true then
+    if anchorToBook then
         frame:SetPoint("TOPLEFT", book, "TOPLEFT", (left-main.left)/box.ratio, (top-main.top)/box.ratio)
     else
         frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left/box.ratio, top/box.ratio)

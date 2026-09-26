@@ -1,157 +1,8 @@
 """Native enum adapter and mock widget integration; no claim of visual correctness."""
-from pathlib import Path
-import sys
-import re
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / '.codex-test-deps'))
-from lupa.lua51 import LuaRuntime
+from ui_test_harness import ROOT as root, new_ui_client
 
-root=Path(__file__).resolve().parents[1]
-lua=LuaRuntime(unpack_returned_tuples=True)
-lua.globals().buildVersion = re.search(r"^## Version: (\S+)", (root / "AzerothFieldbook.toc").read_text(encoding="utf-8"), re.MULTILINE).group(1)
-lua.execute(r'''
-ns,objects,UISpecialFrames={},{},{}
-secret={}; now=1000000; combat=false; chatState=0; npcID=42; playerName='Alice Sunstrider'
-playerSurname=nil
-function issecretvalue(value) return rawequal(value,secret) end
-function time() return now end
-function InCombatLockdown() return combat end
-function UnitName(unit) if unit=='player' then return playerName,playerSurname end; return 'Creature '..npcID end
-function UnitNameUnmodified(unit) return UnitName(unit) end
--- Forever's Camelot helper, unlike retail, preserves the surname.
-NameUtil={GetFullNameWithoutRealm=function(first,surname)
-    if first and first~='' and surname and surname~='' then return first..' '..surname end
-    return first
-end}
-function UnitCreatureType() return 'Humanoid' end
-function UnitLevel() return 9 end
-function UnitGUID() return 'Creature-0-1-2-3-'..npcID..'-1' end
-function UnitIsDead() return false end
-function GetNormalizedRealmName() error('sharing must not require a realm') end
-function GetRealmName() error('sharing must not require a realm') end
-function GetRealZoneText() return 'Elwynn' end
-metadataVersion=buildVersion
-C_AddOns={GetAddOnMetadata=function(addon,field)
-    assert(addon=='AzerothFieldbook' and field=='Version');return metadataVersion
-end}
-Enum={RegisterAddonMessagePrefixResult={Success=0,DuplicatePrefix=1,InvalidPrefix=2,MaxPrefixes=3},
-    SendAddonMessageResult={Success=0,AddonMessageThrottle=3,ChannelThrottle=8,AddOnMessageLockdown=11,TargetOffline=12},
-    AddOnRestrictionType={Chat=5},AddOnRestrictionState={Inactive=0,Activating=1,Active=2}}
-C_RestrictedActions={GetAddOnRestrictionState=function(kind) assert(kind==5); return chatState end}
-local methods={}
-function methods:SetScript(event,fn)
-    self.scripts[event]=fn
-    if fn and (event=='OnMouseDown' or event=='OnMouseUp' or event=='OnEnter' or event=='OnLeave') then
-        self:EnableMouse(true) -- WoW mouse scripts implicitly enable mouse input.
-    end
-end
-function methods:HookScript(event,fn)
-    local previous=self.scripts[event]
-    self:SetScript(event,function(self,...)
-        if previous then previous(self,...) end
-        fn(self,...)
-    end)
-end
-function methods:EnableMouse(value) self.mouseClick=value; self.mouseMotion=value end
-function methods:EnableMouseWheel(value) self.mouseWheel=value end
-function methods:IsMouseEnabled() return self.mouseClick or self.mouseMotion end
-function methods:IsMouseClickEnabled() return self.mouseClick end
-function methods:IsMouseMotionEnabled() return self.mouseMotion end
-function methods:SetMouseClickEnabled(value) self.mouseClick=value end
-function methods:SetMouseMotionEnabled(value) self.mouseMotion=value end
-function methods:SetText(text)
-    assert(type(text)=='string' or type(text)=='number','UI received nonliteral text: '..type(text))
-    self.text=tostring(text)
-    if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self) end
-end
-function methods:GetText() return rawget(self,'text') or '' end
-function methods:SetSize(w,h) self.width=w;self.height=h end
-function methods:SetWidth(w) self.width=w end
-function methods:SetHeight(h) self.height=h end
-function methods:SetPoint(...)
-    self.point={...};self.points=self.points or {};self.points[#self.points+1]=self.point
-end
-function methods:ClearAllPoints() self.point=nil;self.points={} end
-function methods:SetAlpha(value) self.alpha=value end
-function methods:SetTextColor(...) self.textColor={...} end
-function methods:SetTexCoord(...) self.texCoord={...} end
-function methods:GetPoint() return unpack(self.point or {'CENTER',UIParent,'CENTER',0,0}) end
-function methods:GetName() return self.name end
-function methods:GetLeft() return self.left end
-function methods:GetTop() return self.top end
-function methods:GetEffectiveScale() return self:GetScale()*(self.parent and self.parent:GetEffectiveScale() or 1) end
-function methods:GetWidth() return rawget(self,'width') or 100 end
-function methods:GetHeight() return rawget(self,'height') or 100 end
-function methods:GetStringHeight() return math.max(14,math.ceil(#self:GetText()/math.max(1,math.floor(self:GetWidth()/7)))*14) end
-function methods:SetHorizontalScroll(value) self.horizontalScroll=value end
-function methods:GetStringWidth()
-    local text=self:GetText():gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','')
-    local _,characters=text:gsub('[^\128-\191]','')
-    return characters*6
-end
-function methods:SetIndentedWordWrap(value) self.indentedWrap=value end
-function methods:GetFrameLevel() return rawget(self,'frameLevel') or 10 end
-function methods:SetFrameLevel(value) self.frameLevel=value end
-function methods:SetFrameStrata(value) self.strata=value end
-function methods:SetToplevel(value) self.toplevel=value end
-function methods:Raise() focusedWindow=self end
-function methods:GetChildren()
-    local children={}
-    for _,object in ipairs(objects) do
-        if object.parent==self and object.kind~='Texture' and object.kind~='FontString' then
-            children[#children+1]=object
-        end
-    end
-    return unpack(children)
-end
-function methods:Show() self.shown=true end
-function methods:Hide() self.shown=false; if self.scripts.OnHide then self.scripts.OnHide(self) end end
-function methods:SetShown(v) self.shown=v end
-function methods:IsShown() return self.shown end
-function methods:SetEnabled(v) self.enabled=v end
-function methods:SetChecked(v) self.checked=v end
-function methods:GetChecked() return self.checked end
-function methods:SetScale(v) self.scale=v end
-function methods:GetScale() return rawget(self,'scale') or 1 end
-function methods:SetClampedToScreen(v) self.clamped=v end
-function methods:SetFocus() self.focus=true end
-function methods:ClearFocus() self.focus=false end
-function methods:SetVerticalScroll(v) self.scroll=v end
-function methods:GetVerticalScroll() return rawget(self,'scroll') or 0 end
-function methods:GetVerticalScrollRange() return 0 end
-function methods:CreateTexture() return CreateFrame('Texture',nil,self) end
-function methods:CreateFontString() return CreateFrame('FontString',nil,self) end
-function CreateFrame(kind,name,parent,template)
-    local f={kind=kind,name=name,parent=parent,scripts={},shown=true,enabled=true}
-    local interactive=kind=='Button' or kind=='CheckButton' or kind=='EditBox' or kind=='Slider'
-    f.mouseClick=interactive; f.mouseMotion=interactive
-    setmetatable(f,{__index=function(_,k)
-        if methods[k] then return methods[k] end
-        if k:match('^%u') then return function() end end
-    end})
-    objects[#objects+1]=f; if name then _G[name]=f end
-    if template=='UIPanelScrollFrameTemplate' then
-        f.ScrollBar=CreateFrame('Slider',nil,f)
-        f.ScrollBar:SetWidth(16)
-        f.ScrollBar.ScrollUpButton=CreateFrame('Button',nil,f.ScrollBar)
-        f.ScrollBar.ScrollDownButton=CreateFrame('Button',nil,f.ScrollBar)
-        f.ScrollBar.ScrollUpButton:SetSize(16,16)
-        f.ScrollBar.ScrollDownButton:SetSize(16,16)
-    end
-    return f
-end
-function CreateFont(name)
-    local font={}
-    function font:CopyFontObject() end
-    function font:GetFont() return 'test-font',12,'' end
-    function font:SetFont(path,size,flags) self.size=size end
-    _G[name]=font
-    return font
-end
-UIParent=CreateFrame('Frame'); UIParent:SetSize(1920,1080)
-function eq(a,b,label) assert(a==b,(label or '')..': '..tostring(a)..' ~= '..tostring(b)) end
-function plain(text) return text:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','') end
-''')
-for name in ['Scrollbars.lua','ActionButtons.lua','WindowFocus.lua','WindowPositions.lua','UIScale.lua','SharingReport.lua','PlayerNames.lua','BestiaryBackups.lua','BestiaryJournal.lua','Sharing.lua','SharingWindow.lua','CreatureNotes.lua','RumoursWindow.lua','BackupWindow.lua','BestiaryBook.lua','DebugReport.lua']:
+lua=new_ui_client()
+for name in ['Scrollbars.lua','ActionButtons.lua','WindowFocus.lua','WindowPositions.lua','UIScale.lua','SharingReport.lua','PlayerNames.lua','BestiaryBackups.lua','BestiaryJournal.lua','Sharing.lua','SharingWindow.lua','CreatureNotes.lua','RumoursWindow.lua','BackupWindow.lua','FieldbookShell.lua','BestiaryPages.lua','BestiaryBook.lua','DebugReport.lua']:
     lua.execute((root/name).read_text(encoding='utf-8'),'AzerothFieldbook',lua.globals().ns)
 
 lua.execute(r'''
@@ -339,14 +190,15 @@ local env={ready=true,addonVersion=buildVersion,character='Alice Sunstrider',now
 local engine=ns.CreateSharing(j,env)
 local book=ns.CreateBestiaryBook(j)
 book:OpenAtUnit('target')
-local main=AzerothFieldbookBestiary
-assert(not main.titleIcon:IsMouseClickEnabled() and not main.detail:IsMouseClickEnabled(),
+local main=AzerothFieldbookBestiarySection
+local window=book:GetShell():GetFrame()
+assert(not window.titleIcon:IsMouseClickEnabled() and not main.detail:IsMouseClickEnabled(),
     'full-book decorative overlays must not intercept clicks on the journal controls')
-assert(not main.titleIcon.scripts.OnMouseDown and not main.detail.scripts.OnMouseDown,
+assert(not window.titleIcon.scripts.OnMouseDown and not main.detail.scripts.OnMouseDown,
     'focus must not install mouse handlers on decorative containers')
 main.options.scripts.OnShow(main.options)
 local blockOffers=main.options.blockIncomingOffers
-main.eventLogButton.scripts.OnClick()
+window.eventLogButton.scripts.OnClick()
 main.eventLog.scripts.OnShow(main.eventLog)
 assert(main.eventLog:IsShown(),'fourth title button opens log')
 assert(main.eventLog:GetHeight()==200 and not main.eventLog.older:IsShown(),'empty log is compact without pagination')
@@ -357,7 +209,7 @@ main.eventLog.older.scripts.OnClick()
 assert(main.eventLog.text:GetText():find('Log event 1',1,true),'older page remains available')
 assert(not main.eventLog.text:GetText():find('Log event 51',1,true),'history renders in bounded pages')
 assert(main.eventLog:GetHeight()<767,'short history page shrinks to fit')
-main.eventLogButton.scripts.OnClick()
+window.eventLogButton.scripts.OnClick()
 assert(not main.eventLog:IsShown(),'fourth title button toggles log closed')
 local anchorOption=main.options.alwaysAnchorToMain
 assert(anchorOption:GetChecked() and j:GetAlwaysAnchorToMain(),'main anchoring defaults on')
@@ -374,7 +226,7 @@ main.options.scripts.OnShow(main.options)
 assert(blockOffers:GetChecked(),'reopening Options reflects the saved preference')
 blockOffers:SetChecked(false); blockOffers.scripts.OnClick(blockOffers)
 assert(not j:GetBlockIncomingOffers(),'checkbox can allow offers again')
-assert(main.windowTitle.text:find(buildVersion,1,true),'book displays the installed TOC version')
+assert(window.windowTitle.text:find(buildVersion,1,true),'book displays the installed TOC version')
 assert(main.shareButton.enabled)
 main.shareButton.scripts.OnClick()
 local composer=AzerothFieldbookShare
@@ -469,7 +321,7 @@ eq(main.killCount.point[2],main.rumoursButton,'Rumours is between Kills and Crea
 main.rumoursButton.scripts.OnClick()
 local rumours=AzerothFieldbookRumours
 assert(rumours.shown and rumours.clamped and notes.shown)
-eq(rumours.point[2],main,'resizing Rumours preserves its book-relative default')
+eq(rumours.point[2],window,'resizing Rumours preserves its shared-window default')
 eq(main.offensePicker.point[2],main,'observation defaults use the main window, not a moved damage dialog')
 eq(main.rankFrame.point[2],main,'rank default uses the main window, not a moved location dialog')
 local escapeRegistered=false
@@ -663,10 +515,10 @@ do
     eq(block:GetHeight(),bottom+14,'Points block includes both sections and bottom padding')
 end
 ns.ShowDebugReport('Position test')
-local windows={main,main.help,main.options,main.locationFrame,main.rankFrame,
+local windows={window,main.help,main.options,main.locationFrame,main.rankFrame,
     main.offensePicker,main.defensePicker,main.behaviourPicker,AzerothFieldbookBestiaryDamageNotes,
     notes,rumours,composer,receiver,AzerothFieldbookDebugReport}
-for _,frame in ipairs({main,main.help,main.options,main.locationFrame,main.rankFrame,
+for _,frame in ipairs({window,main.help,main.options,main.locationFrame,main.rankFrame,
     main.offensePicker,main.defensePicker,main.behaviourPicker,main.notesForm,
     main.effectPicker,main.damageForm,main.deleteForm,notes,rumours,composer,receiver,AzerothFieldbookDebugReport}) do
     assert(frame.parent==UIParent and frame.strata=='DIALOG' and frame.toplevel,
@@ -677,8 +529,8 @@ composer.recipient.scripts.OnMouseDown(composer.recipient)
 eq(focusedWindow,composer,'clicking a text field raises its own window')
 notes.notesArea.scripts.OnMouseDown(notes.notesArea,'LeftButton')
 eq(focusedWindow,notes); assert(notes.notes.focus,'focus hooks preserve the original control handler')
-main.titleBar.scripts.OnMouseDown(main.titleBar)
-eq(focusedWindow,main,'the book can return to the front after its independent dialogs')
+window.titleBar.scripts.OnMouseDown(window.titleBar)
+eq(focusedWindow,window,'the book can return to the front after its independent dialogs')
 local lateControl=CreateFrame('Button',nil,composer)
 local decoration=CreateFrame('Frame',nil,composer)
 local hoverOnly=CreateFrame('Frame',nil,decoration)
@@ -717,9 +569,9 @@ for key,frame in pairs({AbilityEffects=main.effectPicker,DamageObservation=main.
     assert(db.windowPositions[key],key..' must save its position')
 end
 GetCursorPosition=function() return 10,20 end
-main.titleBar.scripts.OnDragStart()
-main.left=360; main.top=740; main.titleBar.scripts.OnDragStop()
-eq(db.windowPositions.AzerothFieldbookBestiary.left,360*main:GetEffectiveScale(),'titlebar drag saves the book')
+window.titleBar.scripts.OnDragStart()
+window.left=360; window.top=740; window.titleBar.scripts.OnDragStop()
+eq(db.windowPositions.AzerothFieldbookBestiary.left,360*window:GetEffectiveScale(),'titlebar drag saves the book')
 
 -- Short reports shrink; long metadata and many wrapped claims keep scrolling
 -- without allowing footer controls to overlap the report contents.
@@ -857,7 +709,8 @@ do
     local j=ns.CreateBestiaryJournal({},function() return nil end)
     for i=1,35 do local entry=j:Ensure(i,false,string.format('Creature %02d',i));entry.category='Beast' end
     local book=ns.CreateBestiaryBook(j);book:Toggle()
-    local main=AzerothFieldbookBestiary
+    local main=AzerothFieldbookBestiarySection
+local window=book:GetShell():GetFrame()
     eq(#main.rows,16);assert(main.creatureScrollBar.shown)
     eq(-main.rows[16].point[3]+main.rows[16]:GetHeight(),588,'list fills space to eight pixels above navigation')
     local width=main.rows[1]:GetWidth()
@@ -933,8 +786,36 @@ do
     eq(#sources,2);eq(sources[1],'Erna Lionguard');eq(sources[2],'Peww Pewz')
     eq(#j:GetSharedSources(99),0)
     local book=ns.CreateBestiaryBook(j);book:Toggle()
-    local main=AzerothFieldbookBestiary
+    local main=AzerothFieldbookBestiarySection
+local window=book:GetShell():GetFrame()
     main.rows[1].scripts.OnClick(main.rows[1])
+    assert(main.modelUnknown.shown and not main.model.shown,'shared-only portrait is a question mark')
+    assert(main.rows[1].unknownMark.shown and not main.rows[1].killReward.shown,'shared-only list entry shows a question mark instead of a reward')
+    eq(main.rows[1].text:GetWidth(),121,'question mark reserves name space')
+    local observationButtons={main.damageButton,main.offenseButton,main.defenseButton,
+        main.behaviourButton,main.effectButton,main.confirmAbilityButton}
+    for _,control in ipairs(observationButtons) do
+        assert(not control.enabled and control.encounterHint.shown,'shared-only observations are disabled with a hover explanation')
+    end
+    local previousTooltip=GameTooltip
+    GameTooltip={SetOwner=function(self,owner) self.owner=owner end,
+        SetText=function(self,text) self.title=text end,AddLine=function(self,text) self.line=text end,
+        Show=function(self) self.shown=true end,Hide=function(self) self.shown=false end,
+        IsOwned=function(self,owner) return self.owner==owner end}
+    local hint=main.damageButton.encounterHint
+    hint.scripts.OnEnter(hint)
+    assert(GameTooltip.shown and GameTooltip.line:find('not personally encountered',1,true))
+    hint.scripts.OnLeave(hint);assert(not GameTooltip.shown)
+    GameTooltip=previousTooltip
+    local originalSetCreature=main.model.SetCreature
+    local portraitLoads=0
+    main.model.SetCreature=function(self,id)
+        assert(j.entries[id].personalEncountered==true,'shared IDs must not load creature artwork')
+        portraitLoads=portraitLoads+1
+        return originalSetCreature(self,id)
+    end
+    main.rows[1].scripts.OnClick(main.rows[1])
+    eq(portraitLoads,0,'reselecting shared info does not load its portrait')
     assert(main.sourceStatus.text:find('Erna Lionguard',1,true))
     assert(main.sourceTooltip.text:find('Peww Pewz',1,true) and main.sourceTooltip.text:find('Not personally encountered',1,true))
     local tooltip=GameTooltip
@@ -969,8 +850,19 @@ do
     RAID_CLASS_COLORS=oldColours
 
     j:Observe('mouseover');book:Refresh()
+    assert(not main.modelUnknown.shown and main.model.shown,'personal encounter reveals the open portrait')
+    eq(portraitLoads,1,'encounter refresh loads the newly revealed portrait')
+    assert(not main.rows[1].unknownMark.shown,'personal encounter removes the list question mark')
+    for _,control in ipairs(observationButtons) do
+        assert(control.enabled and not control.encounterHint.shown,'encounter enables unlocked observations')
+    end
     eq(main.sourceStatus.text,'');assert(not main.sourceTooltip.shown,'personal encounter hides portrait attribution')
     j:SetEntryConfirmed(42,true);book:Refresh()
+    for _,control in ipairs(observationButtons) do
+        assert(not control.enabled and control.encounterHint.shown,'locked observations have a hover explanation')
+        eq(control.encounterHint.title,'Creature locked')
+        eq(control.encounterHint.description,'Unlock this creature to edit its observations.')
+    end
     eq(main.sourceStatus.text,'');assert(not main.sourceTooltip.shown,'locking does not restore attribution')
     assert(e.lockedBasic.sources==nil,'source display never changes the saved basic-info schema')
 

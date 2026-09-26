@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.128 (Beta)
+# Azeroth Fieldbook 0.9.137 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,11 +6,13 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.128 includes sharing, addon-version compatibility
+spell databases. Version 0.9.137 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.128.
+are not part of version 0.9.137. Development will continue through 0.x Beta
+milestones as those sections are added. Stable 1.0 is reserved until Beast Lore
+has been tested in game; it does not require every future section to be complete.
 
 ## Installation and opening
 
@@ -189,7 +191,7 @@ book shows lifetime **knowledge earned**. Sharing shows **available** knowledge:
 earned minus spending and active reservations. Spending never removes kills,
 stars, crowns or discovery progress.
 
-## Sharing and Rumours (development)
+## Sharing and Rumours
 
 Options includes **Block incoming offers**, off by default and saved per character.
 Enable it to automatically decline new offers and close unaccepted offers, with
@@ -457,7 +459,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.128 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.137 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,
@@ -469,21 +471,39 @@ binding labels, preserving assigned keys across the rename.
 
 ## Verification
 
-Python/lupa Lua 5.1 tests in `tests/` cover observation boundaries, persistence,
-legacy migration, encounter attribution, filters, manual notes, damage records,
-creature traits, kill counting, tooltips and mocked native UI construction.
-Account-tracking tests cover migration, replay protection, separate character
-journals, shared event recording, knowledge balances, transfer ownership and resets.
-Backup tests cover literal export/import, Unicode notes, malformed data, snapshot
-isolation, retention, reset/reload recovery, tracking scopes, knowledge continuity,
-live transfers and the preview/confirmation UI workflow.
-Sharing adds simulated two-client protocol tests, enum/error handling, migration,
-credit preservation, import isolation, malformed reports, consent, retries and
-rumour verification, manual matching, rejection history and mocked window interactions. In-game rendering, real Forever WHISPER
-restrictions and cross-client persistence still require live verification; see
-[the research notes and acceptance test](tests/SHARING.md). Live persistence and
-reload/reconnect checks are currently blocked by an operator-reported WoW Forever
-persistence bug. The successful in-session sharing results remain confirmed.
+On 2026-09-27, the author confirmed that pet kills award credit correctly and
+that the Forever SavedVariables bug is fixed: data and settings persist across
+reloads/logins. Earlier research notes describing those checks as blocked or
+unverified are historical. In-session sharing delivery and attribution were
+also verified during Beta development.
+
+**Beast Lore remains pending live verification** until the Forever beta level
+cap allows testing the spell. Its automated tests use public-tooltip mocks;
+they do not establish live capture, rendering or two-player lore delivery.
+See the [current verification record](tests/VERIFICATION.md) and
+[Beast Lore acceptance checklist](tests/BEAST_LORE.md).
+
+Python/lupa tests run the addon using Lua 5.1. They cover observation boundaries,
+kill attribution, discovery credit, account migration, notes, abilities,
+backups/restoration, sharing and retries, Rumours, window controls, positions,
+scaling and section navigation. Native rendering and client restrictions still
+require in-game observation. The shell extraction preserves the current Bestiary
+layout; its final visual smoke check remains an in-game check.
+
+To run the complete suite from the repository root with Python 3.12:
+
+```text
+python -m pip install -r tests/requirements.txt
+python -B -X utf8 tests/run_tests.py
+```
+
+The runner validates Lua syntax, TOC contents, bindings and release-version
+consistency, then runs every `test_*.py` script in a separate process. GitHub
+runs the same checks on `main` pushes and pull requests. A release tag runs them
+again on the tagged commit; packaging and GitHub/CurseForge publication start
+only after they pass.
+
+Section integration is described in [the architecture notes](tests/ARCHITECTURE.md).
 
 ## About
 

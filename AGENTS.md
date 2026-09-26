@@ -227,7 +227,27 @@ An automated upload succeeding does not imply CurseForge moderation approval.
 Every release should represent meaningful changes and have an appropriate
 changelog. Do not create trivial releases solely to increase project visibility.
 
+## Automated checks and section architecture
+
+Run `python -B -X utf8 tests/run_tests.py` from the repository root. Install the
+pinned test dependency with `python -m pip install -r tests/requirements.txt`.
+The suite contains both unittest modules and scripts with top-level Lua
+assertions; unittest discovery alone is not a substitute for the full runner.
+The tag-triggered release workflow must keep its dependency on the automated
+test workflow so failing tagged commits cannot publish.
+
+`FieldbookShell.lua` owns the main window and section/page navigation.
+`BestiaryBook.lua` owns the Bestiary content; `BestiaryPages.lua` supplies its
+Help, Options and Event log contents. See `tests/ARCHITECTURE.md` before adding
+sections. Preserve existing window-position keys and Bestiary data compatibility.
+
 ## Scope
+
+The operator reserves stable 1.0 for successful live Beast Lore testing after
+the Forever beta level cap permits it, regardless of other sections' progress.
+Additional sections may use later 0.x Beta milestones such as 0.10.0 and 0.11.0.
+This preparation batch remains on the current 0.9 line; future milestone jumps
+follow the operator's requested scope/version.
 
 Azeroth Fieldbook may later expand beyond the Bestiary into gathering or
 collection journals such as herbs, minerals, or skinning.

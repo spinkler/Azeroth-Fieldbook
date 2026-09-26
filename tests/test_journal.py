@@ -172,6 +172,13 @@ lua.execute(r'''
 objects={}
 local methods={}
 function methods:SetScript(event,fn) self.scripts[event]=fn end
+function methods:HookScript(event,fn)
+    local previous=self.scripts[event]
+    self:SetScript(event,function(self,...)
+        if previous then previous(self,...) end
+        fn(self,...)
+    end)
+end
 function methods:SetText(text)
     self.text=text
     if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self) end
@@ -216,9 +223,10 @@ local function object(kind,parent)
 end
 function methods:CreateTexture() return object('Texture',self) end
 function methods:CreateFontString() return object('FontString',self) end
+function methods:GetName() return self.name end
 function CreateFrame(kind,name,parent)
     local o=object(kind,parent)
-    if name then _G[name]=o end
+    if name then _G[name]=o; o.name=name end
     return o
 end
 function CreateFont(name)
@@ -232,7 +240,7 @@ end
 UIParent=CreateFrame('Frame'); UIParent:SetSize(1920,1080)
 UISpecialFrames={}
 ''')
-for name in ['Scrollbars.lua','ActionButtons.lua']:
+for name in ['Scrollbars.lua','ActionButtons.lua','FieldbookShell.lua','BestiaryPages.lua']:
     lua.execute(root.joinpath(name).read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(root.joinpath('CreatureNotes.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(root.joinpath('BestiaryBook.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
@@ -255,7 +263,7 @@ do
 end
 controller=ns.CreateBestiaryBook(journal)
 controller:Toggle()
-check(AzerothFieldbookBestiary:IsShown(),'book opens')
+check(AzerothFieldbookBestiarySection:IsShown(),'book opens')
 check(#UISpecialFrames==13 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
 check(controller:OpenAtUnit('mouseover'),'mouseover binding opens the observed NPC page')
 for _,o in ipairs(objects) do check(o.text~='Your note','empty manual field note stays visually empty') end
@@ -268,7 +276,7 @@ end
 check(click('Record damage taken'),'damage form opens')
 check(click('Cancel'),'damage form closes')
 check(click('All'),'category selection')
-local indexBook=AzerothFieldbookBestiary
+local indexBook=AzerothFieldbookBestiarySection
 do
     local control=indexBook.typeButtons['All creatures']
     for _,control in ipairs({indexBook.locationsButton,indexBook.ranksButton}) do
@@ -306,15 +314,15 @@ check(indexBook.review.afbSelected and indexBook.review.normalFont=='AzerothFiel
 check(click('Pending'),'review filter clears using the same label')
 check(not indexBook.review.afbSelected and indexBook.review.normalFont=='AzerothFieldbookFilterGameFontDisable','pending filter returns to grey text')
 check(click('Locations') and AzerothFieldbookBestiaryLocations:IsShown(),'location filter window opens')
-for _,control in ipairs({AzerothFieldbookBestiary.offenseButton,AzerothFieldbookBestiary.defenseButton,
-    AzerothFieldbookBestiary.behaviourButton,AzerothFieldbookBestiary.effectButton,
-    AzerothFieldbookBestiary.confirmAbilityButton,AzerothFieldbookBestiary.manualName}) do
+for _,control in ipairs({AzerothFieldbookBestiarySection.offenseButton,AzerothFieldbookBestiarySection.defenseButton,
+    AzerothFieldbookBestiarySection.behaviourButton,AzerothFieldbookBestiarySection.effectButton,
+    AzerothFieldbookBestiarySection.confirmAbilityButton,AzerothFieldbookBestiarySection.manualName}) do
     check(not control.enabled,'locked editor disabled')
 end
-check(AzerothFieldbookBestiary.creatureNotesButton.enabled,'notes button stays enabled')
+check(AzerothFieldbookBestiarySection.creatureNotesButton.enabled,'notes button stays enabled')
 check(click('Unlock this entry'),'confirmed entry unlocks')
 check(not journal.entries[42].confirmed,'unlock state saved')
-check(AzerothFieldbookBestiary.offenseButton.enabled and AzerothFieldbookBestiary.confirmAbilityButton.enabled,'unlock restores editing')
+check(AzerothFieldbookBestiarySection.offenseButton.enabled and AzerothFieldbookBestiarySection.confirmAbilityButton.enabled,'unlock restores editing')
 check(click('Offenses') and AzerothFieldbookBestiaryOffenses:IsShown(),'offenses window opens')
 check(click('Defenses') and AzerothFieldbookBestiaryDefenses:IsShown(),'defenses window opens')
 check(click('Behaviour') and AzerothFieldbookBestiaryBehaviour:IsShown(),'behaviour window opens')
@@ -353,7 +361,7 @@ check(behaviour:IsShown() and not defense:IsShown(),'enabling option retains lat
 for _,item in ipairs({{'Locations',AzerothFieldbookBestiaryLocations},
     {'Ranks',AzerothFieldbookBestiaryRanks},{'Offenses',offense},
     {'Defenses',defense},{'Behaviour',behaviour},
-    {'Choose effects',AzerothFieldbookBestiary.effectPicker}}) do
+    {'Choose effects',AzerothFieldbookBestiarySection.effectPicker}}) do
     item[2]:Hide()
     check(click(item[1]) and item[2]:IsShown(),'button opens '..item[1])
     check(click(item[1]) and not item[2]:IsShown(),'button closes '..item[1])
@@ -404,8 +412,8 @@ check(db.spellIDWindowAlpha==0.7,'opacity control saves setting')
 options.spellIDWindowLocked.GetChecked=function() return true end
 options.spellIDWindowLocked.scripts.OnClick(options.spellIDWindowLocked)
 check(db.spellIDWindowLocked,'lock checkbox saves setting')
-controller:Toggle(); check(not AzerothFieldbookBestiary:IsShown(),'book closes')
-controller:Toggle(); check(AzerothFieldbookBestiary:IsShown(),'book reopens')
+controller:Toggle(); check(not AzerothFieldbookBestiarySection:IsShown(),'book closes')
+controller:Toggle(); check(AzerothFieldbookBestiarySection:IsShown(),'book reopens')
 controller:OpenNotes()
 local notes=AzerothFieldbookCreatureNotes
 check(notes:IsShown() and notes.creature.text==journal.entries[42].name..' |cff999999[#42]|r','notes opens for selected creature with grey ID')
@@ -413,7 +421,7 @@ notes.spellInput:SetText('6268'); notes.spellInput.scripts.OnEnterPressed(notes.
 notes.notes:SetText('Boar field notes')
 journal:Ensure(43,false,'Other creature'); controller:Refresh()
 local function selectEntry(id)
-    for _,row in ipairs(AzerothFieldbookBestiary.rows) do
+    for _,row in ipairs(AzerothFieldbookBestiarySection.rows) do
         if row.id==id then row.scripts.OnClick(row); return end
     end
     error('entry not visible')
@@ -423,7 +431,7 @@ check(notes.creature.text=='Other creature |cff999999[#43]|r' and notes.count.te
 selectEntry(42)
 check(notes.count.text=='1/10' and notes.notes.text=='Boar field notes','book selection restores notes')
 check(click('Creature Notes'),'creature notes button opens window')
-local abilityBook=AzerothFieldbookBestiary
+local abilityBook=AzerothFieldbookBestiarySection
 local savedAbilities=journal.entries[42].abilities
 local savedLock=journal.entries[42].confirmed
 journal:SetEntryConfirmed(42,false)
@@ -483,7 +491,7 @@ for _,sample in ipairs({{9,false,false},{10,true,false},{25,true,false},{50,true
     end
 end
 journal.entries[42].kills=savedKills; controller:Refresh()
-local damageBook=AzerothFieldbookBestiary
+local damageBook=AzerothFieldbookBestiarySection
 local savedDamage=journal.entries[42].damage
 journal.entries[42].damage={}
 damageBook.damageScrollBar=CreateFrame('Frame')
@@ -519,7 +527,7 @@ check(journal.entries[42] and not deletion:IsShown(),'escape cancels deletion')
 db.bestiary.creatures[42]={spells={}}
 click('Delete'); deletion.input:SetText('delete'); deletion.input.scripts.OnEnterPressed(deletion.input)
 check(not journal.entries[42] and not db.bestiary.creatures[42],'confirmed deletion removes locked entry and legacy data')
-check(journal.entries[43] and not AzerothFieldbookBestiary.deleteButton.enabled,'other entries survive; no selection disables delete')
+check(journal.entries[43] and not AzerothFieldbookBestiarySection.deleteButton.enabled,'other entries survive; no selection disables delete')
 check(notes.count.text=='0/10','deleted creature notes cleared from window')
 local reloaded=ns.CreateBestiaryJournal(db,function() return nil end)
 check(not reloaded.entries[42],'deleted entry does not return through legacy migration')

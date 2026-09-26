@@ -409,6 +409,33 @@ class WindowPositionTests(unittest.TestCase):
         """)
 
 
+    def test_always_anchor_attaches_restored_observation_windows_even_without_moving(self):
+        self.lua.execute('''
+            UIParent.width=1800;UIParent.height=1000
+            local book=CreateFrame()
+            book.left=100;book.top=900;book.width=800;book.height=700;book.shown=true
+            AzerothFieldbookBestiary=book
+            for _,name in ipairs({'Offenses','Defenses','Behaviour'}) do
+                local dialog=CreateFrame()
+                dialog.width=300;dialog.height=250
+                dialog.afbPreferBookEdge=true;dialog.afbAnchorRule='right'
+                dialog.afbAlignBookBottom=true
+                db.windowPositions[name]={left=900,top=450}
+                ns.WindowPositions:Register(dialog,name)
+                assert(dialog.anchor[2]==UIParent,'saved position initially uses screen coordinates')
+                ns.WindowPositions:AvoidWindowOverlap(dialog)
+                assert(dialog.anchor[2]==book,'enabled option must attach even when already correctly positioned')
+                near(dialog.anchor[4],800);near(dialog.anchor[5],-450)
+                db.alwaysAnchorToMain=false
+                ns.WindowPositions:Restore(dialog)
+                ns.WindowPositions:AvoidWindowOverlap(dialog)
+                assert(dialog.anchor[2]==UIParent,'disabled option preserves independent saved position')
+                db.alwaysAnchorToMain=true;dialog.afbPinned=true
+                ns.WindowPositions:AvoidWindowOverlap(dialog)
+                assert(dialog.anchor[2]==UIParent,'pinned windows remain independent')
+            end
+        ''')
+
     def test_secret_geometry_on_show_is_neither_calculated_nor_saved(self):
         self.lua.execute('''
             UIParent.width=1400;UIParent.height=900

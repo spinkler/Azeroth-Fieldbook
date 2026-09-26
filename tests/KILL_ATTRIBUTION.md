@@ -1,5 +1,13 @@
 # Kill attribution: implementation and live evidence
 
+## Current verification — 2026-09-27
+
+The operator has tested pet kills and confirmed that they give credit correctly.
+The Forever SavedVariables bug is also fixed, with data/settings persisting
+across reloads/logins. These confirmations supersede the older unverified-pet
+and blocked-persistence status below. Historical captures remain for diagnosis;
+they are not the current release checklist. See [VERIFICATION.md](VERIFICATION.md).
+
 ## Current policy — 0.9.119
 
 The user's current rule is **tag eligibility**, replacing the historical
@@ -34,11 +42,15 @@ Automated tests cover this ordering, pet/party/raid roles, outside finishers,
 low-level and no-loot deaths, denied and unreadable tags, first-seen corpses,
 49 → 50 → 51 with no `PARTY_KILL`, duplicate suppression and reload persistence.
 Mocks validate the policy and recorded ordering, not additional live API behavior.
-Live verification after `/reload`: let a pet finish an eligible creature and
-check one increment, inspect its corpse repeatedly, and check that killing a
-denied-tag creature adds nothing. The new code has not yet been verified in game.
+Pet credit was subsequently confirmed in game by the operator on 2026-09-27.
+For future regressions, repeat an eligible pet kill, corpse reinspection and a
+denied-tag kill. The operator confirmation does not supply a new per-scenario
+capture or exact client build number.
 
 ## Historical implementation and captures (0.9.11 onward)
+
+Status statements in this archive describe their original test dates. Current
+pet-credit and persistence status is recorded at the top of this document.
 
 The remainder records the previous finishing-blow policy and its original
 validation. Its actor/event requirements are superseded by 0.9.119 above.

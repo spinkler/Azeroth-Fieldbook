@@ -1,5 +1,10 @@
 # Beast Lore in-game checks
 
+Status on 2026-09-27: pending the WoW Forever beta level-cap increase. The
+operator is reserving stable 1.0 until this feature is tested, independently
+of progress on other Fieldbook sections. The general SavedVariables blocker
+has been resolved; Beast Lore itself still needs its own persistence check.
+
 Automated Lua tests cover event routing and public tooltip mocks, not live spell
 delivery or visual correctness. Use two players on the same addon version.
 

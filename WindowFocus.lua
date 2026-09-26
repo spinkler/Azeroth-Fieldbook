@@ -24,7 +24,7 @@ local function watch(frame, window)
 end
 
 function focus:Register(window, strata)
-    if windows[window] then return end
+    if windows[window] then watch(window,window); return end
     windows[window] = true
     if ns.WindowPositions then ns.WindowPositions:Track(window) end
     -- Raise only works within one strata. Native top-level handling also raises

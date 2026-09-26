@@ -1,5 +1,17 @@
 # Point-funded sharing: implementation and live checkpoint
 
+## Current verification — 2026-09-27
+
+The operator confirms that the Forever SavedVariables bug is fixed and data
+and settings persist across reloads/logins. Persistence is no longer blocked.
+Existing in-session sharing, receipt and attribution results remain confirmed.
+The detailed scenarios below are retained as a regression checklist, not a claim
+that each network interruption/faction/throttle case has a recorded live pass.
+Beast Lore capture and lore delivery remain pending the beta level-cap increase.
+See [VERIFICATION.md](VERIFICATION.md) for the current release record.
+
+## Historical development baseline
+
 Development baseline: clean `main`, `f33e392`, TOC 0.8.3 / interface 16001.
 Release version: 0.9.11 Beta, including account-wide tracking and the separate Rumours review window,
 updated kill thresholds and Index toggle after the operator-designated 0.9.0 sharing
@@ -254,13 +266,12 @@ recipient-side attribution, and separation from recorded abilities for this case
 Reload persistence, group/faction relationship, and interruption handling remain
 part of the acceptance checks below.
 
-**Live persistence testing is blocked:** on 2026-09-25, the operator reported
-that a current WoW Forever bug prevents persistence. Defer reload/reconnect-based
-checks until that client issue is resolved. Automated persistence/reload tests
-have passed with simulated SavedVariables; live persistence remains unverified.
-The confirmed in-session delivery, acknowledgement and import results still stand.
+**Historical blocker, resolved 2026-09-27:** the operator reported a Forever
+SavedVariables bug on 2026-09-25, then confirmed that it was fixed and data/settings
+were saving correctly. Earlier deferrals no longer apply. Simulated transaction
+recovery tests and in-session live delivery remain useful independent evidence.
 
-## Two-player acceptance test — partially verified
+## Two-player regression checklist
 
 **Stop at step 1 if real native delivery fails.** Record client build, exact
 recipient spelling, relationship/group status and both UI status messages before
@@ -277,7 +288,7 @@ considering another transport. Mock tests cannot establish networking or layout.
    A must show acknowledged completion and exactly one spent point; B's balance
    stays unchanged. Repeat the reachability check grouped if ungrouped delivery
    failed; do not claim ungrouped support from a grouped result.
-2. Both clients install the same updated protocol-3 addon version. A selects at least three
+2. Both clients install the same updated protocol-4 addon version. A selects at least three
    separate local records, including a manually entered ability or trait, and
    sends to B. Additional selections must remain available. Three rumours must
    cost 4 points total; each selection/deselection changes the cost by one point.
@@ -292,13 +303,13 @@ considering another transport. Mock tests cannot establish networking or layout.
 3. Decline another offer; A's reservation returns and spending does not increase.
    B, if still at zero earned points, tries to share its imported entry: insufficient
    funds must prevent sending. Merely accepting reports never funds this attempt.
-4. **Deferred until the reported client persistence bug is resolved.** Reload
+4. Persistence is now working; use this as an upgrade regression check. Reload
    both clients. Verify earned/spent balances, shared basics, attribution,
    notes and rumour rejection/verification history. B later genuinely encounters the NPC: first
    discovery earns once; already-shared but newly personal levels/zones remain
    eligible. Delete/reimport/re-encounter the same milestones: no repeat credit.
-5. Try an offline/disabled-addon recipient: useful failure, no spending. Defer
-   the following reload/reconnect checks until the client persistence bug is fixed.
+5. Try an offline/disabled-addon recipient: useful failure, no spending. For
+   interruption/reconnect coverage, use the following scenarios.
    For a deterministic interruption, reload A while B is previewing an unaccepted offer.
    A's reservation must return; a later acceptance of that abandoned preview must
    not import. If a real disconnect can be reproduced **after A shows spent points
@@ -319,10 +330,10 @@ considering another transport. Mock tests cannot establish networking or layout.
 Before a new offer, also test a deliberate addon-version mismatch between clients
 that support protocol 4: the sender must see both versions, send no report payload,
 spend no points, and regain its reservation. Restore matching versions for later
-checks. Do this when installing/reloading test builds is practical given the
-current client persistence bug; the existing automated mismatch checks already pass.
+checks. The existing automated mismatch checks also exercise this path.
 
-Outstanding: separate-window layout, verification/manual matching and repeat-rejection warnings in game;
+Historical acceptance checklist (retain for regression testing; these are not all current blockers):
+separate-window layout, verification/manual matching and repeat-rejection warnings in game;
 installed-version mismatch reporting in game, per-rumour pricing and selections above two in game, basic-only
 delivery, recipient-side balance checks and locked entries,
 declines, insufficient funds, interrupted transfers/retries, broader whisper

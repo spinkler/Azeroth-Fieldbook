@@ -51,9 +51,16 @@ end
 
 -- Keep the template's scrolling behavior, but only display its controls when
 -- there is content outside the viewport. Range changes also cover EditBox text.
-function ns.AutoHideScrollBar(scroll)
+function ns.AutoHideScrollBar(scroll, contentHeight)
+    local updating=false
     local function update(self)
+        if updating then return end
+        updating=true
         local range = math.max(0, tonumber(self:GetVerticalScrollRange()) or 0)
+        if contentHeight then
+            range=math.max(0,(tonumber(contentHeight()) or 0)-(tonumber(self:GetHeight()) or 0))
+            if range<0.5 then range=0 end -- Ignore subpixel layout rounding.
+        end
         local bar = self.ScrollBar
         if type(bar) == "function" then bar = nil end
         if not bar and type(self.GetScrollBar) == "function" then bar = self:GetScrollBar() end
@@ -61,6 +68,7 @@ function ns.AutoHideScrollBar(scroll)
         self:EnableMouseWheel(range > 0)
         local offset = tonumber(self:GetVerticalScroll()) or 0
         if offset > range then self:SetVerticalScroll(range) end
+        updating=false
     end
     scroll:HookScript("OnScrollRangeChanged", update)
     scroll:HookScript("OnShow", function(self)
@@ -68,5 +76,15 @@ function ns.AutoHideScrollBar(scroll)
         update(self)
     end)
     scroll.RefreshScrollBar=update
+    if contentHeight then
+        local bar=scroll.ScrollBar
+        if type(bar)=="function" then bar=nil end
+        if not bar and type(scroll.GetScrollBar)=="function" then bar=scroll:GetScrollBar() end
+        if bar and type(bar)~="function" then
+            -- The template may show its controls again after a layout update.
+            bar:HookScript("OnShow",function() update(scroll) end)
+        end
+        scroll:HookScript("OnSizeChanged",update)
+    end
     update(scroll)
 end

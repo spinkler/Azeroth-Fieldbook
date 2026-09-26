@@ -5,7 +5,7 @@ local addonName, ns = ...
 ns = ns or {}
 local db, trackingDB
 local encounters
-local journal, book
+local journal, book, fieldbook
 local wipeDeadline = 0
 local afterWipeHold = false
 local skipped = 0
@@ -368,7 +368,10 @@ local function initialize()
         end)
     end
     if journal and ns.InitializeSharing then ns.InitializeSharing(journal) end
-    if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal) end
+    if journal and ns.CreateFieldbookShell then
+        fieldbook=ns.CreateFieldbookShell({getBrightness=function() return journal:GetBackgroundBrightness() end})
+    end
+    if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal,fieldbook) end
     if journal and journal.sharing then
         journal.sharing:SetImportedCallback(function() if book then book:Refresh() end end)
         journal.sharing:SetCostAdjustedCallback(function(tx)
@@ -377,7 +380,7 @@ local function initialize()
                 tx.cost .. " knowledge.")
         end)
     end
-    if ns.MinimapButton then ns.MinimapButton:Initialize(db, book) end
+    if ns.MinimapButton then ns.MinimapButton:Initialize(db, fieldbook or book) end
     if ns.CreateBestiaryEncounterReader then
         encounters = ns.CreateBestiaryEncounterReader(function(id, spellID, creatureName)
             return storeObserved(id, spellID, nil, creatureName)
@@ -521,7 +524,7 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         wipeDeadline = 0
         say("Wipe cancelled. Nothing deleted.")
     elseif command == "" or command == "book" then
-        if book then book:Toggle() else say("Book module unavailable; reload the UI.") end
+        if fieldbook or book then (fieldbook or book):Toggle() else say("Book module unavailable; reload the UI.") end
     elseif command == "notes" then
         if book then book:OpenNotes() else say("Book module unavailable; reload the UI.") end
     elseif command == "encounters" then
