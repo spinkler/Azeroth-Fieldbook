@@ -130,8 +130,8 @@ function killProbe:Report(say)
     say("Kill evidence recorder: " .. (self.enabled and "ON; qualified kill tracking active." or "OFF."))
     if self.client then say(self.client) end
     if #self.rows == 0 then return end
-    say("A kill needs player/pet/party PARTY_KILL, readable eligibility and death for the same observed GUID.")
-    say("Probe revision 3: CanLootUnit/legacy tap APIs are research only. Discovery may separately award knowledge.")
+    say("A kill needs a recent living observation, readable tag eligibility and death for the same GUID. PARTY_KILL is optional.")
+    say("Probe revision 4: Finishing attacker, XP and loot drops do not gate kills. CanLootUnit/legacy tap APIs are diagnostic only.")
     say("Last 80 changed samples/events, session only. Registration success does not prove event delivery or credit.")
     for _, event in ipairs(probeEvents) do
         say(event .. ": registered=" .. (self.registrations[event] or "not attempted") .. "; delivered=" .. (self.counts[event] or 0))

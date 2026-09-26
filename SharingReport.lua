@@ -5,6 +5,7 @@ local _, ns = ...
 local report = { VERSION = 1, MAX_BYTES = 2048, MAX_LOCATIONS = 8,
     MAX_BASIC_REPORTS = 16, MAX_STORED_RUMOURS = 32, MAX_SHARED_ENTRIES = 500 }
 ns.SharingReport = report
+report.LORE_VERSION,report.MAX_LORE_BYTES=2,8192
 local schools = { Arcane=true, Fire=true, Frost=true, Holy=true, Nature=true, Shadow=true }
 local behaviours = { Hostile=true, Neutral=true, Melee=true, Ranged=true, Caster=true,
     ["Flees at low health"]=true, ["Calls allies"]=true, Patrols=true, Summons=true,
@@ -63,6 +64,28 @@ local function validClaim(claim)
     if claim.kind=="behaviour" then return behaviours[claim.value]==true end
     return (claim.kind=="offense" or claim.kind=="resistance" or claim.kind=="immunity") and schools[claim.value]==true
 end
+function report.ValidLore(value)
+    if not keys(value,{level=true,observed=true,rows=true}) or not integer(value.level,1,255)
+        or not integer(value.observed,1,9999999999) then return false end
+    local count=array(value.rows,32)
+    if not count or count==0 then return false end
+    for _,row in ipairs(value.rows) do
+        if not keys(row,{left=true,right=true}) or not report.Text(row.left,200)
+            or (row.right~=nil and not report.Text(row.right,200)) then return false end
+    end
+    return true
+end
+function report.CopyLore(value)
+    if not report.ValidLore(value) then return end
+    local copy={level=value.level,observed=value.observed,rows={}}
+    for i,row in ipairs(value.rows) do copy.rows[i]={left=row.left,right=row.right} end
+    return copy
+end
+function report.LoreText(value)
+    local lines={"Observed at creature level " .. value.level}
+    for _,row in ipairs(value.rows) do lines[#lines+1]=row.left .. (row.right and ("  " .. row.right) or "") end
+    return table.concat(lines,"\n")
+end
 function report.ClaimText(claim)
     if claim.kind=="ability" then return "Casts " .. claim.value end
     if claim.kind=="offense" then return "Uses " .. claim.value .. " magic" end
@@ -85,8 +108,12 @@ function report.Cost(claims)
 end
 function report.Validate(value)
     if not keys(value,{version=true,transaction=true,created=true,recipient=true,creatureID=true,
-        name=true,category=true,levelMin=true,levelMax=true,locations=true,rumours=true}) then return nil,"Unexpected report fields." end
-    if not report.Public(value.version) or value.version~=report.VERSION then return nil,"Incompatible report version." end
+        name=true,category=true,levelMin=true,levelMax=true,locations=true,rumours=true,beastLore=true}) then return nil,"Unexpected report fields." end
+    if not report.Public(value.version) or (value.version~=report.VERSION and value.version~=report.LORE_VERSION) then return nil,"Incompatible report version." end
+    if not report.Public(value.beastLore) then return nil,"Unreadable Beast Lore." end
+    if value.version==report.LORE_VERSION then
+        if not report.ValidLore(value.beastLore) or not report.Text(value.category,50) or value.category~="Beast" then return nil,"Invalid Beast Lore." end
+    elseif value.beastLore~=nil then return nil,"Unexpected Beast Lore." end
     if not report.Transaction(value.transaction) or not integer(value.created,1,9999999999)
         or not report.Character(value.recipient) or not integer(value.creatureID,1,10000000)
         or not report.Text(value.name,100) or not report.Text(value.category,50) then return nil,"Invalid creature identity or report header." end
@@ -104,6 +131,7 @@ function report.Validate(value)
         seen[location]=true
     end
     if not report.Cost(value.rumours) then return nil,"Invalid rumour selection." end
+    if value.beastLore and #value.rumours>0 then return nil,"Beast Lore offers cannot include paid rumours." end
     seen={}
     for _,claim in ipairs(value.rumours) do
         if not validClaim(claim) then return nil,"Invalid individual rumour." end
@@ -125,12 +153,16 @@ function report.Encode(value)
     for _,location in ipairs(value.locations) do add(location) end
     add(#value.rumours)
     for _,claim in ipairs(value.rumours) do add(claim.kind); add(claim.value); add(claim.spellID or 0) end
+    if value.beastLore then
+        add(value.beastLore.level);add(value.beastLore.observed);add(#value.beastLore.rows)
+        for _,row in ipairs(value.beastLore.rows) do add(row.left);add(row.right or "") end
+    end
     local encoded=table.concat(fields)
-    if #encoded>report.MAX_BYTES then return nil,"Report is too large; select fewer rumours." end
+    if #encoded>(value.beastLore and report.MAX_LORE_BYTES or report.MAX_BYTES) then return nil,"Report is too large; select fewer rumours." end
     return encoded
 end
 function report.Decode(encoded)
-    if not report.Text(encoded,report.MAX_BYTES) then return nil,"Invalid report data." end
+    if not report.Text(encoded,report.MAX_LORE_BYTES) then return nil,"Invalid report data." end
     local position,failed=1,false
     local function take()
         local first,last,length=encoded:find("^(%d+):",position)
@@ -161,7 +193,16 @@ function report.Decode(encoded)
         if claim.spellID==0 then claim.spellID=nil end
         value.rumours[#value.rumours+1]=claim
     end
-    if failed or position~=#encoded+1 then return nil,"Malformed report." end
+    if value.version==report.LORE_VERSION then
+        value.beastLore={level=numeric(),observed=numeric(),rows={}}
+        local count=numeric()
+        if failed or count<1 or count>32 then return nil,"Invalid Beast Lore rows." end
+        for i=1,count do
+            local left,right=take(),take()
+            value.beastLore.rows[i]={left=left,right=right~="" and right or nil}
+        end
+    end
+    if failed or position~=#encoded+1 or (#encoded>report.MAX_BYTES and value.version~=report.LORE_VERSION) then return nil,"Malformed report." end
     local ok,err=report.Validate(value)
     if not ok then return nil,err end
     return value
@@ -196,6 +237,13 @@ function report.Capture(journal,id)
     local ok,err=report.Encode(probe)
     if not ok then return nil,err end
     return captured,report.Candidates(entry)
+end
+function report.CaptureLore(journal,id)
+    local entry=journal.entries[id]
+    local lore=entry and report.CopyLore(entry.beastLore)
+    if not lore then return nil,"No Beast Lore recorded for this creature." end
+    return {version=report.LORE_VERSION,creatureID=id,name=journal:GetCreatureName(id),category="Beast",
+        levelMin=lore.level,levelMax=lore.level,locations={},rumours={},beastLore=lore}
 end
 local function basicKey(value)
     return table.concat({value.name,value.category,value.levelMin or 0,value.levelMax or 0,table.concat(value.locations,"\n")},"\n")
@@ -367,7 +415,7 @@ function ns.InstallSharingRecords(journal)
             if count>=report.MAX_SHARED_ENTRIES then return nil,"Shared creature storage is full." end
         end
         return {newBasic=newBasic==true,newRumours=#additions,rumours=additions,replacements=replacements,duplicateBasic=duplicateBasic,
-            newInformation=newBasic==true or #additions>0,locked=entry and entry.confirmed==true,
+            newInformation=value.beastLore~=nil or newBasic==true or #additions>0,locked=entry and entry.confirmed==true,
             conflict=entry and ((entry.name and entry.name~=value.name) or
                 (entry.category~="Unclassified" and entry.category~=value.category)) or false}
     end
@@ -378,6 +426,13 @@ function ns.InstallSharingRecords(journal)
         if not preview then return nil,err end
         if not integer(received,1,9999999999) then return nil,"Invalid receipt time." end
         local entry=self:Ensure(value.creatureID,true)
+        -- Local observations take precedence; accepted lore remains separate
+        -- from editable traits and never passes through rumour verification.
+        if value.beastLore and entry.beastLoreSource~="gameTooltip" then
+            entry.beastLore=report.CopyLore(value.beastLore)
+            entry.beastLoreSource="WHISPER"
+            entry.beastLoreSender=sender
+        end
         entry.sharedReports=entry.sharedReports or {}
         entry.rumours=entry.rumours or {}
         if not preview.duplicateBasic then

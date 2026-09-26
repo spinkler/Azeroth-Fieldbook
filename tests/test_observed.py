@@ -350,11 +350,20 @@ dead=true; frames[5].handler(frames[5], 'UNIT_HEALTH', 'target'); frames[5].hand
 check(entry.kills==1,'observed creature death increments kill counter once per GUID')
 dead=false
 GameTooltip.lines={}; tooltipHook(GameTooltip)
-check(#GameTooltip.lines==0,'journal review gates tooltip')
+check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Kills: 1','kill count is shown by default without exposing unconfirmed abilities')
+AzerothFieldbookDB.showKillCountTooltips=false
+GameTooltip.lines={}; tooltipHook(GameTooltip)
+check(#GameTooltip.lines==0,'disabling kill counts restores the ability-only tooltip')
+AzerothFieldbookDB.showKillCountTooltips=true
 entry.confirmed=true; entry.abilities['Observed trap'].state='confirmed'
 AzerothFieldbookDB.bestiary.creatures={}
 GameTooltip.lines={}; tooltipHook(GameTooltip)
 check(GameTooltip.lines[2]=='Observed trap','manual journal abilities work without automatic DB')
+check(GameTooltip.lines[3]=='Kills: 1','locked entries include the same kill count')
+AzerothFieldbookDB.showKillCountTooltips=false
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Observed trap','kill toggle leaves confirmed abilities visible')
+AzerothFieldbookDB.showKillCountTooltips=true
 guid='Creature-0-1-2-3-42-locked'
 castName,castID='Locked new ability',888
 frames[5].handler(frames[5], 'UNIT_SPELLCAST_SUCCEEDED', 'target', nil, 888)

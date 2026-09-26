@@ -3,7 +3,7 @@ local schema = ns.SharingReport
 local PREFIX, DAY, OFFER_SECONDS = "AFBShare", 86400, 180
 local PREFLIGHT_SECONDS = 20
 -- Protocol 4 adds the recipient's basic-information cost to acceptance replies.
--- The literal report format stays at schema 1 so paid retries retain their data.
+-- Schema 1 keeps paid retries intact; schema 2 carries free, locked Beast Lore.
 local PROTOCOL = "4"
 local MAX_INCOMING, MAX_RECEIPTS, CHUNK = 3, 512, 180
 -- Optional bounded decline reasons. Empty replies from older builds still work;
@@ -147,7 +147,7 @@ function ns.CreateSharing(journal, env)
             local ok,cost=journal:CommitShare(tx.id,basicCost==0)
             if not ok then finish(tx,"failed","Reservation missing; nothing sent for import."); return end
             tx.cost,tx.basicCost=cost,basicCost
-            tx.basicInfoWaived=basicCost==0
+            tx.basicInfoWaived=basicCost==0 and not (schema.Decode(tx.payload) or {}).beastLore
             adjusted=tx.basicInfoWaived
             tx.spent=true
         end
@@ -225,9 +225,9 @@ function ns.CreateSharing(journal, env)
         value.rumours=claims or {}
         local payload,err=schema.Encode(value)
         if not payload then return nil,err end
-        local cost=schema.Cost(value.rumours)
+        local cost=value.beastLore and 0 or schema.Cost(value.rumours)
         if not journal:ReserveShare(id,cost) then return nil,"Insufficient available knowledge." end
-        local tx={id=id,recipient=recipient,payload=payload,cost=cost,basicCost=1,created=env.now(),
+        local tx={id=id,recipient=recipient,payload=payload,cost=cost,basicCost=value.beastLore and 0 or 1,created=env.now(),
             stage="preflight",deadline=env.now()+PREFLIGHT_SECONDS,retries=0,
             message="Checking recipient compatibility (up to " .. PREFLIGHT_SECONDS .. " seconds); knowledge reserved."}
         store.outgoing=tx
@@ -284,7 +284,7 @@ function ns.CreateSharing(journal, env)
         local preview,err=journal:PreviewReport(item.report,item.sender)
         if not preview then return nil,err end
         -- Freeze the quote with consent so retries/reloads cannot change it.
-        item.basicCost=preview.newBasic and 1 or 0
+        item.basicCost=not item.report.beastLore and preview.newBasic and 1 or 0
         item.state,item.expires="accepted",item.report.created+DAY
         recordTransfer("received","accepted",item.sender,item.report,"Waiting for the sender's transfer. Receiving is free.",0)
         send("A",item.id,item.sender,tostring(item.basicCost))
@@ -374,7 +374,7 @@ function ns.CreateSharing(journal, env)
             if journal:GetBlockIncomingOffers() then self:ApplyIncomingOfferSetting(); return end
             local index,total,data=body:match("^(%d+)~(%d+)~(.*)$")
             index,total=tonumber(index),tonumber(total)
-            if not schema.Integer(total,1,12) or not schema.Integer(index,1,total)
+            if not schema.Integer(total,1,46) or not schema.Integer(index,1,total)
                 or #data<1 or #data>CHUNK or (index<total and #data~=CHUNK)
                 or (item.total and item.total~=total) or (item.chunks[index] and item.chunks[index]~=data) then
                 store.incoming[k]=nil; reject(id,sender,"chunks"); return
@@ -416,6 +416,7 @@ function ns.CreateSharing(journal, env)
             if size(store.receipts)>=MAX_RECEIPTS then send("E",id,sender); return end
             local ok=journal:ImportReport(item.report,sender,now)
             if not ok then send("E",id,sender); return end
+            if ns.PlayerNames then ns.PlayerNames:Remember(sender) end
             store.receipts[k]={received=now,creatureID=item.report.creatureID}
             recordTransfer("received","received",sender,item.report,"Imported into your Bestiary. Receiving is free; no knowledge earned or spent.",0)
             store.incoming[k]=nil

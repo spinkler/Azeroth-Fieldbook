@@ -126,6 +126,8 @@ local entry=record({id=positive,name=names,category=names,rank=names,levelMin=po
     locations=flags,offenses=flags,resistances=flags,immunities=flags,behaviours=flags,
     abilities=map(names,ability),ignoredAbilities=flags,damage=map(positive,damage),
     idNotes=record({spells=array(positive),text=prose}),tameable=boolean,tameabilitySource=names,
+    beastLore=record({level=positive,observed=timestamp,rows=array(record({left=names,right=names},{"left"}))},{"level","observed","rows"}),
+    beastLoreSource=enum({gameTooltip=true,WHISPER=true}),beastLoreSender=names,
     discoveryProgress=progress,sharedReports=array(shared),rumours=array(rumour),unchangedKills=natural},{"id"})
 local bestiary=record({entries=map(positive,entry),creatures=map(positive,record({names=flags,spells=map(positive,record({name=names},{"name"}))})),
     points=record({version=positive,earned=natural,spent=natural,credits=map(positive,progress)},{"earned","spent","credits"}),

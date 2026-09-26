@@ -4,6 +4,22 @@ from kill_test_harness import new_client
 
 
 class KillDiagnostics(unittest.TestCase):
+    def test_pet_death_without_party_kill_reports_acceptance(self):
+        lua = new_client(diagnostics=True)
+        lua.execute(r'''
+            SlashCmdList.AZEROTHFIELDBOOK('debug kills on')
+            victim=beginKill('pet')
+            units.target.dead=true
+            fire('UNIT_DIED',victim); tick()
+            SlashCmdList.AZEROTHFIELDBOOK('debug kills')
+        ''')
+        report = lua.eval('copiedReport')
+        self.assertEqual(lua.eval('kills()'), 1)
+        self.assertIn('PARTY_KILL is optional', report)
+        self.assertIn('PARTY_KILL: registered=true; delivered=0', report)
+        self.assertIn('accepted; killAward=1; killPointsAward=0', report)
+        self.assertNotIn('pending: no qualifying PARTY_KILL', report)
+
     def test_opt_in_recorder_separates_discovery_from_kill_rewards(self):
         lua = new_client(diagnostics=True)
         self.assertFalse(lua.eval('ns.KillDiagnostics.enabled'))

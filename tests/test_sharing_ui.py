@@ -82,6 +82,7 @@ function methods:GetEffectiveScale() return self:GetScale()*(self.parent and sel
 function methods:GetWidth() return rawget(self,'width') or 100 end
 function methods:GetHeight() return rawget(self,'height') or 100 end
 function methods:GetStringHeight() return math.max(14,math.ceil(#self:GetText()/math.max(1,math.floor(self:GetWidth()/7)))*14) end
+function methods:SetHorizontalScroll(value) self.horizontalScroll=value end
 function methods:GetStringWidth()
     local text=self:GetText():gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','')
     local _,characters=text:gsub('[^\128-\191]','')
@@ -976,6 +977,11 @@ do
     local options=main.options
     options.scripts.OnShow(options)
     assert(options.lockNewCritters:GetChecked())
+    assert(options.killCountTooltips:GetChecked() and j:GetKillCountTooltips())
+    options.killCountTooltips:SetChecked(false);options.killCountTooltips.scripts.OnClick(options.killCountTooltips)
+    options.scripts.OnShow(options)
+    assert(not options.killCountTooltips:GetChecked() and not j:GetKillCountTooltips())
+    options.killCountTooltips:SetChecked(true);options.killCountTooltips.scripts.OnClick(options.killCountTooltips)
     options.lockNewCritters:SetChecked(false);options.lockNewCritters.scripts.OnClick(options.lockNewCritters)
     options.scripts.OnShow(options)
     assert(not j:GetLockNewCritters() and not options.lockNewCritters:GetChecked())
@@ -1009,6 +1015,76 @@ do
     eq(rowFor(42).text.textColor[1],0.75,'unselected name returns to normal ink')
     local row=rowFor(42);row.scripts.OnClick(row)
     eq(row.text.textColor[1],1,'selected name returns to gold')
+    -- Beast Lore borrows exactly one button row, preserving every other anchor.
+    local detailPoint=main.detail.point
+    local offensePoint=main.offenseButton.point
+    local defensePoint=main.defenseButton.point
+    local behaviourPoint=main.behaviourButton.point
+    assert(not main.beastLoreButton.shown)
+    eq(main.damageBorder:GetHeight(),115);eq(main.damageScroll:GetHeight(),75)
+    eq(main.damageButton.point[3],-248)
+    e.category='Beast';j:Touch();book:Refresh()
+    assert(main.beastLoreButton.shown)
+    eq(main.damageBorder:GetHeight(),86);eq(main.damageScroll:GetHeight(),46)
+    eq(main.damageButton.point[3],-248);eq(main.beastLoreButton.point[3],-133)
+    eq(main.damageBorder.point[3],-162);eq(main.damageScroll.point[3],-192)
+    for _,pair in ipairs({{main.detail,detailPoint},
+        {main.offenseButton,offensePoint},{main.defenseButton,defensePoint},{main.behaviourButton,behaviourPoint}}) do
+        for index,value in ipairs(pair[2]) do eq(pair[1].point[index],value,'existing anchor stays fixed') end
+    end
+    main.beastLoreButton.scripts.OnClick();assert(main.beastLore.shown)
+    eq(main.beastLore.creature.text,j:GetBasicInfo(42).name)
+    eq(main.beastLore.creature.textColor[1],1);eq(main.beastLore.creature.textColor[2],0.82)
+    assert(not main.beastLore.send.enabled,'empty lore cannot be sent')
+    e.beastLore={level=12,observed=now,rows={{left='Health:',right='244'},{left='Diet:',right='Meat'}}}
+    e.beastLoreSource='gameTooltip';j:Touch();book:Refresh()
+    assert(main.beastLore.content.text:find('Health:  244',1,true))
+    assert(main.beastLore.provenance.text:find('Locked',1,true))
+    local sentRecipient
+    local oldSharing=j.sharing
+    j.sharing={Start=function(_,captured,recipient,claims)
+        assert(captured.beastLore.rows[2].right=='Meat' and #claims==0)
+        sentRecipient=recipient;return nil,'Test send response'
+    end}
+    book:Refresh();assert(main.beastLore.send.enabled)
+    main.beastLore.recipient:SetText('Bob Stonewell');main.beastLore.send.scripts.OnClick()
+    eq(sentRecipient,'Bob Stonewell');eq(main.beastLore.status.text,'Test send response')
+    j.sharing=oldSharing
+    j:SetEntryConfirmed(42,true);book:Refresh()
+    assert(main.beastLore.shown and main.beastLoreButton.enabled~=false,'locked beasts can read lore')
+    main.beastLore.closeButton.scripts.OnClick();assert(not main.beastLore.shown)
+    main.beastLoreButton.scripts.OnClick();assert(main.beastLore.shown)
+    local other=rowFor(43);other.scripts.OnClick(other)
+    assert(not main.beastLore.shown and not main.beastLoreButton.shown)
+    eq(main.damageBorder:GetHeight(),115);eq(main.damageScroll:GetHeight(),75)
+    eq(main.damageBorder.point[3],-133);eq(main.damageScroll.point[3],-163)
+    eq(main.damageButton.point[3],-248)
+    eq(main.sortButton:GetWidth(),main.sortButton:GetHeight(),'sort control is square')
+    assert(main.search.point[2]+main.search:GetWidth()<main.sortButton.point[2])
+    main.sortButton.scripts.OnClick();assert(main.sortMenu.shown)
+    assert(main.sortChoices[1].control.afbSelected and main.sortChoices[6].control.afbSelected)
+    main.sortChoices[2].control.scripts.OnClick()
+    eq(j:GetListSort(),'kills');assert(main.sortChoices[2].control.afbSelected)
+    main.sortChoices[7].control.scripts.OnClick()
+    local field,descending=j:GetListSort();assert(field=='kills' and descending)
+    main.sortMenu.scripts.OnClick(main.sortMenu);assert(not main.sortMenu.shown)
+    local hovering=rowFor(42)
+    hovering.text:SetText('Stonesplinter Skullthumper with a long name')
+    hovering.scripts.OnEnter(hovering)
+    assert(hovering.nameViewport.shown and not hovering.text.shown)
+    hovering.scripts.OnUpdate(hovering,0.5)
+    eq(hovering.nameViewport.horizontalScroll,0,'hover pauses before moving')
+    hovering.scripts.OnUpdate(hovering,0.8)
+    assert(hovering.nameViewport.horizontalScroll>0,'long names gently scroll')
+    eq(hovering.nameViewport:GetWidth(),hovering.text:GetWidth(),'hover text clips before rewards')
+    hovering.scripts.OnLeave(hovering)
+    assert(not hovering.nameViewport.shown and hovering.text.shown and not hovering.scripts.OnUpdate)
+    eq(hovering.nameViewport.horizontalScroll,0)
+    hovering.text:SetText('Wolf');hovering.scripts.OnEnter(hovering)
+    assert(not hovering.nameViewport.shown and not hovering.scripts.OnUpdate,'short names stay still')
+    hovering.text:SetText('Another long creature name that needs to scroll');hovering.scripts.OnEnter(hovering)
+    book:Refresh()
+    assert(not hovering.nameViewport.shown and not hovering.scripts.OnUpdate,'row refresh clears stale animated text')
 end
 ''')
 print('PASS: Share button, captured selection, unrestricted rumour selection, per-rumour costs, balances, native controls, receive consent, separate Rumours toggle, verification/rejection, manual refresh, Notes input, pinning and scaling')

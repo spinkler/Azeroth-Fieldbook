@@ -31,6 +31,8 @@ alice.bestiary.entries[42].damage[9]={low=5,high=10,reports=1}
 alice.bestiary.entries[42].offenses={Fire=true}
 alice.bestiary.entries[42].lockedBasic={name='Locked snapshot',category='Humanoid',locations={Elwynn=true},levelMin=9,levelMax=9}
 alice.bestiary.entries[42].rumours={{kind='ability',value='Rumour',sender='Carol',dismissed=true,rejected=true}}
+alice.bestiary.entries[42].beastLore={level=9,observed=1000000,rows={{left='Diet:',right='Meat'}}}
+alice.bestiary.entries[42].beastLoreSource='WHISPER';alice.bestiary.entries[42].beastLoreSender='Carol'
 alice.bestiary.points.spent=1
 alice.bestiary.points.reservations.outgoing=1
 alice.bestiary.sharing={sequence=5,receipts={},incoming={},outgoing={id='outgoing',stage='preflight',recipient='Carol'}}
@@ -52,6 +54,8 @@ bob.uiScale=1.25
 bob.bestiary.entries[42].idNotes={spells={2,3},text='Bob notes'}
 bob.bestiary.entries[42].damage[9]={low=7,high=20,reports=1}
 bob.bestiary.entries[42].resistances={Frost=true}
+bob.bestiary.entries[42].beastLore={level=11,observed=1000001,rows={{left='Diet:',right='Fish'}}}
+bob.bestiary.entries[42].beastLoreSource='gameTooltip'
 bob.bestiary.entries[43]={id=43,name='Other creature',category='Beast',kills=0,abilities={},damage={},locations={}}
 -- Ensure the additional entry has genuine credit, as normal observation does.
 ns.CreateBestiaryJournal(bob,function() end):Ensure(43)
@@ -60,6 +64,8 @@ assert(bobAccount==account and bob.accountTrackingKey~=key)
 eq(b.entries[42].kills,25,'different characters contribute their recorded kills')
 assert(b.entries[42].abilities.Fireball and b.entries[42].abilities.Frostbolt and b.entries[43])
 assert(b.entries[42].offenses.Fire and b.entries[42].resistances.Frost)
+eq(b.entries[42].beastLore.rows[1].right,'Fish');eq(b.entries[42].beastLoreSource,'gameTooltip')
+assert(b.entries[42].beastLore~=bob.bestiary.entries[42].beastLore and not b.entries[42].beastLoreSender)
 assert(b.entries[42].locations.Elwynn and b.entries[42].locations.Westfall)
 eq(b.entries[42].levelMin,9);eq(b.entries[42].levelMax,11)
 eq(b:GetBasicInfo(42).name,'Locked snapshot','merging retains an existing locked page snapshot')

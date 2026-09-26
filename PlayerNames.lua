@@ -3,6 +3,11 @@ local schema=ns.SharingReport
 local names={revision=0}
 ns.PlayerNames=names
 local classes={}
+local function savedClasses()
+    if type(AzerothFieldbookDB)~="table" then return end
+    if type(AzerothFieldbookDB.sourceClasses)~="table" then AzerothFieldbookDB.sourceClasses={} end
+    return AzerothFieldbookDB.sourceClasses
+end
 
 local function read(fn,...)
     if type(fn)~="function" then return end
@@ -29,6 +34,8 @@ function names:Observe(unit)
     local ok,_,class=pcall(UnitClass,unit)
     if not ok or not schema.Text(class,40) or not class:match("^[A-Z]+$") then return end
     local key=name:lower()
+    local saved=savedClasses()
+    if saved and saved[key]~=nil then saved[key]=class end
     if classes[key]~=class then
         classes[key]=class
         self.revision=self.revision+1
@@ -38,6 +45,16 @@ function names:Refresh()
     for _,unit in ipairs({"player","target","mouseover"}) do self:Observe(unit) end
     for i=1,4 do self:Observe("party"..i) end
     for i=1,40 do self:Observe("raid"..i) end
+end
+function names:Remember(value)
+    local name=schema.Character(value)
+    if not name then return end
+    self:Refresh()
+    local saved=savedClasses()
+    if saved then
+        local key=name:lower()
+        saved[key]=classes[key] or saved[key] or false
+    end
 end
 local function classColor(class)
     local color=read(C_ClassColor and C_ClassColor.GetClassColor,class)
@@ -58,13 +75,16 @@ end
 function names:Format(value)
     local name=schema.Character(value)
     if not name then return "Unknown player" end
-    local class=classes[name:lower()]
+    local saved=savedClasses()
+    local class=classes[name:lower()] or (saved and saved[name:lower()])
+    if not schema.Text(class,40) or not class:match("^[A-Z]+$") then class=nil end
+    if saved then saved[name:lower()]=class or false end
     local color=class and classColor(class) or nil
     return "|cff" .. (color or "8c9494") .. name .. "|r"
 end
 
--- Only game-observed classes are cached, for this session. Reports, backups and
--- sharing messages keep plain names and never establish another player's class.
+-- Remember source classes locally across sessions. Only public game observations
+-- establish class identity; reports and sharing messages still contain plain names.
 local frame=CreateFrame("Frame")
 for _,event in ipairs({"PLAYER_LOGIN","PLAYER_ENTERING_WORLD","GROUP_ROSTER_UPDATE",
     "PLAYER_TARGET_CHANGED","UPDATE_MOUSEOVER_UNIT","UNIT_NAME_UPDATE","UNIT_CONNECTION"}) do

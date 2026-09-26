@@ -256,7 +256,7 @@ end
 controller=ns.CreateBestiaryBook(journal)
 controller:Toggle()
 check(AzerothFieldbookBestiary:IsShown(),'book opens')
-check(#UISpecialFrames==11 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
+check(#UISpecialFrames==13 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
 check(controller:OpenAtUnit('mouseover'),'mouseover binding opens the observed NPC page')
 for _,o in ipairs(objects) do check(o.text~='Your note','empty manual field note stays visually empty') end
 local function click(text)
@@ -474,6 +474,13 @@ for _,sample in ipairs({{9,false,false},{10,true,false},{25,true,false},{50,true
     check(#abilityBook.killStar.crownParts>0,'crown has its own silhouette')
     for _,part in ipairs(abilityBook.killStar.parts) do check(part:IsShown()~=sample[3],'crown replaces the star') end
     for _,part in ipairs(abilityBook.killStar.crownParts) do check(part:IsShown()==sample[3],'crown only appears at 50 kills') end
+    for _,row in ipairs(abilityBook.rows) do
+        if row.id==42 then
+            check(row.killReward:IsShown()==sample[2],'index reward matches the kill counter')
+            check(row.text:GetWidth()==(sample[2] and 121 or 140),'name reserves space only for earned rewards')
+            for _,part in ipairs(row.killReward.crownParts) do check(part:IsShown()==sample[3],'index crown follows the same milestone') end
+        end
+    end
 end
 journal.entries[42].kills=savedKills; controller:Refresh()
 local damageBook=AzerothFieldbookBestiary

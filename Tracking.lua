@@ -72,6 +72,11 @@ local function mergeEntry(target, source)
         target.category = source.category or target.category
     end
     target.personalEncountered = target.personalEncountered == true or source.personalEncountered == true
+    if source.beastLore and (not target.beastLore or (target.beastLoreSource~="gameTooltip" and source.beastLoreSource=="gameTooltip")) then
+        target.beastLore=copy(source.beastLore)
+        target.beastLoreSource=source.beastLoreSource
+        target.beastLoreSender=source.beastLoreSender
+    end
     if target.tameabilitySource~="gameTooltip" and source.tameabilitySource=="gameTooltip" then
         target.tameable=source.tameable;target.tameabilitySource="gameTooltip"
     end

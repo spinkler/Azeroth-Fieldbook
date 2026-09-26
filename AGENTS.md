@@ -106,6 +106,25 @@ unless explicitly requested or recovering from automation failure.
 
 ## Changelog coverage
 
+Group consecutive patch versions that each contain only one or two changes
+under one version-range heading, rather than giving every small patch its own
+heading. For example:
+
+```markdown
+## v0.9.120 - v0.9.124 - Unreleased
+
+- First change.
+- Second change.
+- Further changes from the grouped patches.
+```
+
+Keep all changes represented in the combined bullet list. Related adjustments
+may be combined when the final result remains clear. Extend an existing range
+when another qualifying patch follows it; keep larger change sets under their
+own headings. Do not combine released and unreleased entries. Grouping changes
+only the changelog presentation: each completed request still advances the
+addon version, and the range must include every version it represents.
+
 Every push must include changelog coverage for **all changes since the previous
 push**, not just the latest local version or the most recent user request. Local
 iteration often spans many version increments before one public push.

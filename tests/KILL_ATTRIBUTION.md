@@ -1,5 +1,48 @@
 # Kill attribution: implementation and live evidence
 
+## Current policy — 0.9.119
+
+The user's current rule is **tag eligibility**, replacing the historical
+finishing-blow restriction below. A recently observed creature's death counts
+when the client reports `UnitExists == true`, `UnitPlayerControlled == false`
+and `UnitIsTapDenied == false` for that exact full GUID at kill/death time.
+Player, pet, party, raid or outside finishing blows are treated alike. No XP,
+level, loot drop, loot distribution or current `CanLootUnit` result gates credit.
+Missing, secret or invalid eligibility still waits rather than guessing; an
+explicit denied tag rejects the instance. Ordinary living unclaimed mobs do not
+provide cached eligibility and first discovering a corpse does not count.
+
+`PARTY_KILL` is now optional: it can sample eligibility before the target clears,
+but neither the event nor an attacker/group-membership match is required.
+`UNIT_DIED` or a readable watched alive-to-dead transition supplies death evidence.
+If the target clears before eligibility can be read, a matching corpse mouseover
+can complete the pending kill within ten seconds. If eligibility never becomes
+readable, the kill remains uncounted. Existing observation bounds, world/reset
+invalidation, saved GUID replay protection and milestone accounting remain.
+
+### Build 70009 reproduction and validation
+
+The September 26 captures show a personal Kobold Tunneler kill advancing 49 to
+50 and awarding the crown. A subsequent level-5 Tunneler (GUID suffix
+`0000B77B65`) emits `UNIT_DIED` at 7764.886, clears the target, then appears as a
+mouseover corpse with readable `tapDenied=false`. It emits no `PARTY_KILL` and
+the old gate expires it at 7775.061. The user confirmed pet finishing blows cause
+the failure regardless of creature level. The new gate accepts that eligible
+death without requiring an attacker event or waiting for loot.
+
+Automated tests cover this ordering, pet/party/raid roles, outside finishers,
+low-level and no-loot deaths, denied and unreadable tags, first-seen corpses,
+49 → 50 → 51 with no `PARTY_KILL`, duplicate suppression and reload persistence.
+Mocks validate the policy and recorded ordering, not additional live API behavior.
+Live verification after `/reload`: let a pet finish an eligible creature and
+check one increment, inspect its corpse repeatedly, and check that killing a
+denied-tag creature adds nothing. The new code has not yet been verified in game.
+
+## Historical implementation and captures (0.9.11 onward)
+
+The remainder records the previous finishing-blow policy and its original
+validation. Its actor/event requirements are superseded by 0.9.119 above.
+
 Status: implemented locally against **main, HEAD f33e392, addon 0.9.11**.
 The automated checks passed. Solo event delivery with and without XP was observed
 on the installed Forever client. Live acceptance now confirms a party member's

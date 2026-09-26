@@ -38,6 +38,27 @@ def client():
 
 
 class PlayerNameTests(unittest.TestCase):
+    def test_shared_class_survives_reload_and_unknown_source_is_backfilled(self):
+        lua = client()
+        lua.execute('''
+            AzerothFieldbookDB={version=1}
+            units.party1={player=true,first='Erna',surname='Lionguard',class='MAGE'}
+            ns.PlayerNames:Remember('Erna Lionguard')
+            ns.PlayerNames:Remember('Later Player')
+            assert(AzerothFieldbookDB.sourceClasses['erna lionguard']=='MAGE')
+            assert(AzerothFieldbookDB.sourceClasses['later player']==false)
+            units.party1=nil
+        ''')
+        lua.execute(ROOT.joinpath('PlayerNames.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
+        lua.execute('''
+            assert(ns.PlayerNames:Format('Erna Lionguard')=='|cff40c7ebErna Lionguard|r')
+            assert(ns.PlayerNames:Format('Later Player')==grey('Later Player'))
+            units.target={player=true,first='Later',surname='Player',class='WARRIOR'}
+            fire('PLAYER_TARGET_CHANGED')
+            assert(AzerothFieldbookDB.sourceClasses['later player']=='WARRIOR')
+            assert(ns.PlayerNames:Format('Later Player')=='|cffc79c6eLater Player|r')
+        ''')
+
     def test_full_name_player_check_and_session_cache(self):
         lua = client()
         lua.execute('''

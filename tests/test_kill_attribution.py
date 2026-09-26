@@ -1,4 +1,4 @@
-"""Real event/scan paths, informed by Forever 69977 captures and clarified policy.
+"""Real event/scan paths, informed by Forever captures and tag eligibility policy.
 
 Group/pet mocks test the policy, not live group/pet compatibility. No XP/loot API
 or undocumented tap function is invented to manufacture positive credit.
@@ -29,12 +29,15 @@ class KillAttribution(unittest.TestCase):
         self.assertEqual(lua.eval('kills()'), 0, 'previously alive is identity evidence only')
         self.assertEqual(lua.eval('points()'), 1)
 
-    def test_untagged_target_reaches_zero_health(self):
+    def test_unclaimed_living_target_is_not_credit_or_cached_eligibility(self):
         lua = new_client()
         lua.execute("units.target = spawn('untagged', false); fire('PLAYER_TARGET_CHANGED')")
-        # UnitIsTapDenied is false for this scenario, NOT positive player credit.
+        # Not denied while alive must neither count nor supply later eligibility.
+        lua.execute("tick(); tick(); fire('UNIT_HEALTH', 'target')")
+        self.assertEqual(lua.eval('kills()'), 0)
+        lua.execute('UnitIsTapDenied=function() return nil end')
         lua.execute("units.target.dead = true; fire('UNIT_HEALTH', 'target'); tick()")
-        self.assertEqual(lua.eval('kills()'), 0, 'not denied must not mean credited')
+        self.assertEqual(lua.eval('kills()'), 0, 'unknown eligibility at death must not use an old living sample')
         self.assertEqual(lua.eval('points()'), 1)
 
     def test_solo_kill_and_duplicate_notifications_follow_live_capture(self):
@@ -75,7 +78,7 @@ class KillAttribution(unittest.TestCase):
                 self.assertEqual(lua.eval('kills()'), 1)
                 self.assertEqual(lua.eval('points()'), 1)
 
-    def test_group_membership_or_unrelated_finisher_is_not_credit(self):
+    def test_eligible_tag_counts_without_event_or_with_outside_finisher(self):
         for actor in [None, 'Player-2-999']:
             with self.subTest(actor=actor):
                 lua = new_client()
@@ -83,8 +86,60 @@ class KillAttribution(unittest.TestCase):
                 if actor:
                     lua.execute(f"fire('PARTY_KILL', '{actor}', victim)")
                 lua.execute("units.target.dead=true; fire('UNIT_DIED', victim); fire('UNIT_LOOT', victim, true); fire('PLAYER_XP_UPDATE','player'); tick()")
-                self.assertEqual(lua.eval('kills()'), 0)
+                self.assertEqual(lua.eval('kills()'), 1)
                 self.assertEqual(lua.eval('points()'), 1)
+
+    def test_pet_party_raid_and_low_level_kills_without_party_kill_or_loot(self):
+        for role in ['pet', 'party1', 'partypet1', 'raid1', 'raidpet1']:
+            for level in [1, 5, 60]:
+                for denied in [False, True]:
+                    with self.subTest(role=role, level=level, denied=denied):
+                        lua = new_client()
+                        lua.execute(f"""
+                            actorUnits.{role}='Pet-0-1-2-3-9-abc'
+                            victim=beginKill('eligible')
+                            units.target.level={level}; units.target.denied={str(denied).lower()}
+                            -- No PARTY_KILL, XP or loot events. Loot APIs throw.
+                            units.target.dead=true
+                            fire('UNIT_DIED', victim); tick(); tick()
+                            fire('UNIT_DIED', victim)
+                        """)
+                        self.assertEqual(lua.eval('kills()'), 0 if denied else 1)
+
+    def test_pet_capture_target_clears_and_corpse_supplies_tag_eligibility(self):
+        lua = new_client()
+        lua.execute(r'''
+            -- Reproduce build 70009: pet finish, no PARTY_KILL, target clears,
+            -- then matching mouseover exposes the eligible corpse.
+            victim=beginKill('pet'); corpse=units.target
+            units.target=nil
+            fire('UNIT_DIED', victim)
+            assert(kills()==0, 'death alone cannot infer an unreadable tag')
+            fire('UNIT_LOOT', victim, true)
+            assert(kills()==0, 'actual drops do not establish tag eligibility')
+            corpse.dead=true; corpse.combat=false; units.mouseover=corpse
+            fire('UPDATE_MOUSEOVER_UNIT'); tick()
+            assert(kills()==1)
+            units.target=corpse; fire('PLAYER_TARGET_CHANGED')
+            fire('PARTY_KILL', secret, victim); fire('UNIT_DIED',victim); tick()
+            assert(kills()==1, 'late events and corpse inspection cannot duplicate')
+        ''')
+
+    def test_no_event_pet_kills_cross_crown_milestone_and_survive_reload(self):
+        lua = new_client()
+        lua.execute(r'''
+            for i=1,49 do beginKill('old'..i); finishKill() end
+            assert(kills()==49 and points()==4)
+            for i=50,51 do
+                victim=beginKill('pet'..i)
+                units.target.dead=true; units.target.combat=false
+                fire('UNIT_DIED',victim); tick(); fire('UNIT_DIED',victim)
+            end
+            assert(kills()==51 and points()==7)
+            fire('ADDON_LOADED','AzerothFieldbook'); tick(); fire('UNIT_DIED',victim)
+            assert(kills()==51 and points()==7)
+        ''')
+        self.assertEqual(lua.eval('output()').count('50 kills!!!'), 1)
 
     def test_own_or_party_finisher_cannot_steal_another_players_tap(self):
         for actor in ['player', 'party1']:
@@ -161,7 +216,7 @@ class KillAttribution(unittest.TestCase):
                 lua.execute('UnitIsTapDenied=function() return false end; tick(); tick()')
                 self.assertEqual(lua.eval('kills()'), 1, 'late readable eligibility completes once')
 
-    def test_secret_identity_actor_and_death_are_not_consumed(self):
+    def test_secret_identity_and_death_fail_closed_but_attacker_is_not_required(self):
         lua = new_client()
         lua.execute(r'''
             victim=beginKill('secret')
@@ -172,14 +227,35 @@ class KillAttribution(unittest.TestCase):
             assert(kills()==0)
             units.target.dead=true
             fire('UNIT_DIED', victim)
-            assert(kills()==0, 'death alone still has no credit')
+            assert(kills()==1, 'readable death and tag eligibility need no attacker')
             fire('PARTY_KILL', UnitGUID('player'), victim)
         ''')
         self.assertEqual(lua.eval('kills()'), 1)
 
-    def test_missing_event_delivery_never_falls_back_to_a_corpse(self):
+    def test_missing_party_kill_does_not_block_an_observed_eligible_death(self):
         lua = new_client()
         lua.execute("frames[1].events.PARTY_KILL=nil; beginKill('noevent'); finishKill()")
+        self.assertEqual(lua.eval('kills()'), 1)
+
+    def test_watched_death_without_either_notification_uses_tag_eligibility(self):
+        for denied in [False, True]:
+            with self.subTest(denied=denied):
+                lua = new_client()
+                lua.execute(f"""
+                    beginKill('polled')
+                    units.target.denied={str(denied).lower()}
+                    units.target.dead=true; units.target.combat=false
+                    tick(); tick()
+                """)
+                self.assertEqual(lua.eval('kills()'), 0 if denied else 1)
+
+    def test_corpse_first_inspection_never_counts_even_when_tag_is_eligible(self):
+        lua = new_client()
+        lua.execute(r'''
+            units.target=spawn('oldcorpse',true)
+            fire('PLAYER_TARGET_CHANGED'); tick()
+            fire('UNIT_DIED',units.target.guid); tick()
+        ''')
         self.assertEqual(lua.eval('kills()'), 0)
 
     def test_death_before_credit_completes_without_current_target(self):
@@ -188,7 +264,7 @@ class KillAttribution(unittest.TestCase):
             victim=beginKill('late')
             units.target.dead=true
             fire('UNIT_DIED', victim)
-            assert(kills()==0)
+            assert(kills()==1, 'eligible death counts before optional PARTY_KILL')
             units.target=nil
             clock=1
             fire('PARTY_KILL', UnitGUID('player'), victim)
@@ -220,6 +296,7 @@ class KillAttribution(unittest.TestCase):
                 lua.execute("victim=beginKill('stale'); fire('PARTY_KILL',UnitGUID('player'),victim)")
                 if reset:
                     lua.execute("units.target.combat=false; fire('PLAYER_TARGET_CHANGED')")
+                    lua.execute('UnitIsTapDenied=function() return nil end')
                 else:
                     lua.execute('clock=11')
                 lua.execute("units.target.dead=true; fire('UNIT_DIED',victim); tick()")

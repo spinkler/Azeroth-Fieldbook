@@ -1,5 +1,182 @@
 # Changelog
 
+## v0.9.128-beta - 2026-09-26
+
+This release includes all changes since v0.9.99-beta, covering local iterations
+v0.9.100 through v0.9.128. The previous-push and previous-release baseline is
+commit e353c02930e19d1ea2ec6c1ee0d112d02561b172. Both players must use this addon
+version to share creatures or Beast Lore.
+
+- Remember verified player classes for Shared by and Rumours attribution so
+  names retain their class colours after logout or reload; backfill unknown
+  classes when the player is later observed through public game data.
+- Add a beast-only Known Beast Lore window with yellow headings and creature
+  names, and a scrollable lore box. Capture readable native tooltip fields after
+  a successful Beast Lore cast, preserving both text columns and additional
+  revealed fields. Retry delayed results and reject hidden or mismatched data.
+- Keep captured Beast Lore locked and verified, separate from editable creature
+  notes and rumours. Personal observations take precedence over received lore;
+  preserve lore through reloads, account migration and backup/restore.
+- Add free Send Beast Lore offers with full-name/surname recipients, explicit
+  acceptance, version checks, receipts and retries, including at zero Knowledge.
+  Support larger bounded lore transfers without changing normal report pricing.
+- Count kills using tag eligibility instead of the finishing attacker. Eligible
+  pet, party, raid and outside-assisted kills count regardless of mob level, XP,
+  actual loot drops or loot distribution. Denied tags do not count. Retain
+  witnessed-death, exact-creature eligibility and duplicate protection, and
+  update diagnostic reports to explain the new rule.
+- Add Show kill count in creature tooltips under Options, enabled by default.
+  Known creatures show recorded kills even before their entry is locked.
+- Add a Sort menu above the list scrollbar with Name, Kills, Max Level, Min Level
+  and First Encountered, ascending or descending. Default to Name / Ascending,
+  remember the selection, and apply it to filters and Previous/Next navigation.
+  Keep unknown levels/dates last and sort ties consistently.
+- Show earned silver stars, gold stars and crowns beside creature-list names.
+  Use smooth transparent artwork and drop shadows in both the list and kill
+  counter, refine crown alignment, and keep the Sort menu above reward graphics.
+- Fade long names before reward icons and gently scroll overflowing names on
+  hover, with pauses at each end and reset when the pointer leaves.
+- Add a red clear-search button, reserve space so text scrolls clear of it, and
+  refine the search box alignment. Clicking an active type or A-Z filter again
+  clears that filter.
+- Place Known Beast Lore above Damage taken, shortening the beast damage panel
+  from its top while preserving the other controls and non-beast layout. Align
+  the styled damage scrollbar arrows with the panel's top and bottom edges.
+- Rename the notes heading to Creature Notes. Colour Spinkler's help credit mage
+  blue and thank Erna, Labrick, and Rhysdogg in their respective class colours.
+- Expand regression coverage for capture, free sharing, surnames, persistence,
+  backups, sorting, tooltips, UI behavior, denied tags and no-event pet kills
+  across the crown milestone. Add reproducible reward-art generation and live
+  Beast Lore/kill-attribution verification notes.
+- Document grouping small changelog patches under version-range headings in
+  AGENTS.md. Beast Lore live capture and two-player delivery still require
+  in-game verification; automated checks do not establish client rendering.
+
+### Local development history included in this release
+
+## Local development history included in this release
+
+## v0.9.120 - v0.9.128 - Included in v0.9.128-beta
+
+- Raise the crown graphic by 3px, then lower it 1px in the kill counter and
+  creature list, then lower only the list crown another 1px. The counter crown
+  sits 2px above its original position and the list crown sits 1px above it.
+- Add subtle drop shadows to stars and crowns in the kill counter and creature list.
+- Add a red clear-search button inside the search bar. Reserve text space so
+  long searches scroll without overlapping the button; clearing refreshes the list.
+- Move the search box right in three 2px adjustments, for a total of 6px.
+- Add an AGENTS.md rule to group small patches under version-range changelog
+  headings, and group these recent small updates accordingly.
+
+## v0.9.111 - v0.9.119 - Included in v0.9.128-beta
+
+- Count kills by tag eligibility instead of requiring a player/party finishing
+  blow event. Eligible pet, party, raid and outside-assisted kills count regardless
+  of level, XP, loot drops or loot distribution; denied tags remain excluded.
+- Preserve witnessed-death, same-creature eligibility and duplicate protection.
+  Update diagnostics and test missing pet events, target clearing, no-loot kills,
+  denied tags, the 49-to-51 crown boundary and reload persistence.
+
+- Add Show kill count in creature tooltips under Options, enabled by default.
+  Known creatures show their recorded kill count even before entry locking;
+  disabling the option leaves confirmed ability tooltips unchanged.
+
+- Gently scroll overflowing creature names on hover after a short pause. Pause
+  at the ending before returning, clip text before reward icons, and reset on
+  mouse leave or row changes. Short names remain still.
+
+- Replace star and crown scanlines with supersampled transparent textures for
+  smoother edges at different UI scales, preserving reward colours and layout.
+
+- Keep the Sort popup and its controls in an independent foreground layer so
+  list stars, crowns, and scrollbar arrows cannot draw over the open menu.
+
+- Add First Encountered sorting: ascending shows oldest encounters first,
+  descending shows newest first, and unknown dates remain last.
+
+- Fade creature names over the final 20 pixels before earned list rewards,
+  keeping text clear of stars and crowns. Clear the fade on rows without rewards.
+
+- Show earned silver stars, gold stars, and crowns at the right edge of creature
+  list rows, using the same artwork and kill milestones as the kill counter.
+  Reserve name space for earned icons and update them as kills or rows change.
+
+- Move the Sort button right to align its centre above the creature-list
+  scrollbar's up arrow.
+
+## v0.9.110 - Included in v0.9.128-beta
+
+- Add a square down-arrow Sort menu beside Search with Name, Kills, Max Level,
+  and Min Level, each supporting ascending or descending order. Default to
+  alphabetical Name / Ascending and remember the character's chosen order.
+- Apply sorting consistently to filtered lists and Previous/Next navigation.
+  Keep unknown levels last in either direction and resolve ties consistently.
+- Test ordering, filters, effective shared levels, persistence and menu controls;
+  guard the Damage taken scrollbar styling when no usable scrollbar is returned.
+
+## v0.9.104 - v0.9.109 - Included in v0.9.128-beta
+
+- Move Known Beast Lore above the Damage taken panel. For beasts, shorten the
+  panel from the top, keeping its bottom and Record damage taken in their
+  original positions. Non-beast layouts remain unchanged.
+
+- Add the Oxford comma to the beta-testing special thanks.
+
+- Shorten the special-thanks names to Erna and Labrick, preserving class colours.
+
+- Add Rhysdogg to the beta-testing special thanks in druid orange.
+
+- Clicking an active creature-type or A–Z filter again clears that filter.
+- Colour Spinkler's help credit mage blue and add special thanks directly below
+  it to beta testers Erna Lionguard (paladin pink) and Labrick Curby (hunter green).
+
+- Style the Damage taken scrollbar and inset it along the panel's right edge.
+  Align its upper and lower arrow edges with the panel's top and bottom,
+  automatically following the shorter beast layout without moving content.
+
+## v0.9.103 - Included in v0.9.128-beta
+
+- Make the creature name yellow in Known Beast Lore and display captured lore in
+  a scrollable box styled like Damage taken, with observed creature level and
+  locked/verified source attribution.
+- Capture public native tooltip fields after a successful Beast Lore cast on
+  the identified target or mouseover. Retry delayed data for five seconds,
+  preserve left/right text and additional revealed fields, and reject hidden
+  data or mismatched creature instances. Repeated observations can update lore
+  independently of the main entry lock; no manual lore editing is offered.
+- Add Send Beast Lore and a full-name recipient field. Use the existing version
+  handshake, acceptance, delivery receipt and retry flow with zero Knowledge
+  cost, including at zero balance. Imported lore is locked/verified rather than
+  a rumour, names its sender, and cannot overwrite a personal observation.
+- Add an explicit Beast Lore report schema and bounded larger transfers while
+  retaining the existing paid-report schema and pricing. Persist lore through
+  reloads, account migration and backup/restore.
+- Test cast routing, delayed capture, instance identity, restricted data, free
+  transfers, surnames, consent, retries, large reports, persistence and UI wiring.
+  Live Forever spell/tooltip behavior and two-player delivery need in-game QA.
+
+## v0.9.102 - Included in v0.9.128-beta
+
+- Make the Known Beast Lore window heading yellow to match the other headings.
+
+## v0.9.101 - Included in v0.9.128-beta
+
+- Rename the notes window heading to Creature Notes to match its button.
+- Add a beast-only Known Beast Lore button and a matching empty window. Shorten
+  the damage panel by one button row and raise Record damage taken to make room,
+  preserving other page positions and the original layout for non-beasts.
+- Support closing, dragging, saved positioning, UI scale and brightness for the
+  new window, including access on locked beast entries. Add layout and switching
+  regression checks. Beast Lore capture, locked/verified sharing and gamification
+  remain planned for future development.
+
+## v0.9.100 - Included in v0.9.128-beta
+
+- Save verified sender classes locally when importing shared reports so Shared
+  by and Rumours names retain their class colours after logout or reload.
+  Remember displayed sources too, and fill in unknown classes when later
+  observed through public game data. Add persistence and backfill regression coverage.
+
 ## v0.9.99-beta - 2026-09-26
 
 This release covers every change since v0.9.82-beta, including local iterations

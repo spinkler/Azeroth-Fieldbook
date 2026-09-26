@@ -274,10 +274,15 @@ local function addTooltip(tooltip)
     if journal then
         journal:ObserveTameability(unit)
         local names = journal:ConfirmedNames(id)
-        if #names == 0 then tooltipStatus = "No confirmed abilities: review this entry in /fieldbook."; return end
+        local showKills=journal:GetKillCountTooltips() and journal.entries[id]~=nil
+        if #names == 0 and not showKills then tooltipStatus = "No confirmed abilities: review this entry in /fieldbook."; return end
         tooltip:AddLine("Azeroth Fieldbook - Bestiary", 0.5, 0.82, 1)
         for _, name in ipairs(names) do tooltip:AddLine(name, 1, 1, 1, true) end
-        tooltipStatus = "Added " .. #names .. " confirmed ability names."
+        if showKills then
+            local _,_,kills=journal:GetKillReward(id)
+            tooltip:AddLine("Kills: " .. kills,1,0.82,0.14)
+        end
+        tooltipStatus = "Added " .. #names .. " confirmed ability names" .. (showKills and " and kill count." or ".")
         return
     end
     if not creature then tooltipStatus = "Eligible NPC, but no saved observations for this creature ID."; return end
@@ -409,7 +414,10 @@ local function watchedAlias(unit)
     end
 end
 
-frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
+frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID, sentSpellID)
+    if journal and not afterWipeHold and journal.BeastLoreEvent then
+        journal:BeastLoreEvent(event,unit,castGUID,spellID,sentSpellID)
+    end
     if encounters then encounters:Event(event) end
     if event == "ADDON_LOADED" then
         if unit == addonName then initialize() end
@@ -455,6 +463,7 @@ end)
 -- target/mouseover. Never scan spell lists or inspect completed/hidden casts.
 local elapsedSinceScan = 0
 frame:SetScript("OnUpdate", function(_, elapsed)
+    if journal and not afterWipeHold and journal.PollBeastLore then journal:PollBeastLore(elapsed) end
     if encounters then encounters:Update(elapsed) end
     elapsedSinceScan = elapsedSinceScan + elapsed
     if elapsedSinceScan < 0.2 then return end
@@ -466,12 +475,13 @@ end)
 for _, event in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT",
     "UNIT_HEALTH",
     "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_EMPOWER_START",
-    "UNIT_SPELLCAST_SUCCEEDED", "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD",
+    "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED", "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD",
     "DAMAGE_METER_COMBAT_SESSION_UPDATED", "DAMAGE_METER_CURRENT_SESSION_UPDATED", "DAMAGE_METER_RESET" }) do
     frame:RegisterEvent(event)
 end
 -- Standalone GUID events in Forever 69977 (not combat-log subevents). Missing
--- registration fails closed; ordinary scans still perform discovery only.
+-- registration can fail; a watched alive-to-dead transition can still count
+-- with readable tag eligibility. PARTY_KILL is optional (pets may not emit it).
 for _, event in ipairs({ "PARTY_KILL", "UNIT_DIED" }) do
     pcall(frame.RegisterEvent, frame, event)
 end

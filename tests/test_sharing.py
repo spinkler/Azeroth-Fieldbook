@@ -676,9 +676,10 @@ assert(budget:ReserveShare('first',2)); assert(not budget:ReserveShare('second',
 assert(budget:ReserveShare('second',1)); eq(budget:GetSharingBalance(),0)
 assert(budget:CommitShare('second')); assert(budget:CommitShare('first')); eq(budget:GetSharingBalance(),0)
 for i=4,8 do budget:Ensure(i,false,'Funding creature') end
-for _,cost in ipairs({0,-1,1.5,math.huge,0/0,'4',secret}) do
-    assert(not budget:ReserveShare('invalid',cost),'reservations require readable positive finite integers')
+for _,cost in ipairs({-1,1.5,math.huge,0/0,'4',secret}) do
+    assert(not budget:ReserveShare('invalid',cost),'reservations require readable nonnegative finite integers')
 end
+assert(budget:ReserveShare('free',0));assert(budget:CommitShare('free'))
 assert(budget:ReserveShare('larger',4));assert(budget:ReserveShare('larger',4))
 assert(not budget:ReserveShare('larger',3));assert(not budget:ReserveShare('overspend',2))
 eq(budget:GetSharingBalance(),1);assert(budget:CommitShare('larger'));eq(budget:GetSharingBalance(),1)
@@ -721,3 +722,43 @@ eq(#events(b,'received'),1,'paid retry logs no second import')
 b=endpoint('Bob Stonewell',b.db);eq(#events(b,'received'),1,'received account persists across reload')
 ''')
 print('PASS: transfer history, costs, cancellation, retries and duplicate receipt suppression')
+
+lua.execute(r'''
+local function loreSetup()
+    setup()
+    a.db.bestiary.points.earned=0;a.db.bestiary.points.spent=0
+    local e=a.j.entries[42];e.category='Beast'
+    e.beastLore={level=9,observed=now,rows={{left='Diet:',right='Meat'},{left='Tameable'}}}
+    e.beastLoreSource='gameTooltip'
+    capture=assert(S.CaptureLore(a.j,42))
+end
+loreSetup()
+local tx,item=start()
+eq(tx.cost,0);eq(a.j:GetSharingBalance(),0)
+assert(not b.j.entries[42],'offer alone cannot import lore')
+assert(b.engine:Accept(item));pump(10)
+eq(tx.stage,'complete');eq(tx.cost,0)
+eq(b.j.entries[42].beastLore.rows[1].right,'Meat')
+eq(b.j.entries[42].beastLoreSender,'Alice Sunstrider')
+eq(#b.j:GetRumours(42),0);eq(select(3,a.j:GetSharingBalance()),0);eq(b.j:GetSharingBalance(),0)
+assert(not tx.basicInfoWaived,'free lore was never a paid basic offer')
+local received=b.j.entries[42].beastLore
+a.engine:Receive(a.engine.PREFIX,'4~K~'..tx.id,'WHISPER','Bob Stonewell')
+assert(b.j.entries[42].beastLore==received)
+loreSetup();tx,item=start();assert(b.engine:Decline(item));pump(5)
+assert(not b.j.entries[42]);eq(select(3,a.j:GetSharingBalance()),0)
+loreSetup();tx,item=start();drop=function(m) return m.text:find('~K~',1,true) end
+assert(b.engine:Accept(item));pump(75);eq(tx.stage,'unknown')
+local stored=b.j.entries[42].beastLore
+drop=nil;assert(a.engine:Retry());pump(15);eq(tx.stage,'complete')
+assert(b.j.entries[42].beastLore==stored,'receipt retry cannot replace or duplicate lore')
+eq(select(3,a.j:GetSharingBalance()),0)
+b=endpoint('Bob Stonewell',b.db);eq(b.j.entries[42].beastLore.rows[1].right,'Meat')
+-- A full native snapshot can exceed the original paid report's byte budget.
+loreSetup()
+for i=1,30 do capture.beastLore.rows[i]={left='Field '..i..':',right=string.rep('x',180)} end
+tx=assert(a.engine:Start(capture,'Bob Stonewell',{}));assert(#tx.payload>2048)
+pump(70);item=assert(b.engine:GetIncoming()[1]);assert(b.engine:Accept(item));pump(10)
+eq(tx.stage,'complete');eq(#b.j.entries[42].beastLore.rows,30);eq(tx.cost,0)
+''')
+print('PASS: free Beast Lore offers, full surnames, consent, zero balances, retries, reload and large snapshots')

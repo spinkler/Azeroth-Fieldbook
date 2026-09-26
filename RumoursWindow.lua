@@ -175,7 +175,7 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
         frame:SetSize(maxWidth,500)
         local book=getAnchors and getAnchors()
         if book then
-            -- Reserve the expanded, empty ID Logs and Notes window (310 high)
+            -- Reserve the expanded, empty Creature Notes window (310 high)
             -- even if Rumours is the first of the two windows opened.
             frame:SetPoint("TOPLEFT",book,"TOPRIGHT",6,-316)
         else frame:SetPoint("CENTER",UIParent,"CENTER",160,0) end

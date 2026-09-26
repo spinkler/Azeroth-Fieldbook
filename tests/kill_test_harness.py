@@ -7,7 +7,7 @@ sys.path.insert(0, str(ROOT.parent / '.codex-test-deps'))
 from lupa.lua51 import LuaRuntime
 
 
-def new_client(diagnostics=False, tracking=False):
+def new_client(diagnostics=False, tracking=False, beast_lore=False):
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(r'''
         ns, frames, messages, SlashCmdList, units, actorUnits = {}, {}, {}, {}, {}, {}
@@ -81,6 +81,9 @@ def new_client(diagnostics=False, tracking=False):
         function points() return AzerothFieldbookDB.bestiary.points.earned end
         function output() return table.concat(messages, '\n') end
     ''')
+    if beast_lore:
+        for filename in ['SharingReport.lua', 'BeastLore.lua']:
+            lua.execute(ROOT.joinpath(filename).read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
     lua.execute(ROOT.joinpath('BestiaryJournal.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
     if tracking:
         lua.execute(ROOT.joinpath('Tracking.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)

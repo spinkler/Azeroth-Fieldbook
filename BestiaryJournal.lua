@@ -58,7 +58,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     local function clearTerminal(guid, observed)
         if observed.deadline then decision(guid, "stale: living reset or combat state unknown") end
-        observed.actor, observed.dead, observed.eligible, observed.rejected, observed.deadline = nil, nil, nil, nil, nil
+        observed.dead, observed.eligible, observed.rejected, observed.deadline = nil, nil, nil, nil
     end
     local function pruneInstances(at)
         for guid, observed in pairs(killInstances) do
@@ -273,7 +273,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         return math.max(0, ledger.earned - ledger.spent - reserved), ledger.earned, ledger.spent, reserved
     end
     function journal:ReserveShare(transaction, cost)
-        if not str(transaction) or not number(cost) then return false end
+        if not str(transaction) or not (number(cost) or (public(cost) and cost==0)) then return false end
         if ledger.reservations[transaction] then return ledger.reservations[transaction] == cost end
         if self:GetSharingBalance() < cost then return false end
         ledger.reservations[transaction] = cost
@@ -319,6 +319,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:DeleteEntry(id)
         if not number(id) or not self.entries[id] then return false end
+        if self.ClearBeastLoreCapture then self:ClearBeastLoreCapture(id) end
         self.entries[id] = nil
         -- Forget transient sightings, but keep the durable discovery/kill credit.
         for guid, observed in pairs(seenGUIDs) do if observed.id == id then seenGUIDs[guid] = nil end end
@@ -449,6 +450,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             db[key] = value == true
         else return end
         if ns.SpellIDWindow then ns.SpellIDWindow:ApplySettings() end
+    end
+    function journal:GetKillCountTooltips() return db.showKillCountTooltips~=false end
+    function journal:SetKillCountTooltips(enabled)
+        db.showKillCountTooltips=enabled==true
+        self:Touch()
     end
     function journal:GetSpellIDTooltips()
         if type(GetCVarBool) == "function" then
@@ -673,14 +679,6 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         -- Repeated scans/events never extend an ambiguous death indefinitely.
         observed.deadline = observed.deadline or (at + pendingSeconds)
     end
-    local function actorRole(guid)
-        if not str(guid) then return end
-        for _, unit in ipairs({ "player", "pet", "party1", "partypet1", "party2", "partypet2",
-            "party3", "partypet3", "party4", "partypet4" }) do
-            local candidate = read(UnitGUID, unit)
-            if str(candidate) and candidate == guid then return unit end
-        end
-    end
     local function sampleEligibility(observed, unit, guid)
         if read(UnitGUID, unit) ~= guid then return end
         local exists, controlled = read(UnitExists, unit), read(UnitPlayerControlled, unit)
@@ -691,12 +689,13 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         elseif exists == true and controlled == false and denied == false then
             observed.eligible = true
         end
-        -- Missing/error/secret values leave eligibility unknown. In particular,
-        -- false denial is useful ONLY alongside a qualifying PARTY_KILL event.
+        -- Missing/error/secret values leave eligibility unknown. This is sampled
+        -- only at kill/death time, never from an ordinary unclaimed living mob.
+        -- Tag eligibility decides credit, regardless of the finishing attacker,
+        -- group/raid loot distribution, XP, or whether loot actually dropped.
     end
     local function completeKill(self, guid, observed)
         if observed.rejected then return decision(guid, "rejected: tap denied or player-controlled") end
-        if not observed.actor then return decision(guid, "pending: no qualifying PARTY_KILL") end
         if not observed.dead then return decision(guid, "pending: death not readable yet") end
         if observed.eligible ~= true then return decision(guid, "pending: eligibility unknown") end
         local id, entry = observed.id, self.entries[observed.id]
@@ -734,16 +733,16 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:ClearKillEvidence()
         killInstances = {}
     end
-    function journal:RecordPartyKill(attackerGUID, victimGUID)
+    function journal:RecordPartyKill(_attackerGUID, victimGUID)
         local at = now()
         if not creatureID(victimGUID) then return false end
         if killedGUIDs[victimGUID] then return decision(victimGUID, "duplicate") end
         local observed = getInstance(victimGUID, at)
         if not observed then return decision(victimGUID, "rejected: no recent living observation") end
-        local role = actorRole(attackerGUID)
-        if not role then return decision(victimGUID, "rejected: attacker not readable player/pet/party") end
-        observed.actor = role
         startPending(observed, at)
+        -- Optional early eligibility sample if this event arrives before the
+        -- target clears. Pet kills need not emit it; death + tag eligibility
+        -- also completes through RecordUnitDeath/RecordKill without an attacker.
         -- Query only watched tokens that STILL identify this event's victim.
         -- Eligibility is sampled only with a kill/death notification or corpse,
         -- never cached from ordinary living observations before either event.
@@ -1054,7 +1053,19 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             or category == "Totem" or category == "Gas Cloud" then return "Other" end
         return category
     end
+    local sortFields={name=true,kills=true,maxLevel=true,minLevel=true,firstEncountered=true}
+    function journal:GetListSort()
+        local field=type(db.listSort)=="string" and sortFields[db.listSort] and db.listSort or "name"
+        return field,db.listSortDescending==true
+    end
+    function journal:SetListSort(field,descending)
+        if type(field)~="string" or not sortFields[field] then return false end
+        db.listSort,db.listSortDescending=field,descending==true
+        self:Touch()
+        return true
+    end
     function journal:List(category, query, reviewOnly, initial, locations, ranks)
+        local sortField,descending=self:GetListSort()
         query = (query or ""):lower()
         local locationFilterActive = type(locations) == "table" and next(locations) ~= nil
         local rows = {}
@@ -1079,14 +1090,32 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
                     and (not ranks or not next(ranks) or ranks[entry.rank] == true)
                     and locationMatch
                     and (name:lower():find(query, 1, true) or basic.category:lower():find(query, 1, true)) then
-                    rows[#rows + 1] = { id = id, name = name, review = review }
+                    local sortValue=name:lower()
+                    if sortField=="kills" then sortValue=entry.kills or 0
+                    elseif sortField=="maxLevel" then sortValue=basic.levelMax
+                    elseif sortField=="minLevel" then sortValue=basic.levelMin
+                    elseif sortField=="firstEncountered" then sortValue=self:GetFirstEncounteredAt(id) end
+                    rows[#rows + 1] = { id = id, name = name, review = review, sortValue=sortValue }
                 end
             end
         end
-        table.sort(rows, function(a, b) if a.name == b.name then return a.id < b.id end return a.name < b.name end)
+        table.sort(rows, function(a,b)
+            -- Unknown levels or encounter dates stay last in either direction. Ties are stable,
+            -- using alphabetical names and then creature IDs.
+            if a.sortValue~=b.sortValue then
+                if a.sortValue==nil then return false end
+                if b.sortValue==nil then return true end
+                if descending then return a.sortValue>b.sortValue end
+                return a.sortValue<b.sortValue
+            end
+            local left,right=a.name:lower(),b.name:lower()
+            if left~=right then return left<right end
+            return a.id<b.id
+        end)
         return rows
     end
     function journal:Reset()
+        if self.ClearBeastLoreCapture then self:ClearBeastLoreCapture() end
         trackingDB.bestiary = { entries = {}, creatures = {} }
         self.entries = trackingDB.bestiary.entries
         initializePoints()
@@ -1147,6 +1176,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         for name in pairs(creature.names or {}) do self:Offer(id, name, "Previous observations") end
     end
     if ns.InstallSharingRecords then ns.InstallSharingRecords(journal) end
+    if ns.InstallBeastLore then ns.InstallBeastLore(journal,identify) end
     -- Compare recorded content, not kill totals, sightings, timestamps or points.
     -- No-op setters and repeated sightings therefore keep the current streak.
     for _,name in ipairs({"Ensure","Offer","SetAbility","SetAbilityTooltip","RemoveAbility","AddManual","ResolveAbility",

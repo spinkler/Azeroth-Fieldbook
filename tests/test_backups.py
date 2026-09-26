@@ -44,6 +44,8 @@ class BackupTests(unittest.TestCase):
         lua.execute('''
             local j,db,store,e=fresh()
             e.tameable=true;e.tameabilitySource='gameTooltip'
+            e.beastLore={level=10,observed=now,rows={{left='Diet:',right='Meat'}}}
+            e.beastLoreSource='gameTooltip'
             e.unchangedKills=9;e.rank='Rare'
             e.idNotes.text='Line 1\\nUnicode: Élan • 熊\\t100% :()[]'
             j:Offer(42,'Roar','Automatic observation',456)
@@ -60,6 +62,8 @@ class BackupTests(unittest.TestCase):
             eq(ns.BestiaryBackups.Encode(decoded),encoded)
             eq(decoded.bestiary.entries[42].idNotes.text,e.idNotes.text)
             assert(decoded.bestiary.entries[42].confirmed and decoded.bestiary.entries[42].tameable)
+            eq(decoded.bestiary.entries[42].beastLore.rows[1].right,'Meat')
+            eq(decoded.bestiary.entries[42].beastLoreSource,'gameTooltip')
             eq(decoded.bestiary.entries[42].damage[10].notes[1].playerLevel,11)
             eq(decoded.bestiary.entries[42].abilities.Roar.state,'rejected')
             assert(decoded.bestiary.entries[42].rumours[1].dismissed)

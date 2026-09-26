@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.99 (Beta)
+# Azeroth Fieldbook 0.9.128 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,11 +6,11 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.99 includes sharing, addon-version compatibility
+spell databases. Version 0.9.128 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.99.
+are not part of version 0.9.128.
 
 ## Installation and opening
 
@@ -118,6 +118,17 @@ type, level range, location and model. Players, pets, vehicles and
 player-controlled creatures are excluded.
 
 The index supports creature-type, location, rank, review-state, text and A-Z filters.
+Earned stars and crowns appear beside creature names. Hover over an overflowing
+name to slowly reveal the full text; leaving the row resets it to the beginning.
+Creature tooltips also show recorded kill counts by default, including on
+unlocked entries. Toggle **Show kill count in creature tooltips** under Options
+→ **Tooltips and cast IDs** to hide them; the preference is saved per character.
+The square arrow beside Search opens **Sort**, with **Name**, **Kills**, **Max
+Level**, **Min Level**, and **First Encountered** and separate **Ascending** / **Descending** choices.
+It defaults to **Name / Ascending** and remembers your character's selection.
+First Encountered sorts oldest first when ascending and newest first when descending.
+Unknown levels or encounter dates stay last in either direction; Previous/Next follows the same
+order as the filtered index.
 The **Index** button starts red with the letters hidden and no letter filter.
 Click it to highlight the button and reveal all 26 letter buttons. Click it again
 to hide the letters and clear the letter filter, restoring the full creature list
@@ -134,9 +145,12 @@ Each creature entry can contain:
 - Personal damage observations with separate player and creature levels. Equal-level records are recommended; other levels are supported.
 - Observed offensive spell schools, resistances and immunities.
 - Observed disposition, combat style and behavioural traits. A separate Tameable portrait badge records explicit game tooltip information (English clients, when revealed by the game, such as Beast Lore). Missing or unreadable data remains unknown; previous manual marks do not establish this badge.
-- A deduplicated kill counter requiring player/pet/party kill evidence and
-  readable eligibility for the same observed creature GUID. Inspecting another
-  player's corpse grants no kill credit; XP and actual loot drops are not required.
+- A deduplicated kill counter based on tag eligibility for a recently observed
+  creature. Eligible deaths count regardless of who lands the killing blow,
+  including pets, party and raid members, or outside help. Mob level, XP, actual
+  loot drops and the group's loot distribution do not gate credit. Denied tags
+  do not count. Death and readable eligibility must belong to the same creature
+  GUID; first discovering an old corpse cannot add a kill.
 
 Magic schools are color-coded in the creature summary. Creature observations
 remain manual where the client does not expose reliable addon-readable evidence.
@@ -255,10 +269,38 @@ hover that label for every sender and the encounter/lock status.
 Each shared report in Rumours also names its source. Sender names use their
 class colour after the game identifies them as a player through your target,
 mouseover or party/raid roster. Full surnames must match. Verified classes are
-remembered for the session; unknown classes stay grey, as does the Shared by
+saved locally when shared reports arrive or source names are displayed, keeping
+their colours after logout or reload. Unknown classes are filled in when later
+observed; until then they stay grey, as does the Shared by
 label. Received reports never supply class identity. Local names
 and creature types win conflicts. A locked page retains its displayed basics;
 additional reports remain available in Rumours and after unlocking.
+
+Beast pages include **Known Beast Lore** above the **Damage taken** panel. Its
+window is available even on locked entries. Casting Beast Lore on an identified
+target or mouseover records the public native tooltip's revealed fields in a
+scrollable box: damage, health, armour, resistances, diet, tameability, abilities
+and other revealed text where the client provides it. The record includes the
+observed creature level; values are a snapshot of that observation, not a
+promise for every level or instance. The capture waits up to five seconds for
+delayed fields and checks the original creature GUID. English lore labels are
+currently recognized; hidden/unreadable information is never inspected or guessed.
+
+Lore is read-only and shown as **Locked • Verified**, independently of the main
+entry lock. Further client observations can update it. **Send Beast Lore** accepts
+a full name including surname and sends an offer using the normal compatibility,
+accept/decline, receipt and retry flow. It costs **0 Knowledge**, even for an
+unknown creature and when the sender has no points. Receiving earns no points.
+Both players need the same addon version. Accepted lore is stored directly with
+sender attribution, rather than as an unverified rumour; personal observations
+take precedence over received lore. Sender provenance comes from the message
+transport; addon messages cannot independently authenticate another client's
+observation. Lore survives reloads, account migration and backup/restore.
+
+The damage panel gives up one button row to make room for the Beast Lore button;
+the rest of the page and all non-beast layouts retain their positions. Beast Lore
+progression rewards remain future work. See [in-game checks](tests/BEAST_LORE.md)
+for the capture and delivery checks still required on the live Forever client.
 
 Click **Rumours** between the kill counter and **Creature Notes** to open a
 separate window for the selected creature. Click it again to close the window.
@@ -415,7 +457,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.99 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.9.128 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,
