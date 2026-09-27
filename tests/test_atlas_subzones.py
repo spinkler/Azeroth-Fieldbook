@@ -1,0 +1,609 @@
+"""Personal crossing evidence, inferred regions and the optional Atlas overlay."""
+import unittest
+from atlas_test_harness import new_atlas
+
+
+class SubzoneTests(unittest.TestCase):
+    def setUp(self):
+        self.lua = new_atlas(ui=True)
+        self.lua.execute('''
+            S=ns.AtlasSubzones;s=j.subzones
+            function settle()
+                for i=1,20000 do
+                    if not S.worker or not S.worker:IsShown() then assert(not m.map.subzoneError,m.map.subzoneError);return end
+                    S.Step()
+                end
+                error('Sub-zone worker did not settle')
+            end
+            autoSettle=true
+            local refresh=c.Refresh
+            function c:Refresh(...) refresh(self,...);if autoSettle then settle() end end
+            for _,buffer in ipairs(m.map.subzoneBuffers) do
+                local create=buffer.frame.CreateFontString
+                function buffer.frame:CreateFontString(...)
+                    local label=create(self,...)
+                    local stringWidth=label.GetStringWidth
+                    function label:SetFont(_,size,flags) self.fontSize=size;self.fontFlags=flags end
+                    function label:GetStringWidth() return stringWidth(self)*(self.fontSize or 12)/12 end
+                    return label
+                end
+            end
+            tick=10;name='Meadow';function GetTime() return tick end
+            function GetSubZoneText() return name end
+            function GetRealZoneText() return 'Coast' end
+            function sample(label,x,y)
+                name=label;px=x or px;py=y or py;tick=tick+0.25
+                return s:Observe()
+            end
+            s:Reset();sample('Meadow',.4,.4)
+            function crossing(from,to,x,y,dx,dy)
+                return {mapID=101,from=from,to=to,x=x,y=y,fromX=x+(dx or -10),fromY=y+(dy or 0),at=100}
+            end
+            function ring()
+                return {crossing('Meadow','Forest',3000,3000),crossing('Meadow','Forest',7000,3000),
+                    crossing('Meadow','Hill',7000,7000),crossing('Meadow','Hill',3000,7000)}
+            end
+        ''')
+
+    def test_logging_labels_positions_deduplication_and_reload(self):
+        self.lua.execute('''
+            assert(not j.state.showSubzones and #s:Crossings(101)==0)
+            assert(sample('Forest',.401,.4))
+            local rows=s:Crossings(101);local r=rows[1]
+            assert(r.from=='Meadow' and r.to=='Forest' and r.x==4010 and r.fromX==4000 and r.mapID==101 and r.at==now)
+            assert(not sample('Forest',.401,.4) and #s:Crossings(101)==1)
+            sample('Meadow',.4,.4);sample('Forest',.401,.4)
+            assert(#s:Crossings(101)==2,'Same-direction cell crossings coalesce; reverse direction is retained')
+            r.from='Detached';assert(s:Crossings(101)[1].from=='Meadow')
+            j.state.showSubzones=true
+            local reload=ns.CreateAtlasJournal(saved)
+            assert(reload.state.showSubzones and #reload.subzones:Crossings(101)==2)
+            assert(not reload.subzones:Observe(),'Reload must only establish baseline')
+            sample('',.402,.4);assert(s:Crossings(101)[3].to=='Coast')
+            assert(not next(j.records) and not next(j.expeditions),'Automatic evidence never creates discoveries')
+        ''')
+
+    def test_discontinuities_and_unreadable_values_do_not_draw_boundaries(self):
+        self.lua.execute('''
+            sample('Forest',.9,.9);assert(#s:Crossings(101)==0)
+            mapID=102;sample('Hill',.901,.9);assert(#s:Crossings(102)==0)
+            mapID=101;sample('Meadow',.4,.4)
+            px=nil;name='Forest';s:Observe();sample('Forest',.401,.4)
+            tick=tick+10;sample('Hill',.402,.4);assert(#s:Crossings(101)==0)
+            sample(nil,.403,.4);sample('Meadow',.404,.4);assert(#s:Crossings(101)==0)
+            name='Forest';px=.405;c.subzoneObserver.scripts.OnEvent(c.subzoneObserver,'PLAYER_ENTERING_WORLD')
+            assert(#s:Crossings(101)==0)
+            c.subzoneObserver.scripts.OnEvent(c.subzoneObserver,'PLAYER_LEAVING_WORLD')
+            name='Hill';px=.406;c.subzoneObserver.scripts.OnUpdate(c.subzoneObserver,1)
+            assert(#s:Crossings(101)==0)
+            c.subzoneObserver.scripts.OnEvent(c.subzoneObserver,'PLAYER_ENTERING_WORLD')
+            name='Meadow';px=.407;c.subzoneObserver.scripts.OnEvent(c.subzoneObserver,'ZONE_CHANGED_NEW_AREA')
+            assert(#s:Crossings(101)==0)
+            local future={schema=999,subzones={keep=true}}
+            local before=snapshot(future);local newer=ns.CreateAtlasJournal(future)
+            newer.subzones:Observe();assert(snapshot(future)==before)
+        ''')
+
+    def test_hidden_background_observer_records_indoor_and_poll_changes(self):
+        self.lua.execute('''
+            shell:ShowSection('test');assert(not m.map:IsVisible())
+            name='Forest';px=.401;c.subzoneObserver.scripts.OnEvent(c.subzoneObserver,'ZONE_CHANGED_INDOORS')
+            assert(#s:Crossings(101)==1 and not j.state.showSubzones)
+            name='Meadow';px=.4;c.subzoneObserver.scripts.OnUpdate(c.subzoneObserver,.25)
+            assert(#s:Crossings(101)==2)
+        ''')
+
+    def test_geometry_is_unseeded_non_overlapping_and_neighbours_differ(self):
+        self.lua.execute('''
+            local empty=S.Build({});assert(#empty.strips==0 and #empty.names==0)
+            local one=S.Build({crossing('Meadow','Forest',5000,5000)})
+            assert(#one.strips==0 and one.areas.Meadow.colourID~=one.areas.Forest.colourID)
+            local line=S.Build({crossing('Meadow','Forest',3000,3000),crossing('Meadow','Forest',5000,3000),crossing('Meadow','Forest',7000,3000)})
+            assert(#line.strips==0,'Collinear boundaries do not enclose an area')
+            local model=S.Build(ring());assert(#model.strips>0 and model:At(5000,5000).name=='Meadow')
+            assert(not model:At(1000,1000),'Do not extrapolate across unseen map')
+            local occupied={}
+            for _,strip in ipairs(model.strips) do
+                for x=strip.x,strip.x+strip.width-1 do
+                    local key=x..':'..strip.y;assert(not occupied[key]);occupied[key]=true
+                end
+            end
+            for _,a in pairs(model.areas) do
+                for name in pairs(a.neighbours) do assert(a.colourID~=model.areas[name].colourID) end
+            end
+            -- A dense graph cannot wrap a short palette and reuse neighbour colours.
+            local rows={}
+            for i=1,10 do for k=i+1,10 do rows[#rows+1]=crossing('Area '..i,'Area '..k,5000,5000) end end
+            local dense=S.Build(rows);local used={}
+            for _,a in pairs(dense.areas) do assert(not used[a.colourID]);used[a.colourID]=true end
+        ''')
+
+    def test_sparse_map_uses_unique_accents_deterministically(self):
+        self.lua.execute("""
+            local rows={}
+            for i=1,S.MAX_AREAS-1 do rows[#rows+1]=crossing('Hub','Area '..i,5000,5000) end
+            local model=S.Build(rows);local again=S.Build(rows);local used={};local count=0
+            for name,a in pairs(model.areas) do
+                assert(a.colourID==again.areas[name].colourID)
+                if not used[a.colourID] then used[a.colourID]=true;count=count+1 end
+                for neighbour in pairs(a.neighbours) do assert(a.colourID~=model.areas[neighbour].colourID) end
+            end
+            assert(count==S.MAX_AREAS,'Never reuse a colour, even on non-neighbouring areas')
+            local firstTen=S.Build({unpack(rows,1,9)});local seen={}
+            for _,a in pairs(firstTen.areas) do
+                assert(not seen[a.colourID],'prefer unused colours while available')
+                seen[a.colourID]=true
+            end
+        """)
+
+    def test_new_colour_maximises_nearest_perceptual_distance_and_keeps_existing_colours(self):
+        self.lua.execute('''
+            local rows={}
+            for i=1,12 do rows[i]=crossing('Hub','Zone '..i,5000,5000) end
+            local old=S.Build(rows)
+            rows[#rows+1]=crossing('Hub','Added first alphabetically',5000,5000)
+            local model=S.Build(rows,nil,nil,old)
+            local used={}
+            for name,area in pairs(old.areas) do
+                assert(model.areas[name].colourID==area.colourID,'New discoveries must not recolour existing areas')
+                used[area.colourID]=true
+            end
+            local function distanceToClosest(rgb)
+                local best=math.huge
+                for _,area in pairs(old.areas) do
+                    local a,b=rgb.lab,area.colour.lab
+                    best=math.min(best,(a[1]-b[1])^2+(a[2]-b[2])^2+(a[3]-b[3])^2)
+                end
+                return best
+            end
+            local chosen=model.areas['Added first alphabetically']
+            local distance=distanceToClosest(chosen.colour)
+            assert(not used[chosen.colourID] and distance>0)
+            local seen={}
+            for i,rgb in ipairs(S.Palette()) do
+                local key=string.format('%.8f:%.8f:%.8f',rgb[1],rgb[2],rgb[3])
+                assert(not seen[key],'Candidate palette must not contain duplicate RGB colours');seen[key]=true
+                assert(rgb.lab[1]>=.60,'Candidate colours must stay bright enough for map artwork')
+                if not used[i] then assert(distanceToClosest(rgb)<=distance+1e-12,'Choose the furthest available colour from the entire existing set') end
+            end
+        ''')
+
+    def test_checkbox_render_pool_hover_and_map_isolation(self):
+        self.lua.execute('''
+            s.store[101]=ring();s:Changed(101)
+            local width,height=m.map:GetWidth(),m.map:GetHeight();local point=m.map.point
+            m.subzones:SetChecked(true);click(m.subzones)
+            assert(j.state.showSubzones and m.map.subzoneModel and #m.map.subzoneTextures>0)
+            assert(m.map:GetWidth()==width and m.map:GetHeight()==height and m.map.point==point)
+            local count=#objects;local textures=#m.map.subzoneTextures
+            for i=1,5 do c:Refresh() end
+            assert(#objects==count and #m.map.subzoneTextures==textures)
+            m.map.left=100;m.map.top=700
+            local left,top=m.map:GetLeft(),m.map:GetTop();local scale=m.map:GetEffectiveScale()
+            cursorX=(left+.3*width)*scale;cursorY=(top-.3*height)*scale
+            m.map.scripts.OnEnter(m.map)
+            local lines='';for _,v in ipairs(GameTooltip.lines) do lines=lines..v.text end
+            assert(lines:find('Meadow -> Forest',1,true))
+            m.map.scripts.OnLeave(m.map);assert(not GameTooltip:IsShown())
+            c:SetZone(102,'Synthetic hills');assert(#m.map.subzoneModel.names==0)
+            for _,t in ipairs(m.map.subzoneTextures) do assert(not t:IsVisible()) end
+            c:SetZone(101,'Synthetic coast');assert(#m.map.subzoneModel.names==3)
+            m.subzones:SetChecked(false);click(m.subzones)
+            assert(not m.map.subzoneModel and #s:Crossings(101)==4)
+            for _,t in ipairs(m.map.subzoneDots) do assert(not t:IsVisible()) end
+            for _,t in ipairs(m.map.subzoneLabels) do assert(not t:IsVisible()) end
+            m.subzones:SetChecked(true);click(m.subzones)
+            C_Map.GetMapArtLayers=function() return nil end;m.map:Invalidate();c:Refresh()
+            assert(not m.map.subzoneModel,'Unavailable map art must hide overlay')
+        ''')
+
+    def test_bounded_storage_and_invalid_saved_records(self):
+        self.lua.execute('''
+            s.store[101]={false,{mapID=101,from='bad'}}
+            assert(#s:Crossings(101)==0)
+            s.store[101]={};S.MAX_CROSSINGS=1
+            assert(sample('Forest',.401,.4));assert(not sample('Hill',.402,.4))
+            assert(#s:Crossings(101)==1)
+        ''')
+
+    def test_isolated_dots_stay_small_and_disappear_when_incorporated(self):
+        self.lua.execute('''
+            s.store[101]={crossing('Meadow','Forest',3000,3000)};s:Changed(101)
+            m.subzonePoints:SetChecked(false);click(m.subzonePoints)
+            m.subzones:SetChecked(true);click(m.subzones)
+            local dot=m.map.subzoneDots[1]
+            assert(dot:IsShown() and dot:GetWidth()*m.map.zoom==3)
+            m.map:ZoomBy(20)
+            assert(m.map.zoom==4 and dot:GetWidth()*m.map.zoom==3,'Zoom must not enlarge isolated samples')
+            local rows=ring();rows[#rows+1]=crossing('Cave','Pass',9000,9000)
+            s.store[101]=rows;s:Changed(101);c:Refresh()
+            local model=m.map.subzoneModel
+            for i=1,4 do assert(model.covered[i],'Boundary and interior evidence must stop displaying dots') end
+            assert(not model.covered[5],'An unrelated isolated sample still needs a dot')
+            local shown=0
+            for _,t in ipairs(m.map.subzoneDots) do
+                if t:IsShown() then shown=shown+1;assert(t:GetWidth()*m.map.zoom==3) end
+            end
+            assert(shown==1 and #s:Crossings(101)==5,'Hiding dots must preserve the recorded samples')
+            s.store[101]=ring();s:Changed(101);c:Refresh()
+            for _,t in ipairs(m.map.subzoneDots) do assert(not t:IsVisible()) end
+            s.store[101]={crossing('Meadow','Forest',3000,3000)};s:Changed(101);c:Refresh()
+            dot=m.map.subzoneDots[1];assert(dot:IsShown() and dot:GetWidth()*m.map.zoom==3,'Reused dots must retain constant size')
+            m.map:ZoomBy(-20);assert(dot:GetWidth()==3)
+        ''')
+
+    def test_independent_labels_size_brightness_and_persistence(self):
+        self.lua.execute('''
+            s.store[101]=ring();s:Changed(101)
+            local initial=snapshot(s.store)
+            local point=m.map.point;local width,height=m.map:GetWidth(),m.map:GetHeight()
+            assert(m.labelSize.track.colorTexture and m.brightness.track.colorTexture)
+            m.subzoneLabels:SetChecked(true);click(m.subzoneLabels)
+            assert(not j.state.showSubzones and m.map.subzoneLabels[1]:IsShown())
+            assert(#m.map.subzoneTextures==0 and #m.map.subzoneTriangles==0)
+            local label=m.map.subzoneLabels[1]
+            assert(label.fontSize==4 and m.labelSize.valueLabel:GetText()=='4','Unsaved label size must default to 4 in the map and slider')
+            assert(label.fontFlags=='OUTLINE','Use a thin outline without MONOCHROME or THICKOUTLINE')
+            m.labelSize.scripts.OnValueChanged(m.labelSize,20)
+            label=m.map.subzoneLabels[1];assert(label.fontSize==20 and label:GetHeight()==24 and j.state.subzoneLabelSize==20)
+            m.labelSize.scripts.OnValueChanged(m.labelSize,2)
+            label=m.map.subzoneLabels[1];assert(label.fontSize==2 and label:GetHeight()==6 and j.state.subzoneLabelSize==2)
+            assert(label.fontFlags=='OUTLINE','Outline must survive font-size edits and buffer swaps')
+            m.subzones:SetChecked(true);click(m.subzones)
+            m.subzoneLabels:SetChecked(false);click(m.subzoneLabels)
+            assert(m.map.subzoneTextures[1]:IsShown() and not label:IsVisible())
+            local colour=snapshot(m.map.subzoneTextures[1].colorTexture)
+            C_MapExplorationInfo={GetExploredMapTextures=function() return {{textureWidth=128,textureHeight=128,offsetX=0,offsetY=0,fileDataIDs={7777}}} end}
+            m.map:Invalidate();c:Refresh()
+            m.brightness.scripts.OnValueChanged(m.brightness,40)
+            local base,overlay=0,0
+            for _,o in ipairs(objects) do
+                if o.parent==m.map.canvas and type(o.texture)=='number' and o:IsShown() then
+                    if o.texture==7777 then overlay=overlay+1 else base=base+1 end
+                    assert(o.vertexColor[1]==.4 and o.vertexColor[2]==.4 and o.vertexColor[3]==.4)
+                end
+            end
+            assert(base==12 and overlay==1)
+            assert(snapshot(m.map.subzoneTextures[1].colorTexture)==colour)
+            assert(m.map.point==point and m.map:GetWidth()==width and m.map:GetHeight()==height)
+            local reload=ns.CreateAtlasJournal(saved)
+            assert(reload.state.mapBrightness==.4 and reload.state.subzoneLabelSize==2 and reload.state.showSubzoneLabels==false)
+            assert(snapshot(s.store)==initial,'Display controls cannot change crossing evidence')
+            local old=ns.CreateAtlasJournal({settings={showSubzones=true}})
+            assert(old.state.showSubzoneLabels,'Preserve visible labels for existing enabled overlays')
+            m.labelSize.scripts.OnValueChanged(m.labelSize,100)
+            m.brightness.scripts.OnValueChanged(m.brightness,0/0)
+            assert(j.state.subzoneLabelSize==2 and j.state.mapBrightness==.4)
+        ''')
+
+    def test_points_toggle_is_independent_persistent_and_reuses_geometry(self):
+        self.lua.execute('''
+            s.store[101]=ring();s.store[101][5]=crossing('Cave','Pass',9000,9000);s:Changed(101)
+            local evidence=snapshot(s.store)
+            assert(not j.state.showSubzonePoints and not m.subzonePoints:GetChecked())
+            m.subzonePoints:SetChecked(true);click(m.subzonePoints)
+            assert(j.state.showSubzonePoints and not j.state.showSubzones and not j.state.showSubzoneLabels)
+            assert(m.map.subzoneDots[1]:IsVisible() and #m.map.subzoneDots==5,'Checked must show all points even without shading')
+            assert(#m.map.subzoneTextures==0 and #m.map.subzoneTriangles==0 and #m.map.subzoneLabels==0)
+            local model=m.map.subzoneModel
+            local build=S.Build
+            S.Build=function() error('Display toggles cannot rebuild unchanged geometry') end
+            m.subzones:SetChecked(true);click(m.subzones)
+            m.subzoneLabels:SetChecked(true);click(m.subzoneLabels)
+            -- Exercise both reusable buffers and a change during queued painting.
+            autoSettle=false
+            local clock=0;function debugprofilestop() clock=clock+.6;return clock end
+            m.subzonePoints:SetChecked(false);click(m.subzonePoints)
+            S.Step()
+            assert(m.map.subzonePending,'Exercise cancellation part-way through painting')
+            m.subzonePoints:SetChecked(true);click(m.subzonePoints);settle()
+            j.state.subzoneLabelSize=14;m.map:RenderSubzones();settle()
+            assert(m.map.subzoneDots[1]:IsVisible())
+            autoSettle=true
+            for i=1,4 do
+                m.subzonePoints:SetChecked(i%2==1);click(m.subzonePoints)
+                local visible=0;for _,dot in ipairs(m.map.subzoneDots) do if dot:IsVisible() then visible=visible+1 end end
+                assert(visible==(i%2==1 and 5 or 1),'Unchecked retains automatic isolated dots')
+                assert(m.map.subzoneTextures[1]:IsVisible() and m.map.subzoneLabels[1]:IsVisible())
+                assert(m.map.subzoneModel==model)
+            end
+            assert(snapshot(s.store)==evidence,'Visibility cannot change saved evidence')
+            local reload=ns.CreateAtlasJournal(saved)
+            assert(reload.state.showSubzonePoints==false and reload.state.showSubzones and reload.state.showSubzoneLabels)
+            local old=ns.CreateAtlasJournal({settings={showSubzones=true}})
+            assert(old.state.showSubzonePoints,'Existing visible points survive upgrade')
+            local optedOut=ns.CreateAtlasJournal({settings={showSubzones=true,showSubzonePoints=false}})
+            assert(not optedOut.state.showSubzonePoints,'A saved opt-out survives reload')
+            S.Build=build
+            assert(sample('Forest',.401,.4) and #s:Crossings(101)==6,'Hidden points must keep recording')
+        ''')
+
+    def test_smooth_contours_cover_hull_without_cell_steps_and_bound_complexity(self):
+        self.lua.execute('''
+            local model=S.Build(ring());assert(model.grid==64 and #model.triangles>0)
+            local total,refined=0,false;local step=10000/model.grid
+            for _,strip in ipairs(model.strips) do total=total+strip.width*step*step end
+            for _,t in ipairs(model.triangles) do
+                local a,b,c=t[1],t[2],t[3]
+                total=total+math.abs((b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x))/2
+                for _,v in ipairs(t) do
+                    if math.abs(v.x/step-math.floor(v.x/step+.5))>.01 then refined=true end
+                end
+            end
+            assert(refined and math.abs(total-16000000)<5000,'Contour covers the hull to sub-pixel precision')
+            for _,buffer in ipairs(m.map.subzoneBuffers) do
+                local create=buffer.frame.CreateTexture
+                function buffer.frame:CreateTexture(...)
+                    local t=create(self,...)
+                    function t:SetVertexOffset(i,x,y) self.offsets=self.offsets or {};self.offsets[i]={x,y} end
+                    return t
+                end
+            end
+            s.store[101]=ring();s:Changed(101)
+            m.subzones:SetChecked(true);click(m.subzones)
+            for _,t in ipairs(m.map.subzoneTriangles) do
+                local o=t.offsets;assert(o and #o==4 and t:IsShown())
+                local ax,ay=o[1][1],o[1][2]
+                local bx,by=o[2][1],o[2][2]-t:GetHeight()
+                local cx,cy=o[3][1]+t:GetWidth(),o[3][2]
+                assert((bx-ax)*(cy-ay)-(by-ay)*(cx-ax)>0,'Native triangle winding must face the viewer')
+                assert(t.colorTexture[4]==.4)
+            end
+            local rows={}
+            for i=1,4096 do rows[i]=crossing('Meadow','Forest',10+(i*127)%9990,(i*191)%10000) end
+            local dense=S.Build(rows)
+            assert(#dense.triangles<=S.MAX_TRIANGLES and dense.grid>=8)
+            for _,a in pairs(dense.areas) do
+                for name in pairs(a.neighbours) do assert(a.colourID~=dense.areas[name].colourID) end
+            end
+        ''')
+
+    def test_ten_yard_spacing_respects_border_pair_map_scale_and_reload(self):
+        self.lua.execute('''
+            C_Map.GetMapWorldSize=function() return 1000,2000 end
+            local data={subzones={[101]={
+                crossing('A','B',1000,1000),crossing('B','A',1050,1000),
+                crossing('A','C',1050,1000),crossing('A','B',1101,1000),
+                crossing('A','B',1000,1060),{invalid='preserve'}}}}
+            data.subzones[101].metadata='preserve'
+            local journal=ns.CreateAtlasJournal(data);local survey=journal.subzones
+            survey:Index(101,true)
+            assert(#data.subzones[101]==6,'Compaction must not run in the caller frame')
+            settle()
+            assert(#data.subzones[101]==5 and data.subzones[101][2].to=='C')
+            assert(data.subzones[101][3].x==1101 and data.subzones[101][4].y==1060)
+            assert(data.subzones[101][5].invalid=='preserve' and data.subzones[101].metadata=='preserve')
+            local before=snapshot(data.subzones)
+            ns.CreateAtlasJournal(data).subzones:Index(101,true);settle()
+            assert(snapshot(data.subzones)==before,'Thinning must be idempotent after reload')
+
+            local live=ns.CreateAtlasJournal({}).subzones
+            name='A';px=.1;py=.1;live:Observe()
+            name='B';px=.101;assert(live:Observe())
+            name='A';px=.106;assert(not live:Observe(),'Reverse crossing within ten yards is redundant')
+            name='B';px=.111;assert(not live:Observe(),'Ten-yard threshold is inclusive')
+            name='A';px=.112;assert(live:Observe(),'Keep a point more than ten yards from retained evidence')
+            name='C';px=.113;assert(live:Observe(),'Different borders at the same position remain distinct')
+            mapID=102;name='A';live:Observe();name='B';px=.114;assert(live:Observe())
+            assert(#live:Crossings(101)==3 and #live:Crossings(102)==1)
+        ''')
+
+    def test_deferred_index_preserves_pending_crossings_and_flushes_on_logout(self):
+        self.lua.execute('''
+            local data={subzones={[101]={}}}
+            for i=1,1000 do data.subzones[101][i]=crossing('A','B',i*9,1000) end
+            C_Map.GetMapWorldSize=function() return 1000,2000 end
+            local journal=ns.CreateAtlasJournal(data);local survey=journal.subzones
+            name='C';px=.4;py=.4;survey:Observe(true)
+            assert(not survey.index[101].ready)
+            name='D';px=.401;survey:Observe(true)
+            assert(#survey.index[101].pending==3 and #data.subzones[101]==1000,'Queue both interior observations and the genuine crossing')
+            local observer=S.Track(journal)
+            observer.scripts.OnEvent(observer,'PLAYER_LOGOUT')
+            local rows=survey:Crossings(101)
+            assert(survey.index[101].ready and #rows<1000)
+            assert(rows[#rows].from=='C' and rows[#rows].to=='D' and rows[#rows].x==4010)
+            local samples=survey:Samples(101)
+            assert(samples[#samples].kind=='interior' and samples[#samples].name=='D','Logout also retains pending interior evidence')
+            local value=snapshot(data);settle();assert(snapshot(data)==value,'Cancelled index job must not commit twice')
+            local future={schema=999,subzones=data.subzones}
+            value=snapshot(future);local newer=ns.CreateAtlasJournal(future).subzones
+            newer:Index(101,true);newer:Flush();settle();assert(snapshot(future)==value)
+
+            C_Map.GetMapWorldSize=nil
+            local partial={subzones={[101]={crossing('A','B',1000,1000)}}}
+            local pending=ns.CreateAtlasJournal(partial).subzones
+            local index=pending:Index(101,true)
+            for i=1,600 do index.pending[i]=crossing('C','D',i*10,2000) end
+            S.Step();assert(not index.ready and #partial.subzones[101]>1,'Exercise a partially committed pending queue')
+            name='E';px=.4;pending:Observe(true);name='F';px=.401;pending:Observe(true)
+            pending:Flush()
+            local final=partial.subzones[101]
+            assert(final[#final].from=='E' and final[#final].to=='F','A late crossing must survive a mid-drain logout')
+            local seen={}
+            for _,row in ipairs(final) do
+                local key=row.from..row.to..math.floor(row.x/25)..':'..math.floor(row.y/25)
+                assert(not seen[key],'Logout restart must not duplicate already committed rows');seen[key]=true
+            end
+            local snapshotAfter=snapshot(partial);settle();assert(snapshot(partial)==snapshotAfter)
+        ''')
+
+    def test_interior_sampling_uses_yards_without_fabricating_crossings(self):
+        self.lua.execute('''
+            local dimensions=0
+            C_Map.GetMapWorldSize=function() dimensions=dimensions+1;return 1000,2000 end
+            local data={};local survey=ns.CreateAtlasJournal(data).subzones
+            name='Mine';px=.1;py=.1
+            assert(survey:Observe() and #survey:Samples(101)==1,'Seed the current area without needing a crossing')
+            assert(not survey:Observe(),'Stationary polling must not add data')
+            px=.1999;assert(not survey:Observe(),'99.9 yards is too close')
+            px=.2;assert(survey:Observe(),'Exactly 100 horizontal yards permits a sample')
+            py=.1499;assert(not survey:Observe(),'Use the map height for vertical yard distances')
+            py=.15;assert(survey:Observe(),'Exactly 100 vertical yards permits a sample')
+            assert(#survey:Samples(101)==3 and #survey:Crossings(101)==0)
+            local model=S.Build(survey:Samples(101))
+            assert(model.areas.Mine.hasFill and model:At(1800,1100).name=='Mine','Interior samples must expand the estimated region')
+            assert(not next(model.areas.Mine.neighbours),'Interior data must not invent another sub-zone')
+            px=.1;py=.1;assert(not survey:Observe(),'Returning to a sampled location must not grow saved data')
+            local before=snapshot(data.subzones)
+            local restored=ns.CreateAtlasJournal(data).subzones
+            assert(not restored:Observe() and snapshot(data.subzones)==before,'Reload must not duplicate the initial sample')
+            assert(dimensions==2,'Read dimensions once per map index, not each poll')
+            mapID=102;assert(restored:Observe(),'Maps have independent interior coverage')
+            name='Tunnel';assert(restored:Observe(),'Nearby different areas retain their own interior evidence')
+            assert(#restored:Crossings(102)==1,'The real name change still records a crossing')
+            px=nil;assert(not restored:Observe(),'Unavailable coordinates cannot become interior evidence')
+            local future={schema=999};ns.CreateAtlasJournal(future).subzones:Observe()
+            assert(not future.subzones)
+        ''')
+
+    def test_interior_capture_is_bounded_continues_hidden_and_has_honest_hover(self):
+        self.lua.execute('''
+            C_Map.GetMapWorldSize=function() return 1000,2000 end
+            s.index={};s:Reset();name='Mine';px=.1;py=.1
+            shell:ShowSection('test')
+            c.subzoneObserver.scripts.OnUpdate(c.subzoneObserver,.25)
+            assert(#s:Samples(101)==1 and #s:Crossings(101)==0)
+            S.MAX_INTERIORS=1;px=.3;c.subzoneObserver.scripts.OnUpdate(c.subzoneObserver,.25)
+            assert(#s:Samples(101)==1,'Interior sample budget must be bounded')
+            name='Tunnel';px=.301;c.subzoneObserver.scripts.OnEvent(c.subzoneObserver,'ZONE_CHANGED')
+            assert(#s:Crossings(101)==1,'The interior budget must leave room for border observations')
+            j.state.showSubzonePoints=true;shell:ShowSection('atlas');settle()
+            m.map.left=100;m.map.top=700
+            cursorX=(100+.1*m.map:GetWidth())*m.map:GetEffectiveScale()
+            cursorY=(700-.1*m.map:GetHeight())*m.map:GetEffectiveScale()
+            m.map.scripts.OnEnter(m.map)
+            local lines='';for _,v in ipairs(GameTooltip.lines) do lines=lines..v.text end
+            assert(lines:find('Mine — interior observation',1,true) and not lines:find('Crossed at',1,true))
+            local rows=s:Samples(101);rows[1].name='Detached'
+            assert(s:Samples(101)[1].name=='Mine','Rendering receives detached copies')
+            local invalid=crossing('A','B',1000,1000);invalid.kind='interior'
+            s.store[101][#s.store[101]+1]=invalid;s.index={}
+            s:Index(101);assert(#s:Samples(101)==2,'Malformed typed samples must be preserved but ignored')
+        ''')
+
+    def test_checked_points_show_all_samples_over_shading(self):
+        self.lua.execute('''
+            s.store[101]=ring()
+            for _,p in ipairs({{4000,4000},{4100,4000},{6000,6000}}) do
+                s.store[101][#s.store[101]+1]={kind='interior',mapID=101,name='Meadow',x=p[1],y=p[2],at=100}
+            end
+            s:Changed(101);j.state.showSubzones=true;j.state.showSubzonePoints=true;c:Refresh()
+            local model=m.map.subzoneModel
+            assert(model.areas.Meadow.hasFill)
+            for i=1,7 do assert(model.covered[i],'All samples qualify for automatic suppression') end
+            local function visibleDots()
+                local n=0;for _,dot in ipairs(m.map.subzoneDots) do
+                    if dot:IsVisible() then n=n+1;assert(dot:GetWidth()*m.map.zoom==3) end
+                end;return n
+            end
+            assert(visibleDots()==7,'Checked must show every sample without coarse-cell merging')
+            m.map:ZoomBy(20);assert(visibleDots()==7)
+            for i=1,4 do
+                m.subzonePoints:SetChecked(i%2==0);click(m.subzonePoints)
+                assert(visibleDots()==(i%2==0 and 7 or 0),'Both buffers must respect the toggle')
+            end
+            m.subzones:SetChecked(false);click(m.subzones);assert(visibleDots()==7)
+            m.subzonePoints:SetChecked(false);click(m.subzonePoints);assert(visibleDots()==0)
+            assert(#s:Samples(101)==7 and #s:Crossings(101)==4,'Display changes preserve evidence')
+        ''')
+
+    def test_labels_measure_text_and_wrap_before_hiding(self):
+        self.lua.execute(r'''
+            local function observation(name,x,y)
+                return {kind='interior',mapID=101,name=name,x=x,y=y,at=100}
+            end
+            s.store[101]={observation('A',4000,5000),observation('Silver Stream Mine',5100,5000),
+                observation('Silver Stream Mining Outpost',8000,8000),observation(string.rep('W',40),1000,1000)}
+            s:Changed(101);j.state.showSubzoneLabels=true;j.state.subzoneLabelSize=12;c:Refresh()
+            local visible={};local count=0
+            for _,label in ipairs(m.map.subzoneLabels) do
+                if label:IsVisible() then
+                    visible[label:GetText()]=label;count=count+1
+                    assert(label.fontFlags=='OUTLINE' and label.wordWrap and not label.nonSpaceWrap)
+                end
+            end
+            assert(count==3,'Only the unbreakable oversized name should be hidden')
+            assert(visible.A and visible['Silver\nStream Mine'],'Try two lines when a one-line label would collide')
+            local wrapped
+            for text,label in pairs(visible) do if text:gsub('\n',' ')=='Silver Stream Mining Outpost' then wrapped=label end end
+            assert(wrapped and wrapped:GetText():find('\n',1,true) and wrapped:GetHeight()==28,'Long labels must fit on two lines without ellipses')
+            assert(visible.A:GetWidth()<20,'Short names should not reserve a full fixed-width collision box')
+            local objectsBefore=#objects
+            for i=1,4 do c:Refresh() end
+            assert(#objects==objectsBefore,'Unchanged labels reuse their font strings')
+        ''')
+
+    def test_worker_slices_atomic_updates_and_handles_crossings_during_build(self):
+        self.lua.execute('''
+            local time=0;function debugprofilestop() time=time+.1;return time end
+            autoSettle=false
+            s.store[101]=ring();s:Changed(101);j.state.showSubzones=true
+            local builds=0;local build=S.Build
+            S.Build=function(...) builds=builds+1;return build(...) end
+            m.map:RenderSubzones()
+            assert(builds==0 and not m.map.subzoneModel,'Requesting an update cannot build geometry inline')
+            S.Step();assert(m.map.subzonePending and not m.map.subzoneModel,'A build must yield before publication')
+            local pending=m.map.subzonePending
+            local p=crossing('Meadow','Forest',8000,4000);s.store[101][5]=p;s:Changed(101)
+            m.map:RenderSubzones();assert(m.map.subzonePending==pending,'New crossings must not repeatedly restart an in-flight build')
+            settle();assert(#m.map.subzoneModel.rows==5 and not m.map.subzonePending)
+            local front=m.map.subzoneModel;local count=builds
+            s:Changed(102);m.map:RenderSubzones();settle()
+            assert(builds==count and m.map.subzoneModel==front,'Other maps cannot invalidate the displayed mesh')
+            s.store[101][6]=crossing('Meadow','Hill',2000,4000);s:Changed(101)
+            m.map:RenderSubzones();S.Step()
+            assert(m.map.subzoneModel==front,'Keep the completed overlay while preparing a replacement')
+            c:SetZone(102,'Synthetic hills');settle()
+            assert(#m.map.subzoneModel.rows==0,'A cancelled job must not paint its old map')
+            c:SetZone(101,'Synthetic coast');S.Step()
+            shell:ShowSection('test');settle()
+            assert(not m.map:IsVisible() and not S.worker:IsShown())
+            shell:ShowSection('atlas');settle();assert(#m.map.subzoneModel.rows==6)
+            local n=builds
+            for i=1,4 do j.state.subzoneLabelSize=i+8;m.map:RenderSubzones();settle() end
+            assert(builds==n,'Changing label size must reuse the completed mesh')
+        ''')
+
+    def test_capture_avoids_metadata_reads_and_worker_failure_does_not_spin(self):
+        self.lua.execute('''
+            C_Map.GetMapInfo=function() error('Sampling must not read display metadata') end
+            C_Map.GetMapWorldSize=function() error('An already indexed map must not query dimensions repeatedly') end
+            local reads=0;local copy=s.Crossings
+            s.Crossings=function(...) reads=reads+1;return copy(...) end
+            for i=1,20 do sample('Meadow',.4+i*.0001,.4) end
+            assert(sample('Forest',.403,.4) and reads==0,'Capturing a crossing must not copy the saved history')
+            autoSettle=false;j.state.showSubzones=true
+            S.Build=function() error('Synthetic build failure') end
+            m.map:RenderSubzones()
+            for i=1,200 do if not S.worker:IsShown() then break end;S.Step() end
+            assert(m.map.subzoneError and not S.worker:IsShown())
+            for i=1,10 do m.map:RenderSubzones() end
+            assert(not S.worker:IsShown(),'An unchanged failing request must not retry every player tick')
+        ''')
+
+    def test_cancelled_jobs_release_snapshots_and_double_buffers_stop_growing(self):
+        self.lua.execute('''
+            local weak=setmetatable({},{__mode='v'})
+            local job=S.Queue(function(checkpoint)
+                local held={};weak[1]=held
+                for i=1,10000 do checkpoint() end
+                return held
+            end)
+            S.Step();assert(weak[1])
+            S.Cancel(job);collectgarbage('collect');assert(not weak[1],'Cancelled coroutine must release its snapshot')
+            settle()
+            s.store[101]=ring();s:Changed(101);j.state.showSubzones=true;c:Refresh()
+            weak[2]=m.map.subzoneModel
+            for i=1,2 do s:Changed(101);c:Refresh() end
+            collectgarbage('collect');assert(not weak[2],'Only the two reusable buffers may retain completed meshes')
+            local count=#objects
+            for i=1,8 do s:Changed(101);c:Refresh() end
+            assert(#objects==count,'Native texture pools must plateau after both buffers are warm')
+            j.state.showSubzones=false;c:Refresh();assert(not S.worker:IsShown())
+            for _,buffer in ipairs(m.map.subzoneBuffers) do assert(not buffer.frame:IsShown()) end
+        ''')
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -1,4 +1,27 @@
-# Azeroth Fieldbook 0.11.0 (Beta)
+# Azeroth Fieldbook 0.13.30 (Beta)
+
+Atlas and Almanac maps support scroll-wheel zoom (1×–4×) toward the pointer,
+including over map pins. Scroll down to return to the full map. Changing maps
+resets zoom; the map frame and border stay fixed. Player coordinates remain
+visible in the map's lower-left corner with a thin antialiased black outline.
+While zoomed in, hold the left mouse button and drag to pan, including from a
+marker. Movement stays within the map edges; a short click retains its usual action.
+
+Both maps also support world-map navigation: **left-click** a zone to open it,
+or **right-click** to open the parent map. Disable **World-map click navigation**
+under **Options → Atlas and Almanac maps** to turn this off; it defaults on.
+Marker selection, Ctrl+right-click removal and Atlas point placement keep their
+existing actions. Map navigation does not assign a fishing source.
+
+The single zone selector on both pages opens a cascading menu. Hover a base map
+such as Eastern Kingdoms or Kalimdor to choose one of its zones, or select
+**View** to open that base map. **Battlegrounds** has its own submenu; Zephras
+Isle is under **Other**. Long menus scroll and selecting a map adds no discoveries.
+
+On Almanac map markers, **Ctrl+right-click** removes a remembered spot or the
+displayed automatic fishing position. Catch history remains intact. Restore
+remembered spots through **Show: removed**; new catches can display a fresh
+automatic position. For overlapping markers, select the intended spot first.
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,19 +29,181 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.11.0 includes sharing, addon-version compatibility
+spell databases. Version 0.13.30 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
-**Bestiary**, **Herbs & Minerals**, **Traveller’s Atlas**, **Angler’s Almanac**,
+**Bestiary**, **Gatherer's Compendium**, **Traveller’s Atlas**, **Angler’s Almanac**,
 **Merchant’s Ledger**, **Treasure & Salvage**, and **Lore & Landmarks**.
-Bestiary is selected on first opening. **Herbs & Minerals** is a personal gathering
-journal; the other five sections display their wishlist for future releases and collect no
-data yet. Hover a tab for its name; the selected tab has a gold border. Switching
+Bestiary is selected on first opening. **Gatherer's Compendium** is a personal gathering
+journal; **Traveller’s Atlas** is a personal geographical journal, and **Angler’s
+Almanac** records personal fishing knowledge. The other three
+sections display their wishlist for future releases and collect no data yet.
+Hover a tab for its name; the selected tab has a gold border. Switching
 tabs retains the Bestiary's creature selection, filters, list/ability browsing
 positions and unfinished fields. Creature-entry actions select the Bestiary.
 
-## Herbs & Minerals
+## Angler’s Almanac
+
+The title-bar **Event log** button opens this character’s ongoing history of Almanac
+events: acquired catches, fish getting away, pool discoveries, source changes,
+skipped captures and journal corrections. Events survive reloads and appear
+newest first, in pages of 50. Partial loot updates share one catch entry. **Clear
+log**, then **Confirm clear**, removes only the log; catches and notes remain.
+Older activity cannot be reconstructed, and this log is not included in reports.
+The Catches list puts the most recently caught item first. Record names appear
+in the yellow detail title without a duplicate heading in the description.
+
+The Almanac starts with no fishing knowledge. **Waters**, **Pool Types**, and
+**Catches** browse the same character-owned observations. Search recorded names,
+places and notes; cycle the compact zone, source, knowledge and activity filters.
+Use **Sources / spots** on a caught item to find where you caught it before.
+
+- Readable fishing loot records acquired
+  item slots in the background, including autoloot and non-fish items. Quantities
+  and catch-event occurrences are separate; interrupted casts and uncollected
+  full-bag slots do not count. Unidentified sources remain **Unclassified water**.
+  A missing client cast ID no longer blocks confirmed fishing loot; the collector
+  uses a local event identity without inventing historical skill evidence.
+  Fish-escaped and fish-not-hooked errors discard pending loot and show a status;
+  they do not add catches, change skill evidence or clear the session source.
+- Hovering a recognizable fishing-pool world tooltip adds its type to the current
+  zone, without a coordinate pin or catch association. Localized Fishing requirements
+  are recognized; English school/pool/shoal and wreckage names also have a fallback.
+  Select a pool type and **Remove pool** to hide it and suppress automatic re-addition.
+  Use **Show: removed**, select the type, then **Restore pool** to bring it back.
+  Removal preserves notes and catch history.
+  In **Waters**, select an incorrect pool sighting and use **Remove sighting**;
+  **Show: removed** offers **Restore sighting**. Other sightings and the pool
+  type remain. Removed automatic sightings stay suppressed in that zone.
+- **Remember spot** and **Pool sighting** record deliberate, named observations
+  at your approximate player position. A sighting reveals no pool contents.
+  Map pins remember past observations; they do not promise a live pool.
+- **Assign selected pool** or **Assign open water** explicitly assigns the next
+  session's source. The assignment is visible and clearable. Movement, changed
+  waters, another activity, five minutes idle, or reload invalidate it.
+- **Record catch** is a player-recorded fallback when automatic evidence is
+  unavailable. Enter only catches missing from the history. **Notes / edit**
+  saves personal notes; **Merge spot** corrects compatible duplicate spots while
+  preserving original notes, positions and catch history.
+- Successful effective skill is qualified evidence, never a minimum requirement.
+  Unreadable requirements and separate equipment/lure contributions stay unknown.
+- **Recorded catches** and the main **Catches** index show item icons and native
+  item tooltips on hover. Uncached or name-only items have a safe text fallback.
+- **Reports** prepares selected knowledge, excludes notes by default, and provides
+  a data-only copy/paste boundary. Incoming data must be **Previewed** and
+  **Accepted**. Reported facts keep original source claims (not authenticated),
+  remain separate from personal statistics, and survive forwarding without adding
+  duplicate results. Addon-message transport, fishing prices and rewards are not
+  configured; Bestiary sharing and its point rules remain unchanged.
+
+`AzerothFieldbookAnglingDB` is per-character and independent of other sections'
+resets, backups and account tracking. The last 200 catch events and 32 sessions
+are retained alongside durable source-specific totals. Browsing, notes and map
+selection persist. The map uses the Atlas renderer and exactly the same anchor,
+dimensions and aspect-fit policy, with independent state. See the
+[implementation contract and remaining in-game checks](tests/ANGLING.md).
+
+## Traveller’s Atlas
+
+Build a personal record of caves, ruins, routes, crossings and useful places.
+Add expedition notes, connect discoveries across Fieldbook sections, and prepare
+regional field reports. The Atlas starts empty, with no seeded sub-zone boundaries
+or secret-place database. Named discoveries are added deliberately; personal
+sub-zone crossings and encountered weather are observed automatically.
+
+- **Add Discovery** captures readable current-map context and coordinates. Give
+  the entry a name and category; notes are optional. Coordinates can be left
+  blank and added later. **Choose on displayed map** explicitly picks a map
+  position. Record cave entrances deliberately; interior labels/maps are optional.
+- Browse continent/zone selectors or use **Current Zone**. Search the displayed
+  map or all recorded zones. Pins and the index share selection. Eight independent
+  map layers do not filter the index; **Reveal layer** explicitly shows a hidden
+  selected category. Overlapping pins cycle on repeated clicks.
+  A facing arrow shows your live position when viewing your current map; it
+  hides on other maps or unavailable position data and records no movement history.
+- Choose **Route / Passage**, then **Save & route stops** to add, remove and reorder
+  existing places and named waypoints. Numbered stops span zones; supported line
+  rendering connects consecutive visible stops only within one coordinate space.
+- **Map Layers** opens a dropdown with a checkbox for each discovery category,
+  plus **Show all** and **Hide all**. Changes apply immediately; the menu stays
+  open for selecting several layers. Settings persist without filtering the index
+  or changing the sub-zone controls. The button sits directly above the map;
+  the Zone selector stays at the top. Both match the Almanac's zone-selector width.
+  The selectors use native dropdown arrow artwork with a dark drop shadow.
+- The **Sub-zones** group beside Map Layers contains independent **Shading**,
+  **Points** and **Labels** toggles on separate rows (off by default for new journals).
+  The group fills the space beside the matching-width Zone and Map Layers selectors. Shading
+  estimates regions from your crossings and interior observations, with a unique colour for each area
+  on the map. New colours maximise their minimum perceptual distance from those
+  already assigned, retaining existing colours as the visible map updates.
+  Checked **Points** shows every recorded crossing and interior sample, including
+  incorporated samples, as small dots that stay the same size when zooming.
+  Unchecked retains automatic isolated dots with shading and hides incorporated
+  samples. Saved evidence remains available. Shading needs at least
+  three non-collinear samples. Brighter saturated colours and refined
+  triangle contours replace the coarse square-cell edges. **Labels**
+  independently shows names with a thin, non-monochrome outline. Names use their
+  measured width and try two lines before being hidden for lack of space. **Label size**
+  adjusts text from 2–24, defaulting to 4 while preserving saved sizes. The styled
+  **Brightness** slider adjusts map artwork from 20–100% without dimming labels,
+  shading, markers or the player arrow. Settings persist per character; existing
+  enabled overlays retain their visible points on upgrade. Hiding points leaves
+  recording and saved evidence intact.
+  Hover the map for names, from/to labels,
+  coordinates and observation time; interior samples are identified separately
+  from crossings. Convex estimates may bridge bays or holes;
+  these are personal approximations, not exact game borders. Crossings collect
+  with the Atlas closed or the layer hidden, persist per character, and stay out
+  of discovery entries and field reports. Loading screens, unavailable positions
+  and large jumps break continuity. Samples of the same border within about
+  10 yards coalesce, including reverse crossings. Redundant saved samples are
+  thinned when you visit or display their map; different border pairs remain
+  distinct. If map dimensions are unavailable, the existing same-direction
+  0.25% coordinate-cell fallback applies for borders. With readable map dimensions,
+  the Atlas also records your initial sub-zone position and further interior
+  samples about every 100 yards. Revisiting sampled ground adds no duplicate
+  interior observations; different named areas retain their own samples. Up to
+  4,096 total samples per map are retained, with at most 1,024 interior samples
+  to leave room for crossing evidence. Interior samples carry a name, position
+  and time, never an invented from/to transition.
+  Recording queues lightweight updates; indexing, geometry and drawing are spread
+  across frames. The previous completed shading remains visible while updating,
+  and observations on another map do not rebuild the displayed map.
+- **Observed Weather** lists weather types encountered in the selected Atlas zone.
+  Observations accumulate while playing, even with the Atlas closed, and persist
+  per character. Unvisited zones remain empty; unavailable weather is not recorded.
+- **Expeditions** stores longer journals with dates, zone associations and links.
+  **Linked notes** attaches the selected discovery to new or existing expeditions.
+  **Connections** links Atlas records or existing Bestiary / Gatherer's Compendium
+  discoveries. Bestiary links use existing entry navigation; gathering links show
+  an Atlas-contained summary. Removing a link never deletes its source record.
+- **Prepare Field Report** saves a zone or named-selection draft, explicit record
+  selections, optional private notes and chosen expedition excerpts. The preview
+  shows the exact included content. Versioned validation, bounded literal
+  serialization and recipient staging are implemented; transport, inbox and import
+  UI are deferred. No report is sent or imported by this page.
+
+Atlas data and layer/browsing settings use the per-character
+`AzerothFieldbookAtlasDB`, independent of Bestiary resets, account scope, sharing
+and backups. Explored status is always a player assertion, separate from Recorded
+or Reported provenance. Deleted entries leave clearly unresolved links, allowing
+the player to preserve or remove their history. See [Atlas implementation and
+validation](tests/ATLAS.md) for limits, sharing contracts and the live-client checklist.
+
+## Gatherer's Compendium
+
+The two checkboxes at the bottom of the Compendium independently show recorded
+nodes on the **world map** and **minimap**. Both default to off and are saved per
+character. World-map icons appear on the recorded zone's map; minimap icons show
+nearby positions and follow movement, zoom and rotation. Hover an icon for its
+resource name and approximate coordinates. These are historical positions, not
+live node availability. Minimap pins hide when position or view-radius information
+is unavailable. Dense maps display up to 512 recent world-map positions and 128
+nearest minimap positions; all recorded positions remain in the journal and its
+per-resource Locations view. The main window's **Options** cog is accessible from every section. Every section
+also has a **? Help** button in the same title-bar position: established journals
+show usage instructions and placeholder sections show their wishlists.
 
 The gathering journal starts empty. Mouse over a herb or mineral to discover
 its name, type and zone from its readable world-object tooltip, even without
@@ -662,7 +847,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.11.0 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
+Version 0.13.30 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,
@@ -714,3 +899,5 @@ Created by Spinkler
 
 Developed with AI-assisted coding tools.
 Design, direction, testing and final development decisions by the author.
+
+Bestiary defaults to automatically observed drops; Show Damage toggles the panel to damage records and back. Loot is displayed, with icons, tooltips, quantities and corpse drop percentages. Rates use readable creature loot sources, including money-only sources, rather than all kills. Empty or unavailable loot is not inferred. The most recent 128 corpses per creature are deduplicated across openings and reloads.

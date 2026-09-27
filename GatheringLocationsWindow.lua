@@ -1,5 +1,19 @@
 local _, ns = ...
 
+-- Shared marker art for the journal, world map and minimap.
+function ns.StyleGatheringDot(dot)
+    dot:SetSize(6,6);dot:EnableMouse(true)
+    dot:SetHitRectInsets(-2,-2,-2,-2)
+    dot.border=dot:CreateTexture(nil,"ARTWORK")
+    dot.border:SetAllPoints();dot.border:SetVertexColor(0.05,0.05,0.05,1)
+    dot.texture=dot:CreateTexture(nil,"OVERLAY")
+    dot.texture:SetPoint("TOPLEFT",1,-1);dot.texture:SetPoint("BOTTOMRIGHT",-1,1)
+    for _,texture in ipairs({dot.border,dot.texture}) do
+        -- The image carries the circular alpha for both the border and fill.
+        texture:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\GatheringDot.tga","CLAMP","CLAMP","TRILINEAR")
+    end
+end
+
 function ns.CreateGatheringLocationsWindow(journal,getBook)
     -- Keep the Bestiary map presentation, with a single interaction-only layer.
     local controller={}
@@ -12,7 +26,7 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
     local function colour(texture,alpha)
         local entry=journal.entries[selected]
         local c=palettes[entry and entry.kind or "herb"]
-        texture:SetColorTexture(c[1],c[2],c[3],alpha)
+        texture:SetVertexColor(c[1],c[2],c[3],alpha)
     end
     local function public(v) return not (issecretvalue and issecretvalue(v)) end
     local function number(v) return public(v) and type(v)=="number" and v>0 and v<=100000 end
@@ -131,18 +145,7 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
             local dot=dots[i]
             if not dot then
                 dot=CreateFrame("Frame",nil,frame.map)
-                dot:SetSize(6,6);dot:EnableMouse(true)
-                dot:SetHitRectInsets(-2,-2,-2,-2)
-                dot.border=dot:CreateTexture(nil,"ARTWORK")
-                dot.border:SetAllPoints();dot.border:SetColorTexture(0.05,0.05,0.05,1)
-                dot.texture=dot:CreateTexture(nil,"OVERLAY")
-                dot.texture:SetPoint("TOPLEFT",1,-1);dot.texture:SetPoint("BOTTOMRIGHT",-1,1)
-                -- Mask the border and inset separately so neither stays square.
-                for _,texture in ipairs({dot.border,dot.texture}) do
-                    local mask=dot:CreateMaskTexture()
-                    mask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
-                    mask:SetAllPoints(texture);texture:AddMaskTexture(mask)
-                end
+                ns.StyleGatheringDot(dot)
                 dot:SetScript("OnEnter",function(self)
                     if GameTooltip then
                         GameTooltip:SetOwner(self,"ANCHOR_RIGHT")

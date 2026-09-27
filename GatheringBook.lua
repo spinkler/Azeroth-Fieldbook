@@ -203,13 +203,12 @@ function ns.CreateGatheringBook(journal,shell)
         book.noMatches:SetText(next(journal.entries) and "No matching entries.\nTry clearing your filters."
             or "No herbs or minerals recorded yet.")
         local entry=selected and journal.entries[selected]
-        book.title:SetText(entry and entry.name or "Herbs & Minerals")
+        book.title:SetText(entry and (entry.name.." • "..ns.GatheringKinds[entry.kind].title) or "Gatherer's Compendium")
         book.locations:SetEnabled(entry~=nil);book.details:SetShown(entry~=nil);book.empty:SetShown(entry==nil)
         if not entry then
             book.modelFileID=nil;book.model:ClearModel();book.model:Hide()
             return
         end
-        local kind=ns.GatheringKinds[entry.kind]
         local modelFileID=entry.modelFileID or ns.GatheringModel(entry.kind,entry.name)
         -- Load only after the section and its book are visible. Native model
         -- render state can be discarded while a section is hidden, even when
@@ -229,7 +228,6 @@ function ns.CreateGatheringBook(journal,shell)
                 book.model:SetRotation(0)
             end
         end
-        book.kind:SetText(kind.title)
         book.stats:SetText("Interactions: "..entry.interactions.."\nCompleted gathers: "..entry.completed)
         book.history:SetText("First encountered: "..dateText(entry.firstSeen).."\nLast interaction: "..
             (entry.interactions>0 and dateText(entry.lastSeen) or "Not yet interacted"))
@@ -241,6 +239,7 @@ function ns.CreateGatheringBook(journal,shell)
                     locations:Open(selected,self.zone.mapID)
                 end)
                 row:SetNormalFontObject("GameFontHighlightSmall")
+                row:SetHighlightFontObject("GameFontHighlightSmall")
                 book.zoneRows[i]=row
             end
             local count=0;for _ in pairs(zone.data and zone.data.points or {}) do count=count+1 end
@@ -390,7 +389,7 @@ function ns.CreateGatheringBook(journal,shell)
             tab:SetFrameLevel(shell:GetFrame().titleIcon:GetFrameLevel()-1);tab.letter=letter
             styleSelection(tab);tab:Hide();book.letterButtons[i]=tab
         end
-        book.title=label(book,"Herbs & Minerals",362,-55,474,"GameFontNormalLarge")
+        book.title=label(book,"Gatherer's Compendium",362,-55,474,"GameFontNormalLarge")
         book.title:SetTextColor(1,0.82,0.14);book.title:SetWordWrap(false)
         local path,size,flags=book.title:GetFont()
         if path and size then book.title:SetFont(path,size+2,flags) end
@@ -401,17 +400,16 @@ function ns.CreateGatheringBook(journal,shell)
         book.empty:SetSpacing(6)
         book.details=CreateFrame("Frame",nil,book);book.details:SetAllPoints(book)
         local detail=book.details
-        book.kind=label(detail,"",362,-86,562);book.kind:SetTextColor(1,0.82,0.14)
-        label(detail,"Basic info",362,-110,562,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        label(detail,"Basic info",362,-86,562,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         book.modelBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
-        book.modelBorder:SetPoint("TOPLEFT",364,-133);book.modelBorder:SetSize(207,168)
+        book.modelBorder:SetPoint("TOPLEFT",364,-109);book.modelBorder:SetSize(207,168)
         book.modelBorder:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8,insets={left=2,right=2,top=2,bottom=2}})
         book.modelBorder:SetBackdropColor(0.045,0.032,0.018,0.88)
         book.modelBorder:SetBackdropBorderColor(0.37,0.25,0.11,0.90)
         book.model=CreateFrame("PlayerModel",nil,detail)
         book.model:SetFrameLevel(book.modelBorder:GetFrameLevel()+1)
-        book.model:SetPoint("TOPLEFT",366,-135);book.model:SetSize(203,164)
+        book.model:SetPoint("TOPLEFT",366,-111);book.model:SetSize(203,164)
         applyModelZoom(book.model);book.model:EnableMouse(true)
         book.modelCaption=label(book.modelBorder,"",8,-76,191,"GameFontHighlightSmall")
         book.modelCaption:SetJustifyH("CENTER")
@@ -441,17 +439,20 @@ function ns.CreateGatheringBook(journal,shell)
             lastCursorX=x
         end)
         book.model:SetScript("OnHide",function() rotating=false;lastCursorX=nil end)
-        book.stats=label(detail,"",362,-326,216);book.stats:SetSpacing(6)
-        book.history=label(detail,"",590,-326,334,"GameFontHighlightSmall");book.history:SetSpacing(6)
-        label(detail,"Locations",590,-133,334,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        book.stats=label(detail,"",362,-302,216);book.stats:SetSpacing(6)
+        book.history=label(detail,"",590,-302,334,"GameFontHighlightSmall");book.history:SetSpacing(6)
+        label(detail,"Locations",590,-109,334,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         book.zoneScroll=CreateFrame("ScrollFrame",nil,detail,"UIPanelScrollFrameTemplate")
-        book.zoneScroll:SetPoint("TOPLEFT",590,-158);book.zoneScroll:SetSize(312,140)
+        book.zoneScroll:SetPoint("TOPLEFT",590,-134);book.zoneScroll:SetSize(312,140)
         book.zoneChild=CreateFrame("Frame",nil,book.zoneScroll);book.zoneChild:SetSize(304,140)
         book.zoneScroll:SetScrollChild(book.zoneChild);ns.AutoHideScrollBar(book.zoneScroll)
         book.zoneRows={};book.noZones=label(book.zoneChild,"Mouse over this herb or mineral to record its zone.",0,-6,296,"GameFontHighlightSmall")
-        label(detail,"Field notes",362,-415,562,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        local divider=detail:CreateTexture(nil,"ARTWORK")
+        divider:SetColorTexture(0.35,0.20,0.08,0.42)
+        divider:SetPoint("TOPLEFT",362,-367);divider:SetSize(554,3)
+        label(detail,"Field notes",362,-391,562,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         local noteBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
-        noteBorder:SetPoint("TOPLEFT",362,-445);noteBorder:SetSize(554,185)
+        noteBorder:SetPoint("TOPLEFT",362,-421);noteBorder:SetSize(554,185)
         noteBorder:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12})
         noteBorder:SetBackdropColor(0.05,0.04,0.025,0.6);noteBorder:SetBackdropBorderColor(0.45,0.30,0.13,1)
         book.noteScroll=CreateFrame("ScrollFrame",nil,noteBorder,"UIPanelScrollFrameTemplate")
@@ -478,14 +479,27 @@ function ns.CreateGatheringBook(journal,shell)
             book.saveNote:SetEnabled(drafts[selected]~=(journal.entries[selected].note or ""))
             book.noteScroll:UpdateScrollChildRect();book.noteScroll:RefreshScrollBar()
         end)
-        book.saveNote=button(detail,"Save notes",362,-642,108,function()
+        book.saveNote=button(detail,"Save notes",362,-618,108,function()
             local id=book.noteID
             if id and id==selected and journal:SetNote(id,book.note:GetText()) then
                 drafts[id]=nil;book.message:SetText("Notes saved.");book.note:ClearFocus();refresh()
             end
         end)
-        book.message=label(detail,"",482,-648,424,"GameFontHighlightSmall")
-        label(book,"Hover to record zones. Interact to record approximate coordinates.",362,-697,554,"GameFontHighlightSmall")
+        book.message=label(detail,"",482,-624,424,"GameFontHighlightSmall")
+        book.mapOptions={}
+        for i,spec in ipairs({{"worldMap","Show nodes on world map"},{"minimap","Show nodes on minimap"}}) do
+            local key=spec[1]
+            local control=CreateFrame("CheckButton",nil,book,"UICheckButtonTemplate")
+            control:SetSize(24,24);control:SetPoint("TOPLEFT",362+(i-1)*280,-649)
+            label(control,spec[2],26,-6,250,"GameFontHighlightSmall")
+            control:SetChecked(journal:ShowNodesOn(key))
+            control:SetScript("OnClick",function(self)
+                journal:SetShowNodesOn(key,self:GetChecked()==true)
+                if controller.mapPins then controller.mapPins:Refresh() end
+            end)
+            book.mapOptions[key]=control
+        end
+        label(book,"Hover to record zones. Interact to record approximate coordinates.",362,-681,554,"GameFontHighlightSmall")
         local filter=CreateFrame("Frame","AzerothFieldbookGatheringLocationFilter",UIParent,"BackdropTemplate")
         filter:SetSize(320,378);filter:SetPoint("TOPRIGHT",book,"TOPLEFT",-6,0)
         filter:SetFrameStrata("FULLSCREEN_DIALOG");filter:SetClampedToScreen(true);filter.afbAnchorRule="filters"
@@ -556,7 +570,13 @@ function ns.CreateGatheringBook(journal,shell)
             end
         end)
     end
-    shell:RegisterSection("gathering",{title="Herbs & Minerals",icon="Interface\\Icons\\INV_Misc_Flower_02",
+    shell:RegisterSection("gathering",{title="Gatherer's Compendium",icon="Interface\\Icons\\INV_Misc_Flower_02",
+        help="|cffffd1001. Discover|r\nMouse over a herb or mineral in the world to record its name, type and zone from the readable tooltip. You do not need Herbalism or Mining to discover it. Hovering records a zone, not a coordinate or completed gather.\n\n"..
+            "|cffffd1002. Record positions|r\nStarting a Herbalism or Mining cast records an interaction and approximate position, even if interrupted. A successful cast also counts as a completed gather, not a quantity of loot. Without the required profession or rank, right-clicking the node can still record its position when the matching skill-requirement error is received. Unrelated loot, targeting and minimap tracking do not record nodes.\n\n"..
+            "|cffffd1003. Browse|r\nUse Herbs, Minerals, search, the sort menu and Locations filters to narrow the index. Index opens the A-Z filters; Previous and Next browse the matching entries. Drag the node preview to rotate it.\n\n"..
+            "|cffffd1004. Review locations|r\nClick a zone under Locations to open its recorded positions. Green dots are herbs; gold dots are minerals. Hover a dot for coordinates. These are your approximate positions while interacting, not proof that a node is currently available. Zone-only discoveries have no dots.\n\n"..
+            "|cffffd1005. Map display|r\nThe checkboxes at the bottom independently show recorded nodes on the world map and minimap. Both start off and are saved for this character. World-map dots show up to 512 recent positions in the displayed zone; minimap dots show up to 128 nearest positions and follow movement, zoom and rotation. All recorded positions remain in each resource's Locations view. Dots hide when the client cannot provide the required location information.\n\n"..
+            "|cffffd1006. Field notes|r\nSelect an entry, write your notes and click Save notes. Gathering records belong to this character and are separate from Bestiary account tracking, resets, backups and sharing. Use the Options cog for shared Fieldbook settings.",
         frameName="AzerothFieldbookGatheringSection",build=build,onOpen=function() refresh(true) end})
     function controller:Refresh() refresh() end
     return controller
@@ -567,5 +587,6 @@ function ns.InitializeGathering(shell,getBrightness)
     local journal=ns.CreateGatheringJournal(AzerothFieldbookGatheringDB,getBrightness)
     local controller=ns.CreateGatheringBook(journal,shell)
     controller.tracking=ns.CreateGatheringTracking(journal)
+    controller.mapPins=ns.CreateGatheringMapPins(journal)
     return controller
 end

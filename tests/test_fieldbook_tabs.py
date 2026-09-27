@@ -3,9 +3,76 @@ import unittest
 import xml.etree.ElementTree as ET
 from kill_test_harness import new_client, ROOT
 from ui_test_harness import new_ui_client
+from atlas_test_harness import ATLAS_MODULES
+from angling_test_harness import ANGLING_MODULES
 
 
 class FieldbookTabsTests(unittest.TestCase):
+    def test_repeated_navigation_reuses_all_section_and_page_widgets(self):
+        self.lua.execute('''
+            local function visit()
+                for _,id in ipairs(shell.order) do
+                    shell:ShowSection(id)
+                    shell:TogglePage('help');shell:TogglePage('help')
+                    shell:TogglePage('options');shell:TogglePage('options')
+                end
+            end
+            visit()
+            local count,escapes=#objects,#UISpecialFrames
+            for _=1,100 do visit() end
+            assert(#objects==count,'Repeated navigation must not allocate native frames or regions')
+            assert(#UISpecialFrames==escapes,'Escape registrations must not accumulate')
+        ''')
+
+    def test_every_section_help_uses_shared_button_and_relevant_content(self):
+        self.lua.execute('''
+            shell:ShowSection('bestiary')
+            local root=shell:GetFrame();local button=root.helpButton
+            local x,y=button:GetWidth(),button:GetHeight();local anchor=button.point
+            for _,id in ipairs(shell.order) do
+                shell:ShowSection(id)
+                assert(root.helpButton==button and button:IsShown())
+                assert(button:GetWidth()==x and button:GetHeight()==y and button.point==anchor)
+                root.optionsButton.scripts.OnClick()
+                assert(shell.sections.bestiary.pages.options:IsShown())
+                button.scripts.OnClick()
+                local help=shell.sections[id].pages.help
+                assert(help:IsShown() and not shell.sections.bestiary.pages.options:IsShown())
+                assert(help:GetWidth()==610 and help.scroll and help.closeButton)
+                if id=='gathering' then assert(help.instructions:GetText():find('Save notes',1,true)) end
+                if id=='atlas' then assert(help.instructions:GetText():find('Route / Passage',1,true)) end
+                for _,definition in ipairs(ns.FieldbookWishlistSections) do
+                    if definition.id==id then
+                        assert(help.instructions:GetText():find(definition.wishlist,1,true))
+                        assert(help.instructions:GetText():find('does not collect or save data',1,true))
+                    end
+                end
+                button.scripts.OnClick();assert(not help:IsShown())
+                button.scripts.OnClick();assert(help:IsShown())
+                root.optionsButton.scripts.OnClick()
+                assert(not help:IsShown() and shell.sections.bestiary.pages.options:IsShown())
+                root.optionsButton.scripts.OnClick()
+            end
+        ''')
+
+    def test_options_access_from_every_section_before_bestiary_open(self):
+        self.lua.execute('''
+            shell:ShowSection('gathering')
+            assert(shell.sections.bestiary.frame==nil)
+            local root=shell:GetFrame()
+            root.optionsButton.scripts.OnClick()
+            local options=shell.sections.bestiary.pages.options
+            assert(options:IsShown() and shell.active=='gathering')
+            assert(not shell.sections.bestiary.frame:IsShown())
+            root.optionsButton.scripts.OnClick();assert(not options:IsShown())
+            for _,id in ipairs(shell.order) do
+                shell:ShowSection(id)
+                assert(root.optionsButton:IsShown() and root.optionsButton.enabled)
+                root.optionsButton.scripts.OnClick();assert(options:IsShown() and shell.active==id)
+                root.optionsButton.scripts.OnClick();assert(not options:IsShown())
+            end
+        ''')
+
     def test_binding_xml_routes_next_and_previous_actions(self):
         lua=new_client()
         lua.execute('''
@@ -76,7 +143,8 @@ class FieldbookTabsTests(unittest.TestCase):
             'ActionButtons.lua', 'SharingReport.lua', 'BestiaryBackups.lua', 'BestiaryJournal.lua', 'BackupWindow.lua',
             'CreatureNotes.lua', 'RumoursWindow.lua', 'FieldbookShell.lua',
             'CreatureLocations.lua', 'GatheringJournal.lua', 'GatheringModels.lua', 'GatheringTracking.lua',
-            'GatheringLocationsWindow.lua', 'GatheringBook.lua',
+            'GatheringLocationsWindow.lua', 'GatheringMapPins.lua', 'GatheringBook.lua',
+            *ATLAS_MODULES, *ANGLING_MODULES,
             'FieldbookSections.lua', 'BestiaryPages.lua', 'BestiaryBook.lua',
         ])
         self.lua.execute('''
@@ -89,6 +157,8 @@ class FieldbookTabsTests(unittest.TestCase):
             shell=ns.CreateFieldbookShell()
             controller=ns.CreateBestiaryBook(journal,shell)
             gathering=ns.InitializeGathering(shell)
+            atlas=ns.InitializeAtlas(shell,journal)
+            angling=ns.InitializeAngling(shell)
             ns.RegisterFieldbookWishlistSections(shell)
             function click(index,button,inside)
                 local tab=shell:GetFrame().sectionTabs[index]
@@ -109,7 +179,7 @@ class FieldbookTabsTests(unittest.TestCase):
             end
             assert(root.closeButton:GetFrameLevel()>root.titleIcon:GetFrameLevel())
             assert(not root.titleIcon:IsMouseEnabled(),'decorative trim does not block tab clicks')
-            local names={'Bestiary','Herbs & Minerals','Traveller’s Atlas','Angler’s Almanac',
+            local names={'Bestiary',"Gatherer's Compendium",'Traveller’s Atlas','Angler’s Almanac',
                 'Merchant’s Ledger','Treasure & Salvage','Lore & Landmarks'}
             assert(shell.active=='bestiary' and #root.sectionTabs==7)
             assert(root.navigation.point[2]==root and root.navigation.point[3]=='TOPRIGHT')
@@ -134,7 +204,8 @@ class FieldbookTabsTests(unittest.TestCase):
                     assert(shell.sections[shell.order[other]].frame==nil or
                         shell.sections[shell.order[other]].frame:IsShown()==(other==index))
                 end
-                assert(not root.helpButton:IsShown() and not root.optionsButton:IsShown() and not root.eventLogButton:IsShown())
+                assert(root.helpButton:IsShown() and root.optionsButton:IsShown())
+                assert(root.eventLogButton:IsShown()==(shell.active=='angling'))
                 local content=shell.sections[shell.active].frame
                 click(index);assert(shell.sections[shell.active].frame==content and root:IsShown())
             end
@@ -145,8 +216,6 @@ class FieldbookTabsTests(unittest.TestCase):
 
     def test_exact_copy_and_wrapping_bounds(self):
         paragraphs = [
-            'Build a personal record of caves, ruins, routes, crossings and useful places. Add expedition notes, connect discoveries across Fieldbook sections, and eventually share regional field reports.',
-            'Record fish and other catches alongside the waters and fishing spots where they were found. Build a personal catch history and share useful findings with other anglers.',
             'Remember merchants, trainers and useful services encountered during exploration. Record observed goods, recipe sources, locations and access notes.',
             'Record discovered chests, locked containers and salvage opportunities. Distinguish sightings from opened finds, with locations, observed contents and personal notes.',
             'Collect references to books, inscriptions, landmarks and noteworthy characters. Keep source-labelled notes, connect related discoveries and record mysteries worth revisiting.',
@@ -156,7 +225,7 @@ class FieldbookTabsTests(unittest.TestCase):
             shell:Toggle()
             local entry=journal.entries[42]
             for index,text in ipairs(paragraphs) do
-                click(index+2)
+                click(index+4)
                 local content=shell.sections[shell.active].frame
                 assert(content.title:GetText()==shell.sections[shell.active].definition.title)
                 assert(content.heading:GetText()=='Wishlist for future releases')

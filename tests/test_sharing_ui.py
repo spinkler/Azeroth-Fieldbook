@@ -191,6 +191,15 @@ local engine=ns.CreateSharing(j,env)
 local book=ns.CreateBestiaryBook(j)
 book:OpenAtUnit('target')
 local main=AzerothFieldbookBestiarySection
+assert(j:GetMapClickNavigation() and ns.IsMapClickNavigationEnabled())
+main.options.mapClickNavigation:SetChecked(false)
+main.options.mapClickNavigation.scripts.OnClick(main.options.mapClickNavigation)
+assert(db.mapClickNavigation==false and not ns.IsMapClickNavigationEnabled())
+main.options.scripts.OnShow(main.options)
+assert(not main.options.mapClickNavigation:GetChecked())
+main.options.mapClickNavigation:SetChecked(true)
+main.options.mapClickNavigation.scripts.OnClick(main.options.mapClickNavigation)
+assert(db.mapClickNavigation==true and ns.IsMapClickNavigationEnabled())
 local window=book:GetShell():GetFrame()
 assert(not window.titleIcon:IsMouseClickEnabled() and not main.detail:IsMouseClickEnabled(),
     'full-book decorative overlays must not intercept clicks on the journal controls')
@@ -522,7 +531,7 @@ local windows={window,main.help,main.options,main.locationFrame,main.rankFrame,
 for _,frame in ipairs({window,main.help,main.options,main.locationFrame,main.rankFrame,
     main.offensePicker,main.defensePicker,main.behaviourPicker,main.notesForm,
     main.effectPicker,main.damageForm,main.deleteForm,notes,rumours,composer,receiver,AzerothFieldbookDebugReport}) do
-    assert(frame.parent==UIParent and frame.strata=='DIALOG' and frame.toplevel,
+    assert(frame.parent==UIParent and frame.strata=='MEDIUM' and frame.toplevel,
         'each independent window must be able to raise above every other addon window')
     frame.scripts.OnMouseDown(frame); eq(focusedWindow,frame)
 end
@@ -918,9 +927,12 @@ local window=book:GetShell():GetFrame()
     eq(main.damageButton.point[3],-248)
     e.category='Beast';j:Touch();book:Refresh()
     assert(main.beastLoreButton.shown)
-    eq(main.damageBorder:GetHeight(),86);eq(main.damageScroll:GetHeight(),46)
+    eq(main.damageBorder:GetHeight(),115);eq(main.damageScroll:GetHeight(),75)
+    eq(main.modelBorder:GetHeight(),139);eq(main.model:GetHeight(),135)
+    eq(main.beastLoreButton.point[2],364);eq(main.beastLoreButton:GetWidth(),207)
     eq(main.damageButton.point[3],-248);eq(main.beastLoreButton.point[3],-133)
-    eq(main.damageBorder.point[3],-162);eq(main.damageScroll.point[3],-192)
+    eq(main.damageBorder.point[3],-133);eq(main.damageScroll.point[3],-163)
+    eq(main.modelBorder.point[3],-162);eq(main.model.point[3],-164)
     for _,pair in ipairs({{main.detail,detailPoint},
         {main.offenseButton,offensePoint},{main.defenseButton,defensePoint},{main.behaviourButton,behaviourPoint}}) do
         for index,value in ipairs(pair[2]) do eq(pair[1].point[index],value,'existing anchor stays fixed') end

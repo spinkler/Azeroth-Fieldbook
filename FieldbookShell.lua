@@ -123,7 +123,7 @@ function ns.CreateFieldbookShell(settings)
         book = CreateFrame("Frame", "AzerothFieldbookBestiary", UIParent, "BackdropTemplate")
         book:SetSize(960, 740)
         book:SetPoint("CENTER")
-        book:SetFrameStrata("HIGH")
+        book:SetFrameStrata("MEDIUM")
         book:SetToplevel(true)
         book:SetScript("OnShow",book.Raise)
         book:SetClampedToScreen(true)
@@ -151,15 +151,34 @@ function ns.CreateFieldbookShell(settings)
         book:SetScript("OnDragStart", startBookDrag)
         book:SetScript("OnDragStop", stopBookDrag)
         local backgroundBrightness = (settings.getBrightness and settings.getBrightness() or 1)
+        local darkMode = settings.getDarkMode and settings.getDarkMode() or false
         local backgroundLayers = {}
-        addBackgroundLayer = function(texture, red, green, blue)
-            backgroundLayers[#backgroundLayers + 1] = { texture = texture, red = red, green = green, blue = blue }
-            texture:SetVertexColor(red * backgroundBrightness, green * backgroundBrightness, blue * backgroundBrightness)
+        local function applyBackgroundLayer(layer)
+            local brightness = backgroundBrightness
+            local red, green, blue = layer.red, layer.green, layer.blue
+            if not layer.fixedStyle then
+                layer.texture:SetDesaturated(darkMode)
+                if darkMode then
+                    -- Match the Locations parchment at every slider position.
+                    brightness = brightness * 0.34
+                    green, blue = red, red
+                end
+            end
+            layer.texture:SetVertexColor(red * brightness, green * brightness, blue * brightness)
+        end
+        addBackgroundLayer = function(texture, red, green, blue, fixedStyle)
+            local layer = { texture = texture, red = red, green = green, blue = blue, fixedStyle = fixedStyle }
+            backgroundLayers[#backgroundLayers + 1] = layer
+            applyBackgroundLayer(layer)
+        end
+        function book:SetDarkMode(enabled)
+            darkMode = enabled == true
+            for _, layer in ipairs(backgroundLayers) do applyBackgroundLayer(layer) end
         end
         function book:SetBackgroundBrightness(value)
             backgroundBrightness = math.max(0.5, math.min(1.5, tonumber(value) or 1))
             for _, layer in ipairs(backgroundLayers) do
-                layer.texture:SetVertexColor(layer.red * backgroundBrightness, layer.green * backgroundBrightness, layer.blue * backgroundBrightness)
+                applyBackgroundLayer(layer)
             end
         end
         book:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border", tile=true, tileSize=32, edgeSize=24, insets={left=8,right=8,top=8,bottom=8}})
@@ -355,9 +374,12 @@ function ns.CreateFieldbookShell(settings)
         book:Hide()
         return book
     end
-    function shell:AddBackgroundLayer(texture,red,green,blue)
+    function shell:AddBackgroundLayer(texture,red,green,blue,fixedStyle)
         self:EnsureFrame()
-        addBackgroundLayer(texture,red,green,blue)
+        addBackgroundLayer(texture,red,green,blue,fixedStyle)
+    end
+    function shell:SetDarkMode(enabled)
+        self:EnsureFrame():SetDarkMode(enabled)
     end
     function shell:SetBackgroundBrightness(value)
         self:EnsureFrame():SetBackgroundBrightness(value)
@@ -393,7 +415,7 @@ function ns.CreateFieldbookShell(settings)
     end
     local function createBookPage(name,title,bottomInset)
         local page=CreateFrame("Frame",name,UIParent,"BackdropTemplate")
-        page:SetSize(610,767); page:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0); page:SetFrameStrata("FULLSCREEN_DIALOG")
+        page:SetSize(610,767); page:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0); page:SetFrameStrata("MEDIUM")
         page:SetClampedToScreen(true); page:SetToplevel(true)
         page:SetMovable(true); page:EnableMouse(true); page:RegisterForDrag("LeftButton")
         page:SetScript("OnDragStart",function(self) self:StartMoving() end)
@@ -511,9 +533,18 @@ function ns.CreateFieldbookShell(settings)
         local section=self.sections[self.active]
         local pages=section and section.pages
         local page=pages and pages[key]
+        if not page and key=="options" and self.sections.bestiary then
+            self:EnsureSection("bestiary")
+            local shared=self.sections.bestiary.pages
+            page=shared and shared.options
+        end
         if not page then return false end
-        if key=="help" and pages.options then pages.options:Hide()
-        elseif key=="options" and pages.help then pages.help:Hide() end
+        if key=="help" and self.sections.bestiary then
+            local shared=self.sections.bestiary.pages
+            if shared and shared.options then shared.options:Hide() end
+        end
+        if key=="help" and pages and pages.options then pages.options:Hide()
+        elseif key=="options" and pages and pages.help then pages.help:Hide() end
         page:SetShown(not page:IsShown())
         return true
     end
@@ -534,6 +565,19 @@ function ns.CreateFieldbookShell(settings)
         content:Hide()
         section.frame=content
         section.definition.build(content,self)
+        if section.definition.help and not (section.pages and section.pages.help) then
+            local help,body=self:CreatePage("AzerothFieldbookHelp_"..id,section.definition.title.." - HELP",24)
+            help.instructions=label(body,section.definition.help,35,0,535)
+            help.instructions:SetWordWrap(true);help.instructions:SetNonSpaceWrap(false)
+            help:SetScript("OnShow",function(page)
+                body:SetHeight(help.instructions:GetStringHeight()+16)
+                page.scroll:UpdateScrollChildRect();page.scroll:RefreshScrollBar()
+                self:ShowPage(page)
+            end)
+            help:Hide()
+            local pages=section.pages or {};pages.help=help
+            self:SetSectionPages(id,pages)
+        end
         -- Register after the first section builds, so focus reaches its controls.
         if ns.WindowPositions then ns.WindowPositions:Register(window,window:GetName()) end
         if ns.WindowFocus then ns.WindowFocus:Register(window) end
@@ -565,6 +609,7 @@ function ns.CreateFieldbookShell(settings)
         book.windowTitle:SetText("Azeroth Fieldbook - "..section.definition.title.." - v"..addonVersion())
         for _,key in ipairs({"help","options","eventLog"}) do
             local available=section.pages~=nil and section.pages[key]~=nil
+            if key=="options" and self.sections.bestiary then available=true end
             book[key.."Button"]:SetEnabled(available)
             book[key.."Button"]:SetShown(available)
         end

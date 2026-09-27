@@ -3,6 +3,7 @@ local schema=ns.SharingReport
 local names={revision=0}
 ns.PlayerNames=names
 local classes={}
+local classOrder,nextClass,classLimit={},1,512
 local function savedClasses()
     if type(AzerothFieldbookDB)~="table" then return end
     if type(AzerothFieldbookDB.sourceClasses)~="table" then AzerothFieldbookDB.sourceClasses={} end
@@ -37,6 +38,13 @@ function names:Observe(unit)
     local saved=savedClasses()
     if saved and saved[key]~=nil then saved[key]=class end
     if classes[key]~=class then
+        -- Only report sources are durable. Merely passing other players must
+        -- not retain every observed character name for the whole session.
+        if classes[key]==nil then
+            local previous=classOrder[nextClass]
+            if previous then classes[previous]=nil end
+            classOrder[nextClass]=key;nextClass=nextClass%classLimit+1
+        end
         classes[key]=class
         self.revision=self.revision+1
     end

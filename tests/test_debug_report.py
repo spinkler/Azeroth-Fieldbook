@@ -59,7 +59,7 @@ local report=string.rep('A long diagnostic line\n',500)
 ns.ShowDebugReport(report)
 local panel, scroll, edit=frames[1],frames[4],frames[5]
 assert(panel.shown and edit.text==report and edit.selected and edit.focus)
-assert(panel.strata=="DIALOG" and panel.toplevel and panel.raises==1)
+assert(panel.strata=="MEDIUM" and panel.toplevel and panel.raises==1)
 assert(edit.multiline and edit.maxLetters==0 and scroll.child==edit)
 assert(#UISpecialFrames==1)
 edit.scripts.OnCursorChanged(edit,0,-800,0,14)

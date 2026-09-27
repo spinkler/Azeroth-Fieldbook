@@ -63,6 +63,19 @@ local ranks = { Rare = 1, Elite = 2, ["Rare Elite"] = 3, ["World Boss"] = 4 }
 local function mergeEntry(target, source)
     ns.MigrateDisposition(target);ns.MigrateDisposition(source)
     target.firstEncounteredAt=ns.EarliestEncounterTime(target.firstEncounteredAt,source.firstEncounteredAt)
+    if source.loot then
+        target.loot=target.loot or {samples=0,items={},recent={}}
+        target.loot.samples=target.loot.samples+source.loot.samples
+        for id,item in pairs(source.loot.items) do
+            local into=target.loot.items[id] or {quantity=0,drops=0}
+            into.quantity=into.quantity+item.quantity;into.drops=into.drops+item.drops
+            target.loot.items[id]=into
+        end
+        for _,record in ipairs(source.loot.recent) do
+            target.loot.recent[#target.loot.recent+1]=copy(record)
+            if #target.loot.recent>128 then table.remove(target.loot.recent,1) end
+        end
+    end
     target.kills = (tonumber(target.kills) or 0) + (tonumber(source.kills) or 0)
     target.sightings = (tonumber(target.sightings) or 0) + (tonumber(source.sightings) or 0)
     if ns.CreatureLocations then

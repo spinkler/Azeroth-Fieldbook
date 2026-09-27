@@ -6,10 +6,15 @@ Azeroth Fieldbook is a World of Warcraft addon created by Spinkler.
 
 Current functionality includes the Bestiary, a personal monster journal, and
 Herbs & Minerals, with mouseover zone discovery and interaction-only coordinate
-markers. The shared shell also presents five future-section wishlist pages, which
-do not collect or save data.
+markers, plus Traveller’s Atlas for deliberate geographical records, routes and
+expedition notes, and Angler’s Almanac for personal fishing observations.
+The shared shell also presents three future-section wishlist
+pages, which do not collect or save data.
 Gathering uses its own per-character `AzerothFieldbookGatheringDB`, outside
 Bestiary resets, account tracking, backups and sharing.
+Atlas uses its own per-character `AzerothFieldbookAtlasDB`, with the same isolation.
+Angling uses per-character `AzerothFieldbookAnglingDB`; see `tests/ANGLING.md`
+for observation, provenance, report and layout boundaries.
 
 Canonical public repository:
 
@@ -194,8 +199,10 @@ fixes, tests, documentation and workflow changes. Read-only work needs no bump.
 Routine changes increment the **last numeric component**:
 `0.9.0` → `0.9.1` → `0.9.2`. The operator explicitly designated the sharing
 feature milestone as **0.9.0**, the section-navigation milestone as **0.10.0**,
-and the Herbs & Minerals milestone as **0.11.0**. Larger version jumps follow
-explicit operator instructions; otherwise keep the first two components unchanged.
+the Herbs & Minerals milestone as **0.11.0**, Traveller’s Atlas as **0.12.0**,
+and Angler’s Almanac as **0.13.0**.
+Larger version jumps follow explicit operator instructions; otherwise keep the
+first two components unchanged.
 
 - Increment `## Version:` in `AzerothFieldbook.toc` once per completed change set.
   Internal edits and test-fix iterations for that same request share one bump;
@@ -258,11 +265,12 @@ sections. Preserve existing window-position keys and Bestiary data compatibility
 The operator reserves stable 1.0 for successful live Beast Lore testing after
 the Forever beta level cap permits it, regardless of other sections' progress.
 The operator designated section navigation as 0.10.0 and Herbs & Minerals as
-0.11.0. Subsequent routine changes increment the last component; further
-milestone jumps follow the operator's requested scope/version.
+0.11.0, Traveller’s Atlas as 0.12.0, and Angler’s Almanac as 0.13.0.
+Subsequent routine changes increment the
+last component; further milestone jumps follow the operator's requested scope/version.
 
-Azeroth Fieldbook may later expand beyond Bestiary and Herbs & Minerals into
-additional gathering or collection journals, such as fishing or skinning.
+Azeroth Fieldbook may later add further gathering or collection journals,
+such as skinning, beyond its four implemented sections.
 
 Do not implement speculative future sections unless explicitly requested.
 

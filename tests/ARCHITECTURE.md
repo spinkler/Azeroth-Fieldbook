@@ -1,5 +1,10 @@
 # Fieldbook section integration
 
+`WindowFocus` registers independent addon windows on `MEDIUM`, with native
+top-level raising and hooks on clickable children. This lets normal game windows
+raise above the Fieldbook instead of being trapped below its former `DIALOG`
+layer. Decorative and hover-only frames remain untouched.
+
 `FieldbookShell.lua` owns the main window, artwork, title controls, dragging,
 brightness, section selection and shared scrollable page frames. Its root
 retains the name `AzerothFieldbookBestiary` to preserve existing saved positions,
@@ -42,7 +47,7 @@ first registration. Normal Bestiary bindings explicitly select the Bestiary;
 the minimap and general book command use the shared shell.
 
 The Bestiary registers first, followed by Herbs & Minerals (`GatheringBook.lua`),
-then the five definitions in
+Traveller’s Atlas (`AtlasBook.lua`), Angler’s Almanac (`AnglingBook.lua`), then the three definitions in
 `FieldbookSections.lua`. That file owns their titles, icons and wishlist text;
 they have no tracking or saved data. The Bestiary's icon is in its registration
 in `BestiaryBook.lua`. The shell uses Forever's `LargeSideTabButtonTemplate` for
@@ -96,7 +101,7 @@ old journal and backup compatibility when implementing their storage.
 (schema 1), with resource identities keyed by profession kind and normalized
 observed name. It shares no entries, settings or reset/backup/sharing paths with
 the Bestiary. The main addon initialization registers the gathering section
-between Bestiary and the five wishlist sections and starts its event frame even
+after Bestiary, before Atlas, Angling and the three wishlist sections, and starts its event frame even
 when its UI has never been opened.
 
 `GatheringTracking.lua` reads the current world-object tooltip for mouseover
@@ -125,3 +130,44 @@ in section-owned frames. Their local style/map code is intentionally separate to
 preserve the other pages. Names, counts, notes, map history and sort preferences
 survive reloads; filters, selection, scroll and unsaved notes survive section
 changes during the session. `tests/GATHERING.md` defines the acceptance checks.
+
+## Traveller’s Atlas
+
+`AtlasJournal.lua` owns schema 1 in per-character `AzerothFieldbookAtlasDB`, outside
+Bestiary/gathering resets, backups, account tracking and transport. Deliberate
+recording uses stable local IDs and map-relative positions; no Atlas background
+tracking frame is created. `AtlasBook.lua` registers after gathering and before
+Angling and the three remaining wishlist definitions without resizing the shell.
+
+Atlas controls, editors, pickers and report previews are children of the section.
+Leaving the page hides them by ancestry and clears focus/tooltips, while retaining
+browsing/editor state. `AtlasUI.lua` uses shared primitives without altering them.
+`AtlasMap.lua` owns tile/pin pools and never accesses the live World Map frame.
+`AtlasReferences.lua` reads source identities; only the existing Bestiary open
+context is used for navigation. `AtlasReports.lua` has its own bounded literal
+schema/codec and detached Reported staging, without changing Bestiary sharing.
+See `tests/ATLAS.md` for the complete data contract and live acceptance checklist.
+
+## Angler’s Almanac
+
+`AnglingJournal.lua` owns schema 1 in per-character `AzerothFieldbookAnglingDB`.
+The Almanac registers after Atlas in the existing `angling` slot, before the
+three wishlist definitions. `AnglingTracking.lua` starts during addon
+initialization and collects guarded fishing/loot events and world-tooltip pool
+sightings. Native tooltips that bypass callbacks are checked only while visible,
+at most five times per second; there is no hidden world or bag scan.
+Confirmed fishing loot can use local event identities
+when cast GUIDs are unavailable. Zone sightings never assign catch sources.
+The UI is lazy and uses section-owned state and left-pane editors.
+
+`AnglingEventLog.lua` registers the Almanac's own Event Log page with the shell,
+using its existing title-bar button. The journal persists an ongoing history per
+character; log callbacks update only the visible log page. Clearing that log has
+no effect on observations or other sections' data.
+
+`AnglingMap.lua` adapts fishing records to the already exposed `CreateAtlasMap`
+factory. Each invocation owns separate rendering/cache state; no Atlas journal
+or opened Atlas page is needed. `AnglingReports.lua` implements a fishing-only
+report boundary and reported storage. It does not change Bestiary transport,
+permissions, costs or rewards. See `tests/ANGLING.md` for the full contract,
+Forever API evidence, limits and remaining live checks.

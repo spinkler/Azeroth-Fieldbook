@@ -1,0 +1,316 @@
+local _, ns = ...
+local A,U=ns.Atlas,ns.AtlasUI
+function ns.CreateAtlasBook(journal,shell,adapters)
+    local c={journal=journal,shell=shell,adapters=adapters,pages={}}
+    c.subzoneObserver=ns.AtlasSubzones.Track(journal,function()
+        if c.main and c.main.map:IsVisible() then c.main.map:RenderSubzones() end
+    end)
+    -- Weather is a per-zone collection of encountered types, independent of
+    -- which map is open. Keep only first observations, not a running history.
+    c.weatherObserver=CreateFrame("Frame")
+    c.weatherObserver:SetScript("OnEvent",function()
+        journal:ObserveWeather()
+        if c.main then c.main.map:UpdateWeather() end
+    end)
+    for _,event in ipairs({"PLAYER_ENTERING_WORLD","ZONE_CHANGED_NEW_AREA","ZONE_CHANGED","WEATHER_CHANGED"}) do
+        pcall(c.weatherObserver.RegisterEvent,c.weatherObserver,event)
+    end
+    journal:ObserveWeather()
+    local state=journal.state
+    state.query=type(state.query)=="string" and state.query or ""
+    state.offset=A.Integer(state.offset,0,5000) and state.offset or 0
+    state.all=state.all==true
+    function c:Show(page)
+        for _,v in pairs(self.pages) do v:Hide() end
+        self.activePage=page or self.main;self.activePage:Show()
+        if ns.WindowFocus then ns.WindowFocus:Register(shell:GetFrame()) end
+        if GameTooltip then GameTooltip:Hide() end
+    end
+    function c:Message(text) self.main.message:SetText(A.Safe(text or "")) end
+    function c:SetZone(mapID,zone)
+        state.mapID,state.zone=mapID,zone or "Unknown zone";state.offset=0
+        if self.main then self.main.map:Invalidate() end
+        self:Refresh()
+    end
+    function c:Select(id)
+        local e=journal:Get(id);if not e then return end
+        state.selected=id
+        local target=e
+        if e.category=="route" then
+            for _,s in ipairs(e.stops) do local p=journal:ResolveStop(s);if p.mapID then target=p;break end end
+            if journal:InZone(e,state.mapID) then target={mapID=state.mapID,zone=state.zone} end
+        end
+        if target.mapID and target.mapID~=state.mapID then
+            state.mapID,state.zone,state.continent=target.mapID,target.zone,nil
+        end
+        if not target.mapID and not journal:InZone(e,state.mapID) then
+            state.all=true;self:Message("Showing all recorded zones for this unpositioned discovery.")
+        end
+        -- Pins may select entries outside the current search. Make that clear
+        -- and clear only the index query so selection can be seen in both views.
+        local rows=journal:List(state.query,state.mapID,state.all);local found
+        for i,r in ipairs(rows) do if r.id==id then found=i;break end end
+        if not found then
+            if state.query~="" then self:Message("Index search cleared to show the selected discovery.") end
+            state.query="";self.main.search:SetText("")
+            rows=journal:List("",state.mapID,state.all)
+            for i,r in ipairs(rows) do if r.id==id then found=i;break end end
+        end
+        if found then state.offset=math.floor((found-1)/12)*12 end
+        self.main.details:SetVerticalScroll(0);self:Refresh()
+    end
+    function c:Picker(config)
+        local p=self.pages.picker
+        if not p then
+            p=U.Panel(self.frame,shell,"",function() p.config.back() end);self.pages.picker=p
+            p.search=U.Field(p,"Search",22,-54,630,200);p.rows={}
+            p.extra=U.Button(p,"",674,-74,183,function() if p.config.extra then p.config.extra() end end)
+            for i=1,10 do
+                local row=U.Button(p,"",24,-115-(i-1)*43,705,function(self)
+                    if self.data then p.config.pick(self.data);p:Render() end
+                end)
+                row:SetHeight(38);row:SetNormalFontObject("GameFontHighlightSmall")
+                row.secondary=U.Button(p,"Open",738,-121-(i-1)*43,112,function()
+                    if row.data and p.config.secondary then p.config.secondary(row.data) end
+                end)
+                p.rows[i]=row
+            end
+            p.previous=U.Button(p,"Previous",24,-556,110,function() p.offset=math.max(0,p.offset-10);p:Render() end)
+            p.next=U.Button(p,"Next",144,-556,110,function() p.offset=p.offset+10;p:Render() end)
+            p.count=U.Label(p,"",275,-562,570,"GameFontHighlightSmall")
+            function p:Render()
+                local rows=self.config.rows(self.search:GetText());self.data=rows
+                self.offset=math.max(0,math.min(self.offset,math.floor(math.max(0,#rows-1)/10)*10))
+                for i,row in ipairs(self.rows) do
+                    local data=rows[self.offset+i];row.data=data;row:SetShown(data~=nil)
+                    row.secondary:SetShown(data~=nil and self.config.secondary~=nil)
+                    if data then
+                        row:SetText(A.Safe((data.checked and "[Linked] " or "")..data.name..(data.detail and "\n"..data.detail or "")))
+                        row:SetWidth(self.config.secondary and 705 or 826)
+                        row.secondary:SetText(self.config.secondaryLabel or "Open")
+                    end
+                end
+                self.previous:SetEnabled(self.offset>0);self.next:SetEnabled(self.offset+10<#rows)
+                self.count:SetText(#rows==0 and (self.config.empty or "No matching entries.") or (self.offset+1).."–"..math.min(self.offset+10,#rows).." of "..#rows)
+            end
+            p.search:SetScript("OnTextChanged",function() if p.config then p.offset=0;p:Render() end end)
+        end
+        p.config=config;p.offset=0;p.title:SetText(config.title);p.search:SetText("")
+        p.extra:SetText(config.extraLabel or "");p.extra:SetShown(config.extra~=nil)
+        p.message:SetText(config.hint or "");p:Render();self:Show(p)
+        return p
+    end
+    function c:PickZone(callback,back,continent)
+        local maps=A.MapCatalog(journal)
+        self:Picker({title="Choose a zone",back=back,rows=function(query)
+            local rows={}
+            for _,z in ipairs(maps) do
+                if (not continent or z.continent==continent) and (z.zone.." "..z.continent):lower():find(query:lower(),1,true) then
+                    rows[#rows+1]={name=z.zone,detail=z.continent.." • Map "..z.mapID,zone=z}
+                end
+            end
+            return rows
+        end,pick=function(r) callback(r.zone) end,empty="No maps available. Use Current Zone or enter a map ID in a record."})
+    end
+    function c:Refresh()
+        if not self.main then return end
+        local m=self.main
+        local rows=journal:List(state.query,state.mapID,state.all)
+        state.offset=math.max(0,math.min(state.offset,math.floor(math.max(0,#rows-1)/12)*12))
+        m.scope:SetText(state.all and "Scope: All recorded zones" or "Scope: Current map")
+        m.zone:SetText(state.zone and state.zone~="" and state.zone or "Choose zone")
+        for i,row in ipairs(m.rows) do
+            local data=rows[state.offset+i];row.id=data and data.id;row:SetShown(data~=nil)
+            if data then
+                row.name:SetText((data.id==state.selected and "> " or "")..A.Safe(data.name));row.zone:SetText(A.Safe(data.zone~="" and data.zone or "Unpositioned / unknown zone"))
+                row.icon:SetTexture(A.category[data.category].icon)
+                local selected=data.id==state.selected;row.selected:SetShown(selected)
+                row.name:SetTextColor(selected and 1 or 0.75,selected and 0.82 or 0.8,selected and 0.14 or 0.8)
+            end
+        end
+        m.empty:SetShown(#rows==0)
+        m.empty:SetText(next(journal.records) and "No matching discoveries.\nTry all zones or clear your search." or "Your atlas starts empty.\n\nChoose Add Discovery to record a place at your current position, or save a name and notes for later.")
+        m.count:SetText(#rows.." discoveries • "..(state.all and "all zones" or "displayed map"))
+        m.cancelPlace:SetShown(m.map.placing==true)
+        m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+12<#rows)
+        m.subzones:SetChecked(state.showSubzones==true)
+        m.subzoneLabels:SetChecked(state.showSubzoneLabels==true)
+        m.subzonePoints:SetChecked(state.showSubzonePoints==true)
+        m.labelSize:Display(A.Integer(state.subzoneLabelSize,2,24) and state.subzoneLabelSize or ns.AtlasSubzones.DEFAULT_LABEL_SIZE)
+        m.brightness:Display(A.Number(state.mapBrightness,0.2,1) and math.floor(state.mapBrightness*100+0.5) or 100)
+        local e=journal:Get(state.selected)
+        local mapCaption=m.map:Render(state.mapID,state.selected)
+        local detail={}
+        if e then
+            detail={e.name.." — "..A.category[e.category].label,
+                (e.zone~="" and e.zone or "Unknown zone")..(e.subzone~="" and " / "..e.subzone or "")..(A.Position(e) and string.format(" • %.1f, %.1f",e.x/100,e.y/100) or " • Unpositioned"),
+                "Knowledge: "..e.provenance.kind.." ("..e.provenance.source..") • "..(e.explored and "Explored — your assertion" or "Not marked explored"),
+                "Created "..U.Date(e.created).." • Updated "..U.Date(e.updated)}
+            if e.notes~="" then detail[#detail+1]="Notes: "..e.notes end
+            if e.access~="" then detail[#detail+1]="Access: "..e.access end
+            if e.interior~="" then detail[#detail+1]="Interior label: "..e.interior end
+            if e.interiorMapID then detail[#detail+1]="Interior map: "..e.interiorMapID end
+            if e.category=="route" then
+                if #e.stops>0 then detail[#detail+1]="From "..journal:ResolveStop(e.stops[1]).name.." to "..journal:ResolveStop(e.stops[#e.stops]).name end
+                for i,s in ipairs(e.stops) do
+                    local p=journal:ResolveStop(s);detail[#detail+1]=i..". "..p.name.." — "..(p.zone or "Unknown zone")..(p.mapID~=state.mapID and " (another map / unresolved)" or "")
+                end
+            end
+            for _,id in ipairs(e.related) do local r=journal:Get(id);detail[#detail+1]="Related: "..(r and r.name or id.." (missing)") end
+            for _,r in ipairs(e.references) do local target,title=adapters:Resolve(r);detail[#detail+1]=title..": "..target.name..(target.missing and " (unavailable)" or "") end
+            for _,n in ipairs(journal:Associated(e.id)) do detail[#detail+1]="Expedition: "..n.name end
+        else detail={"Select a discovery to read your field notes.","Record entrances deliberately; an interior position is not an outdoor entrance."} end
+        if mapCaption~="" then table.insert(detail,1,mapCaption) end
+        m.details:SetText(table.concat(detail,"\n"))
+        m.reveal:SetShown(e~=nil and not journal:Layer(e.category))
+        for _,b in ipairs(m.entryButtons) do b:SetEnabled(e~=nil) end
+        m.route:SetEnabled(e~=nil and e.category=="route")
+    end
+    local function build(content)
+        c.frame=content
+        local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m;c.pages.main=m
+        local spine=m:CreateTexture(nil,"ARTWORK")
+        spine:SetColorTexture(0.25,0.13,0.055,0.35)
+        spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
+        U.Label(m,"Traveller’s Atlas",42,-60,260,"GameFontNormalLarge")
+        U.Label(m,"Discovery index",42,-93,245,"GameFontNormalSmall")
+        m.search=U.Edit(m,48,-113,240,200);m.search:SetText(state.query)
+        m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();state.offset=0;c:Refresh() end)
+        m.scope=U.Button(m,"",42,-146,250,function() state.all=not state.all;state.offset=0;c:Refresh() end)
+        m.count=U.Label(m,"",42,-179,250,"GameFontHighlightSmall")
+        m.rows={}
+        for i=1,12 do
+            local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-204-(i-1)*30);row:SetSize(250,29)
+            row:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+            row.selected=row:CreateTexture(nil,"BACKGROUND");row.selected:SetAllPoints();row.selected:SetColorTexture(0.95,0.7,0.15,0.18)
+            row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",3,-6);row.icon:SetSize(20,20)
+            row.name=U.Label(row,"",28,-2,217,"GameFontHighlightSmall");row.name:SetWordWrap(false)
+            row.zone=U.Label(row,"",28,-17,217,"GameFontDisableSmall");row.zone:SetWordWrap(false)
+            row:SetScript("OnClick",function(self) if self.id then c:Select(self.id) end end)
+            row:SetScript("OnEnter",function(self)
+                local e=journal:Get(self.id)
+                if e and GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(A.Safe(e.name));GameTooltip:AddLine(A.Safe(e.zone).." • "..A.category[e.category].label,1,1,1);GameTooltip:Show() end
+            end)
+            row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+            m.rows[i]=row
+        end
+        m.empty=U.Label(m,"",50,-228,233,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(4)
+        m.previous=U.Button(m,"Previous",42,-574,118,function() state.offset=math.max(0,state.offset-12);c:Refresh() end)
+        m.next=U.Button(m,"Next",174,-574,118,function() state.offset=state.offset+12;c:Refresh() end)
+        -- Center the 580-pixel control rows between the divider and inner right edge.
+        U.Button(m,"Add Discovery",342,-58,140,function() c:OpenEditor(nil,false,A.CurrentLocation()) end)
+        U.Button(m,"Expeditions",488,-58,116,function() c:Expeditions() end)
+        U.Button(m,"Prepare Field Report",610,-58,178,function() c:Report() end)
+        U.Button(m,"Current Zone",794,-58,128,function()
+            local location=A.CurrentLocation();c:SetZone(location.mapID,location.zone);c:Message(location.mapID and "Showing your current zone." or "Current map unavailable; you can still record notes.")
+        end)
+        m.zone=U.ZoneMenu(m,342,-91,306,function()
+            local ids={state.mapID};for _,row in ipairs(A.MapCatalog(journal)) do ids[#ids+1]=row.mapID end;return ids
+        end,function(id,name) c:SetZone(id,name) end)
+        m.layerMenu=U.MenuButton(m,"Map Layers",342,-174,306,function(self)
+            if not MenuUtil or type(MenuUtil.CreateContextMenu)~="function" then return end
+            if GameTooltip then GameTooltip:Hide() end
+            MenuUtil.CreateContextMenu(self,function(_,root)
+                local function selected(id) return journal:Layer(id) end
+                local function toggle(id)
+                    journal:SetLayer(id,not journal:Layer(id));c:Refresh()
+                    return MenuResponse and MenuResponse.Refresh
+                end
+                for _,category in ipairs(A.categories) do
+                    root:CreateCheckbox(category.label,selected,toggle,category.id)
+                end
+                root:CreateDivider()
+                local function all(visible)
+                    for _,category in ipairs(A.categories) do journal:SetLayer(category.id,visible) end
+                    c:Refresh();return MenuResponse and MenuResponse.Refresh
+                end
+                root:CreateButton("Show all",function() return all(true) end)
+                root:CreateButton("Hide all",function() return all(false) end)
+            end)
+        end)
+        U.Tip(m.layerMenu,"Choose which discovery markers appear on the map. Check several layers or use Show all / Hide all. The discovery index and sub-zone controls are unchanged.")
+        -- Keep the survey controls together within the existing header height.
+        local group=CreateFrame("Frame",nil,m,"BackdropTemplate");m.subzoneControls=group
+        group:SetPoint("TOPLEFT",660,-91);group:SetSize(262,107);group:EnableMouse(false)
+        group:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8})
+        group:SetBackdropColor(0.055,0.04,0.022,0.6);group:SetBackdropBorderColor(0.45,0.30,0.13,0.75)
+        U.Label(group,"Sub-zones",12,-7,80,"GameFontNormalSmall")
+        m.labelSize=U.SmallSlider(group,"Label size",100,-84,56,2,24,1,function(v) return tostring(v) end,function(value)
+            if not journal.readOnly then state.subzoneLabelSize=value end
+            c:Refresh()
+        end)
+        U.Tip(m.labelSize,"Sub-zone label text size (2–24, default 4). Applies immediately; map zoom also scales labels.")
+        m.brightness=U.SmallSlider(group,"Brightness",98,-6,60,20,100,5,function(v) return v.."%" end,function(value)
+            if not journal.readOnly then state.mapBrightness=value/100 end
+            c:Refresh()
+        end)
+        U.Tip(m.brightness,"Map artwork brightness (20–100%). Sub-zone shading, labels, markers and the player arrow keep their contrast.")
+        m.subzones=U.Check(group,"Shading",10,-27,65,function(on)
+            if not journal.readOnly then state.showSubzones=on end;c:Refresh()
+        end)
+        U.Tip(m.subzones,"Shade self-discovered sub-zones after three non-collinear observations. Crossings and interior samples about every 100 yards collect while playing, even with these layers hidden. Points and Labels are independent display options. Hover for evidence details. Unvisited areas stay blank; inferred boundaries may be inaccurate.")
+        m.subzonePoints=U.Check(group,"Points",10,-53,88,function(on)
+            if not journal.readOnly then state.showSubzonePoints=on end;c:Refresh()
+        end)
+        U.Tip(m.subzonePoints,"Checked: show every recorded crossing and interior sample, including points incorporated into shading. Unchecked: retain automatic isolated dots with shading and hide incorporated samples. All dots stay small when zooming. Recording and saved observations are unchanged.")
+        m.subzoneLabels=U.Check(group,"Labels",10,-79,65,function(on)
+            if not journal.readOnly then state.showSubzoneLabels=on end;c:Refresh()
+        end)
+        U.Tip(m.subzoneLabels,"Show discovered sub-zone names independently of boundary shading. Names try two lines before hiding for lack of space. Adjust their text with Label size.")
+        m.map=ns.CreateAtlasMap(m,journal,function(id) c:Select(id) end,function(x,y)
+            if c.placeCallback then
+                local callback=c.placeCallback;c.placeCallback=nil;m.map.placing=false;c:Message("")
+                callback(x,y,state.mapID,state.zone)
+            end
+        end,function(id,name) c:SetZone(id,name) end)
+        m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
+        m.map.weatherText=U.Label(m,"",342,-587,580,"GameFontHighlightSmall")
+        m.map.weatherText:SetWordWrap(false)
+        m.details=U.ReadArea(m,342,-606,555,64)
+        m.reveal=U.Button(m,"Reveal layer",788,-513,114,function()
+            local e=journal:Get(state.selected);if e then journal:SetLayer(e.category,true);c:Refresh() end
+        end)
+        -- Leave a separate line for the hidden-layer affordance, never cover text.
+        m.reveal:ClearAllPoints();m.reveal:SetPoint("TOPLEFT",174,-666)
+        local edit=U.Button(m,"Edit",342,-680,80,function() c:OpenEditor(state.selected) end)
+        local links=U.Button(m,"Connections",428,-680,128,function() c:Connections(state.selected,false) end)
+        m.route=U.Button(m,"Route stops",562,-680,112,function() c:Stops(state.selected) end)
+        local notes=U.Button(m,"Linked notes",680,-680,112,function() c:Expeditions(state.selected) end)
+        local position=U.Button(m,"Map position",798,-680,124,function() c:OpenEditor(state.selected);c:ChoosePosition() end)
+        m.entryButtons={edit,links,notes,position}
+        m.cancelPlace=U.Button(m,"Cancel placement",42,-666,128,function()
+            m.map.placing=false;c.placeCallback=nil;m.cancelPlace:Hide();c:Message("")
+            if c.placeReturn then c:Show(c.placeReturn) end
+        end);m.cancelPlace:Hide()
+        m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall")
+        ns.InstallAtlasEditors(c);ns.InstallAtlasReportUI(c)
+        content:SetScript("OnHide",function()
+            m.map:SuspendPlayer()
+            if GameTooltip then GameTooltip:Hide() end
+            m.search:ClearFocus()
+            if c.ClearFocus then c:ClearFocus() end
+        end)
+        if not state.mapID then local p=A.CurrentLocation();state.mapID,state.zone=p.mapID,p.zone end
+        c:Show();c:Refresh()
+        if journal.readOnly then c:Message("Newer Atlas schema: this journal is read-only; saved data is untouched.") end
+    end
+    shell:RegisterSection("atlas",{title="Traveller’s Atlas",icon="Interface\\Icons\\INV_Misc_Map_01",
+        help="|cffffd1001. Record a discovery|r\nThe discovery index starts empty and records only what you deliberately add. Click Add Discovery, enter a name and category, and save. Current-map context and readable coordinates can be captured; you may also leave coordinates blank. Use Choose on displayed map to place a point yourself. For caves, record the entrance as the navigational position.\n\n"..
+            "|cffffd1002. Browse maps|r\nUse the zone selector or Current Zone. Hover a base map in the selector to reveal its zones; battlegrounds have a separate menu and Zephras Isle is under Other. Search the current map or all recorded zones. Select a discovery in the index or click its map pin; repeated clicks cycle overlapping pins. The Map Layers dropdown has checkboxes for each marker category and Show all / Hide all actions. The menu stays open while selecting several layers, without removing entries from the index or changing sub-zone controls. Reveal layer shows the selected entry's hidden category.\n\n"..
+            "|cffffd1003. Edit and explore|r\nUse Edit for names, notes, access details and explored status. Map position lets you choose a location. Explored is your own assertion; recording a point does not automatically mark it explored. Recorded and Reported describe where the information came from.\n\n"..
+            "|cffffd1004. Routes and passages|r\nChoose Route / Passage, then Save & route stops. Add existing places or named waypoints and use Up, Down and Remove to arrange them. Stops may span zones. Lines connect consecutive visible stops within the same map; they are recorded connections, not guaranteed safe paths.\n\n"..
+            "|cffffd1005. Expeditions and connections|r\nExpeditions stores longer journals, dates and zone associations. Linked notes attaches a discovery to an expedition. Connections links Atlas discoveries or existing Bestiary and Gatherer's Compendium records. Removing a link leaves its source intact. Deleted sources leave unresolved links you can keep or remove.\n\n"..
+            "|cffffd1006. Field reports|r\nPrepare Field Report creates a saved draft for a zone or selected discoveries. Choose records, optional private notes and expedition excerpts, then review the preview. Sending and importing reports are not available from this page yet.\n\n"..
+            "|cffffd1007. Self-discovered sub-zones|r\nThe Sub-zones group contains independent Shading, Points and Labels toggles. Checked Points shows every crossing and interior sample. Unchecked retains automatic isolated dots with shading and hides incorporated samples. Recording and saved evidence are unchanged. Label size adjusts text from 2–24, defaulting to 4, with a thin non-monochrome outline. Names try two lines before hiding for lack of space. Brightness dims only the map artwork from 20–100%. These display settings are saved for this character. While playing, the Atlas records readable same-map name changes, their position, previous position, from/to names and time. Loading screens, missing coordinates and large jumps cannot invent a crossing. With readable map dimensions, the Atlas also records your current sub-zone position and further interior samples about every 100 yards. Revisiting sampled ground adds no duplicate interior points. Interior observations record only their own area, position and time. Both types collect with the Atlas closed or layers hidden. Dots stay small when zooming. Checked Points keeps all samples visible over shading; unchecked uses automatic isolated dots. Three non-collinear observations can produce estimated shading. Convex perimeters may bridge bays or holes; more observations improve the evidence but never guarantee exact borders. Every observed area on the map receives a unique colour; new colours maximise contrast with existing assignments, which stay steady during live updates. Hover the map for names and nearby observation details.\n\n"..
+            "|cffffd1008. Your journal|r\nAtlas records and browsing settings are saved for this character, independently of Bestiary account tracking, resets, backups and sharing. Sub-zone observations do not create discovery entries or enter field reports. The Options cog opens shared Fieldbook settings.",
+        frameName="AzerothFieldbookAtlasSection",build=build,onOpen=function()
+            if c.main then c.main.map:Invalidate() end;c:Refresh()
+        end})
+    return c
+end
+function ns.InitializeAtlas(shell,bestiary)
+    if type(AzerothFieldbookAtlasDB)~="table" then AzerothFieldbookAtlasDB={} end
+    local journal=ns.CreateAtlasJournal(AzerothFieldbookAtlasDB)
+    local adapters=ns.CreateAtlasReferences(bestiary,function() return AzerothFieldbookGatheringDB end,shell)
+    return ns.CreateAtlasBook(journal,shell,adapters)
+end

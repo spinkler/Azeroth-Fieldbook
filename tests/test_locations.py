@@ -343,7 +343,7 @@ class LocationsWindowTests(unittest.TestCase):
             local map=AzerothFieldbookCreatureLocations
             map.scripts.OnShow(map) -- The mock's Show omits native OnShow dispatch.
             assert(map:IsShown() and content.creatureLocationsButton.afbSelected)
-            eq(map.strata,'DIALOG');assert(map.toplevel and map.clamped)
+            eq(map.strata,'MEDIUM');assert(map.toplevel and map.clamped)
             assert(map.afbPreferBookEdge and map.afbAnchorRule=='right' and map.afbAlignBookTop)
             local base=map:GetScale();ns.UIScale:Set(1.25);eq(map:GetScale(),base*1.25)
             content:Hide();assert(not map:IsShown() and not content.creatureLocationsButton.afbSelected)

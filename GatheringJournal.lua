@@ -63,6 +63,13 @@ function ns.CreateGatheringJournal(saved,getBrightness)
         end
     end
     function journal:Changed() self.revision=self.revision+1 end
+    function journal:ShowNodesOn(map)
+        return (map=="worldMap" or map=="minimap") and saved[map]==true
+    end
+    function journal:SetShowNodesOn(map,enabled)
+        if map~="worldMap" and map~="minimap" then return end
+        saved[map]=enabled==true;self:Changed()
+    end
     function journal:Discover(kind,name,stamp,zone,map,modelFileID)
         name=cleanName(name)
         if not kinds[kind] or not name then return end

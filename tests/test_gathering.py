@@ -1,13 +1,15 @@
 """Mouseover zones, interaction-only coordinates and the real section/map UI."""
 import unittest
 from ui_test_harness import ROOT, new_ui_client
+from atlas_test_harness import ATLAS_MODULES
 
 
 MODULES = [
     'Scrollbars.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
     'CreatureLocations.lua', 'FieldbookShell.lua', 'FieldbookSections.lua',
     'GatheringJournal.lua', 'GatheringModels.lua', 'GatheringTracking.lua', 'GatheringLocationsWindow.lua',
-    'GatheringBook.lua',
+    'GatheringMapPins.lua', 'GatheringBook.lua',
+    *ATLAS_MODULES,
 ]
 
 ENV = r'''
@@ -92,6 +94,7 @@ def client(ui=False):
             shell=ns.CreateFieldbookShell()
             gathering=ns.InitializeGathering(shell)
             journal=gathering.journal;tracker=gathering.tracking
+            ns.InitializeAtlas(shell)
             ns.RegisterFieldbookWishlistSections(shell)
         ''')
     else:
@@ -118,6 +121,25 @@ class GatheringTrackingTests(unittest.TestCase):
             fire('UNIT_SPELLCAST_STOP','player','cast',2366)
             assert(count(journal.entries)==0 and positionReads==0)
         ''')
+
+    def test_first_click_before_poll_captures_tooltip_then_skill_rejection(self):
+        self.lua.execute("""
+            local callback
+            TooltipDataProcessor={AddTooltipPostCall=function(kind,fn)
+                assert(kind==Enum.TooltipDataType.Object);callback=fn
+            end}
+            tracker=ns.CreateGatheringTracking(journal)
+            hover('Peacebloom');callback(GameTooltip)
+            assert(entry('herb:peacebloom').interactions==0 and positionReads==0)
+            elapsed=elapsed+0.01;cursorInfo=nil;cursorData=nil;GameTooltip:Hide()
+            clickNode();skillError();skillError()
+            assert(entry('herb:peacebloom').interactions==1 and positionReads==1)
+            assert(entry('herb:peacebloom').completed==0)
+            hover('Copper Vein','Requires Mining');callback(GameTooltip)
+            elapsed=elapsed+0.01;cursorInfo=nil;cursorData=nil;GameTooltip:Hide()
+            clickNode();skillError('Requires Mining')
+            assert(entry('mineral:copper vein').interactions==1 and positionReads==2)
+        """)
 
     def test_mouseover_records_zones_without_profession_or_coordinates(self):
         self.lua.execute('''
@@ -456,7 +478,7 @@ class GatheringUITests(unittest.TestCase):
             assert(not book.model:IsShown() and not book.model.requestedModel)
             assert(book.modelCaption:GetText()=='Model unavailable')
             book.model.SetModel=load;shell:ShowSection('atlas');shell:ShowSection('gathering')
-            assert(book.title:GetText()=='Peacebloom' and book.model.requestedModel==219481 and book.model:IsShown())
+            assert(book.title:GetText()=='Peacebloom • Herb' and book.model.requestedModel==219481 and book.model:IsShown())
         ''')
 
     def test_hover_locations_and_object_previews_match_bestiary_panel_and_rotate(self):
@@ -465,7 +487,7 @@ class GatheringUITests(unittest.TestCase):
             local book=gathering.frame
             assert(book.model:GetWidth()==203 and book.model:GetHeight()==164)
             assert(book.modelBorder:GetWidth()==207 and book.modelBorder:GetHeight()==168)
-            assert(book.model.point[2]==366 and book.model.point[3]==-135)
+            assert(book.model.point[2]==366 and book.model.point[3]==-111)
             assert(book.model.requestedModel==219481 and book.model:IsShown())
             assert(book.model.cameraDistance==3.125)
             assert(book.zoneRows[1]:GetText()=='Elwynn  •  0 mapped positions')
@@ -515,7 +537,7 @@ class GatheringUITests(unittest.TestCase):
             book.typeButtons.herb.scripts.OnClick();assert(book.rows[1].id=='herb:herb 01')
             book.rows[1].scripts.OnClick(book.rows[1])
             book.rows[1].scripts.OnMouseWheel(book.rows[1],-1);assert(book.rows[1].id=='herb:herb 04')
-            book.next.scripts.OnClick();assert(book.title:GetText()=='Herb 02' and book.resourceScrollBar:GetValue()==1)
+            book.next.scripts.OnClick();assert(book.title:GetText()=='Herb 02 • Herb' and book.resourceScrollBar:GetValue()==1)
             book.search:SetText('Herb 2');assert(book.rows[1].id=='herb:herb 20' and not book.resourceScrollBar:IsShown())
             book.searchClear.scripts.OnClick();assert(book.search:GetText()=='')
             book.clearFilters.scripts.OnClick();book.indexButton.scripts.OnClick()
@@ -537,7 +559,7 @@ class GatheringUITests(unittest.TestCase):
             assert(not book.sortMenu:IsShown() and not book.locationFrame:IsShown() and not gathering.locations:IsShown())
             gather('Copper Vein','hidden',2575)
             shell:ShowSection('gathering')
-            assert(book.title:GetText()=='Silverleaf' and book.search:GetText()=='Silver')
+            assert(book.title:GetText()=='Silverleaf • Herb' and book.search:GetText()=='Silver')
             assert(book.note:GetText()=='Unfinished note' and entry().note=='')
             book.saveNote.scripts.OnClick();assert(entry().note=='Unfinished note' and not book.saveNote.enabled)
             book.search:SetText('');book.rows[1].scripts.OnClick(book.rows[1]);book.rows[3].scripts.OnClick(book.rows[3])
@@ -583,8 +605,8 @@ class GatheringUITests(unittest.TestCase):
             assert(#markers==3 and count(points())==3)
             for _,dot in ipairs(markers) do
                 assert(dot:GetWidth()==6 and dot:GetHeight()==6)
-                assert(dot.border.mask and dot.texture.mask and dot.border.mask~=dot.texture.mask)
-                assert(dot.texture.mask.texture=='Interface\\\\CHARACTERFRAME\\\\TempPortraitAlphaMask')
+                assert(not rawget(dot.border,"mask") and not rawget(dot.texture,"mask"))
+                assert(dot.texture.texture:find('GatheringDot.tga',1,true))
                 assert(dot.point[4]==dot.location.x/10000*map.map:GetWidth())
                 assert(dot.point[5]==-dot.location.y/10000*map.map:GetHeight())
             end
@@ -596,7 +618,7 @@ class GatheringUITests(unittest.TestCase):
         self.lua.execute('''
             gather('Copper Vein','copper',2575);gather('Peacebloom','peace')
             shell:ShowSection('gathering');local book=gathering.frame
-            assert(book.kind:GetText()=='Mineral' and book.note:IsMouseClickEnabled())
+            assert(book.title:GetText()=='Copper Vein • Mineral' and book.note:IsMouseClickEnabled())
             book.noteScroll.scripts.OnMouseDown(book.noteScroll,'LeftButton')
             assert(book.note.focus)
             book.note:SetText('Copper near the bridge');assert(book.saveNote.enabled)
@@ -604,7 +626,7 @@ class GatheringUITests(unittest.TestCase):
             assert(entry('mineral:copper vein').note=='Copper near the bridge')
             assert(book.message:GetText()=='Notes saved.' and not book.saveNote.enabled)
             book.rows[2].scripts.OnClick(book.rows[2])
-            assert(book.kind:GetText()=='Herb' and book.note:GetText()=='' and not book.note.focus)
+            assert(book.title:GetText()=='Peacebloom • Herb' and book.note:GetText()=='' and not book.note.focus)
             local border=book.noteScroll.parent
             border.scripts.OnMouseDown(border,'LeftButton');assert(book.note.focus)
             book.note:SetText('Flowers by the stream');book.saveNote.scripts.OnClick()

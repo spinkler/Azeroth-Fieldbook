@@ -1,16 +1,8 @@
 local _, ns = ...
 
 -- Presentation only. These sections deliberately have no tracking or saved data.
--- Registration order is the order of the tabs after the two implemented journals.
+-- Registration order is the order of the tabs after the four implemented journals.
 ns.FieldbookWishlistSections = {
-    {
-        id="atlas", title="Traveller’s Atlas", icon="Interface\\Icons\\INV_Misc_Map_01",
-        wishlist="Build a personal record of caves, ruins, routes, crossings and useful places. Add expedition notes, connect discoveries across Fieldbook sections, and eventually share regional field reports.",
-    },
-    {
-        id="angling", title="Angler’s Almanac", icon="Interface\\Icons\\Trade_Fishing",
-        wishlist="Record fish and other catches alongside the waters and fishing spots where they were found. Build a personal catch history and share useful findings with other anglers.",
-    },
     {
         id="merchants", title="Merchant’s Ledger", icon="Interface\\Icons\\INV_Misc_Coin_01",
         wishlist="Remember merchants, trainers and useful services encountered during exploration. Record observed goods, recipe sources, locations and access notes.",
@@ -30,6 +22,8 @@ function ns.RegisterFieldbookWishlistSections(shell)
         local page=definition
         shell:RegisterSection(page.id,{
             title=page.title, icon=page.icon,
+            help="|cffffd100Wishlist for future releases|r\n"..page.wishlist..
+                "\n\nThis section is a preview of planned features. It does not collect or save data yet.\n\nUse the tabs on the right to browse other sections. The Options cog opens the shared Fieldbook settings.",
             build=function(content)
                 local label=ns.FieldbookUI.Label
                 content.title=label(content,page.title,48,-72,864,"GameFontNormalLarge")

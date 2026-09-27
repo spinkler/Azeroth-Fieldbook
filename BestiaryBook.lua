@@ -157,7 +157,7 @@ local function addNameScroller(row,heading)
 end
 
 function ns.CreateBestiaryBook(journal,shell)
-    shell=shell or ns.CreateFieldbookShell({getBrightness=function() return journal:GetBackgroundBrightness() end})
+    shell=shell or ns.CreateFieldbookShell({getBrightness=function() return journal:GetBackgroundBrightness() end, getDarkMode=function() return journal:GetDarkMode() end})
     local ui=ns.FieldbookUI
     local label,button,cornerClose,edit=ui.Label,ui.Button,ui.Close,ui.Edit
     local book, selected, offset, abilityOffset = nil, nil, 0, 0
@@ -436,12 +436,18 @@ local ink = { 0.75, 0.8, 0.8 }
         local basic=e and basicInfo(selected)
         local isBeast=basic~=nil and basic.category=="Beast"
         book.beastLoreButton:SetShown(isBeast)
+        book.modelBorder:ClearAllPoints()
+        book.modelBorder:SetPoint("TOPLEFT",364,isBeast and -162 or -133)
+        book.modelBorder:SetHeight(isBeast and 139 or 168)
+        book.model:ClearAllPoints()
+        book.model:SetPoint("TOPLEFT",366,isBeast and -164 or -135)
+        book.model:SetHeight(isBeast and 135 or 164)
         book.damageBorder:ClearAllPoints()
-        book.damageBorder:SetPoint("TOPLEFT",579,isBeast and -162 or -133)
-        book.damageBorder:SetHeight(isBeast and 86 or 115)
+        book.damageBorder:SetPoint("TOPLEFT",579,-133)
+        book.damageBorder:SetHeight(115)
         book.damageScroll:ClearAllPoints()
-        book.damageScroll:SetPoint("TOPLEFT",592,isBeast and -192 or -163)
-        book.damageScroll:SetHeight(isBeast and 46 or 75)
+        book.damageScroll:SetPoint("TOPLEFT",592,-163)
+        book.damageScroll:SetHeight(75)
         book.damageButton:ClearAllPoints()
         book.damageButton:SetPoint("TOPLEFT",579,-248)
         if isBeast then
@@ -645,7 +651,7 @@ local ink = { 0.75, 0.8, 0.8 }
         if #names == 0 then book.abilityCount:SetTextColor(0.55,0.58,0.58)
         else book.abilityCount:SetTextColor(unpack(ink)) end
         local levels = {}
-        for level in pairs(e.damage) do levels[#levels + 1] = level end
+        for level in pairs(book.lootMode and {} or e.damage) do levels[#levels + 1] = level end
         table.sort(levels)
         local contentHeight = 0
         for i, level in ipairs(levels) do
@@ -679,7 +685,46 @@ local ink = { 0.75, 0.8, 0.8 }
             contentHeight = contentHeight + rowHeight + 1
         end
         for i=#levels+1,#book.damageRows do book.damageRows[i]:Hide() end
-        book.noDamage:SetShown(#levels==0)
+        for _,row in ipairs(book.lootRows or {}) do row:Hide() end
+        book.damageHeading:SetText(book.lootMode and ("Loot · "..tostring(e.loot and e.loot.samples or 0).." observed corpses") or "Damage taken")
+        book.noDamage:SetText(book.lootMode and "No item drops observed yet." or "No damage recorded.")
+        local itemIDs={}
+        if book.lootMode then
+            for id in pairs(e.loot and e.loot.items or {}) do itemIDs[#itemIDs+1]=id end
+            table.sort(itemIDs)
+            book.lootRows=book.lootRows or {}
+            for i,id in ipairs(itemIDs) do
+                local row=book.lootRows[i]
+                if not row then
+                    row=CreateFrame("Button",nil,book.damageChild);row:SetSize(296,32)
+                    row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("LEFT",3,0);row.icon:SetSize(26,26)
+                    row.name=label(row,"",35,-1,255,"GameFontHighlightSmall")
+                    row.stats=label(row,"",35,-16,255,"GameFontHighlightSmall")
+                    row.stats:SetTextColor(0.8,0.72,0.52)
+                    row:SetScript("OnEnter",function(self)
+                        GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetHyperlink("item:"..self.itemID)
+                        GameTooltip:AddLine("Observed rate: corpses with this item / observed loot sources.",0.8,0.72,0.52,true)
+                        GameTooltip:Show()
+                    end)
+                    row:SetScript("OnLeave",function() GameTooltip:Hide() end)
+                    row:SetScript("OnHide",function(self) if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
+                    book.lootRows[i]=row
+                end
+                local item=e.loot.items[id]
+                local getInfo=C_Item and C_Item.GetItemInfo or GetItemInfo
+                local name,link,icon
+                if type(getInfo)=="function" then
+                    local info={getInfo(id)}
+                    name,link,icon=info[1],info[2],info[10]
+                end
+                row.itemID=id;row.name:SetText(link or name or ("Item "..id))
+                row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+                row.stats:SetText(string.format("%d items · %d/%d corpses · %.1f%%",item.quantity,item.drops,e.loot.samples,100*item.drops/math.max(1,e.loot.samples)))
+                row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-contentHeight);row:Show()
+                contentHeight=contentHeight+34
+            end
+        end
+        book.noDamage:SetShown(book.lootMode and #itemIDs==0 or not book.lootMode and #levels==0)
         local viewportHeight = book.damageScroll:GetHeight()
         local damageHeight=math.max(viewportHeight,contentHeight)
         book.damageChild:SetHeight(damageHeight)
@@ -693,6 +738,7 @@ local ink = { 0.75, 0.8, 0.8 }
     end
     local function build(content)
         book=content
+        book.lootMode=true
         local function addBackgroundLayer(...) shell:AddBackgroundLayer(...) end
         local spine = book:CreateTexture(nil, "ARTWORK")
         spine:SetColorTexture(0.25, 0.13, 0.055, 0.35)
@@ -1116,6 +1162,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.damageBorder:SetBackdropColor(0.045,0.032,0.018,0.88)
         book.damageBorder:SetBackdropBorderColor(0.36,0.23,0.10,0.48)
         local damageHeading = label(book.damageBorder, "Damage taken", 13, -9, 311)
+        book.damageHeading=damageHeading
         damageHeading:SetTextColor(1.00, 0.82, 0.14)
         local damageScroll=CreateFrame("ScrollFrame",nil,detail,"UIPanelScrollFrameTemplate")
         damageScroll:SetPoint("TOPLEFT",592,-163); damageScroll:SetSize(296,75)
@@ -1129,27 +1176,39 @@ local ink = { 0.75, 0.8, 0.8 }
         if book.damageScrollBar and type(book.damageScrollBar)~="function" then
             local bar=book.damageScrollBar
             local up,down=bar.ScrollUpButton,bar.ScrollDownButton
-            local upHeight=up and type(up)~="function" and up:GetHeight() or 16
-            local downHeight=down and type(down)~="function" and down:GetHeight() or 16
-            -- Anchor to the panel, so its beast-only height change keeps both
-            -- arrows flush with the edges without changing the content viewport.
+            -- Keep all native controls inside the existing panel backdrop.
+            -- A separate opaque track creates a seam against its translucent fill.
+            local width,inset=16,6
+            bar:SetWidth(width)
+            for _,arrow in ipairs({up,down}) do
+                if arrow and type(arrow)~="function" then
+                    arrow:SetSize(width,width)
+                    for _,getter in ipairs({"GetNormalTexture","GetPushedTexture","GetDisabledTexture","GetHighlightTexture"}) do
+                        local texture=arrow[getter] and arrow[getter](arrow)
+                        if texture and type(texture)~="function" then
+                            texture:ClearAllPoints();texture:SetAllPoints(arrow)
+                        end
+                    end
+                end
+            end
             bar:ClearAllPoints()
-            bar:SetPoint("TOPRIGHT",book.damageBorder,"TOPRIGHT",-6,-upHeight)
-            bar:SetPoint("BOTTOMRIGHT",book.damageBorder,"BOTTOMRIGHT",-6,downHeight)
+            bar:SetPoint("TOPRIGHT",book.damageBorder,"TOPRIGHT",-inset,-inset-width)
+            bar:SetPoint("BOTTOMRIGHT",book.damageBorder,"BOTTOMRIGHT",-inset,inset+width)
             if up and type(up)~="function" then
                 up:ClearAllPoints();up:SetPoint("BOTTOM",bar,"TOP",0,0)
             end
             if down and type(down)~="function" then
                 down:ClearAllPoints();down:SetPoint("TOP",bar,"BOTTOM",0,0)
             end
-            ns.StyleScrollBarTrack(bar)
+            local thumb=bar.GetThumbTexture and bar:GetThumbTexture()
+            if thumb and type(thumb)~="function" then thumb:SetSize(width,width) end
         end
         book.damageRows={}
         book.noDamage=label(book.damageChild,"No damage recorded.",3,-3,281,"GameFontHighlightSmall")
         book.noDamage:SetTextColor(0.55,0.58,0.58)
         local abilityDivider = detail:CreateTexture(nil, "ARTWORK")
         abilityDivider:SetColorTexture(0.35,0.20,0.08,0.42)
-        abilityDivider:SetPoint("TOPLEFT",352,-315); abilityDivider:SetSize(574,1)
+        abilityDivider:SetPoint("TOPLEFT",352,-315); abilityDivider:SetSize(574,3)
         local abilitiesHeading = label(detail, "Recorded abilities", 352, -325, 222, "GameFontNormalLarge")
         abilitiesHeading:SetTextColor(1.00, 0.82, 0.14)
         book.abilityCount = label(detail, "", 580, -331, 346, "GameFontHighlightSmall")
@@ -1324,10 +1383,10 @@ local ink = { 0.75, 0.8, 0.8 }
             message(msg)
             if ok then book.manualName:SetText(""); book.manualNote:SetText(""); book.spellLink:SetText(""); book.manualEffects={}; book.effectButton:SetText("Choose effects"); refresh() end
         end)
-        book.damageButton=button(detail,"Record damage taken",579,-248,343,function()
+        book.damageButton=button(detail,"Record damage taken",579,-248,227,function()
             book.damageForm:SetShown(not book.damageForm:IsShown())
         end)
-        book.beastLoreButton=button(detail,"Known Beast Lore",579,-133,343,function()
+        book.beastLoreButton=button(detail,"Known Beast Lore",364,-133,207,function()
             book.beastLore:SetShown(not book.beastLore:IsShown())
         end)
         book.beastLoreButton:Hide()
@@ -1379,6 +1438,13 @@ local ink = { 0.75, 0.8, 0.8 }
         book.defenseButton=button(detail,"Defenses",695,-277,111,function()
             book.defensePicker:SetShown(not book.defensePicker:IsShown())
         end)
+        book.lootButton=button(detail,"Show Damage",811,-248,111,function()
+            book.lootMode=not book.lootMode
+            book.lootButton:SetSelected(not book.lootMode)
+            book.damageScroll:SetVerticalScroll(0)
+            refresh()
+        end)
+        styleSelection(book.lootButton,nil,true)
         book.behaviourButton=button(detail,"Behaviour",811,-277,111,function()
             book.behaviourPicker:SetShown(not book.behaviourPicker:IsShown())
         end)

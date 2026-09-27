@@ -278,6 +278,29 @@ local function click(text)
     end
     return false
 end
+do
+    local book=AzerothFieldbookBestiarySection
+    local prior,priorItemAPI=GetItemInfo,C_Item
+    local function itemInfo(id) return 'Test drop','|cffffffff[Test drop]|r',1,nil,nil,nil,nil,nil,nil,123 end
+    GetItemInfo=nil;C_Item={GetItemInfo=itemInfo}
+    journal.entries[42].loot={samples=4,items={[123]={quantity=6,drops=2}},recent={}}
+    check(book.lootMode,'loot is the default view')
+    check(click('Show Damage') and not book.lootMode,'Show Damage opens damage')
+    check(click('Show Damage'),'Show Damage returns to loot')
+    check(book.lootMode and book.damageHeading.text=='Loot · 4 observed corpses','loot replaces damage panel')
+    check(book.lootRows[1].stats.text=='6 items · 2/4 corpses · 50.0%','quantity differs from drop rate')
+    check(book.lootButton:GetWidth()==book.behaviourButton:GetWidth(),'matching button widths')
+    check(click('Show Damage') and not book.lootMode,'loot toggles off')
+    check(book.damageHeading.text=='Damage taken' and not book.lootRows[1]:IsShown(),'damage view restored')
+    C_Item=nil;GetItemInfo=itemInfo
+    check(click('Show Damage') and book.lootRows[1].name.text=='|cffffffff[Test drop]|r','legacy item API fallback')
+    click('Show Damage');GetItemInfo=nil
+    check(click('Show Damage') and book.lootRows[1].name.text=='Item 123','missing item APIs use placeholder')
+    click('Show Damage');C_Item={GetItemInfo=function() return nil end}
+    check(click('Show Damage') and book.lootRows[1].name.text=='Item 123','uncached item uses placeholder')
+    click('Show Damage')
+    journal.entries[42].loot=nil;GetItemInfo=prior;C_Item=priorItemAPI
+end
 check(click('Record damage taken'),'damage form opens')
 check(click('Cancel'),'damage form closes')
 check(click('All'),'category selection')

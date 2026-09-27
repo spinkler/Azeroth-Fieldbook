@@ -38,6 +38,19 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     for _,entry in pairs(journal.entries) do ns.MigrateDisposition(entry) end
     local activeAccountWideTracking = db.accountWideTracking ~= false
     local seenGUIDs = {}
+    local seenOrder, nextSeen, sightingLimit = {}, 1, 2048
+    local function clearSightings()
+        seenGUIDs, seenOrder, nextSeen = {}, {}, 1
+    end
+    local function rememberSighting(guid, id)
+        if seenGUIDs[guid] then return false end
+        local previous = seenOrder[nextSeen]
+        if previous and seenGUIDs[previous.guid] == previous then seenGUIDs[previous.guid] = nil end
+        local observed = { guid = guid, id = id }
+        seenGUIDs[guid], seenOrder[nextSeen] = observed, observed
+        nextSeen = nextSeen % sightingLimit + 1
+        return true
+    end
     local killedGUIDs = {}
     local killInstances = {}
     local recentKills
@@ -399,7 +412,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not entry then return end
         local content={}
         for _,key in ipairs({"name","category","rank","levelMin","levelMax","locations","abilities","ignoredAbilities",
-            "offenses","resistances","immunities","behaviours","behaviourSources","ignoredBehaviours","disposition","damage","idNotes","tameable","discoveryProgress"}) do
+            "offenses","resistances","immunities","behaviours","behaviourSources","ignoredBehaviours","disposition","damage","loot","idNotes","tameable","discoveryProgress"}) do
             content[key]=entry[key]
         end
         local signature=contentSignature(content)
@@ -448,6 +461,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:GetMinimapButton()
         return db.showMinimapButton ~= false
     end
+    function journal:GetMapClickNavigation() return db.mapClickNavigation~=false end
+    function journal:SetMapClickNavigation(enabled) db.mapClickNavigation=enabled==true end
+    ns.IsMapClickNavigationEnabled=function() return journal:GetMapClickNavigation() end
     function journal:SetMinimapButton(enabled)
         db.showMinimapButton = enabled == true
         if ns.MinimapButton then ns.MinimapButton:ApplySettings() end
@@ -505,6 +521,12 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if type(SetCVar) == "function" then
             pcall(SetCVar, "tooltipShowAuraSpellIDs", enabled and "1" or "0")
         end
+    end
+    function journal:GetDarkMode()
+        return db.darkMode == true
+    end
+    function journal:SetDarkMode(enabled)
+        db.darkMode = enabled == true
     end
     function journal:GetBackgroundBrightness()
         local value = tonumber(db.backgroundBrightness)
@@ -703,12 +725,12 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             if not entry.levelMax or level > entry.levelMax then entry.levelMax = level; changed = true end
         end
         local guid = read(UnitGUID, unit)
-        if str(guid) then
-            if not seenGUIDs[guid] then
-                entry.sightings = (entry.sightings or 0) + 1
-                changed = true
-            end
-            seenGUIDs[guid] = { id = id, level = number(level) and level or nil }
+        -- Sightings are transient display statistics, separate from durable
+        -- discovery credit and kill replay protection. Bound instance identities
+        -- and avoid allocating a new record on every target/mouseover poll.
+        if str(guid) and #guid <= 128 and rememberSighting(guid, id) then
+            entry.sightings = (entry.sightings or 0) + 1
+            changed = true
         end
         -- Snapshot the complete first observation before locking. Do not relock
         -- existing critters after a manual unlock or a later option change.
@@ -1353,7 +1375,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         self.entries = trackingDB.bestiary.entries
         initializePoints()
         initializeRecentKills()
-        seenGUIDs = {}
+        clearSightings()
         killInstances = {}
         if self.sharing then self.sharing:Reset() end
         if ns.UIScale then ns.UIScale:Initialize(db) end
@@ -1389,7 +1411,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             journal.entries=restored.entries
             initializePoints()
             initializeRecentKills()
-            seenGUIDs,killInstances={},{}
+            clearSightings();killInstances={}
             for id,e in pairs(journal.entries) do
                 local unchanged=e.unchangedKills
                 journal:TrackStableContent(id)

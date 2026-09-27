@@ -1,0 +1,833 @@
+local _, ns = ...
+local A=ns.Atlas
+local S={MAX_MAPS=256,MAX_CROSSINGS=4096,MAX_AREAS=128,GRID=64,MAX_TRIANGLES=3000,SPACING_YARDS=10,DEFAULT_LABEL_SIZE=4}
+S.INTERIOR_YARDS=100
+S.MAX_INTERIORS=1024
+ns.AtlasSubzones=S
+S.WORK_MS=1
+local jobs={}
+local function noWork() end
+-- One shared budget for indexing, geometry and native texture updates. Lua
+-- coroutines yield only at our checkpoints, never inside native callbacks.
+function S.Queue(run,done,owner)
+    if not S.worker then
+        S.worker=CreateFrame("Frame");S.worker:Hide()
+        S.worker:SetScript("OnUpdate",function() S.Step() end)
+    end
+    local job={done=done,owner=owner}
+    job.thread=coroutine.create(function()
+        return run(function(cost)
+            job.units=job.units+(cost or 1)
+            if job.units>=job.limit or (job.units>=job.checkAt and job.clock and job.clock()>=job.deadline) then
+                coroutine.yield()
+            end
+            if job.units>=job.checkAt then job.checkAt=job.units+16 end
+        end)
+    end)
+    jobs[#jobs+1]=job;S.worker:Show();return job
+end
+function S.Cancel(job)
+    if job then job.thread,job.done,job.owner=nil,nil,nil end
+end
+function S.Step()
+    local job=table.remove(jobs,1)
+    if job and job.thread then
+        if job.owner and A.Read(job.owner.IsVisible,job.owner)==false then
+            S.Cancel(job)
+        else
+            job.clock=type(debugprofilestop)=="function" and debugprofilestop or nil
+            job.units,job.checkAt,job.limit=0,16,job.clock and 4096 or 256
+            job.deadline=job.clock and job.clock()+S.WORK_MS or 0
+            local ok,result=coroutine.resume(job.thread)
+            if not ok or coroutine.status(job.thread)=="dead" then
+                local done=job.done;S.Cancel(job)
+                if done then done(ok,result) end
+            else jobs[#jobs+1]=job end
+        end
+    end
+    if #jobs==0 and S.worker then S.worker:Hide() end
+end
+
+local function valid(p)
+    return type(p)=="table" and p.kind~="interior" and A.Position(p) and A.Text(p.from,160) and A.Text(p.to,160)
+        and p.from~=p.to and A.Integer(p.fromX,0,10000) and A.Integer(p.fromY,0,10000)
+        and A.Integer(p.at,0,9999999999)
+end
+local function interior(p)
+    return type(p)=="table" and p.kind=="interior" and A.Position(p)
+        and A.Text(p.name,160) and A.Integer(p.at,0,9999999999)
+end
+local function sampleNames(p)
+    if p.kind=="interior" then return p.name end
+    return p.from,p.to
+end
+local function extraNames(names,p)
+    local first,second=sampleNames(p)
+    return (names[first] and 0 or 1)+(second and not names[second] and 1 or 0)
+end
+local function key(p)
+    if p.kind=="interior" then return "interior\t"..p.name.."\t"..math.floor(p.x/25)..":"..math.floor(p.y/25) end
+    return p.from.."\t"..p.to.."\t"..math.floor(p.x/25)..":"..math.floor(p.y/25)
+end
+function S.Attach(j)
+    if not j.readOnly then
+        j.saved.subzones=type(j.saved.subzones)=="table" and j.saved.subzones or {}
+        if j.state.showSubzoneLabels==nil then j.state.showSubzoneLabels=j.state.showSubzones==true end
+        if j.state.showSubzonePoints==nil then j.state.showSubzonePoints=j.state.showSubzones==true end
+    end
+    local store=not j.readOnly and j.saved.subzones or {}
+    local s={store=store,revision=0,revisions={},index={}}
+    j.subzones=s
+    function s:Changed(id)
+        self.revision=self.revision+1;self.revisions[id]=(self.revisions[id] or 0)+1
+    end
+    function s:Revision(id) return self.revisions[id] or 0 end
+    function s:Samples(id,checkpoint,crossingsOnly)
+        checkpoint=checkpoint or noWork
+        local out,names={},{};local count=0;local rows=store[id]
+        if type(rows)=="table" then
+            for i=1,math.min(#rows,S.MAX_CROSSINGS) do
+                checkpoint()
+                local p=rows[i]
+                if (valid(p) or (not crossingsOnly and interior(p))) and p.mapID==id then
+                    local extra=extraNames(names,p)
+                    if count+extra<=S.MAX_AREAS then
+                        local first,second=sampleNames(p)
+                        count=count+extra;names[first]=true;if second then names[second]=true end
+                        if p.kind=="interior" then
+                            out[#out+1]={kind="interior",mapID=id,x=p.x,y=p.y,name=p.name,at=p.at}
+                        else out[#out+1]={mapID=id,x=p.x,y=p.y,fromX=p.fromX,fromY=p.fromY,from=p.from,to=p.to,at=p.at} end
+                    end
+                end
+            end
+        end
+        return out
+    end
+    function s:Crossings(id,checkpoint) return self:Samples(id,checkpoint,true) end
+    function s:Reset() self.previous=nil;self.interiorAnchor=nil end
+    local function spatial(index,row,add)
+        if not index.width then return index.keys[key(row)] end
+        local isInterior=row.kind=="interior"
+        local grid,spacing
+        if isInterior then
+            spacing=S.INTERIOR_YARDS;grid=index.interiorGrid[row.name]
+            if not grid then grid={};index.interiorGrid[row.name]=grid end
+        else
+            spacing=S.SPACING_YARDS
+            local from,to=row.from,row.to;if from>to then from,to=to,from end
+            local borders=index.borders[from]
+            if not borders then borders={};index.borders[from]=borders end
+            grid=borders[to];if not grid then grid={};borders[to]=grid end
+        end
+        local x,y=row.x*index.width/10000,row.y*index.height/10000
+        local cx,cy=math.floor(x/spacing),math.floor(y/spacing)
+        if add then
+            local cell=cx..":"..cy;local bucket=grid[cell]
+            if not bucket then bucket={};grid[cell]=bucket end
+            bucket[#bucket+1]={x=x,y=y};return
+        end
+        for dx=-1,1 do for dy=-1,1 do
+            local bucket=grid[(cx+dx)..":"..(cy+dy)]
+            if bucket then for _,p in ipairs(bucket) do
+                local d=(x-p.x)^2+(y-p.y)^2
+                if d<spacing^2 or (not isInterior and d==spacing^2) then return true end
+            end end
+        end end
+    end
+    local function remember(index,row)
+        local extra=extraNames(index.names,row)
+        if index.count+extra>S.MAX_AREAS then return end
+        index.keys[key(row)]=true
+        local first,second=sampleNames(row)
+        if not index.names[first] then index.names[first]=true;index.count=index.count+1 end
+        if second and not index.names[second] then index.names[second]=true;index.count=index.count+1 end
+        if row.kind=="interior" then index.interiors=index.interiors+1 end
+        if index.width then spatial(index,row,true) end
+    end
+    local function append(row,index)
+        local rows=store[row.mapID]
+        local extra=extraNames(index.names,row)
+        if row.kind=="interior" and index.interiors>=S.MAX_INTERIORS then return end
+        if #rows>=S.MAX_CROSSINGS or index.count+extra>S.MAX_AREAS or spatial(index,row) then return end
+        rows[#rows+1]=row;remember(index,row);s:Changed(row.mapID);return true
+    end
+    function s:Index(id,deferred)
+        local index=self.index[id]
+        if index then return index end
+        index={keys={},names={},count=0,pending={}};self.index[id]=index
+        if C_Map and type(C_Map.GetMapWorldSize)=="function" then
+            local ok,w,h=pcall(C_Map.GetMapWorldSize,id)
+            if ok and A.Number(w,1,100000) and A.Number(h,1,100000) then index.width,index.height=w,h end
+        end
+        local rows=store[id];local count=type(rows)=="table" and math.min(#rows,S.MAX_CROSSINGS) or 0
+        local function build(checkpoint)
+            -- A logout flush may restart a partially drained job. Re-index the
+            -- current store, including any pending rows already committed.
+            rows=store[id];count=type(rows)=="table" and math.min(#rows,S.MAX_CROSSINGS) or 0
+            index.keys,index.names,index.borders,index.count={},{},{},0
+            index.interiorGrid,index.interiors={},0
+            local kept={};local removed=0
+            local compact=not j.readOnly and index.width and type(rows)=="table" and #rows<=S.MAX_CROSSINGS
+            local sparse=false
+            for i=1,count do
+                checkpoint()
+                local row=rows[i]
+                if row==nil then sparse=true end
+                if (valid(row) or interior(row)) and row.mapID==id then
+                    if compact and spatial(index,row) then removed=removed+1
+                    else remember(index,row);kept[#kept+1]=row end
+                else kept[#kept+1]=row end
+            end
+            if removed>0 and not sparse then
+                -- Retain non-sample metadata and malformed entries; only remove
+                -- validated redundant border/interior observations.
+                for k,v in pairs(rows) do checkpoint();if not A.Integer(k,1,count) then kept[k]=v end end
+                store[id]=kept;self:Changed(id)
+            else removed=0 end
+            local changed=removed>0
+            for _,row in ipairs(index.pending) do checkpoint();if append(row,index) then changed=true end end
+            index.pending={};index.ready=true;return changed
+        end
+        if deferred and count>0 then
+            index.build=build
+            index.job=S.Queue(build,function(ok,changed)
+                index.job=nil
+                if ok then index.build=nil else index.error=tostring(changed) end
+                if ok and changed and self.onChange then self.onChange(id) end
+            end)
+        else build(noWork) end
+        return index
+    end
+    function s:Flush()
+        -- PLAYER_LOGOUT is the persistence boundary; do not lose crossings
+        -- captured while a populated map's spatial index was still warming.
+        for _,index in pairs(self.index) do
+            if index.build then S.Cancel(index.job);index.build(noWork);index.build,index.job=nil,nil end
+        end
+    end
+    local function record(row,index)
+        local rows=store[row.mapID]
+        if rows~=nil and type(rows)~="table" then return end
+        if not rows then
+            if A.Count(store)>=S.MAX_MAPS then return end
+            rows={};store[row.mapID]=rows
+        end
+        if not index.ready then
+            if #index.pending<S.MAX_CROSSINGS then index.pending[#index.pending+1]=row end
+            return
+        end
+        return append(row,index)
+    end
+    local function observeInterior(id,name,x,y,index)
+        -- Actual map dimensions are required for yard-spaced interior evidence.
+        -- Existing crossing capture keeps its fallback on unsupported maps.
+        if not index.width then return end
+        local anchor=s.interiorAnchor
+        if anchor and anchor.mapID==id and anchor.name==name then
+            local dx,dy=(x-anchor.x)*index.width/10000,(y-anchor.y)*index.height/10000
+            if dx*dx+dy*dy<S.INTERIOR_YARDS^2 then return end
+        else anchor={};s.interiorAnchor=anchor end
+        anchor.mapID,anchor.name,anchor.x,anchor.y=id,name,x,y
+        return record({kind="interior",mapID=id,name=name,x=x,y=y,at=A.Now()},index)
+    end
+    function s:Observe(deferred)
+        if j.readOnly then return end
+        -- Read the raw labels: unavailable/secret values must not become an
+        -- invented sub-zone called "Unavailable". Blank sub-zones are the zone.
+        local name=A.Read(GetSubZoneText)
+        if name=="" then name=A.Read(GetRealZoneText) end
+        if not A.Text(name,160) then self:Reset();return end
+        -- Sampling needs no display metadata. World dimensions are cached once
+        -- per map index; repeated polls retain only the previous point and anchor.
+        local id=A.Read(C_Map and C_Map.GetBestMapForUnit,"player")
+        local position=A.Integer(id,1,2147483647) and A.Read(C_Map and C_Map.GetPlayerMapPosition,id,"player")
+        local clock=A.Read(GetTime) or A.Now()
+        if type(position)~="table" or not A.Number(position.x,0,1) or not A.Number(position.y,0,1)
+            or (position.x==0 and position.y==0) or not A.Number(clock,0,1e12) then self:Reset();return end
+        local x,y=math.floor(position.x*10000+0.5),math.floor(position.y*10000+0.5)
+        local old=self.previous
+        local index=self:Index(id,deferred)
+        if not old then
+            self.previous={mapID=id,x=x,y=y,name=name,clock=clock}
+            return observeInterior(id,name,x,y,index)
+        end
+        local oldID,oldName,oldX,oldY,oldClock=old.mapID,old.name,old.x,old.y,old.clock
+        old.mapID,old.name,old.x,old.y,old.clock=id,name,x,y,clock
+        local gap=clock-oldClock
+        -- Loading screens, stale samples and large jumps are not boundaries.
+        local crossed
+        if oldID==id and oldName~=name and gap>=0 and gap<=2 and (x-oldX)^2+(y-oldY)^2<=300^2 then
+            crossed=record({mapID=id,x=x,y=y,fromX=oldX,fromY=oldY,from=oldName,to=name,at=A.Now()},index)
+        end
+        local sampled=observeInterior(id,name,x,y,index)
+        return crossed or sampled
+    end
+    return s
+end
+
+local palette
+local function linear(v) return v<=0.04045 and v/12.92 or ((v+0.055)/1.055)^2.4 end
+local function perceptual(rgb)
+    -- Oklab measures differences in perceived lightness and hue. Matrices from
+    -- Bjorn Ottosson's public-domain reference: https://bottosson.github.io/posts/oklab/
+    local r,g,b=linear(rgb[1]),linear(rgb[2]),linear(rgb[3])
+    local l=(0.4122214708*r+0.5363325363*g+0.0514459929*b)^(1/3)
+    local m=(0.2119034982*r+0.6806995451*g+0.1073969566*b)^(1/3)
+    local s=(0.0883024619*r+0.2817188376*g+0.6299787005*b)^(1/3)
+    return {0.2104542553*l+0.7936177850*m-0.0040720468*s,
+        1.9779984951*l-2.4285922050*m+0.4505937099*s,
+        0.0259040371*l+0.7827717662*m-0.8086757660*s}
+end
+function S.Palette(checkpoint)
+    if palette then return palette end
+    checkpoint=checkpoint or noWork
+    local candidates={{0.05,0.9,1}}
+    candidates[1].lab=perceptual(candidates[1])
+    for hue=0,47 do
+        local h=hue/8;local x=1-math.abs(h%2-1)
+        local sectors={{1,x,0},{x,1,0},{0,1,x},{0,x,1},{x,0,1},{1,0,x}}
+        local rgb=sectors[math.floor(h)+1]
+        for _,saturation in ipairs({0.5,0.75,1}) do
+            for _,value in ipairs({0.7,0.85,1}) do
+                checkpoint(8)
+                local c={}
+                for i=1,3 do c[i]=value*(1-saturation+saturation*rgb[i]) end
+                c.lab=perceptual(c)
+                -- Exclude dark/muddy candidates that disappear into map art.
+                if c.lab[1]>=0.60 and c.lab[2]^2+c.lab[3]^2>=0.09^2 then candidates[#candidates+1]=c end
+            end
+        end
+    end
+    palette=candidates;return palette
+end
+local function colourDistance(a,b)
+    return (a[1]-b[1])^2+(a[2]-b[2])^2+(a[3]-b[3])^2
+end
+local function cross(a,b,c) return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x) end
+-- Cooperative merge sorting avoids a long, non-yielding table.sort on a
+-- populated zone. KD subranges share one scratch array instead of copying trees.
+local function sortRange(points,lo,hi,axis,checkpoint,scratch)
+    local size=1
+    local function less(a,b)
+        if axis then return a[axis]<b[axis] end
+        return a.x<b.x or (a.x==b.x and a.y<b.y)
+    end
+    while size<=hi-lo do
+        for start=lo,hi,size*2 do
+            local middle,finish=math.min(start+size-1,hi),math.min(start+size*2-1,hi)
+            local i,k=start,middle+1
+            for target=start,finish do
+                checkpoint()
+                if i<=middle and (k>finish or less(points[i],points[k])) then scratch[target]=points[i];i=i+1
+                else scratch[target]=points[k];k=k+1 end
+            end
+            for target=start,finish do checkpoint();points[target]=scratch[target] end
+        end
+        size=size*2
+    end
+end
+local function hull(points,checkpoint)
+    sortRange(points,1,#points,nil,checkpoint,{})
+    local unique={}
+    for _,p in ipairs(points) do
+        checkpoint()
+        local last=unique[#unique]
+        if not last or p.x~=last.x or p.y~=last.y then unique[#unique+1]=p end
+    end
+    if #unique<3 then return unique end
+    local out={}
+    for _,p in ipairs(unique) do
+        checkpoint()
+        while #out>=2 and cross(out[#out-1],out[#out],p)<=0 do table.remove(out) end
+        out[#out+1]=p
+    end
+    local lower=#out
+    for i=#unique-1,1,-1 do
+        checkpoint()
+        local p=unique[i]
+        while #out>lower and cross(out[#out-1],out[#out],p)<=0 do table.remove(out) end
+        out[#out+1]=p
+    end
+    table.remove(out);return out
+end
+local function inside(points,x,y,checkpoint)
+    if #points<3 then return false end
+    for i,a in ipairs(points) do
+        if i%32==0 then checkpoint(32) end
+        local b=points[i%#points+1]
+        if (b.x-a.x)*(y-a.y)-(b.y-a.y)*(x-a.x)<0 then return false end
+    end
+    return true
+end
+local function tree(points,depth,lo,hi,checkpoint,scratch)
+    if lo>hi then return end
+    local axis=depth%2==0 and "x" or "y"
+    sortRange(points,lo,hi,axis,checkpoint,scratch)
+    local middle=math.floor((lo+hi)/2)
+    return {point=points[middle],axis=axis,
+        left=tree(points,depth+1,lo,middle-1,checkpoint,scratch),
+        right=tree(points,depth+1,middle+1,hi,checkpoint,scratch)}
+end
+local function nearest(node,x,y,best)
+    if not node then return best end
+    local q=node.point;local d=(x-q.x)^2+(y-q.y)^2
+    if d<best then best=d end
+    local delta=node.axis=="x" and x-q.x or y-q.y
+    local near,far=node.left,node.right;if delta>0 then near,far=far,near end
+    best=nearest(near,x,y,best)
+    if delta*delta<best then best=nearest(far,x,y,best) end
+    return best
+end
+function S.Build(rows,checkpoint,preferredResolution,previousModel)
+    checkpoint=checkpoint or noWork
+    local checking=checkpoint
+    local model={areas={},names={},rows=rows,strips={},triangles={}}
+    local function area(name)
+        if not model.areas[name] then
+            model.names[#model.names+1]=name
+            model.areas[name]={name=name,points={},anchors={},neighbours={}}
+        end
+        return model.areas[name]
+    end
+    for _,p in ipairs(rows) do
+        checkpoint()
+        if p.kind=="interior" then
+            local a=area(p.name);local point={x=p.x,y=p.y}
+            a.points[#a.points+1]=point;a.anchors[#a.anchors+1]=point
+        else
+            local a,b=area(p.from),area(p.to)
+            local midpoint={x=(p.fromX+p.x)/2,y=(p.fromY+p.y)/2}
+            a.points[#a.points+1]=midpoint;b.points[#b.points+1]=midpoint
+            a.anchors[#a.anchors+1]={x=p.fromX,y=p.fromY}
+            b.anchors[#b.anchors+1]={x=p.x,y=p.y}
+            a.neighbours[b.name]=true;b.neighbours[a.name]=true
+        end
+    end
+    table.sort(model.names)
+    local active={};local minX,minY,maxX,maxY=10000,10000,0,0
+    for _,name in ipairs(model.names) do
+        local a=model.areas[name];a.hull=hull(a.points,checkpoint);a.points=nil
+        a.x,a.y=0,0
+        for _,p in ipairs(a.anchors) do checkpoint();a.x=a.x+p.x;a.y=a.y+p.y end
+        a.x,a.y=a.x/#a.anchors,a.y/#a.anchors
+        if #a.hull>=3 then
+            a.minX,a.minY,a.maxX,a.maxY=10000,10000,0,0
+            for _,p in ipairs(a.hull) do
+                checkpoint()
+                a.minX,a.minY=math.min(a.minX,p.x),math.min(a.minY,p.y)
+                a.maxX,a.maxY=math.max(a.maxX,p.x),math.max(a.maxY,p.y)
+            end
+            minX,minY=math.min(minX,a.minX),math.min(minY,a.minY)
+            maxX,maxY=math.max(maxX,a.maxX),math.max(maxY,a.maxY)
+            active[#active+1]=a
+        end
+    end
+    for _,a in ipairs(active) do
+        if #active>1 then a.tree=tree(a.anchors,0,1,#a.anchors,checkpoint,{}) end
+    end
+    for _,a in pairs(model.areas) do a.anchors=nil end
+    -- Broad-phase bounds reject unseen space without testing hulls or allocating
+    -- a point table. A sole enclosing area needs no nearest-neighbour query.
+    function model:At(x,y)
+        local best,distance
+        for _,a in ipairs(active) do
+            if x>=a.minX and x<=a.maxX and y>=a.minY and y<=a.maxY and inside(a.hull,x,y,checking) then
+                if #active==1 then return a end
+                local d=nearest(a.tree,x,y,distance or math.huge)
+                if not distance or d<distance then best,distance=a,d end
+            end
+        end
+        return best
+    end
+    local step
+    local edges={}
+    local function vertex(x,y) checkpoint();return {x=x,y=y,area=model:At(x,y)} end
+    local function neighbours(a,b)
+        if a and b and a~=b then a.neighbours[b.name]=true;b.neighbours[a.name]=true end
+    end
+    local function triangle(a,b,c,area)
+        if area and math.abs(cross(a,b,c))>0.000001 then
+            model.triangles[#model.triangles+1]={a,b,c,area=area}
+        end
+    end
+    -- Canonical endpoint order gives adjoining triangles exactly the same edge.
+    -- Binary refinement locates the classification change within 1/256 cell.
+    local function boundary(a,b)
+        if a.x>b.x or (a.x==b.x and a.y>b.y) then a,b=b,a end
+        local cache=edges[a]
+        if not cache then cache={};edges[a]=cache end
+        if cache[b] then return cache[b] end
+        local ax,ay,bx,by=a.x,a.y,b.x,b.y
+        for _=1,8 do
+            checkpoint()
+            local x,y=(ax+bx)/2,(ay+by)/2
+            if model:At(x,y)==a.area then ax,ay=x,y else bx,by=x,y end
+        end
+        local point={x=(ax+bx)/2,y=(ay+by)/2};cache[b]=point;return point
+    end
+    local function contour(a,b,c)
+        neighbours(a.area,b.area);neighbours(b.area,c.area);neighbours(c.area,a.area)
+        if a.area==b.area and b.area==c.area then triangle(a,b,c,a.area);return end
+        -- With two labels, split the odd corner from the other two. The
+        -- resulting triangle and quadrilateral partition the cell exactly.
+        local odd,p,q
+        if a.area==b.area then odd,p,q=c,a,b
+        elseif b.area==c.area then odd,p,q=a,b,c
+        elseif c.area==a.area then odd,p,q=b,c,a end
+        if odd then
+            local u,v=boundary(odd,p),boundary(odd,q)
+            triangle(odd,u,v,odd.area);triangle(p,q,v,p.area);triangle(p,v,u,p.area)
+        else
+            local ab,bc,ca=boundary(a,b),boundary(b,c),boundary(c,a)
+            local centre={x=(a.x+b.x+c.x)/3,y=(a.y+b.y+c.y)/3}
+            triangle(a,ab,centre,a.area);triangle(a,centre,ca,a.area)
+            triangle(b,bc,centre,b.area);triangle(b,centre,ab,b.area)
+            triangle(c,ca,centre,c.area);triangle(c,centre,bc,c.area)
+        end
+    end
+    local function raster(resolution)
+        step=10000/resolution;edges={};model.strips={};model.triangles={};model.grid=resolution
+        if #active==0 then return true end
+        local left=math.max(0,math.floor(minX/step))
+        local right=math.min(resolution,math.ceil(maxX/step))
+        local top=math.max(0,math.floor(minY/step))
+        local bottom=math.min(resolution,math.ceil(maxY/step))
+        local previous={}
+        for x=left,right do previous[x]=vertex(x*step,top*step) end
+        for y=top+1,bottom do
+            local current={}
+            for x=left,right do current[x]=vertex(x*step,y*step) end
+            for x=left+1,right do
+                local centre=vertex((x-0.5)*step,(y-0.5)*step)
+                local a=centre.area
+                local tl,tr,br,bl=previous[x-1],previous[x],current[x],current[x-1]
+                if a==tl.area and a==tr.area and a==br.area and a==bl.area then
+                    if a then
+                        local last=model.strips[#model.strips]
+                        if last and last.area==a and last.y==y-1 and last.x+last.width==x-1 then last.width=last.width+1
+                        else model.strips[#model.strips+1]={x=x-1,y=y-1,width=1,area=a} end
+                    end
+                else
+                    contour(centre,tl,tr);contour(centre,tr,br)
+                    contour(centre,br,bl);contour(centre,bl,tl)
+                end
+                if #model.triangles>S.MAX_TRIANGLES then return false end
+            end
+            previous=current
+        end
+        return true
+    end
+    -- Dense, contradictory evidence can create many tiny islands. Bound native
+    -- texture allocation while preserving vector (not stair-stepped) edges.
+    local resolution=A.Integer(preferredResolution,8,S.GRID) and preferredResolution or S.GRID
+    while not raster(resolution) do resolution=math.max(8,resolution/2) end
+    local candidates=#model.names>0 and S.Palette(checkpoint) or {}
+    local used,distances,colourOrder,degrees={},{},{},{}
+    for _,name in ipairs(model.names) do
+        colourOrder[#colourOrder+1]=name;degrees[name]=0
+        for _ in pairs(model.areas[name].neighbours) do checkpoint();degrees[name]=degrees[name]+1 end
+    end
+    -- Highly connected areas get first choice. Name ties keep cold builds
+    -- deterministic; a live update retains every existing area's colour.
+    table.sort(colourOrder,function(a,b)
+        if degrees[a]~=degrees[b] then return degrees[a]>degrees[b] end
+        return a<b
+    end)
+    local function assign(a,id)
+        used[id]=true;a.colourID=id;a.colour=candidates[id]
+        for i,candidate in ipairs(candidates) do
+            checkpoint()
+            if not used[i] then
+                local d=colourDistance(candidate.lab,a.colour.lab)
+                distances[i]=math.min(distances[i] or math.huge,d)
+            end
+        end
+    end
+    for _,name in ipairs(colourOrder) do
+        local old=previousModel and previousModel.areas[name]
+        if old and A.Integer(old.colourID,1,#candidates) and not used[old.colourID] then
+            assign(model.areas[name],old.colourID)
+        end
+    end
+    for _,name in ipairs(colourOrder) do
+        local a=model.areas[name]
+        if not a.colourID then
+            local best,score
+            for i in ipairs(candidates) do
+                checkpoint()
+                local d=distances[i] or math.huge
+                if not used[i] and (not best or d>score) then best,score=i,d end
+            end
+            -- Maximise distance to the closest assigned colour, so a candidate
+            -- cannot win by contrasting with most areas but matching one.
+            -- The bright candidate pool exceeds the 128-area storage limit.
+            assign(a,best)
+        end
+    end
+    for _,strip in ipairs(model.strips) do
+        checkpoint()
+        local a=strip.area
+        a.hasFill=true
+        if not a.labelWidth or strip.width>a.labelWidth then
+            a.labelWidth=strip.width;a.labelX=(strip.x+strip.width/2)*step;a.labelY=(strip.y+0.5)*step
+        end
+    end
+    for _,triangle in ipairs(model.triangles) do checkpoint();triangle.area.hasFill=true end
+    model.covered={}
+    for i,p in ipairs(rows) do
+        checkpoint()
+        -- Every crossing supplies boundary evidence to both named areas. Once
+        -- either area has rendered shading, its sample no longer needs a dot.
+        local first,second=sampleNames(p)
+        model.covered[i]=model.areas[first].hasFill or (second and model.areas[second].hasFill) or false
+    end
+    checking=noWork -- Hover queries must never resume the completed build job.
+    return model
+end
+
+function S.Track(j,onChange)
+    local s=j.subzones;local observer=CreateFrame("Frame");local elapsed=0;local away=false
+    s.onChange=onChange
+    observer:SetScript("OnEvent",function(_,event)
+        if event=="PLAYER_LOGOUT" then s:Flush();return end
+        if event=="PLAYER_LEAVING_WORLD" then away=true;s:Reset();return end
+        if event=="PLAYER_ENTERING_WORLD" or event=="ZONE_CHANGED_NEW_AREA" then away=false;s:Reset() end
+        if not away and s:Observe(true) and onChange then onChange() end
+    end)
+    for _,event in ipairs({"PLAYER_ENTERING_WORLD","PLAYER_LEAVING_WORLD","PLAYER_LOGOUT","ZONE_CHANGED","ZONE_CHANGED_INDOORS","ZONE_CHANGED_NEW_AREA"}) do
+        pcall(observer.RegisterEvent,observer,event)
+    end
+    observer:SetScript("OnUpdate",function(_,dt)
+        elapsed=elapsed+dt
+        if elapsed<0.25 then return end
+        elapsed=0
+        if not away and s:Observe(true) and onChange then onChange() end
+    end)
+    return observer
+end
+
+function S.InstallMap(map,journal,cursorPoint)
+    local function buffer()
+        local frame=CreateFrame("Frame",nil,map.canvas)
+        frame:SetAllPoints(map.canvas);frame:SetFrameLevel(map.canvas:GetFrameLevel());frame:EnableMouse(false);frame:Hide()
+        return {frame=frame,strips={},triangles={},dots={},labels={}}
+    end
+    local front,back=buffer(),buffer()
+    map.subzoneBuffers={front,back}
+    local cacheID,cacheRevision,model,width,height
+    local lastRegions,lastLabels,lastPoints,lastSize
+    local failed
+    local function expose()
+        map.subzoneTextures, map.subzoneTriangles=front.strips,front.triangles
+        map.subzoneDots,map.subzoneLabels=front.dots,front.labels
+    end
+    expose()
+    local dotZoom
+    function map:UpdateSubzoneDotSize()
+        if dotZoom==self.zoom then return end
+        dotZoom=self.zoom
+        for _,pool in ipairs(self.subzoneBuffers) do
+            for _,dot in ipairs(pool.dots) do dot:SetSize(3/self.zoom,3/self.zoom) end
+        end
+    end
+    function map:CancelSubzones()
+        S.Cancel(self.subzonePending);self.subzonePending=nil;back.frame:Hide()
+    end
+    local function hide(pool,checkpoint)
+        for _,v in ipairs(pool) do checkpoint(2);v:Hide() end
+    end
+    local function paint(self,target,model,width,height,regions,names,points,size,checkpoint)
+        local strips,triangles,dots,labels=target.strips,target.triangles,target.dots,target.labels
+        local geometryChanged=target.model~=model or target.width~=width or target.height~=height
+        -- A cancelled paint may have changed some widgets already. Only a fully
+        -- completed buffer may reuse its geometry/visibility on the next request.
+        target.model=nil
+        if geometryChanged or target.regions~=regions then
+            hide(strips,checkpoint);hide(triangles,checkpoint)
+            for i,row in ipairs(regions and model.strips or {}) do
+                checkpoint(8)
+                local t=strips[i] or target.frame:CreateTexture(nil,"ARTWORK",nil,-7);strips[i]=t
+                local rgb=row.area.colour
+                t:ClearAllPoints();t:SetPoint("TOPLEFT",row.x/model.grid*width,-row.y/model.grid*height)
+                t:SetSize(row.width/model.grid*width,height/model.grid);t:SetColorTexture(rgb[1],rgb[2],rgb[3],0.4);t:Show()
+            end
+            for i,row in ipairs(regions and model.triangles or {}) do
+                checkpoint(16)
+                local a,b,c=row[1],row[2],row[3]
+                if cross(a,b,c)>0 then b,c=c,b end
+                local ax,ay,bx,by,cx,cy=a.x/10000*width,a.y/10000*height,b.x/10000*width,b.y/10000*height,c.x/10000*width,c.y/10000*height
+                local left,top=math.min(ax,bx,cx),math.min(ay,by,cy)
+                local tw,th=math.max(ax,bx,cx)-left,math.max(ay,by,cy)-top
+                local t=triangles[i] or target.frame:CreateTexture(nil,"ARTWORK",nil,-7);triangles[i]=t
+                t:ClearAllPoints();t:SetPoint("TOPLEFT",left,-top);t:SetSize(tw,th)
+                local rgb=row.area.colour;t:SetColorTexture(rgb[1],rgb[2],rgb[3],0.4)
+                -- UL=a, LL=b, UR=c, LR=b (second native triangle degenerates).
+                t:SetVertexOffset(1,ax-left,top-ay);t:SetVertexOffset(2,bx-left,top+th-by)
+                t:SetVertexOffset(3,cx-left-tw,top-cy);t:SetVertexOffset(4,bx-left-tw,top+th-by);t:Show()
+            end
+        end
+        if geometryChanged or target.points~=points or target.regions~=regions then
+            hide(dots,checkpoint)
+            -- Points explicitly reveals every sample. Unchecked, shading keeps
+            -- its automatic isolated-dot presentation and hides incorporated data.
+            local cells={};local n=0
+            for i,p in ipairs((points or regions) and model.rows or {}) do
+                checkpoint()
+                local cell=math.floor(p.x/200)..":"..math.floor(p.y/200)
+                if points or (not model.covered[i] and not cells[cell]) then
+                    cells[cell]=true;n=n+1
+                    local t=dots[n] or target.frame:CreateTexture(nil,"ARTWORK",nil,-6);dots[n]=t
+                    t:ClearAllPoints();t:SetPoint("CENTER",self.canvas,"TOPLEFT",p.x/10000*width,-p.y/10000*height)
+                    t:SetSize(3/self.zoom,3/self.zoom);t:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\GatheringDot.tga")
+                    t:SetVertexColor(1,0.94,0.72,0.85);t:Show()
+                end
+            end
+        end
+        hide(labels,checkpoint)
+        -- Measure actual text instead of reserving the same large collision box
+        -- for every name. Try a balanced two-line name before giving up on space.
+        local placed={}
+        local maxWidth=math.min(width,130*size/12)
+        for _,name in ipairs(names and model.names or {}) do
+            checkpoint(8)
+            local a=model.areas[name]
+            local i=#placed+1
+            local label=labels[i] or target.frame:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");labels[i]=label
+            local font=label:GetFont();label:SetFont(font,size,"OUTLINE")
+            label:SetWordWrap(false);label:SetWidth(0);label:SetHeight(0)
+            local text=A.Safe(name)
+            local function measure(value)
+                checkpoint(8);label:SetText(value)
+                local measured=A.Read(label.GetStringWidth,label)
+                return A.Number(measured,0,100000) and measured or #value*size*0.6
+            end
+            local function place(value,textWidth,lines)
+                local w,h=textWidth+4,size*lines+4
+                if w>maxWidth or h>height then return false end
+                local x=math.max(w/2,math.min(width-w/2,(a.labelX or a.x)/10000*width))
+                local y=math.max(h/2,math.min(height-h/2,(a.labelY or a.y)/10000*height))
+                for _,p in ipairs(placed) do
+                    checkpoint()
+                    if math.abs(p.x-x)<(p.width+w)/2+5 and math.abs(p.y-y)<(p.height+h)/2+2 then return false end
+                end
+                placed[#placed+1]={x=x,y=y,width=w,height=h}
+                label:ClearAllPoints();label:SetPoint("CENTER",self.canvas,"TOPLEFT",x,-y)
+                label:SetWidth(w);label:SetHeight(h);label:SetWordWrap(true);label:SetNonSpaceWrap(false)
+                label:SetText(value);label:SetTextColor(a.colour[1],a.colour[2],a.colour[3])
+                label:SetShadowColor(0,0,0,1);label:SetShadowOffset(1,-1);label:Show()
+                return true
+            end
+            if not place(text,measure(text),1) then
+                local wrapped,wrapWidth
+                -- Byte slicing only at ASCII whitespace preserves UTF-8 names.
+                for left,space,right in text:gmatch("()( +)()") do
+                    local first,second=text:sub(1,left-1),text:sub(right)
+                    if first~="" and second~="" then
+                        local w=math.max(measure(first),measure(second))
+                        if not wrapWidth or w<wrapWidth then wrapped,wrapWidth=first.."\n"..second,w end
+                    end
+                end
+                if not wrapped or not place(wrapped,wrapWidth,2) then label:Hide() end
+            end
+        end
+        target.model,target.width,target.height,target.regions=model,width,height,regions
+        target.points=points
+    end
+    function map:RenderSubzones()
+        local id=self.subzoneMapID
+        local regions=journal.state.showSubzones==true
+        local names=journal.state.showSubzoneLabels==true
+        local points=journal.state.showSubzonePoints==true
+        local size=A.Integer(journal.state.subzoneLabelSize,2,24) and journal.state.subzoneLabelSize or S.DEFAULT_LABEL_SIZE
+        if not self.available or not (regions or names or points) or A.Read(self.IsVisible,self)==false then
+            self:CancelSubzones();front.frame:Hide();self.subzoneModel=nil
+            if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+            return
+        end
+        local w,h=self:GetWidth(),self:GetHeight()
+        local revision=journal.subzones:Revision(id)
+        if cacheID~=id then front.frame:Hide();self.subzoneModel=nil end
+        if failed and failed.id==id and failed.revision==revision then return end
+        local pending=self.subzonePending
+        if pending and not pending.thread then self.subzonePending=nil;pending=nil end
+        if pending and pending.thread then
+            if pending.id==id and pending.width==w and pending.height==h and pending.regions==regions
+                and pending.names==names and pending.points==points and pending.size==size then return end
+            self:CancelSubzones()
+        end
+        if cacheID==id and cacheRevision==revision and width==w and height==h
+            and lastRegions==regions and lastLabels==names and lastPoints==points and lastSize==size then
+            self.subzoneModel=model;front.frame:Show();return
+        end
+        local revisionAtStart=revision
+        local job
+        job=S.Queue(function(checkpoint)
+            local index=journal.subzones:Index(id,true)
+            while not index.ready do
+                if index.error then error(index.error) end
+                checkpoint(4096)
+            end
+            revisionAtStart=journal.subzones:Revision(id)
+            local nextModel=model
+            if cacheID~=id or cacheRevision~=revisionAtStart then
+                local rows=journal.subzones:Samples(id,checkpoint)
+                local resolution=cacheID==id and model and #rows>=#model.rows*0.75 and model.grid or nil
+                nextModel=S.Build(rows,checkpoint,resolution,cacheID==id and model or nil)
+            end
+            paint(self,back,nextModel,w,h,regions,names,points,size,checkpoint)
+            return nextModel
+        end,function(ok,result)
+            if self.subzonePending~=job then return end
+            self.subzonePending=nil
+            if not ok then
+                failed={id=id,revision=revisionAtStart};self.subzoneError=tostring(result)
+                local handler=A.Read(geterrorhandler);if type(handler)=="function" then handler(result) end
+                return
+            end
+            if self.subzoneMapID~=id or A.Read(self.IsVisible,self)==false then return end
+            front.frame:Hide();front,back=back,front;front.frame:Show();expose()
+            model=result;self.subzoneModel=model;self.subzoneError=nil;failed=nil
+            cacheID,cacheRevision,width,height=id,revisionAtStart,w,h
+            lastRegions,lastLabels,lastPoints,lastSize=regions,names,points,size
+            -- Crossings arriving during a build are collected in the next
+            -- snapshot, rather than repeatedly restarting and starving drawing.
+            if journal.subzones:Revision(id)~=revisionAtStart then self:RenderSubzones() end
+        end,self)
+        job.id,job.width,job.height,job.regions,job.names,job.size=id,w,h,regions,names,size
+        job.points=points
+        self.subzonePending=job
+    end
+    local hoverX,hoverY,hoverModel
+    function map:SubzoneHover()
+        if not self.subzoneHover or not self.subzoneModel or self.placing or not GameTooltip then return end
+        local x,y=cursorPoint();if not x then return end
+        x,y=(x+self.panX)/(width*self.zoom)*10000,(y+self.panY)/(height*self.zoom)*10000
+        if x==hoverX and y==hoverY and hoverModel==model and GameTooltip:IsOwned(self) and GameTooltip:IsShown() then return end
+        hoverX,hoverY,hoverModel=x,y,model
+        local a=model:At(x,y);local nearest,distance
+        for _,p in ipairs(model.rows) do
+            local d=((x-p.x)/10000*width*self.zoom)^2+((y-p.y)/10000*height*self.zoom)^2
+            if d<=12^2 and (not distance or d<distance) then nearest,distance=p,d end
+        end
+        GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText(a and A.Safe(a.name) or "Sub-zone observations")
+        GameTooltip:AddLine("Estimated from your crossings and interior observations; unexplored boundaries are unknown.",1,1,1,true)
+        if nearest then
+            if nearest.kind=="interior" then
+                GameTooltip:AddLine(A.Safe(nearest.name).." — interior observation",1,0.82,0.14,true)
+                GameTooltip:AddLine(string.format("Observed at %.2f, %.2f",nearest.x/100,nearest.y/100),1,1,1,true)
+            else
+                GameTooltip:AddLine(A.Safe(nearest.from).." -> "..A.Safe(nearest.to),1,0.82,0.14,true)
+                GameTooltip:AddLine(string.format("Crossed at %.2f, %.2f; from %.2f, %.2f",nearest.x/100,nearest.y/100,nearest.fromX/100,nearest.fromY/100),1,1,1,true)
+            end
+            if ns.AtlasUI then GameTooltip:AddLine("Observed "..ns.AtlasUI.Date(nearest.at),1,1,1) end
+        end
+        GameTooltip:AddLine(#model.rows.." observation samples / "..#model.names.." observed areas",0.75,0.8,0.8)
+        if #model.rows==0 then GameTooltip:AddLine("Explore this map to begin recording sub-zones.",1,1,1,true) end
+        GameTooltip:Show()
+    end
+    map:SetScript("OnEnter",function(self) self.subzoneHover=true;self:SubzoneHover() end)
+    map:SetScript("OnLeave",function(self)
+        self.subzoneHover=false
+        if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
+end

@@ -29,7 +29,8 @@ function focus:Register(window, strata)
     if ns.WindowPositions then ns.WindowPositions:Track(window) end
     -- Raise only works within one strata. Native top-level handling also raises
     -- a window when clicking controls added after it was first displayed.
-    window:SetFrameStrata(strata or "DIALOG")
+    -- Share the normal game-window layer so native panels can raise above us.
+    window:SetFrameStrata(strata or "MEDIUM")
     window:SetToplevel(true)
     watch(window, window)
     window:HookScript("OnShow", function(self)

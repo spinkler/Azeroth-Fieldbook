@@ -404,13 +404,16 @@ local function initialize()
         end)
     end
     if journal and ns.InitializeSharing then ns.InitializeSharing(journal) end
+    if journal and ns.StartBestiaryLoot then ns.StartBestiaryLoot(journal) end
     if journal and ns.CreateFieldbookShell then
-        fieldbook=ns.CreateFieldbookShell({getBrightness=function() return journal:GetBackgroundBrightness() end})
+        fieldbook=ns.CreateFieldbookShell({getBrightness=function() return journal:GetBackgroundBrightness() end, getDarkMode=function() return journal:GetDarkMode() end})
     end
     if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal,fieldbook) end
     if fieldbook and ns.InitializeGathering then
         ns.InitializeGathering(fieldbook,function() return journal:GetBackgroundBrightness() end)
     end
+    if fieldbook and ns.InitializeAtlas then ns.InitializeAtlas(fieldbook,journal) end
+    if fieldbook and ns.InitializeAngling then ns.InitializeAngling(fieldbook) end
     if fieldbook and ns.RegisterFieldbookWishlistSections then ns.RegisterFieldbookWishlistSections(fieldbook) end
     if journal and journal.sharing then
         journal.sharing:SetImportedCallback(function() if book then book:Refresh() end end)

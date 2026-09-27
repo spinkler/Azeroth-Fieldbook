@@ -26,18 +26,32 @@ function ns.CreateBestiaryEncounterReader(record)
     end
     local function enum(value) return public(value) and type(value) == "number" end
 
+    -- Only a complete readable snapshot can retire old session identities or
+    -- establish the wipe boundary. A restricted/malformed row is not an empty
+    -- history. The client retains a small list; fail closed above this bound.
+    local function sessionIDs(sessions)
+        if not tab(sessions) then return end
+        local ids, count = {}, 0
+        for index, session in pairs(sessions) do
+            if not id(index) or index > 1000 or not tab(session) or not id(session.sessionID) then return end
+            ids[session.sessionID] = true
+            count = count + 1
+        end
+        for index = 1, count do if sessions[index] == nil then return end end
+        return ids
+    end
+
     function reader:Schedule()
         delay, retries = math.min(delay or 1, 1), 4
     end
 
     function reader:ForgetHistory()
-        for sessionID in pairs(seenSessions) do ignoredSessions[sessionID] = true end
-        local ok, sessions = pcall(function() return C_DamageMeter.GetAvailableCombatSessions() end)
-        if ok and tab(sessions) then
-            for _, session in ipairs(sessions) do
-                if tab(session) and id(session.sessionID) then ignoredSessions[session.sessionID] = true end
-            end
+        local ok, ids = pcall(function() return sessionIDs(C_DamageMeter.GetAvailableCombatSessions()) end)
+        if ok and ids then
+            ignoredSessions, seenSessions = ids, ids
+            ignoreNextSnapshot = false
         else
+            ignoredSessions = seenSessions
             ignoreNextSnapshot = true
         end
         delay, retries = nil, 0
@@ -125,18 +139,25 @@ function ns.CreateBestiaryEncounterReader(record)
         local ok = pcall(function()
             local sessions = get(meter.GetAvailableCombatSessions)
             if not sessions then return end
+            local available = sessionIDs(sessions)
             if ignoreNextSnapshot then
-                each(sessions, 1000, function(session)
-                    if id(session.sessionID) then ignoredSessions[session.sessionID] = true end
-                end)
-                ignoreNextSnapshot = false
+                if available then
+                    ignoredSessions, seenSessions = available, available
+                    ignoreNextSnapshot = false
+                end
                 return
+            end
+            if available then
+                local retained = {}
+                for sessionID in pairs(ignoredSessions) do
+                    if available[sessionID] then retained[sessionID] = true end
+                end
+                ignoredSessions, seenSessions = retained, available
             end
             each(sessions, 30, function(session)
                 if not id(session.sessionID) then stats.unreadable = stats.unreadable + 1; return end
                 local sessionID = session.sessionID
                 if ignoredSessions[sessionID] then return end
-                seenSessions[sessionID] = true
                 stats.sessions = stats.sessions + 1
                 local roster = get(meter.GetCombatSessionFromID, sessionID, modes.EnemyDamageTaken)
                 local names, enemies = {}, {}
@@ -234,6 +255,7 @@ function ns.CreateBestiaryEncounterReader(record)
             self:Schedule()
         elseif event == "DAMAGE_METER_RESET" then
             delay, retries = nil, 0
+            ignoredSessions, seenSessions, ignoreNextSnapshot = {}, {}, false
             self.status = "Meter history cleared; learned Bestiary entries retained."
         end
     end

@@ -1,5 +1,432 @@
 # Changelog
 
+## v0.13.30-beta - 2026-09-28
+
+Traveller's Atlas and Angler's Almanac are now working personal journals. This
+release includes the full development batch from v0.12.0 through v0.13.30, plus
+the publication tooling introduced after the previous release. Previous-push
+baseline: `d0aafda624c451d552cec39ff67ec64ecf6cbe5c`. Previous release:
+`v0.11.0-beta` at `6460b95e73462df4c89faae904f2378a97937b51`.
+Both players must use the same installed addon version to share Bestiary records.
+
+- Add Traveller's Atlas with a searchable discovery index, eight independently
+  selectable map-marker layers, synchronized map/list selection, place and entrance
+  editing, optional coordinates, access notes and explicit explored status. Add
+  ordered routes and waypoints, expedition journals, related discoveries and
+  read-only links to Bestiary and gathering records. Keep browsing state and
+  unfinished forms when changing pages. Atlas records use their own character
+  SavedVariables and stay separate from Bestiary resets, backups and account mode.
+- Add Atlas regional-report drafts with explicit record, note and excerpt
+  selection, complete previews, bounded literal serialization and strict validation.
+  Preserve provenance and unresolved references; imported staging remains Reported
+  and unexplored. Atlas report delivery/import controls remain deferred.
+- Discover Atlas sub-zones from actual border crossings and interior observations.
+  Record crossing from/to names, both positions and time; add an initial interior
+  observation and further samples about every 100 map yards. Coalesce same-border
+  crossings within ten yards, including reverse crossings, and deduplicate interior
+  revisits. Retain pending observations on logout. Map/area/sample caps bound storage;
+  interior data leaves capacity for borders. Missing coordinates and discontinuities
+  never fabricate a crossing. Observations continue with the Atlas closed.
+- Estimate sub-zone coverage with smooth triangle contours and unique colours,
+  selecting new colours for maximum minimum perceptual separation while retaining
+  current assignments during live updates. Keep unexplored areas empty and identify
+  estimates and observation types in hover details. Checked Points shows every
+  sample; unchecked preserves automatic isolated dots and hides incorporated samples.
+  Dots stay small at every zoom. Independent outlined labels try two lines before
+  hiding; size spans 2-24 and defaults to 4, preserving saved preferences. Map
+  brightness spans 20-100% without dimming overlays or the player arrow.
+- Remove synchronous sub-zone rebuilds from crossing capture. Share a small
+  per-frame work budget across indexing, geometry and pooled drawing; retain the
+  completed overlay while preparing its replacement. Reuse per-map geometry,
+  bound mesh detail, skip unseen space and release cancelled work. Keep all display
+  controls in a grouped panel; Map Layers is a checkable dropdown directly above
+  the map, with Show all / Hide all and saved independent category filters.
+- Give Atlas and Almanac matching native map borders, facing arrows and outlined
+  player coordinates. Support cursor-centred 1x-4x zoom, clamped drag panning,
+  marker selection and optional left-click zone/right-click parent navigation.
+  Use shared cascading, scrollable zone menus with battleground and Other groups,
+  matching selector widths and native dropdown arrows with drop shadows. Preserve
+  the map frame while zooming; Atlas also records encountered weather per zone.
+- Add Angler's Almanac with linked Waters & Spots, Pool Types and Catches views,
+  search, filters, favourites, notes, saved browsing state and reverse source lookup.
+  Record acquired fishing loot from readable fishing evidence, deduplicate autoloot,
+  partial snapshots and retries, and keep uncertain sources unclassified. Retain
+  source-specific quantities, occurrences, first/latest observations and measured
+  successful-skill evidence. Provide expiring source assignments and manual catch,
+  spot and sighting fallbacks; keep player assertions distinct from observations.
+- Discover fishing pool types from live world tooltips without inventing positions
+  or assigning catches. Support removable/restorable pools and sightings, spot
+  merging, Ctrl+right-click marker removal and corrections that preserve catch
+  history. Handle localized escaped/not-hooked failures and late loot notifications.
+  Show real item icons/tooltips and order catches newest first. Almanac records are
+  character-owned and isolated from the other journals.
+- Add selected fishing reports with optional notes, strict validation, literal
+  serialization, preview/accept import, original provenance and idempotent result
+  handling. Reports cannot change personal totals or rewards; addon-message
+  transport and fishing pricing remain unconfigured. Add a persistent, uncapped
+  Almanac Event Log with newest-first pages, live updates, combined catch entries,
+  duplicate suppression and confirmed clearing independent of journal data.
+- Rename Herbs & Minerals to Gatherer's Compendium. Add independent character
+  toggles for recorded nodes on the world map and minimap, both initially off.
+  Share round green herb/gold mineral artwork with dark borders, retain readable
+  size through world-map zoom, and draw above terrain/fog. Reuse at most 512 world
+  and 128 nearby minimap pins while preserving all saved locations. Improve detail
+  headings, dividers and location controls. Capture quick first-click tooltip
+  identity immediately while keeping coordinates gated on confirmed interactions.
+- Add Bestiary Loot as the default detail panel, with item quantities, corpse-based
+  drop percentages, icons/tooltips and a Show Damage toggle. Deduplicate recent
+  corpse snapshots, retain money-only source evidence, support modern/legacy item
+  APIs and safe unavailable-item placeholders, and include loot in backups and
+  account migration. Move Known Beast Lore above the model and keep the loot panel
+  full height with inset scroll controls. Start one loot listener at initialization
+  and reuse it, fixing repeated listener allocation from tooltip updates.
+- Add shared Help and Options access across sections, saved Dark Mode alongside
+  brightness, consistent pane dividers and native-window stacking that lets game
+  panels rise above Fieldbook. Three remaining wishlist pages stay presentation-only.
+  Preserve existing window positioning, section navigation and Bestiary data.
+- Bound transient creature/player caches, reconcile combat-session identities with
+  readable retained history, handle meter resets and defer wipe reconciliation when
+  history is unreadable. Release closed backup snapshots and hidden map references,
+  remove stale report-draft selections, and reject sparse lists rather than silently
+  truncating routes/reports. Add retained-memory, pooled-widget, dense-map, capture,
+  geometry, persistence and report regressions plus a repeatable sub-zone benchmark.
+- Validate all 55 runtime Lua files and run all 47 test files before publication.
+  Keep tests as a release dependency, publish a size-checked version-specific
+  changelog to GitHub and CurseForge, and retain recovery support for an existing
+  immutable tag without duplicating a successful CurseForge upload. Native game
+  API/visual checks remain documented; stable 1.0 still awaits live Beast Lore
+  verification after the Forever beta level cap permits it.
+
+## v0.13.29 - Included in v0.13.30-beta
+
+- Make checked Atlas Points reveal every recorded sample, including crossings
+  and interior observations already incorporated into shading, without coarse
+  display-cell merging. Unchecked retains automatic isolated dots with shading
+  and hides incorporated samples. Verify toggles, zoom, both rendering buffers
+  and unchanged saved evidence.
+
+## v0.13.28 - Included in v0.13.30-beta
+
+- Record an initial sub-zone interior observation and further samples about every
+  100 map yards, so exploring an area expands estimated shading without requiring
+  a border crossing. Deduplicate revisits, cap interior data to reserve space for
+  crossings, preserve queued observations on logout, and keep capture and rendering
+  within the existing asynchronous workflow. Distinguish interior observations in
+  saved data and tooltips; retain the ten-yard border filter.
+- Measure sub-zone label widths and try a balanced two-line name before hiding
+  it for width or overlap. Keep the thin outline, chosen text size and reusable
+  font pools. Add coverage for interior sampling, geometry, bounds, persistence,
+  tooltips and label wrapping.
+- Move only Atlas Map Layers directly above the map, keeping the Zone selector
+  in place. Match the Angler's Almanac zone selector to the Atlas's 306-unit width.
+  Replace typed dropdown markers with native arrow artwork and dark drop shadows
+  on all three buttons.
+
+## v0.13.6 - v0.13.27 - Included in v0.13.30-beta
+
+- Match the Atlas Zone selector to the Map Layers dropdown width. Extend the
+  sub-zone panel upward into the freed space and place Shading, Points and Labels
+  on separate rows, with label size alongside Labels.
+
+- Add a saved Atlas Points toggle for isolated sub-zone crossovers, independent
+  of shading and labels. Group the sub-zone controls in a compact bordered panel
+  beside the map-marker layers, aligned with the page's right edge and preserving
+  the map's size and position. Display
+  changes reuse geometry and leave recording and saved observations intact.
+- Expand sub-zone colours beyond the ten-accent palette. Give each discovered
+  area on a map its own colour, choosing new colours by their greatest minimum
+  perceptual distance from all assigned colours. Preserve existing colours during
+  live updates and keep selection within the background drawing budget. Add a
+  thin non-monochrome outline to sub-zone labels and default their size to 4,
+  preserving explicitly saved sizes.
+- Replace the Atlas marker-layer rows with a Map Layers dropdown containing
+  checkboxes for every category and Show all / Hide all actions. Keep the menu
+  open while changing several filters, preserve saved preferences, and leave
+  discovery records and sub-zone controls independent.
+
+- Keep the Loot/damage scrollbar and arrow artwork inset inside the panel. Remove the separate track backdrop that created a visible seam beside the content.
+
+- Capture gathering tooltip identity immediately so a quick first click followed by a missing-profession error can record the node before the polling fallback runs. Keep coordinates gated on confirmed interactions.
+
+- Default the Bestiary panel to Loot and reverse its toggle to Show Damage. Fill the scrollbar strip behind both arrows and align its outer edge with the panel to close visible gaps. Move Known Beast Lore above the creature viewer and retain the full loot-panel height for beasts.
+
+- Fix the Loot panel crash when the legacy GetItemInfo global is unavailable. Prefer C_Item.GetItemInfo, retain the legacy fallback, and show placeholders safely while item information is unavailable. Add regression coverage for modern, legacy, missing and uncached item APIs.
+
+- Add a matching Loot toggle above Behaviour, showing observed item quantities, corpse drop percentages, icons and tooltips in the damage panel. Persist observations and include them in backups and account migration.
+
+- Remove synchronous Atlas mesh rebuilds from crossing capture. Prepare spatial
+  indexes, geometry and pooled texture updates in small shared-budget slices;
+  retain completed shading until its replacement is ready. Cache per map, reuse
+  workable mesh detail, skip unobserved space and avoid repeated metadata reads.
+- Thin same-border samples within approximately 10 map yards, in either direction,
+  including existing saved observations when their map is visited or displayed.
+  Preserve distinct borders and retained records' labels/positions/timestamps;
+  retain pending crossings across logout and use the existing coordinate fallback
+  when map dimensions are unavailable. Reduce mesh density while keeping smooth
+  triangle contours. Add scheduling/compaction regressions and a repeatable
+  synthetic performance benchmark.
+
+- Lower the Atlas sub-zone label-size minimum from 8 to 2 for close-up map
+  viewing. Keep the default at 12 and maximum at 24; retain small sizes on reload.
+
+- Keep isolated Atlas sub-zone samples as small round dots at every map zoom.
+  Hide dots once their evidence contributes to shaded boundary geometry, while
+  preserving the underlying crossing records and hover details.
+
+- Move Sub-zones into the map-layer rows and add independent Sub-zone labels,
+  a styled label-size slider (8–24) and map-brightness slider (20–100%). Save
+  display preferences per character; dim artwork without dimming observations.
+  Use brighter saturated shading and refined triangle contours instead of
+  coarse square edges, with adaptive detail to bound native texture allocation.
+  Preserve map dimensions, discovery evidence and the Almanac.
+
+- Add a Sub-zones checkbox beside Atlas map layers without moving existing controls.
+  Record personal same-map crossings in the background with from/to labels, both
+  positions and time; persist per character and reject discontinuous observations.
+  Show crossing dots, names and estimated perimeter shading, assign different
+  colours to neighbouring regions, and expose evidence on hover. Keep unseen
+  regions empty and label geometric estimates honestly. Add isolated storage,
+  geometry, reload, background tracking and pooled-overlay regression coverage.
+
+- Add left-button drag panning to zoomed Atlas and Almanac maps, including drags
+  starting on markers. Clamp movement to the map edges and distinguish dragging
+  from clicks so zone navigation, marker selection and point placement still work.
+
+- Replace Atlas continent/zone controls with one cascading zone selector and
+  share it with the Almanac. Base maps expand into zone submenus; battlegrounds
+  have a separate group and Zephras Isle appears under Other. Native scrollable
+  menus reuse the same catalogue and selection code without adding journal data.
+
+- Add world-map click navigation to Atlas and Almanac: right-click opens the
+  parent map, left-click opens the zone under the pointer. A shared Options toggle
+  defaults on and applies immediately; preserve wheel zoom, placement and marker
+  actions. Widen Almanac Reports to match adjacent button spacing.
+
+- Put Fieldbook windows on the normal game-window layer, preserving click-to-front
+  behavior so native game panels can rise above the addon when clicked.
+
+- Add Ctrl+right-click removal and tooltip instructions to Almanac map markers.
+  Remembered spots can be restored through Show: removed; removing an automatic
+  fishing-position marker retains catch history and allows new catches to show
+  a new position. Give both maps' player coordinates a thin antialiased outline.
+
+- Match the Almanac Current Zone button to the Atlas button's size, keeping its
+  right edge aligned with Record catch underneath.
+
+- Rotate Almanac actions so Current Zone is at the top right, Reports is to its
+  left and Record catch is underneath. Move player coordinates to the bottom-left
+  of both the Almanac and Atlas maps.
+
+- Keep record names in the yellow detail title without repeating them in the
+  description, and sort the Catches list by most recent catch first.
+
+- Add an Almanac Event Log through the existing title-bar log button. Keep the
+  ongoing timestamped history per character across reloads, with newest-first
+  pages of 50, live updates, and confirmed clearing that leaves journal data intact.
+  Record acquired catches, explicit fishing failures, pool discoveries, source
+  assignments, skipped captures and corrections; combine partial catch updates
+  and suppress repeated observations. Add regression coverage and documentation.
+- Remove the initial event cap. Reuse log widgets, render only the current page,
+  and index cumulative updates without scanning the history. Verify thousands of
+  retained entries, reloads and garbage collection after clearing.
+
+## v0.13.5 - Included in v0.13.30-beta
+
+- Handle localized fish-escaped and fish-not-hooked errors: discard pending loot,
+  ignore late notifications from that attempt and resume on the next cast/loot
+  window without changing catch totals, skill evidence or the session source.
+- Add Remove sighting / Restore sighting in Waters. Keep notes and catch history,
+  suppress removed automatic sightings in their zone, and omit corrected sightings
+  from pins, location links and outgoing reports without removing the pool type.
+- Cover native world tooltips that bypass processor callbacks with throttled
+  visible-tooltip checks and a world-focus guard when processing info is absent.
+  Automatically recorded entries are labelled Pool zone sighting.
+- Show actual item icons and native item tooltips in Recorded catches and the
+  main Catches index, with safe fallbacks for uncached or name-only items.
+
+## v0.13.4 - Included in v0.13.30-beta
+
+- Discover fishing pool types in the current zone from recognizable live world
+  tooltips, without creating coordinate pins or assigning subsequent catches.
+- Add Remove pool and a Show: removed / Restore pool path. Suppress automatic
+  re-addition while preserving notes, reports and catch history.
+- Fix missing-cast-identity rejection of confirmed fishing loot with local
+  event IDs. Preserve pending autoloot evidence when the fishing flag arrives
+  after loot-slot snapshots or clear events; retain retry deduplication and
+  require acquired items, not chat messages or bag changes.
+
+## v0.13.1 - v0.13.3 - Included in v0.13.30-beta
+
+- Place player coordinates inside the displayed map's lower-right corner in
+  Atlas and Almanac, right-aligned and fixed above the zooming map artwork.
+
+- Enable cursor-centred scroll-wheel zoom from 1× to 4× on Atlas and Almanac
+  maps, including over pins. Clip artwork, overlays, routes and markers within
+  the existing border; preserve map placement coordinates and reset zoom when
+  changing maps. Each journal keeps its own zoom while browsing the same map.
+
+- Give Atlas and Almanac maps a thin border using the main window's native
+  frame artwork, with matching dialog-border fallback. Keep map geometry and
+  mouse interaction unchanged.
+
+## v0.13.0 - Included in v0.13.30-beta
+
+- Implement Angler’s Almanac as a character-owned fishing journal with linked
+  Waters & Spots, Pool Types and Catches views, search, compact filters,
+  reverse source lookup, saved browsing state, notes and favourites.
+- Record acquired fishing loot in the background using readable fishing-loot
+  and cast evidence. Deduplicate repeated slots, autoloot and full-bag retries;
+  keep uncertain sources unclassified. Add visible, expiring player source
+  assignments and explicit manual catch/sighting/spot fallbacks.
+- Preserve quantities, event occurrences, first/latest observations and measured
+  successful-skill evidence in durable source-specific aggregates with bounded
+  recent history. Keep player assertions and reported claims distinct.
+- Reuse the exposed Atlas map renderer through an Almanac-local data adapter,
+  matching its exact geometry without changing Atlas or another page. Recorded
+  pins select journal entries; duplicate-spot merging preserves original notes,
+  positions and associated history.
+- Add selected fishing-report construction, bounded literal serialization,
+  strict validation, preview/accept import, original provenance and idempotent
+  result deduplication. Notes are opt-in; reports never alter personal totals or
+  rewards. Addon-message transport and fishing pricing remain unconfigured.
+- Add automated data, capture, report, UI-state, layout and section-regression
+  coverage, and document Forever API evidence and unperformed in-game checks.
+
+## v0.12.15 - v0.12.20 - Included in v0.13.30-beta
+
+- Color the “Observed Weather:” label yellow, keeping weather types in their
+  existing text color.
+- Move Observed Weather beneath the map as one comma-separated line, separate
+  from discovery details. Place route/map status text inside the details area.
+- Center the Atlas right-pane controls, map and details between the divider and
+  inner window edge, balancing the left and right margins.
+- Reduce Atlas maps by 1%, giving the details panel four more pixels. Remove
+  the map drop shadow introduced in v0.12.16 in v0.12.17.
+- Add Observed Weather for the selected Atlas zone. Encountered weather types
+  accumulate per zone in the character’s Atlas journal, including while the
+  Atlas is closed; unavailable weather never implies clear skies.
+
+- Add live player coordinates to Traveller’s Atlas, explicitly labeling another
+  map and unavailable data. Enlarge standard zone maps by 25% within the existing
+  window, keeping unusually wide assets within the map column. Reflow the
+  scrollable details and action buttons below the enlarged map.
+- Remove the persistent map-layer reminder and selected-pin asterisk, retaining
+  the gold border and larger selected pin. Test coordinate updates, map sizing
+  and unchanged shell dimensions alongside the full regression suite.
+
+## v0.12.14 - Included in v0.13.30-beta
+
+- Audit runtime memory ownership, UI reuse, tracking, persistence and report
+  validation. Bound transient creature-instance and player-class caches; retain
+  combat-session identities only while the client retains those sessions.
+  Preserve durable discovery/kill credit and saved report-source class colours.
+- Fix combat-history cleanup after meter resets, including reused session IDs.
+  If a Bestiary wipe encounters unreadable history, wait for a complete readable
+  snapshot before allowing new encounter imports.
+- Bound gathering overlays to 512 recent world-map positions and 128 nearest
+  minimap positions, reuse the native frames, and retain at most the two displayed
+  maps' caches. Release hidden node references; all saved locations remain intact.
+- Release unused Atlas marker groups and closed backup-import snapshots, and
+  remove deselected Atlas report-draft keys, including existing false entries.
+- Reject sparse Atlas lists explicitly instead of relying on Lua's undefined
+  length for tables with holes, preventing silent route/report truncation.
+- Add retained-heap, garbage-collection, dense-map, navigation and malformed-list
+  regression coverage. Document findings, measured limits and live-client checks
+  in `tests/AUDIT.md`.
+
+## v0.12.3 - v0.12.13 - Included in v0.13.30-beta
+
+- Show the player's facing arrow on the Atlas when viewing their current map.
+  Update its position while visible, hide it for other maps or unavailable data,
+  and stop updates when leaving Atlas without saving a movement history.
+
+- Replace the unavailable Camp / Settlement icon with the native fire icon for
+  both Atlas map markers and index rows; test the missing-asset case.
+
+- Show Atlas Route / Passage markers at their recorded positions when they have
+  no itinerary stops, whether selected or not. Preserve route-layer visibility
+  and map boundaries; do not invent stops or positions. Add regression coverage
+  for marker selection, hidden layers, unpositioned entries and later stop editing.
+
+- Fix Atlas discovery-row tooltip errors, including Route / Passage entries:
+  return only cleaned text from the Atlas sanitizer, preventing Lua's `gsub`
+  replacement count from becoming an unintended tooltip color argument. Add
+  regression coverage for single-value sanitization and all eight category hovers.
+
+- Add a saved Dark Mode toggle beside background brightness in Options. Shared
+  parchment uses the Locations greyscale treatment at 34% of the selected
+  brightness; already-dark map backgrounds retain their existing treatment.
+
+- Fix world-map gathering dots being covered by explored terrain and fog:
+  use the normal map-location icon layer instead of the lower default pin layer.
+  Verify ordering against installed Forever 70009 UI source and add a regression
+  that reproduces working tooltips with obscured markers.
+
+- Replace gathering-dot runtime masks with a bundled circular alpha texture to
+  retain the circular appearance without runtime masks, preserving the
+  same green/gold fill and dark border on all three maps.
+
+- Combine Compendium node name and type into one heading (Peacebloom • Herb),
+  and move the details, notes and map controls up to close the removed row.
+
+- Counter-scale world-map gathering dots so they retain a visible six-pixel size
+  as terrain zoom changes. Compensate their coordinate offsets and use Blizzard's
+  map-pin drawing layer. Add regression coverage across five canvas scales.
+
+- Add a vertical divider between the Atlas index and map panes, matching the
+  Bestiary and Compendium colour, opacity, thickness and height.
+
+- Match the Compendium divider's colour and opacity to the Bestiary divider,
+  preserving their shared three-pixel thickness.
+
+- Add Help to all main-window sections using the Bestiary button and shared
+  parchment help-window layout. Include Compendium and Atlas usage instructions
+  and each placeholder section's wishlist; keep Help and shared Options mutually
+  exclusive, with navigation and help-window regression coverage.
+
+- Share the Compendium location page's
+  opaque, circular dot renderer with world-map and minimap markers: green herbs
+  and gold minerals with a dark border. Add rendering-property regression checks.
+
+## v0.12.2 - Included in v0.13.30-beta
+
+- Rename Herbs & Minerals to Gatherer's Compendium throughout the current UI.
+- Keep Locations button text the same size when hovered or pressed, and add a
+  three-pixel horizontal divider above Field notes. Thicken the matching Bestiary
+  divider above recorded abilities to three pixels as well.
+- Add independent, per-character world-map and minimap node display checkboxes
+  to the Compendium, both off by default. Show recorded approximate interaction
+  positions on their zone map and nearby positions on the rotating/zooming minimap.
+- Make the Options button available from every main-window section, including
+  direct opening before visiting the Bestiary. Preserve the active section.
+
+## v0.12.1 - Included in v0.13.30-beta
+
+- Fix Lua errors when hovering Atlas map-layer checkboxes: use a wrapped tooltip
+  body line instead of passing a boolean as `SetText`'s numeric alpha argument.
+  Add native argument validation and regression coverage for all eight layer
+  tooltips, mouse-leave dismissal and section-change dismissal.
+
+## v0.12.0 - Included in v0.13.30-beta
+
+- Replace Traveller’s Atlas with a personal geographical journal: zone maps,
+  a searchable local/all-zone discovery index, eight independent map layers,
+  synchronized pin/list selection and explicit current-zone/map-position actions.
+- Add place and entrance editing, optional positions and interior labels, access
+  notes, explicit explored status, stable identities and separate knowledge sources.
+  Add ordered routes with existing places or waypoints, numbered markers and
+  capability-guarded lines that never join different maps.
+- Add expedition journals, zone associations, related Atlas records and read-only
+  references to existing Bestiary and Herbs & Minerals discoveries. Preserve
+  unresolved links when targets disappear; source pages remain unchanged.
+- Add regional-report drafts, explicit private-note/excerpt selection and complete
+  previews, with versioned validation, bounded non-executable serialization and
+  Reported/unexplored recipient staging. Delivery and import UI remain deferred.
+- Isolate Atlas persistence in its own per-character namespace; retain browsing
+  state and unfinished editors across page switches, pool map controls and keep
+  Atlas forms inside the existing window. Add logic/UI regression coverage and
+  an explicit in-game verification checklist in `tests/ATLAS.md`.
+
 ## v0.11.0-beta - 2026-09-27
 
 Herbs & Minerals is now a complete personal gathering journal. This release
@@ -771,7 +1198,7 @@ addon version to share creatures.
   restored creatures without repeat rewards, critter locking, Knowledge rules,
   adaptive lists, window indicators, pinning and bounded window placement.
 
-## v0.9.98 - Unreleased
+## v0.9.98 - Included in v0.13.30-beta
 
 - Show the selected-filter yellow border on Rumours, Creature Notes, Record
   damage taken, Offenses, Defenses, Behaviour, Choose effects, Locations, Ranks
@@ -779,21 +1206,21 @@ addon version to share creatures.
   styling; clear the border whenever the corresponding window closes.
 - Move the Creature level dropdown another 1px down and 2px left.
 
-## v0.9.97 - Unreleased
+## v0.9.97 - Included in v0.13.30-beta
 
 - Restore the Pending toggle’s native red face, with grey text when off and
   yellow border and text when on.
 - Lower the Search placeholder by 1px and the Creature level dropdown by
   another 3px. Move Shared by 1px down and 1px left inside the viewer.
 
-## v0.9.96 - Unreleased
+## v0.9.96 - Included in v0.13.30-beta
 
 - Lower the viewer’s Shared by attribution by 2px.
 - Keep the Pending filter label fixed on an enabled grey button; use the common
   yellow border and text to show when the filter is active.
 - Move the damage observation Creature level dropdown 3px left and 3px down.
 
-## v0.9.95 - Unreleased
+## v0.9.95 - Included in v0.13.30-beta
 
 - Limit yellow selection styling to the native button bevel and text, keeping
   the original red face unchanged.
@@ -803,7 +1230,7 @@ addon version to share creatures.
   Defenses and Behaviour, preserving overlap avoidance, pinned positions and
   screen containment.
 
-## v0.9.94 - Unreleased
+## v0.9.94 - Included in v0.13.30-beta
 
 - Brighten selected filters with pure-yellow additive colour on the native
   button artwork; restore normal blending when deselected. No separate outline.
@@ -813,7 +1240,7 @@ addon version to share creatures.
 - Keep Locations and reduce filter-button fonts by 1pt in every state, including
   category, alphabet, Index, Locations, Ranks and Pending controls.
 
-## v0.9.93 - Unreleased
+## v0.9.93 - Included in v0.13.30-beta
 
 - Restore yellow text on Locations and Ranks, which open filter windows rather
   than selecting a filter directly.
@@ -826,7 +1253,7 @@ addon version to share creatures.
 - Update scoring, sharing and announcement regressions for location-only rewards;
   check historical balance preservation and native selection artwork.
 
-## v0.9.92 - Unreleased
+## v0.9.92 - Included in v0.13.30-beta
 
 - Use verified player class colours for names in Shared by and Rumours source
   labels/tooltips. Keep the surrounding Shared by text and unknown names grey.
@@ -839,12 +1266,12 @@ addon version to share creatures.
 - Add class-colour checks for surname mismatches, non-player units, unavailable
   or restricted APIs, session caching, colour validation and live UI refresh.
 
-## v0.9.91 - Unreleased
+## v0.9.91 - Included in v0.13.30-beta
 
 - Make the main creature page's Shared by attribution grey, matching the
   understated list legend.
 
-## v0.9.90 - Unreleased
+## v0.9.90 - Included in v0.13.30-beta
 
 - Replace the glowing filter selection outlines with one crisp yellow border
   and yellow text. Unselected filters keep their red button and use grey text;
@@ -853,7 +1280,7 @@ addon version to share creatures.
 - Remove the filter hover glow so it cannot obscure the selected border or turn
   unselected text yellow. Native pressed-button feedback remains available.
 
-## v0.9.89 - Unreleased
+## v0.9.89 - Included in v0.13.30-beta
 
 - Put the green verify tick first on the left of each rumour, followed by the
   reject cross and then the text, with consistent gaps and divider padding.
@@ -864,11 +1291,11 @@ addon version to share creatures.
 - Check control order, text bounds, wrapping and shrinking after long content in
   the Rumours UI regression checks.
 
-## v0.9.88 - Unreleased
+## v0.9.88 - Included in v0.13.30-beta
 
 - Lower creature-list names by another 1px, keeping their review asterisks aligned.
 
-## v0.9.87 - Unreleased
+## v0.9.87 - Included in v0.13.30-beta
 
 - Colour creature-list names green while they have outstanding rumours, including
   selected entries. Return to the normal colour once all rumours are resolved or
@@ -881,7 +1308,7 @@ addon version to share creatures.
 - Cover selected/unselected rumour colours and clearing the final outstanding
   rumour through verification or rejection in the UI regression checks.
 
-## v0.9.86 - Unreleased
+## v0.9.86 - Included in v0.13.30-beta
 
 - Name the sender in the main Shared indicator and each shared basic report in
   Rumours. Deduplicate source names; long sender lists use a compact label with
@@ -898,7 +1325,7 @@ addon version to share creatures.
 - Add regressions for source attribution, delete/hover/reload without repeat
   rewards, critter defaults and overrides, and the options control.
 
-## v0.9.85 - Unreleased
+## v0.9.85 - Included in v0.13.30-beta
 
 - Extend the creature list to sixteen rows, ending just above Previous/Next. Add
   a scroll thumb and themed track in a permanently reserved gutter; filtering,
@@ -920,7 +1347,7 @@ addon version to share creatures.
   history including retry/duplicate handling.
 
 
-## v0.9.84 - Unreleased
+## v0.9.84 - Included in v0.13.30-beta
 
 - Fix the sharing surname mismatch exposed by a report addressed to Peww Pewz
   being compared with Peww. Read both name parts from UnitNameUnmodified and use
@@ -935,7 +1362,7 @@ addon version to share creatures.
   still required; no sharing costs, report format or consent rules change.
 
 
-## v0.9.83 - Unreleased
+## v0.9.83 - Included in v0.13.30-beta
 
 - Replace the combined sharing rejection message with specific reasons for blocked
   offers, full queues, malformed/inconsistent reports, recipient or transaction
@@ -972,11 +1399,11 @@ version to share creatures.
   for Shift+click, persistent hiding, scale migration, cross-character settings
   and reset preservation. All 23 test files pass; live rendering requires WoW.
 
-## v0.9.81 - Unreleased
+## v0.9.81 - Included in v0.13.30-beta
 
 - Shift+left-click the unlocked Spell ID window to hide it; re-enable it with Display Spell ID window in Options. Update its hint to grey “Drag to move / Shift+Click to hide”.
 
-## v0.9.80 - Unreleased
+## v0.9.80 - Included in v0.13.30-beta
 
 - Keep the Last observed spell IDs window on LOW strata, including when focused, so bags and other game windows can appear above it. Other addon windows retain their existing focus behavior.
 
@@ -1050,7 +1477,7 @@ version to share creatures.
   live in-game rendering remains a separate verification step.
 
 
-## v0.9.78 - Unreleased
+## v0.9.78 - Included in v0.13.30-beta
 
 This release includes all changes since v0.9.74-beta (local iterations v0.9.75
 through v0.9.78). The previous-push and previous-release baseline is commit
@@ -1113,12 +1540,12 @@ version to share creatures.
   restore preview/confirmation and Creature Notes. All 23 test files pass;
   live in-game rendering remains a separate verification step.
 
-## v0.9.77 - Unreleased
+## v0.9.77 - Included in v0.13.30-beta
 
 - Add Heal immediately above Heal over Time in the ability effects list. Move the
   following sections down and extend the window to retain their existing spacing.
 
-## v0.9.76 - Unreleased
+## v0.9.76 - Included in v0.13.30-beta
 
 - Add Backup Bestiary and Restore Bestiary beside Reset Bestiary in the Options
   footer, with a small gap separating reset from the backup controls.
@@ -1136,7 +1563,7 @@ version to share creatures.
   scaling, focus and saved-position rules, sizing it to its content. Add regression
   coverage for persistence, recovery, scope isolation, imports and confirmation.
 
-## v0.9.75 - Unreleased
+## v0.9.75 - Included in v0.13.30-beta
 
 - Add an enabled-by-default auto-lock option under Tracking with an editable
   threshold of 10 kills. Lock after that many credited kills without changes to
@@ -1201,7 +1628,7 @@ through v0.9.74). Both players must use the same addon version to share creature
   title-bar layout/layering and secret geometry. All 20 test files pass. Live client
   rendering and Beast Lore detection still require in-game verification.
 
-## v0.9.73 - Unreleased
+## v0.9.73 - Included in v0.13.30-beta
 
 - Replace the manual Tameable behaviour with game-observed status and a portrait
   badge whose tooltip reads "Tameable". Read explicit Tameable/Cannot be Tamed
@@ -1212,7 +1639,7 @@ through v0.9.74). Both players must use the same addon version to share creature
   locked entries. Old manual flags remain stored but cannot establish the badge
   or be newly shared as behaviour rumours. Remove the manual checkbox.
 
-## v0.9.72 - Unreleased
+## v0.9.72 - Included in v0.13.30-beta
 
 - Add Tameable to Behaviour's observed Traits and the creature summary. Record it
   manually after personal verification; unchecked means unknown/unrecorded, not
@@ -1220,31 +1647,31 @@ through v0.9.74). Both players must use the same addon version to share creature
 - Allow Tameable to be shared and verified through the existing behaviour-rumour
   flow and pricing. No automatic detection or bundled tameability database is added.
 
-## v0.9.71 - Unreleased
+## v0.9.71 - Included in v0.13.30-beta
 
 - Lower Help, Options and Event log title text by one additional UI pixel.
 
-## v0.9.70 - Unreleased
+## v0.9.70 - Included in v0.13.30-beta
 
 - Lower the Help, Options and Event log title text by 2 UI pixels within the
   existing title bars, leaving the bars, borders and buttons in place.
 
-## v0.9.69 - Unreleased
+## v0.9.69 - Included in v0.13.30-beta
 
 - Raise Help, Options and Event log title bars by another 1 UI pixel, retaining
   their height and the border-over-title layering.
 
-## v0.9.68 - Unreleased
+## v0.9.68 - Included in v0.13.30-beta
 
 - Raise the top content fade in Help, Options and Event log by 1 UI pixel and
   adjust its parchment sampling to match the new position.
 
-## v0.9.67 - Unreleased
+## v0.9.67 - Included in v0.13.30-beta
 
 - Raise Help, Options and Event log title bars by 1 UI pixel. Layer window borders
   over the title bars for clean edge overlaps, keeping close buttons above both.
 
-## v0.9.66 - Unreleased
+## v0.9.66 - Included in v0.13.30-beta
 
 - Give Help, Options and Event log dark native-trim title bars with centered yellow
   titles matching the main book. Keep title bars above fades and below close buttons,
@@ -1252,11 +1679,11 @@ through v0.9.74). Both players must use the same addon version to share creature
 - Update Event log content sizing for the smaller title area while preserving its
   compact minimum, maximum height and scrolling behavior.
 
-## v0.9.65 - Unreleased
+## v0.9.65 - Included in v0.13.30-beta
 
 - Reduce Options category headings by 2 points, retaining their yellow styling.
 
-## v0.9.64 - Unreleased
+## v0.9.64 - Included in v0.13.30-beta
 
 - Organize Options into Tracking, Chat notifications, Appearance, Window behavior,
   Sharing, Tooltips and cast IDs, and Spell ID window sections. Use consistent
@@ -1264,41 +1691,41 @@ through v0.9.74). Both players must use the same addon version to share creature
 - Clarify that chat settings do not disable Event log collection and retain the
   fixed Reset Bestiary footer outside the scrolling settings.
 
-## v0.9.63 - Unreleased
+## v0.9.63 - Included in v0.13.30-beta
 
 - Refresh the hovered Reject/Remove tooltip as its action changes, using native
   tooltip ownership during the normal UI refresh. Hide it when removing the ability.
 
-## v0.9.62 - Unreleased
+## v0.9.62 - Included in v0.13.30-beta
 
 - Fix corrupted Reject artwork by using the unmodified native yellow close-button
   cross instead of cropping and tinting its texture. Keep the centered yellow dash
   for Remove and preserve button alignment.
 
-## v0.9.61 - Unreleased
+## v0.9.61 - Included in v0.13.30-beta
 
 - Add padding below ability-row dividers and increase row spacing while retaining
   four visible abilities and their notes. Keep the first ability in place.
 - Give the ability scrollbar a dark themed track and border, extending it to
   match the revised row layout. The track hides with the inactive scrollbar.
 
-## v0.9.60 - Unreleased
+## v0.9.60 - Included in v0.13.30-beta
 
 - Replace the Remove text hyphen with a centered, thick yellow dash. Use the
   native close-button cross artwork tinted red for Reject, retaining the frame colors.
 
-## v0.9.59 - Unreleased
+## v0.9.59 - Included in v0.13.30-beta
 
 - Raise the confirmation tick by 1 UI pixel, keeping the Reject/Remove square
   aligned with it and preserving Edit/Resolve positions.
 
-## v0.9.58 - Unreleased
+## v0.9.58 - Included in v0.13.30-beta
 
 - Replace Reject/Remove with a themed square button aligned with the confirmation
   tick. Show a red X for Reject or a yellow minus for Remove, with matching action
   tooltips. Preserve the existing reject/remove behavior and locked-entry hiding.
 
-## v0.9.57 - Unreleased
+## v0.9.57 - Included in v0.13.30-beta
 
 - Lower the Recorded Abilities confirmation tick button by 2 UI pixels while
   preserving the positions of Edit, Reject and Resolve.
@@ -1371,13 +1798,13 @@ through v0.9.56). Both players must use the same addon version to share creature
   collection, log retention, live updates, pagination and adaptive window height.
   All 20 test files pass; live WoW rendering remains an in-game check.
 
-## v0.9.55 - Unreleased
+## v0.9.55 - Included in v0.13.30-beta
 
 - Size Event log height to its content, starting at a compact 200 UI units and
   growing to the existing 767-unit maximum before scrolling. Keep footer controls
   at the bottom, hide unnecessary pagination and recheck screen placement on growth.
 
-## v0.9.54 - Unreleased
+## v0.9.54 - Included in v0.13.30-beta
 
 - Add a fourth themed title-bar button beside Options for a persistent Event log.
   Capture creature discoveries, point awards and observed-cast alerts regardless
@@ -1389,25 +1816,25 @@ through v0.9.56). Both players must use the same addon version to share creature
 - Verify muted-event collection, discovery deduplication, reload/reset retention,
   the title-button toggle, live updates and access to older pages.
 
-## v0.9.53 - Unreleased
+## v0.9.53 - Included in v0.13.30-beta
 
 - Restrict ability spell tooltips to the text area left of the first visible
   action button. Leaving that area hides the tooltip; button gaps no longer
   trigger it. Preserve checkbox/button hints and mouse-wheel scrolling.
 
-## v0.9.52 - Unreleased
+## v0.9.52 - Included in v0.13.30-beta
 
 - Preserve the themed square border on confirmed/locked ability tick buttons by
   deriving disabled artwork from the client's normal button texture or atlas,
   desaturating the frame while retaining the green tick.
 
-## v0.9.51 - Unreleased
+## v0.9.51 - Included in v0.13.30-beta
 
 - Right-align Recorded Abilities action buttons as a group, with the tick at the
   content's right edge and consistent gaps between buttons. Reserve room when
   the ability scrollbar is visible so it cannot overlap the tick.
 
-## v0.9.50 - Unreleased
+## v0.9.50 - Included in v0.13.30-beta
 
 - Rename the main damage panel to "Damage taken" and the entry form to "Your
   damage observations". Keep the observed-creature-level dropdown and add an
@@ -1418,14 +1845,14 @@ through v0.9.56). Both players must use the same addon version to share creature
   levels and retain the existing damage-range and creature-level checks.
 - Cover unequal-level persistence, legacy records and invalid player levels.
 
-## v0.9.49 - Unreleased
+## v0.9.49 - Included in v0.13.30-beta
 
 - Replace Recorded Abilities' Confirm button with a square green-tick button
   using the close/help/options theme, positioned after Reject on the right.
   Pending, unlocked abilities use a clickable red button; confirmed abilities
   and locked entries use a disabled grey button while keeping the tick green.
 
-## v0.9.48 - Unreleased
+## v0.9.48 - Included in v0.13.30-beta
 
 - Add the default-on "Always attempt to anchor to main window" option. Observation
   and effect panels prefer the book's right edge, then the next window's right;
@@ -1436,26 +1863,26 @@ through v0.9.56). Both players must use the same addon version to share creature
   Preserve screen bounds, pinning and overlap fallback when screen space is scarce.
 - Test directional fallbacks, default/saved option state, pinning and crowded screens.
 
-## v0.9.47 - Unreleased
+## v0.9.47 - Included in v0.13.30-beta
 
 - Prefer a free main-book edge when positioning overlapping dialogs opened from
   the Fieldbook, even if an unrelated window offers a nearer edge. Fall back to
   other windows when the book's edges are blocked or off-screen; retain pinning
   and screen-visibility priority.
 
-## v0.9.46 - Unreleased
+## v0.9.46 - Included in v0.13.30-beta
 
 - Make the Creature Notes button toggle its window open and closed. Pinned Notes
   remain open, and reopening displays the selected creature's saved notes.
 
-## v0.9.45 - Unreleased
+## v0.9.45 - Included in v0.13.30-beta
 
 - Trim 30 UI units of empty space below the Offenses buttons and narrow Behaviour
   by 40 UI units, keeping its labels inside the reduced right margin.
 - Narrow the equal-level damage observation window by 36 UI units so its control
   row has matching 28-unit left and right margins; resize heading/instruction text.
 
-## v0.9.44 - Unreleased
+## v0.9.44 - Included in v0.13.30-beta
 
 - Arrange every opening addon window, including the main book and spell-ID
   displays, around all other visible addon windows. Evaluate neighbouring edges
@@ -1466,7 +1893,7 @@ through v0.9.56). Both players must use the same addon version to share creature
 - Keep already-visible windows in place when moving their anchor window; cover
   multiple neighbours, hidden/faded windows, pins and main-window opening in tests.
 
-## v0.9.43 - Unreleased
+## v0.9.43 - Included in v0.13.30-beta
 
 - Check secondary dialogs for overlap with the visible main Fieldbook on opening,
   including saved positions and content-sized layouts. Prefer a fully visible

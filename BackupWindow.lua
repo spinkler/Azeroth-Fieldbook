@@ -118,6 +118,8 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
         frame:HookScript("OnHide",function()
             frame.text:ClearFocus();loading=true;frame.text:SetText("");loading=false
             if StaticPopup_Hide then StaticPopup_Hide("AZEROTHFIELDBOOK_RESTORE_CONFIRM") end
+            selected=nil
+            for _,row in ipairs(frame.rows) do row.snapshot=nil end
         end)
         frame:SetScript("OnShow",function() refresh() end)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBackups" end
@@ -137,9 +139,9 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
         end
         for index,row in ipairs(frame.rows) do
             local item=list[index]
+            row.snapshot=item and item.snapshot or nil
             row:SetShown(mode=="list" and item~=nil)
             if item then
-                row.snapshot=item.snapshot
                 row.text:SetText((item.recovery and "Before last restore • " or "")..data.Date(item.snapshot)
                     .." • "..data.Summary(item.snapshot).." creatures")
                 local chosen=selected==item.snapshot

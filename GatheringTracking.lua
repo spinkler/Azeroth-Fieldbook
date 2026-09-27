@@ -229,6 +229,21 @@ function ns.CreateGatheringTracking(journal)
     -- Older clients may lack global input events; gathering casts still work.
     pcall(frame.RegisterEvent,frame,"GLOBAL_MOUSE_DOWN")
     frame:SetScript("OnEvent",function(_,event,...) controller:OnEvent(event,...) end)
+    -- Capture the first tooltip immediately: a quick click can dismiss it
+    -- before the polling fallback ever sees it. This only discovers identity;
+    -- coordinates still require a cast or a matching skill-rejection error.
+    local objectType=Enum and Enum.TooltipDataType and Enum.TooltipDataType.Object
+    if objectType and TooltipDataProcessor and type(TooltipDataProcessor.AddTooltipPostCall)=="function" then
+        TooltipDataProcessor.AddTooltipPostCall(objectType,function(tooltip)
+            if tooltip==GameTooltip then controller:ObserveWorldCursor() end
+        end)
+    end
+    if GameTooltip and type(GameTooltip.SetWorldCursor)=="function" and type(hooksecurefunc)=="function" then
+        hooksecurefunc(GameTooltip,"SetWorldCursor",function() controller:ObserveWorldCursor() end)
+    end
+    if GameTooltip and type(GameTooltip.HookScript)=="function" then
+        GameTooltip:HookScript("OnShow",function() controller:ObserveWorldCursor() end)
+    end
     local elapsed=0
     frame:SetScript("OnUpdate",function(_,dt)
         elapsed=elapsed+dt

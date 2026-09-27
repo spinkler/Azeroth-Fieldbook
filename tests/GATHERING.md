@@ -1,4 +1,24 @@
-# Herbs & Minerals — 0.11.0
+# Gatherer's Compendium
+
+World-map visibility investigation and regression evidence are documented in
+[GATHERING_MAP_PINS.md](GATHERING_MAP_PINS.md), including the matching Forever
+70009 layer ordering and remaining live checks.
+
+## 0.12.2 live checks
+
+- Hover and hold each Locations zone button; the label must retain its normal size.
+- Confirm the three-pixel divider above Field notes and the matching thickness
+  above Recorded abilities in the Bestiary.
+- Toggle each map checkbox independently, then reload and verify persistence.
+  Checkboxes must also be available when the journal has no entries.
+- Open a recorded zone on the world map, pan/zoom, change maps and reopen it.
+  Only recorded interaction points should appear; hovered-only zones have no pins.
+- Walk past a recorded node with the minimap option on; change zoom and toggle
+  minimap rotation. Check tooltip coordinates, nearby visibility and zone changes.
+  Disabling either option must remove its pins without affecting the other map.
+- Open the Compendium before the Bestiary, then use Options. Repeat on all seven
+  main-window sections; Options must open without switching the active section.
+
 
 Run `python -B -X utf8 tests/run_tests.py` from the repository root. On this
 Windows host the bundled Python 3.12 executable is used because `python` is not
