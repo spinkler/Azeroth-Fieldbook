@@ -686,14 +686,40 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         for i=#levels+1,#book.damageRows do book.damageRows[i]:Hide() end
         for _,row in ipairs(book.lootRows or {}) do row:Hide() end
+        if book.skinningHeading then book.skinningHeading:Hide() end
         book.damageHeading:SetText(book.lootMode and ("Loot · "..tostring(e.loot and e.loot.samples or 0).." observed corpses") or "Damage taken")
         book.noDamage:SetText(book.lootMode and "No item drops observed yet." or "No damage recorded.")
         local itemIDs={}
         if book.lootMode then
             for id in pairs(e.loot and e.loot.items or {}) do itemIDs[#itemIDs+1]=id end
-            table.sort(itemIDs)
+            local skinning={}
+            for _,id in ipairs(itemIDs) do
+                local fn=C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
+                local info=type(fn)=="function" and {pcall(fn,id)} or {}
+                if info[1] and not (issecretvalue and (issecretvalue(info[7]) or issecretvalue(info[8]))) then
+                    skinning[id]=info[7]==7 and info[8]==6 -- Trade goods / leather, not leather armour.
+                end
+                if not info[1] or info[7]==nil then
+                    fn=C_Item and C_Item.GetItemInfo or GetItemInfo
+                    info=type(fn)=="function" and {pcall(fn,id)} or {}
+                    if info[1] and not (issecretvalue and (issecretvalue(info[13]) or issecretvalue(info[14]))) then
+                        skinning[id]=info[13]==7 and info[14]==6
+                    end
+                end
+            end
+            table.sort(itemIDs,function(a,b)
+                if not not skinning[a]~=not not skinning[b] then return not skinning[a] end
+                return a<b
+            end)
+            local skinningStarted=false
             book.lootRows=book.lootRows or {}
             for i,id in ipairs(itemIDs) do
+                if skinning[id] and not skinningStarted then
+                    skinningStarted=true
+                    if not book.skinningHeading then book.skinningHeading=label(book.damageChild,"Skinning",0,0,296,"GameFontNormal") end
+                    book.skinningHeading:ClearAllPoints();book.skinningHeading:SetPoint("TOPLEFT",0,-contentHeight-4)
+                    book.skinningHeading:Show();contentHeight=contentHeight+24
+                end
                 local row=book.lootRows[i]
                 if not row then
                     row=CreateFrame("Button",nil,book.damageChild);row:SetSize(296,32)
@@ -704,6 +730,7 @@ local ink = { 0.75, 0.8, 0.8 }
                     row:SetScript("OnEnter",function(self)
                         GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetHyperlink("item:"..self.itemID)
                         GameTooltip:AddLine("Observed rate: corpses with this item / observed loot sources.",0.8,0.72,0.52,true)
+                        if self.skinning then GameTooltip:AddLine("Skinning groups leatherworking materials by item category; historical loot method was not recorded.",0.8,0.72,0.52,true) end
                         GameTooltip:Show()
                     end)
                     row:SetScript("OnLeave",function() GameTooltip:Hide() end)
@@ -717,6 +744,7 @@ local ink = { 0.75, 0.8, 0.8 }
                     local info={getInfo(id)}
                     name,link,icon=info[1],info[2],info[10]
                 end
+                row.skinning=skinning[id]==true
                 row.itemID=id;row.name:SetText(link or name or ("Item "..id))
                 row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
                 row.stats:SetText(string.format("%d items · %d/%d corpses · %.1f%%",item.quantity,item.drops,e.loot.samples,100*item.drops/math.max(1,e.loot.samples)))

@@ -596,3 +596,69 @@ Regression coverage verifies all-sample display with and without shading,
 automatic isolated-dot fallback, repeated toggles, zoom and unchanged saved data.
 All 47 test files passed, including 21 sub-zone regressions; all 55 runtime Lua
 files compiled under Lua 5.1 with version 0.13.29.
+
+### v0.13.31 — map-wide interior spacing
+
+New interior samples must be at least 100 yards from every retained sample on
+that map, including other sub-zone names and crossings. A separate 100-yard
+spatial grid indexes all retained samples and updates as pending rows commit.
+Crossings still use their existing ten-yard border-pair rule. Existing saved
+samples retain their previous compaction rules. Regression coverage includes
+crossing proximity, different names, exact threshold distances, asymmetric
+map dimensions, independent maps, reloads and pending observations at logout.
+
+### v0.13.32 — strict 50-yard interior clearance and native region hover
+
+Interior capture requires more than 50 yards from all retained samples; exactly
+50 yards is rejected. A rejected attempt is not a movement anchor. Crossings
+keep the ten-yard border-pair rule. Automated coverage exercises 50 and 50.1
+yards, crossing proximity, different sub-zone names and queued observations.
+
+The shared Atlas/Almanac renderer uses C_Map.GetMapHighlightInfoAtPosition for
+native region shapes, UV cropping and map-relative placement. Reference:
+https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_SharedMapDataProviders/MapHighlightDataProvider.lua
+Regression coverage checks cursor transforms at zoom, sizing, cropping, missing
+APIs, failed API calls, mouse exit, disabled navigation and hidden maps.
+Native verification still needed: hover Wetlands on the continent map and each
+continent on the world map in both journals; compare glow with the main map,
+then zoom/pan and verify placement stays aligned.
+
+### v0.13.33 — hide zone-name areas
+
+The fourth Sub-zones checkbox opts into hiding shading and labels whose name
+exactly matches the displayed map's native name (saved selected-zone name is a
+fallback when map metadata is unavailable). It persists per character, defaults
+off, and does not change point visibility, stored samples, geometry or colours.
+Painting and pending-job cache keys include the filtered name. Regression checks
+exercise both render buffers, repeated toggles, neighbouring shading, point
+visibility, unchanged geometry/data, saved preferences and map-name changes.
+
+### v0.13.34 — redundant interior cleanup
+
+Map Layers and Clean redundant points share the former 306-unit selector span
+as two 149-unit buttons separated by eight units. Cleanup operates on the
+selected map independently of shading/filter visibility. It removes only valid
+interior rows strictly inside their area's convex perimeter. Every hull edge
+sample (including collinear samples), crossing, malformed row and other map is
+preserved. A candidate whose same-area Voronoi cell intersects another filled
+area's hull is retained to preserve overlap classification. Work yields through
+the shared worker budget; completion replaces the rows atomically, invalidates
+the spacing index and increments the map revision. New samples during work
+invalidate the result; read-only journals are rejected. Sparse/metadata-bearing
+stores are left untouched. Recording can add fresh evidence on later visits.
+
+Regression checks cover removal counts, repeated cleanup, perimeter/interior
+sample distinction, crossings, malformed rows, other maps, read-only stores,
+unchanged overlapping-area classification and stale-work rejection.
+
+### v0.13.37 — cleanup diagnostics and overlap refinement
+
+The selector row now uses 130 units for Map Layers and 168 for Clean Redundant
+Points, retaining the eight-unit gap and original right edge. Chat reports the
+start, sample count, each 64 checked samples and final removal/retention counts.
+Retained counts distinguish perimeter/insufficient-hull evidence, overlap-boundary
+anchors, cross-over observations and other records. Errors and concurrent-data
+rejections also appear in chat. Overlap protection clips the potential region
+where removing the candidate would allow a rival anchor to beat all remaining
+same-area anchors. Removed anchors are excluded from subsequent decisions to
+prevent collective removals from changing ownership.

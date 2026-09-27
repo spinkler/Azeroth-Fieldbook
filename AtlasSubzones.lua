@@ -1,7 +1,7 @@
 local _, ns = ...
 local A=ns.Atlas
 local S={MAX_MAPS=256,MAX_CROSSINGS=4096,MAX_AREAS=128,GRID=64,MAX_TRIANGLES=3000,SPACING_YARDS=10,DEFAULT_LABEL_SIZE=4}
-S.INTERIOR_YARDS=100
+S.INTERIOR_YARDS=50
 S.MAX_INTERIORS=1024
 ns.AtlasSubzones=S
 S.WORK_MS=1
@@ -104,12 +104,14 @@ function S.Attach(j)
         return out
     end
     function s:Crossings(id,checkpoint) return self:Samples(id,checkpoint,true) end
-    function s:Reset() self.previous=nil;self.interiorAnchor=nil end
-    local function spatial(index,row,add)
+    function s:Reset() self.previous=nil end
+    local function spatial(index,row,add,allSamples)
         if not index.width then return index.keys[key(row)] end
         local isInterior=row.kind=="interior"
         local grid,spacing
-        if isInterior then
+        if allSamples then
+            spacing=S.INTERIOR_YARDS;grid=index.sampleGrid
+        elseif isInterior then
             spacing=S.INTERIOR_YARDS;grid=index.interiorGrid[row.name]
             if not grid then grid={};index.interiorGrid[row.name]=grid end
         else
@@ -130,7 +132,7 @@ function S.Attach(j)
             local bucket=grid[(cx+dx)..":"..(cy+dy)]
             if bucket then for _,p in ipairs(bucket) do
                 local d=(x-p.x)^2+(y-p.y)^2
-                if d<spacing^2 or (not isInterior and d==spacing^2) then return true end
+                if d<spacing^2 or ((allSamples or not isInterior) and d==spacing^2) then return true end
             end end
         end end
     end
@@ -142,13 +144,18 @@ function S.Attach(j)
         if not index.names[first] then index.names[first]=true;index.count=index.count+1 end
         if second and not index.names[second] then index.names[second]=true;index.count=index.count+1 end
         if row.kind=="interior" then index.interiors=index.interiors+1 end
-        if index.width then spatial(index,row,true) end
+        if index.width then
+            spatial(index,row,true)
+            spatial(index,row,true,true)
+        end
     end
     local function append(row,index)
         local rows=store[row.mapID]
         local extra=extraNames(index.names,row)
         if row.kind=="interior" and index.interiors>=S.MAX_INTERIORS then return end
         if #rows>=S.MAX_CROSSINGS or index.count+extra>S.MAX_AREAS or spatial(index,row) then return end
+        -- Interior spacing is map-wide; crossings retain their own border-pair rule.
+        if row.kind=="interior" and spatial(index,row,false,true) then return end
         rows[#rows+1]=row;remember(index,row);s:Changed(row.mapID);return true
     end
     function s:Index(id,deferred)
@@ -165,7 +172,7 @@ function S.Attach(j)
             -- current store, including any pending rows already committed.
             rows=store[id];count=type(rows)=="table" and math.min(#rows,S.MAX_CROSSINGS) or 0
             index.keys,index.names,index.borders,index.count={},{},{},0
-            index.interiorGrid,index.interiors={},0
+            index.interiorGrid,index.interiors,index.sampleGrid={},0,{}
             local kept={};local removed=0
             local compact=not j.readOnly and index.width and type(rows)=="table" and #rows<=S.MAX_CROSSINGS
             local sparse=false
@@ -222,12 +229,6 @@ function S.Attach(j)
         -- Actual map dimensions are required for yard-spaced interior evidence.
         -- Existing crossing capture keeps its fallback on unsupported maps.
         if not index.width then return end
-        local anchor=s.interiorAnchor
-        if anchor and anchor.mapID==id and anchor.name==name then
-            local dx,dy=(x-anchor.x)*index.width/10000,(y-anchor.y)*index.height/10000
-            if dx*dx+dy*dy<S.INTERIOR_YARDS^2 then return end
-        else anchor={};s.interiorAnchor=anchor end
-        anchor.mapID,anchor.name,anchor.x,anchor.y=id,name,x,y
         return record({kind="interior",mapID=id,name=name,x=x,y=y,at=A.Now()},index)
     end
     function s:Observe(deferred)
@@ -238,7 +239,7 @@ function S.Attach(j)
         if name=="" then name=A.Read(GetRealZoneText) end
         if not A.Text(name,160) then self:Reset();return end
         -- Sampling needs no display metadata. World dimensions are cached once
-        -- per map index; repeated polls retain only the previous point and anchor.
+        -- per map index; proximity queries use the cached spatial grids.
         local id=A.Read(C_Map and C_Map.GetBestMapForUnit,"player")
         local position=A.Integer(id,1,2147483647) and A.Read(C_Map and C_Map.GetPlayerMapPosition,id,"player")
         local clock=A.Read(GetTime) or A.Now()
@@ -359,6 +360,125 @@ local function inside(points,x,y,checkpoint)
     end
     return true
 end
+-- Test whether removing each interior anchor can let a competing area take
+-- ownership anywhere in their overlapping hulls; keep all perimeter evidence.
+function S.CleanInterior(journal,id,done,progress)
+    local survey=journal.subzones
+    if journal.readOnly or not A.Integer(id,1,2147483647) or survey.cleaning then return false end
+    survey.cleaning=true
+    if progress then progress("Starting cleanup on map "..id.."; preparing saved samples.") end
+    S.Queue(function(checkpoint)
+        local index=survey:Index(id,true)
+        while not index.ready do
+            if index.error then error(index.error) end
+            checkpoint(4096)
+        end
+        local source=survey.store[id]
+        local revision=survey:Revision(id)
+        if type(source)~="table" or not A.Array(source,S.MAX_CROSSINGS) then return {removed=0,reason="No supported sample list to clean."} end
+        if progress then progress("Checking "..#source.." saved samples; cross-over points will be kept.") end
+        local areas={}
+        local function area(name)
+            if not areas[name] then areas[name]={points={},anchors={}} end
+            return areas[name]
+        end
+        for _,p in ipairs(survey:Samples(id,checkpoint)) do
+            checkpoint()
+            if p.kind=="interior" then
+                local a=area(p.name);a.points[#a.points+1]=p;a.anchors[#a.anchors+1]=p
+            else
+                local a,b=area(p.from),area(p.to)
+                local mid={x=(p.fromX+p.x)/2,y=(p.fromY+p.y)/2}
+                a.points[#a.points+1]=mid;b.points[#b.points+1]=mid
+                a.anchors[#a.anchors+1]={x=p.fromX,y=p.fromY};b.anchors[#b.anchors+1]=p
+            end
+        end
+        for _,a in pairs(areas) do a.hull=hull(a.points,checkpoint) end
+        local function clip(polygon,nx,ny,limit)
+            local out={}
+            for i,v in ipairs(polygon) do
+                checkpoint()
+                local w=polygon[i%#polygon+1]
+                local dv,dw=nx*v.x+ny*v.y-limit,nx*w.x+ny*w.y-limit
+                if dv<=0 then out[#out+1]=v end
+                if (dv<0 and dw>0) or (dv>0 and dw<0) then
+                    local t=dv/(dv-dw);out[#out+1]={x=v.x+t*(w.x-v.x),y=v.y+t*(w.y-v.y)}
+                end
+            end
+            return out
+        end
+        local function closer(polygon,p,q)
+            return clip(polygon,2*(q.x-p.x),2*(q.y-p.y),q.x*q.x+q.y*q.y-p.x*p.x-p.y*p.y)
+        end
+        local function redundant(p)
+            local a=areas[p.name]
+            if not a or #a.hull<3 then return false,"edges" end
+            for i,v in ipairs(a.hull) do
+                checkpoint()
+                if cross(v,a.hull[i%#a.hull+1],p)<=0.000001 then return false,"edges" end
+            end
+            local candidate
+            for i,q in ipairs(a.anchors) do
+                if q.kind=="interior" and q.x==p.x and q.y==p.y then candidate=i;break end
+            end
+            if not candidate then return false,"edges" end
+            for _,other in pairs(areas) do
+                if other~=a and #other.hull>=3 then
+                    local overlap=other.hull
+                    for i,v in ipairs(a.hull) do
+                        local w=a.hull[i%#a.hull+1]
+                        overlap=clip(overlap,w.y-v.y,v.x-w.x,(w.y-v.y)*v.x+(v.x-w.x)*v.y)
+                        if #overlap==0 then break end
+                    end
+                    if #overlap>0 then for _,rival in ipairs(other.anchors) do
+                        checkpoint()
+                        -- Find places this point wins now but a rival could win
+                        -- after its removal, against every remaining own anchor.
+                        local polygon=closer(overlap,p,rival)
+                        for i,q in ipairs(a.anchors) do
+                            if #polygon==0 then break end
+                            if i~=candidate then polygon=closer(polygon,rival,q) end
+                        end
+                        if #polygon>0 then return false,"boundaries" end
+                    end end
+                end
+            end
+            table.remove(a.anchors,candidate)
+            return true
+        end
+        local kept,removed={},0
+        local counts={edges=0,boundaries=0,crossings=0,other=0}
+        for i,p in ipairs(source) do
+            checkpoint()
+            local remove,reason
+            if interior(p) and p.mapID==id then remove,reason=redundant(p)
+            else reason=valid(p) and "crossings" or "other" end
+            if remove then removed=removed+1
+            else kept[#kept+1]=p;counts[reason]=counts[reason]+1 end
+            if progress and i%64==0 then progress("Checked "..i.."/"..#source.." samples; "..removed.." removable so far.") end
+        end
+        return {source=source,revision=revision,kept=kept,removed=removed,counts=counts}
+    end,function(ok,result)
+        survey.cleaning=nil
+        if not ok then if done then done(nil,"Cleanup could not complete; no samples were removed.") end;return end
+        if result.removed>0 then
+            if survey.store[id]~=result.source or survey:Revision(id)~=result.revision then
+                if done then done(nil,"New samples arrived during cleanup; try again while stationary.") end;return
+            end
+            survey.store[id]=result.kept;survey.index[id]=nil;survey:Changed(id)
+            if survey.onChange then survey.onChange(id) end
+        end
+        if progress then
+            local c=result.counts
+            progress(result.reason or ("Cleanup complete: removed "..result.removed.." interior points; kept "..c.edges..
+                " edge/insufficient-boundary points, "..c.boundaries.." overlap-boundary points, "..c.crossings..
+                " cross-over points and "..c.other.." other records."))
+        end
+        if done then done(result.removed) end
+    end)
+    return true
+end
+
 local function tree(points,depth,lo,hi,checkpoint,scratch)
     if lo>hi then return end
     local axis=depth%2==0 and "x" or "y"
@@ -615,7 +735,7 @@ function S.InstallMap(map,journal,cursorPoint)
     local front,back=buffer(),buffer()
     map.subzoneBuffers={front,back}
     local cacheID,cacheRevision,model,width,height
-    local lastRegions,lastLabels,lastPoints,lastSize
+    local lastRegions,lastLabels,lastPoints,lastSize,lastHidden
     local failed
     local function expose()
         map.subzoneTextures, map.subzoneTriangles=front.strips,front.triangles
@@ -636,34 +756,38 @@ function S.InstallMap(map,journal,cursorPoint)
     local function hide(pool,checkpoint)
         for _,v in ipairs(pool) do checkpoint(2);v:Hide() end
     end
-    local function paint(self,target,model,width,height,regions,names,points,size,checkpoint)
+    local function paint(self,target,model,width,height,regions,names,points,size,hidden,checkpoint)
         local strips,triangles,dots,labels=target.strips,target.triangles,target.dots,target.labels
         local geometryChanged=target.model~=model or target.width~=width or target.height~=height
         -- A cancelled paint may have changed some widgets already. Only a fully
         -- completed buffer may reuse its geometry/visibility on the next request.
         target.model=nil
-        if geometryChanged or target.regions~=regions then
+        if geometryChanged or target.regions~=regions or target.hidden~=hidden then
             hide(strips,checkpoint);hide(triangles,checkpoint)
             for i,row in ipairs(regions and model.strips or {}) do
                 checkpoint(8)
-                local t=strips[i] or target.frame:CreateTexture(nil,"ARTWORK",nil,-7);strips[i]=t
+                local t=strips[i] or target.frame:CreateTexture(nil,"ARTWORK",nil,-7);strips[i]=t;t:Hide()
+                if row.area.name~=hidden then
                 local rgb=row.area.colour
                 t:ClearAllPoints();t:SetPoint("TOPLEFT",row.x/model.grid*width,-row.y/model.grid*height)
                 t:SetSize(row.width/model.grid*width,height/model.grid);t:SetColorTexture(rgb[1],rgb[2],rgb[3],0.4);t:Show()
+                end
             end
             for i,row in ipairs(regions and model.triangles or {}) do
                 checkpoint(16)
+                local t=triangles[i] or target.frame:CreateTexture(nil,"ARTWORK",nil,-7);triangles[i]=t;t:Hide()
+                if row.area.name~=hidden then
                 local a,b,c=row[1],row[2],row[3]
                 if cross(a,b,c)>0 then b,c=c,b end
                 local ax,ay,bx,by,cx,cy=a.x/10000*width,a.y/10000*height,b.x/10000*width,b.y/10000*height,c.x/10000*width,c.y/10000*height
                 local left,top=math.min(ax,bx,cx),math.min(ay,by,cy)
                 local tw,th=math.max(ax,bx,cx)-left,math.max(ay,by,cy)-top
-                local t=triangles[i] or target.frame:CreateTexture(nil,"ARTWORK",nil,-7);triangles[i]=t
                 t:ClearAllPoints();t:SetPoint("TOPLEFT",left,-top);t:SetSize(tw,th)
                 local rgb=row.area.colour;t:SetColorTexture(rgb[1],rgb[2],rgb[3],0.4)
                 -- UL=a, LL=b, UR=c, LR=b (second native triangle degenerates).
                 t:SetVertexOffset(1,ax-left,top-ay);t:SetVertexOffset(2,bx-left,top+th-by)
                 t:SetVertexOffset(3,cx-left-tw,top-cy);t:SetVertexOffset(4,bx-left-tw,top+th-by);t:Show()
+                end
             end
         end
         if geometryChanged or target.points~=points or target.regions~=regions then
@@ -690,6 +814,7 @@ function S.InstallMap(map,journal,cursorPoint)
         local maxWidth=math.min(width,130*size/12)
         for _,name in ipairs(names and model.names or {}) do
             checkpoint(8)
+            if name~=hidden then
             local a=model.areas[name]
             local i=#placed+1
             local label=labels[i] or target.frame:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");labels[i]=label
@@ -730,6 +855,8 @@ function S.InstallMap(map,journal,cursorPoint)
                 if not wrapped or not place(wrapped,wrapWidth,2) then label:Hide() end
             end
         end
+        end
+        target.hidden=hidden
         target.model,target.width,target.height,target.regions=model,width,height,regions
         target.points=points
     end
@@ -738,6 +865,12 @@ function S.InstallMap(map,journal,cursorPoint)
         local regions=journal.state.showSubzones==true
         local names=journal.state.showSubzoneLabels==true
         local points=journal.state.showSubzonePoints==true
+        local hidden
+        if journal.state.hideZoneNameSubzones==true then
+            local info=A.Read(C_Map and C_Map.GetMapInfo,id)
+            local zone=type(info)=="table" and info.name or (journal.state.mapID==id and journal.state.zone)
+            if A.Text(zone,160) then hidden=zone end
+        end
         local size=A.Integer(journal.state.subzoneLabelSize,2,24) and journal.state.subzoneLabelSize or S.DEFAULT_LABEL_SIZE
         if not self.available or not (regions or names or points) or A.Read(self.IsVisible,self)==false then
             self:CancelSubzones();front.frame:Hide();self.subzoneModel=nil
@@ -752,11 +885,11 @@ function S.InstallMap(map,journal,cursorPoint)
         if pending and not pending.thread then self.subzonePending=nil;pending=nil end
         if pending and pending.thread then
             if pending.id==id and pending.width==w and pending.height==h and pending.regions==regions
-                and pending.names==names and pending.points==points and pending.size==size then return end
+                and pending.names==names and pending.points==points and pending.size==size and pending.hidden==hidden then return end
             self:CancelSubzones()
         end
         if cacheID==id and cacheRevision==revision and width==w and height==h
-            and lastRegions==regions and lastLabels==names and lastPoints==points and lastSize==size then
+            and lastRegions==regions and lastLabels==names and lastPoints==points and lastSize==size and lastHidden==hidden then
             self.subzoneModel=model;front.frame:Show();return
         end
         local revisionAtStart=revision
@@ -774,7 +907,7 @@ function S.InstallMap(map,journal,cursorPoint)
                 local resolution=cacheID==id and model and #rows>=#model.rows*0.75 and model.grid or nil
                 nextModel=S.Build(rows,checkpoint,resolution,cacheID==id and model or nil)
             end
-            paint(self,back,nextModel,w,h,regions,names,points,size,checkpoint)
+            paint(self,back,nextModel,w,h,regions,names,points,size,hidden,checkpoint)
             return nextModel
         end,function(ok,result)
             if self.subzonePending~=job then return end
@@ -788,13 +921,13 @@ function S.InstallMap(map,journal,cursorPoint)
             front.frame:Hide();front,back=back,front;front.frame:Show();expose()
             model=result;self.subzoneModel=model;self.subzoneError=nil;failed=nil
             cacheID,cacheRevision,width,height=id,revisionAtStart,w,h
-            lastRegions,lastLabels,lastPoints,lastSize=regions,names,points,size
+            lastRegions,lastLabels,lastPoints,lastSize,lastHidden=regions,names,points,size,hidden
             -- Crossings arriving during a build are collected in the next
             -- snapshot, rather than repeatedly restarting and starving drawing.
             if journal.subzones:Revision(id)~=revisionAtStart then self:RenderSubzones() end
         end,self)
         job.id,job.width,job.height,job.regions,job.names,job.size=id,w,h,regions,names,size
-        job.points=points
+        job.points=points;job.hidden=hidden
         self.subzonePending=job
     end
     local hoverX,hoverY,hoverModel

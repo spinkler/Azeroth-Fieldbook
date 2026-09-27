@@ -27,6 +27,43 @@ function ns.CreateGatheringJournal(saved,getBrightness)
     saved.schema=1
     saved.entries=type(saved.entries)=="table" and saved.entries or {}
     local journal={entries=saved.entries,revision=0}
+    local dimensions={}
+    local function mapSize(id)
+        if dimensions[id] then return dimensions[id][1],dimensions[id][2] end
+        if not C_Map or type(C_Map.GetMapWorldSize)~="function" then return end
+        local ok,w,h=pcall(C_Map.GetMapWorldSize,id)
+        if ok and public(w) and public(h) and type(w)=="number" and type(h)=="number"
+            and w>0 and h>0 and w<=100000 and h<=100000 then
+            dimensions[id]={w,h};return w,h
+        end
+    end
+    local function nearby(points,p,w,h)
+        local best,bestDistance,bestKey
+        for key,q in pairs(points) do
+            local dx,dy=(p.x-q.x)*w/10000,(p.y-q.y)*h/10000
+            local distance=dx*dx+dy*dy
+            if distance<=100 and (not bestDistance or distance<bestDistance or
+                (distance==bestDistance and key<bestKey)) then
+                best,bestDistance,bestKey=q,distance,key
+            end
+        end
+        return best
+    end
+    local cleaned=setmetatable({},{__mode="k"})
+    local function cleanMap(map,id)
+        if cleaned[map] then return end
+        local w,h=mapSize(id);if not w then return end
+        local keys={};for key in pairs(map.points) do keys[#keys+1]=key end
+        -- Stable positions prevent clusters drifting as repeated interactions arrive.
+        table.sort(keys)
+        local retained={}
+        for _,key in ipairs(keys) do
+            local p=map.points[key];local existing=nearby(retained,p,w,h)
+            if existing then existing.seenAt=math.max(existing.seenAt,p.seenAt)
+            else retained[key]=p end
+        end
+        map.points=retained;cleaned[map]=true
+    end
     -- Validate the small, literal-only schema when loading saved data.
     for id,entry in pairs(journal.entries) do
         if type(entry)~="table" or not kinds[entry.kind] or not cleanName(entry.name)
@@ -58,6 +95,7 @@ function ns.CreateGatheringJournal(saved,getBrightness)
                         else p.approximate=true end
                     end
                     ns.CreatureLocations.TrimPoints(map.points)
+                    cleanMap(map,mapID)
                 end
             end
         end
@@ -113,7 +151,11 @@ function ns.CreateGatheringJournal(saved,getBrightness)
             end
             if map and validPoint(sample.point) then
                 local p=sample.point
-                map.points[1+p.x*10001+p.y]={x=p.x,y=p.y,seenAt=p.seenAt,approximate=true}
+                cleanMap(map,sample.mapID)
+                local w,h=mapSize(sample.mapID)
+                local existing=w and nearby(map.points,p,w,h) or map.points[1+p.x*10001+p.y]
+                if existing then existing.seenAt=math.max(existing.seenAt,p.seenAt)
+                else map.points[1+p.x*10001+p.y]={x=p.x,y=p.y,seenAt=p.seenAt,approximate=true} end
                 ns.CreatureLocations.TrimPoints(map.points)
             end
         end

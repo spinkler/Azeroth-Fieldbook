@@ -45,6 +45,102 @@ class SubzoneTests(unittest.TestCase):
             end
         ''')
 
+    def test_cleanup_keeps_edges_crossings_and_other_maps(self):
+        self.lua.execute('''
+            local function point(x,y) return {kind='interior',mapID=101,name='Lake',x=x,y=y,at=100} end
+            local border=crossing('Lake','Bank',2500,2000)
+            s.store[101]={point(2000,2000),point(8000,2000),point(8000,8000),point(2000,8000),
+                point(5000,2000),point(5000,5000),point(6000,6000),border,{invalid='preserve'}}
+            s.store[102]={point(3000,3000)}
+            local other=snapshot(s.store[102]);s.index={};s:Changed(101)
+            j.state.showSubzones=true;j.state.showSubzonePoints=true;c:Refresh();settle()
+            local messages={};DEFAULT_CHAT_FRAME={AddMessage=function(_,text) messages[#messages+1]=text end}
+            click(m.cleanPoints);settle()
+            assert(#messages>=3 and messages[1]:find('Starting cleanup',1,true))
+            assert(messages[#messages]:find('kept',1,true) and messages[#messages]:find('cross-over',1,true))
+            assert(m.cleanPoints:GetWidth()>m.layerMenu:GetWidth())
+            assert(#s.store[101]==7 and #s:Crossings(101)==1)
+            assert(s.store[101][5].y==2000,'Collinear perimeter evidence stays')
+            assert(s.store[101][6]==border and s.store[101][7].invalid=='preserve')
+            assert(snapshot(s.store[102])==other)
+            assert(m.message:GetText():find('Removed 2',1,true))
+            click(m.cleanPoints);settle();assert(#s.store[101]==7,'Cleanup is idempotent')
+            assert(m.message:GetText():find('Removed 0',1,true))
+            local count
+            local readOnly=ns.CreateAtlasJournal({schema=999})
+            assert(not S.CleanInterior(readOnly,101,function() error('read only') end))
+        ''')
+
+    def test_cleanup_preserves_overlapping_region_ownership_and_rejects_stale_work(self):
+        self.lua.execute('''
+            s.store[101]={}
+            local function point(name,x,y)
+                s.store[101][#s.store[101]+1]={kind='interior',mapID=101,name=name,x=x,y=y,at=100}
+            end
+            for _,p in ipairs({{1000,1000},{7000,1000},{7000,7000},{1000,7000},{2000,2000},{6500,4000}}) do point('A',p[1],p[2]) end
+            for _,p in ipairs({{5000,2000},{9000,2000},{9000,6000},{5000,6000},{6000,4000}}) do point('B',p[1],p[2]) end
+            s.index={};s:Changed(101)
+            local before=S.Build(s:Samples(101));local removed
+            assert(S.CleanInterior(j,101,function(n) removed=n end));settle()
+            assert(removed and removed>0)
+            local after=S.Build(s:Samples(101))
+            for x=1000,9000,100 do for y=1000,7000,100 do
+                local a,b=before:At(x,y),after:At(x,y)
+                assert((a and a.name)==(b and b.name),'Cleanup must preserve overlap ownership')
+            end end
+            point('A',2000,2000);s.index={};s:Changed(101);s:Index(101)
+            local message;removed=nil
+            S.CleanInterior(j,101,function(n,text) removed=n;message=text end)
+            local clock=0;debugprofilestop=function() clock=clock+2;return clock end
+            S.Step();debugprofilestop=nil
+            point('A',2500,2500);s:Changed(101)
+            local unchanged=snapshot(s.store);settle()
+            assert(removed==nil and message and snapshot(s.store)==unchanged,'New observations invalidate cleanup')
+        ''')
+
+    def test_hide_zone_named_areas_is_display_only_and_survives_buffer_swaps(self):
+        self.lua.execute('''
+            s.store[101]={}
+            for _,p in ipairs({{'Meadow',2000,2000},{'Meadow',4500,2000},{'Meadow',2000,7000},
+                {'Forest',5500,2000},{'Forest',8000,2000},{'Forest',8000,7000}}) do
+                s.store[101][#s.store[101]+1]={kind='interior',mapID=101,name=p[1],x=p[2],y=p[3],at=100}
+            end
+            s:Changed(101)
+            C_Map.GetMapInfo=function(id) return {mapID=id,name=id==101 and 'Meadow' or 'Other'} end
+            j.state.showSubzones=true;j.state.showSubzoneLabels=true;j.state.showSubzonePoints=true
+            c:Refresh();settle()
+            local model=m.map.subzoneModel;local original=snapshot(s.store)
+            local function verify(hidden)
+                local visible,other=0,0
+                for _,kind in ipairs({'strips','triangles'}) do
+                    local pool=kind=='strips' and m.map.subzoneTextures or m.map.subzoneTriangles
+                    for i,row in ipairs(model[kind]) do
+                        local shown=pool[i] and pool[i]:IsVisible()
+                        if row.area.name=='Meadow' then
+                            assert(shown==not hidden,'Matching shading must follow the filter')
+                            visible=visible+1
+                        elseif shown then other=other+1 end
+                    end
+                end
+                assert(visible>0 and other>0,'Exercise matching and neighbouring shading')
+                for _,label in ipairs(m.map.subzoneLabels) do
+                    if hidden and label:IsVisible() then assert(label:GetText()~='Meadow') end
+                end
+                local dots=0;for _,dot in ipairs(m.map.subzoneDots) do if dot:IsVisible() then dots=dots+1 end end
+                assert(dots==#model.rows,'Filtering shading cannot hide checked sample points')
+                assert(m.map.subzoneModel==model and snapshot(s.store)==original,'Do not rebuild geometry or mutate evidence')
+            end
+            verify(false)
+            for i=1,6 do
+                local hidden=i%2==1
+                m.hideZoneAreas:SetChecked(hidden);click(m.hideZoneAreas);settle();verify(hidden)
+            end
+            m.hideZoneAreas:SetChecked(true);click(m.hideZoneAreas);settle()
+            assert(ns.CreateAtlasJournal(saved).state.hideZoneNameSubzones==true,'Save the character display preference')
+            C_Map.GetMapInfo=function(id) return {mapID=id,name='Other'} end
+            c:Refresh();settle();verify(false)
+        ''')
+
     def test_logging_labels_positions_deduplication_and_reload(self):
         self.lua.execute('''
             assert(not j.state.showSubzones and #s:Crossings(101)==0)
@@ -404,7 +500,8 @@ class SubzoneTests(unittest.TestCase):
             assert(survey.index[101].ready and #rows<1000)
             assert(rows[#rows].from=='C' and rows[#rows].to=='D' and rows[#rows].x==4010)
             local samples=survey:Samples(101)
-            assert(samples[#samples].kind=='interior' and samples[#samples].name=='D','Logout also retains pending interior evidence')
+            assert(samples[#samples-1].kind=='interior' and samples[#samples-1].name=='C','Retain the first pending interior sample')
+            assert(samples[#samples].to=='D','Reject the nearby pending interior sample without suppressing its crossing')
             local value=snapshot(data);settle();assert(snapshot(data)==value,'Cancelled index job must not commit twice')
             local future={schema=999,subzones=data.subzones}
             value=snapshot(future);local newer=ns.CreateAtlasJournal(future).subzones
@@ -436,9 +533,9 @@ class SubzoneTests(unittest.TestCase):
             name='Mine';px=.1;py=.1
             assert(survey:Observe() and #survey:Samples(101)==1,'Seed the current area without needing a crossing')
             assert(not survey:Observe(),'Stationary polling must not add data')
-            px=.1999;assert(not survey:Observe(),'99.9 yards is too close')
+            px=.15;assert(not survey:Observe(),'Exactly 50 yards is too close')
             px=.2;assert(survey:Observe(),'Exactly 100 horizontal yards permits a sample')
-            py=.1499;assert(not survey:Observe(),'Use the map height for vertical yard distances')
+            py=.125;assert(not survey:Observe(),'Use the map height for vertical yard distances')
             py=.15;assert(survey:Observe(),'Exactly 100 vertical yards permits a sample')
             assert(#survey:Samples(101)==3 and #survey:Crossings(101)==0)
             local model=S.Build(survey:Samples(101))
@@ -450,11 +547,32 @@ class SubzoneTests(unittest.TestCase):
             assert(not restored:Observe() and snapshot(data.subzones)==before,'Reload must not duplicate the initial sample')
             assert(dimensions==2,'Read dimensions once per map index, not each poll')
             mapID=102;assert(restored:Observe(),'Maps have independent interior coverage')
-            name='Tunnel';assert(restored:Observe(),'Nearby different areas retain their own interior evidence')
+            name='Tunnel';assert(restored:Observe(),'A nearby name change still records its crossing')
             assert(#restored:Crossings(102)==1,'The real name change still records a crossing')
+            assert(#restored:Samples(102)==2,'A different area does not bypass interior spacing')
             px=nil;assert(not restored:Observe(),'Unavailable coordinates cannot become interior evidence')
             local future={schema=999};ns.CreateAtlasJournal(future).subzones:Observe()
             assert(not future.subzones)
+        ''')
+
+    def test_interior_spacing_checks_all_samples_but_does_not_restrict_crossings(self):
+        self.lua.execute('''
+            C_Map.GetMapWorldSize=function() return 1000,2000 end
+            local data={subzones={[101]={crossing('A','B',1000,1000),
+                {kind='interior',mapID=101,name='Elsewhere',x=5000,y=1000,at=100}}}}
+            local survey=ns.CreateAtlasJournal(data).subzones
+            name='Mine';px=.15;py=.1
+            assert(not survey:Observe(),'An existing crossing blocks an interior sample within or exactly 50 yards')
+            px=.1501
+            assert(survey:Observe(),'50.1 yards is eligible immediately after a rejected attempt')
+            survey:Reset();px=.55
+            assert(not survey:Observe(),'Interior samples from other named areas also block sampling')
+            survey:Reset();px=.6
+            assert(survey:Observe(),'Allow an interior sample outside the exclusion radius')
+            name='Tunnel';px=.601
+            assert(survey:Observe(),'A crossing can be recorded beside an interior sample')
+            assert(#survey:Crossings(101)==2)
+            assert(#survey:Samples(101)==5,'The crossing must not also create a nearby interior sample')
         ''')
 
     def test_interior_capture_is_bounded_continues_hidden_and_has_honest_hover(self):

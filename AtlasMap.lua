@@ -181,6 +181,7 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
         self.panX=math.max(0,math.min(self:GetWidth()*(zoom-1),(self.panX+x)*zoom/self.zoom-x))
         self.panY=math.max(0,math.min(self:GetHeight()*(zoom-1),(self.panY+y)*zoom/self.zoom-y))
         self.zoom=zoom;positionCanvas()
+        if self.UpdateRegionHighlight then self:UpdateRegionHighlight() end
         if GameTooltip then GameTooltip:Hide() end
     end
     map:EnableMouseWheel(true)
@@ -240,6 +241,31 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
     local cachedMap
     local displayedMapID,playerElapsed
     if journal.subzones and ns.AtlasSubzones then ns.AtlasSubzones.InstallMap(map,journal,cursorPoint) end
+    -- Reuse the native map highlight shape, cropped and positioned in map coordinates.
+    map.regionHighlight=canvas:CreateTexture(nil,"ARTWORK",nil,1)
+    map.regionHighlight:SetBlendMode("ADD");map.regionHighlight:Hide()
+    function map:UpdateRegionHighlight()
+        local texture=self.regionHighlight;texture:Hide()
+        if not self.available or not displayedMapID or self.placing or drag or
+            A.Read(self.IsVisible,self)==false or A.Read(self.IsMouseOver,self)~=true or
+            (ns.IsMapClickNavigationEnabled and not ns.IsMapClickNavigationEnabled()) or
+            (IsControlKeyDown and IsControlKeyDown()) then return end
+        local fn=C_Map and C_Map.GetMapHighlightInfoAtPosition
+        if type(fn)~="function" then return end
+        local x,y=cursorPoint();if not x then return end
+        local ok,file,atlas,u,v,w,h,left,top=pcall(fn,displayedMapID,
+            (x+self.panX)/(self:GetWidth()*self.zoom),(y+self.panY)/(self:GetHeight()*self.zoom))
+        if not ok or not A.Number(u,0,1) or not A.Number(v,0,1) or
+            not A.Number(w,0.000001,2) or not A.Number(h,0.000001,2) or
+            not A.Number(left,-1,2) or not A.Number(top,-1,2) then return end
+        if A.Text(atlas,256) then texture:SetAtlas(atlas)
+        elseif A.Integer(file,1,2147483647) then texture:SetTexture(file,nil,nil,"TRILINEAR")
+        else return end
+        texture:SetTexCoord(0,u,0,v)
+        texture:ClearAllPoints()
+        texture:SetPoint("TOPLEFT",canvas,"TOPLEFT",left*self:GetWidth(),-top*self:GetHeight())
+        texture:SetSize(w*self:GetWidth(),h*self:GetHeight());texture:Show()
+    end
     function map:UpdateWeather()
         if self.weatherText then self.weatherText:SetText("|cffffd100Observed Weather:|r "..journal:WeatherText(displayedMapID)) end
     end
@@ -249,6 +275,7 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
     map.playerArrow:SetSize(18,18);map.playerArrow:SetTexture("Interface\\Minimap\\MinimapArrow")
     map.playerArrow:Hide()
     function map:UpdatePlayer()
+        self:UpdateRegionHighlight()
         if self.RenderSubzones then self:RenderSubzones();self:SubzoneHover() end
         local arrow=self.playerArrow;arrow:Hide()
         self.playerCoordinates:SetText("Player coordinates unavailable")
@@ -269,7 +296,7 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
         arrow:SetRotation(facing);arrow:Show()
     end
     function map:SuspendPlayer()
-        self:SetScript("OnUpdate",nil);self.playerArrow:Hide();playerElapsed=0
+        self:SetScript("OnUpdate",nil);self.playerArrow:Hide();self.regionHighlight:Hide();playerElapsed=0
     end
     function map:ResumePlayer()
         self:UpdatePlayer()
@@ -465,6 +492,8 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
         x,y=(x+self.panX)/(self:GetWidth()*self.zoom),(y+self.panY)/(self:GetHeight()*self.zoom)
         if A.Number(x,0,1) and A.Number(y,0,1) then onPlace(math.floor(x*10000+0.5),math.floor(y*10000+0.5)) end
     end)
+    map:HookScript("OnEnter",function(self) self:UpdateRegionHighlight() end)
+    map:HookScript("OnLeave",function(self) self.regionHighlight:Hide() end)
     map:SetScript("OnShow",function(self) self:ResumePlayer() end)
     map:SetScript("OnHide",function(self)
         self.subzoneHover=false;self:CancelPan();leave();self:SuspendPlayer()

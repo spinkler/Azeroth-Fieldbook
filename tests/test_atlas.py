@@ -525,6 +525,41 @@ class AtlasUITests(unittest.TestCase):
             map.available=false;map:ZoomBy(1);assert(map.zoom==1)
         ''')
 
+    def test_native_region_highlight_tracks_cursor_zoom_and_lifetime(self):
+        self.lua.execute('''
+            local map=m.map;local w,h=map:GetWidth(),map:GetHeight()
+            map.left,map.top=0,h;cursorX,cursorY=w*.25,h*.25
+            map.IsMouseOver=function() return true end
+            local calls=0
+            C_Map.GetMapHighlightInfoAtPosition=function(id,x,y)
+                calls=calls+1
+                assert(math.abs(x-.25)<.00001 and math.abs(y-.75)<.00001)
+                return 12345,nil,.8,.9,.2,.3,.1,.4
+            end
+            map:UpdateRegionHighlight()
+            local glow=map.regionHighlight
+            assert(glow:IsShown() and glow.texture==12345)
+            assert(math.abs(glow:GetWidth()-w*.2)<.001 and math.abs(glow.point[5]+h*.4)<.001)
+            assert(glow.texCoord[2]==.8 and glow.texCoord[4]==.9)
+            map:ZoomBy(1);assert(glow:IsShown(),'Highlight uses the same zoom transform as clicks')
+            map.placing=true;map:UpdateRegionHighlight();assert(not glow:IsShown())
+            map.placing=false
+            ns.IsMapClickNavigationEnabled=function() return false end
+            map:UpdateRegionHighlight();assert(not glow:IsShown())
+            ns.IsMapClickNavigationEnabled=function() return true end
+            map:UpdateRegionHighlight();assert(glow:IsShown())
+            map.scripts.OnLeave(map);assert(not glow:IsShown())
+            map.IsMouseOver=function() return false end
+            local before=calls;map:UpdateRegionHighlight();assert(calls==before)
+            map.IsMouseOver=function() return true end
+            C_Map.GetMapHighlightInfoAtPosition=function() return nil end
+            map:UpdateRegionHighlight();assert(not glow:IsShown())
+            C_Map.GetMapHighlightInfoAtPosition=function() error('unavailable') end
+            map:UpdateRegionHighlight();assert(not glow:IsShown())
+            C_Map.GetMapHighlightInfoAtPosition=nil;map:UpdateRegionHighlight()
+            map.scripts.OnHide(map);assert(not glow:IsShown())
+        ''')
+
     def test_world_map_click_navigation_and_toggle(self):
         self.lua.execute('''
             local map=m.map;local w,h=map:GetWidth(),map:GetHeight()
@@ -587,7 +622,7 @@ class AtlasUITests(unittest.TestCase):
                 assert(owner==m.zone);generate(owner,description())
             end}
             local before=#j:List('',nil,true)
-            assert(m.continent==nil and m.zone:GetWidth()==m.layerMenu:GetWidth())
+            assert(m.continent==nil and m.zone:GetWidth()==m.layerMenu:GetWidth()+m.cleanPoints:GetWidth()+8)
             m.zone.scripts.OnClick(m.zone);assert(chosen);chosen()
             assert(j.state.mapID==102 and #j:List('',nil,true)==before)
         ''')

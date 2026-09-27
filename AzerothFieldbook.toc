@@ -2,7 +2,7 @@
 ## Title: Azeroth Fieldbook
 ## Notes: A personal monster journal for World of Warcraft.
 ## Author: Spinkler
-## Version: 0.13.30
+## Version: 0.13.37
 ## X-Curse-Project-ID: 1708795
 ## SavedVariablesPerCharacter: AzerothFieldbookDB, AzerothFieldbookGatheringDB, AzerothFieldbookAtlasDB, AzerothFieldbookAnglingDB
 ## SavedVariables: AzerothFieldbookAccountDB

@@ -119,3 +119,12 @@ Bestiary's existing controls continue to apply only to Bestiary data. Positions
 record the player at cast start or the matched skill-rejected interaction and
 are not exact world-object coordinates. Restricted or unidentifiable tooltip
 data cannot be discovered or attributed to a failed interaction safely.
+
+### v0.13.35 — ten-yard position spacing
+
+Load-time cleanup and interaction capture merge positions at most ten yards
+apart within each resource/map. Stable coordinate-key order determines retained
+positions; latest seenAt is preserved. Map width and height are applied separately
+and cached per journal. Missing dimensions preserve points and retry cleanup on
+interaction. Tests cover exact thresholds, asymmetric dimensions, resource/map
+isolation, reload cleanup, unavailable APIs and preserved interaction totals.

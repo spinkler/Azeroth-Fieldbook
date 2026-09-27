@@ -299,6 +299,19 @@ do
     click('Show Damage');C_Item={GetItemInfo=function() return nil end}
     check(click('Show Damage') and book.lootRows[1].name.text=='Item 123','uncached item uses placeholder')
     click('Show Damage')
+    journal.entries[42].loot.items[50]={quantity=2,drops=1}
+    journal.entries[42].loot.items[60]={quantity=1,drops=1}
+    C_Item={GetItemInfo=itemInfo,GetItemInfoInstant=function(id)
+        return id,nil,nil,nil,nil,id==60 and 4 or 7,id==50 and 6 or 2
+    end}
+    click('Show Damage')
+    check(book.lootRows[1].itemID==60 and book.lootRows[2].itemID==123 and book.lootRows[3].itemID==50,'skinning materials sort last; armour stays normal')
+    check(book.skinningHeading:IsShown() and book.skinningHeading.text=='Skinning','skinning heading shown')
+    check(book.lootRows[3].stats.text=='2 items · 1/4 corpses · 25.0%','grouping preserves observed quantities/rates')
+    click('Show Damage');check(not book.skinningHeading:IsShown(),'heading hidden in damage view')
+    C_Item={GetItemInfo=itemInfo};journal.entries[42].loot.items[50]=nil
+    click('Show Damage');check(not book.skinningHeading:IsShown(),'heading hidden when no skinning items remain')
+    click('Show Damage')
     journal.entries[42].loot=nil;GetItemInfo=prior;C_Item=priorItemAPI
 end
 check(click('Record damage taken'),'damage form opens')

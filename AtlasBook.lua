@@ -136,6 +136,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.subzones:SetChecked(state.showSubzones==true)
         m.subzoneLabels:SetChecked(state.showSubzoneLabels==true)
         m.subzonePoints:SetChecked(state.showSubzonePoints==true)
+        m.hideZoneAreas:SetChecked(state.hideZoneNameSubzones==true)
         m.labelSize:Display(A.Integer(state.subzoneLabelSize,2,24) and state.subzoneLabelSize or ns.AtlasSubzones.DEFAULT_LABEL_SIZE)
         m.brightness:Display(A.Number(state.mapBrightness,0.2,1) and math.floor(state.mapBrightness*100+0.5) or 100)
         local e=journal:Get(state.selected)
@@ -207,7 +208,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.zone=U.ZoneMenu(m,342,-91,306,function()
             local ids={state.mapID};for _,row in ipairs(A.MapCatalog(journal)) do ids[#ids+1]=row.mapID end;return ids
         end,function(id,name) c:SetZone(id,name) end)
-        m.layerMenu=U.MenuButton(m,"Map Layers",342,-174,306,function(self)
+        m.layerMenu=U.MenuButton(m,"Map Layers",342,-174,130,function(self)
             if not MenuUtil or type(MenuUtil.CreateContextMenu)~="function" then return end
             if GameTooltip then GameTooltip:Hide() end
             MenuUtil.CreateContextMenu(self,function(_,root)
@@ -229,13 +230,27 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             end)
         end)
         U.Tip(m.layerMenu,"Choose which discovery markers appear on the map. Check several layers or use Show all / Hide all. The discovery index and sub-zone controls are unchanged.")
+        m.cleanPoints=U.Button(m,"Clean Redundant Points",480,-174,168,function()
+            local started=ns.AtlasSubzones.CleanInterior(journal,state.mapID,function(count,message)
+                m.cleanPoints:SetEnabled(not journal.readOnly)
+                c:Refresh()
+                if message and DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAzeroth Fieldbook:|r "..message) end
+                c:Message(message or ("Removed "..count.." redundant interior sample"..(count==1 and "." or "s.")))
+            end,function(message)
+                c:Message(message)
+                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAzeroth Fieldbook:|r "..message) end
+            end)
+            if started then m.cleanPoints:SetEnabled(false);c:Message("Checking interior samples on this map...") end
+        end)
+        m.cleanPoints:SetEnabled(not journal.readOnly)
+        U.Tip(m.cleanPoints,"Remove redundant interior samples on the displayed map. Preserves cross-over points, all perimeter points and samples needed to separate overlapping areas. Recorded discoveries are unchanged.")
         -- Keep the survey controls together within the existing header height.
         local group=CreateFrame("Frame",nil,m,"BackdropTemplate");m.subzoneControls=group
         group:SetPoint("TOPLEFT",660,-91);group:SetSize(262,107);group:EnableMouse(false)
         group:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8})
         group:SetBackdropColor(0.055,0.04,0.022,0.6);group:SetBackdropBorderColor(0.45,0.30,0.13,0.75)
         U.Label(group,"Sub-zones",12,-7,80,"GameFontNormalSmall")
-        m.labelSize=U.SmallSlider(group,"Label size",100,-84,56,2,24,1,function(v) return tostring(v) end,function(value)
+        m.labelSize=U.SmallSlider(group,"Label size",100,-68,56,2,24,1,function(v) return tostring(v) end,function(value)
             if not journal.readOnly then state.subzoneLabelSize=value end
             c:Refresh()
         end)
@@ -245,18 +260,25 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             c:Refresh()
         end)
         U.Tip(m.brightness,"Map artwork brightness (20–100%). Sub-zone shading, labels, markers and the player arrow keep their contrast.")
-        m.subzones=U.Check(group,"Shading",10,-27,65,function(on)
+        m.subzones=U.Check(group,"Shading",10,-23,65,function(on)
             if not journal.readOnly then state.showSubzones=on end;c:Refresh()
         end)
-        U.Tip(m.subzones,"Shade self-discovered sub-zones after three non-collinear observations. Crossings and interior samples about every 100 yards collect while playing, even with these layers hidden. Points and Labels are independent display options. Hover for evidence details. Unvisited areas stay blank; inferred boundaries may be inaccurate.")
-        m.subzonePoints=U.Check(group,"Points",10,-53,88,function(on)
+        U.Tip(m.subzones,"Shade self-discovered sub-zones after three non-collinear observations. Crossings and interior samples with more than 50 yards of clearance collect while playing, even with these layers hidden. Points and Labels are independent display options. Hover for evidence details. Unvisited areas stay blank; inferred boundaries may be inaccurate.")
+        m.subzonePoints=U.Check(group,"Points",10,-43,88,function(on)
             if not journal.readOnly then state.showSubzonePoints=on end;c:Refresh()
         end)
         U.Tip(m.subzonePoints,"Checked: show every recorded crossing and interior sample, including points incorporated into shading. Unchecked: retain automatic isolated dots with shading and hide incorporated samples. All dots stay small when zooming. Recording and saved observations are unchanged.")
-        m.subzoneLabels=U.Check(group,"Labels",10,-79,65,function(on)
+        m.subzoneLabels=U.Check(group,"Labels",10,-63,65,function(on)
             if not journal.readOnly then state.showSubzoneLabels=on end;c:Refresh()
         end)
         U.Tip(m.subzoneLabels,"Show discovered sub-zone names independently of boundary shading. Names try two lines before hiding for lack of space. Adjust their text with Label size.")
+        m.hideZoneAreas=U.Check(group,"Hide zone-name areas",10,-83,218,function(on)
+            if not journal.readOnly then state.hideZoneNameSubzones=on end;c:Refresh()
+        end)
+        U.Tip(m.hideZoneAreas,"Hide shading and labels for areas whose name matches the displayed zone (for example Loch Modan in Loch Modan). Sample points, recording and other sub-zones are unchanged.")
+        for _,check in ipairs({m.subzones,m.subzonePoints,m.subzoneLabels,m.hideZoneAreas}) do
+            check:SetSize(20,20)
+        end
         m.map=ns.CreateAtlasMap(m,journal,function(id) c:Select(id) end,function(x,y)
             if c.placeCallback then
                 local callback=c.placeCallback;c.placeCallback=nil;m.map.placing=false;c:Message("")
@@ -301,7 +323,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             "|cffffd1004. Routes and passages|r\nChoose Route / Passage, then Save & route stops. Add existing places or named waypoints and use Up, Down and Remove to arrange them. Stops may span zones. Lines connect consecutive visible stops within the same map; they are recorded connections, not guaranteed safe paths.\n\n"..
             "|cffffd1005. Expeditions and connections|r\nExpeditions stores longer journals, dates and zone associations. Linked notes attaches a discovery to an expedition. Connections links Atlas discoveries or existing Bestiary and Gatherer's Compendium records. Removing a link leaves its source intact. Deleted sources leave unresolved links you can keep or remove.\n\n"..
             "|cffffd1006. Field reports|r\nPrepare Field Report creates a saved draft for a zone or selected discoveries. Choose records, optional private notes and expedition excerpts, then review the preview. Sending and importing reports are not available from this page yet.\n\n"..
-            "|cffffd1007. Self-discovered sub-zones|r\nThe Sub-zones group contains independent Shading, Points and Labels toggles. Checked Points shows every crossing and interior sample. Unchecked retains automatic isolated dots with shading and hides incorporated samples. Recording and saved evidence are unchanged. Label size adjusts text from 2–24, defaulting to 4, with a thin non-monochrome outline. Names try two lines before hiding for lack of space. Brightness dims only the map artwork from 20–100%. These display settings are saved for this character. While playing, the Atlas records readable same-map name changes, their position, previous position, from/to names and time. Loading screens, missing coordinates and large jumps cannot invent a crossing. With readable map dimensions, the Atlas also records your current sub-zone position and further interior samples about every 100 yards. Revisiting sampled ground adds no duplicate interior points. Interior observations record only their own area, position and time. Both types collect with the Atlas closed or layers hidden. Dots stay small when zooming. Checked Points keeps all samples visible over shading; unchecked uses automatic isolated dots. Three non-collinear observations can produce estimated shading. Convex perimeters may bridge bays or holes; more observations improve the evidence but never guarantee exact borders. Every observed area on the map receives a unique colour; new colours maximise contrast with existing assignments, which stay steady during live updates. Hover the map for names and nearby observation details.\n\n"..
+            "|cffffd1007. Self-discovered sub-zones|r\nThe Sub-zones group contains independent Shading, Points and Labels toggles. Hide zone-name areas hides shading and labels matching the displayed zone name without changing points or recorded evidence. Checked Points shows every crossing and interior sample. Unchecked retains automatic isolated dots with shading and hides incorporated samples. Recording and saved evidence are unchanged. Label size adjusts text from 2–24, defaulting to 4, with a thin non-monochrome outline. Names try two lines before hiding for lack of space. Brightness dims only the map artwork from 20–100%. These display settings are saved for this character. While playing, the Atlas records readable same-map name changes, their position, previous position, from/to names and time. Loading screens, missing coordinates and large jumps cannot invent a crossing. With readable map dimensions, the Atlas also records your current sub-zone position and further interior samples more than 50 yards from all other samples. Revisiting sampled ground adds no duplicate interior points. Interior observations record only their own area, position and time. Both types collect with the Atlas closed or layers hidden. Dots stay small when zooming. Checked Points keeps all samples visible over shading; unchecked uses automatic isolated dots. Three non-collinear observations can produce estimated shading. Convex perimeters may bridge bays or holes; more observations improve the evidence but never guarantee exact borders. Every observed area on the map receives a unique colour; new colours maximise contrast with existing assignments, which stay steady during live updates. Hover the map for names and nearby observation details.\n\n"..
             "|cffffd1008. Your journal|r\nAtlas records and browsing settings are saved for this character, independently of Bestiary account tracking, resets, backups and sharing. Sub-zone observations do not create discovery entries or enter field reports. The Options cog opens shared Fieldbook settings.",
         frameName="AzerothFieldbookAtlasSection",build=build,onOpen=function()
             if c.main then c.main.map:Invalidate() end;c:Refresh()

@@ -109,6 +109,40 @@ class GatheringTrackingTests(unittest.TestCase):
     def setUp(self):
         self.lua = client()
 
+    def test_ten_yard_node_cleanup_and_capture(self):
+        self.lua.execute('''
+            local reads=0
+            C_Map.GetMapWorldSize=function() reads=reads+1;return 1000,2000 end
+            local function record(kind,name,x,y,mapID,stamp)
+                return journal:RecordInteraction(kind,name,{mapID=mapID or 37,name='Test',
+                    point={x=x,y=y,seenAt=stamp or 10}},'Test',stamp or 10)
+            end
+            local id=record('herb','Peacebloom',1000,1000)
+            record('herb','Peacebloom',1100,1000,37,20)
+            record('herb','Peacebloom',1000,1050,37,30)
+            assert(count(journal.entries[id].locations[37].points)==1,'Exactly ten yards merges on either axis')
+            record('herb','Peacebloom',1101,1000)
+            assert(count(journal.entries[id].locations[37].points)==2)
+            local ore=record('mineral','Copper Vein',1000,1000)
+            record('herb','Peacebloom',1000,1000,38)
+            assert(count(journal.entries[ore].locations[37].points)==1)
+            assert(count(journal.entries[id].locations[38].points)==1 and reads==2)
+            local points=journal.entries[id].locations[37].points
+            points[1+1050*10001+1000]={x=1050,y=1000,seenAt=40}
+            local interactions=journal.entries[id].interactions
+            journal=ns.CreateGatheringJournal(saved)
+            points=journal.entries[id].locations[37].points
+            assert(count(points)==2 and points[1+1000*10001+1000].seenAt==40)
+            assert(journal.entries[id].interactions==interactions)
+            C_Map.GetMapWorldSize=nil
+            points[1+1050*10001+1000]={x=1050,y=1000,seenAt=50}
+            journal=ns.CreateGatheringJournal(saved)
+            assert(count(journal.entries[id].locations[37].points)==3,'Unknown dimensions must not delete evidence')
+            C_Map.GetMapWorldSize=function() return 1000,2000 end
+            record('herb','Peacebloom',1050,1000)
+            assert(count(journal.entries[id].locations[37].points)==2,'Retry cleanup when dimensions become available')
+        ''')
+
     def test_passive_events_and_sent_only_never_record_or_sample(self):
         self.lua.execute('''
             for _,event in ipairs({'UPDATE_MOUSEOVER_UNIT','PLAYER_TARGET_CHANGED','CURSOR_CHANGED',
@@ -408,7 +442,7 @@ class GatheringTrackingTests(unittest.TestCase):
         self.lua.execute('''
             gather('Silverleaf','one');gather('Silverleaf','two')
             assert(entry().interactions==2 and count(points())==1)
-            for i=1,270 do px=i/1000;now=now+1;gather('Silverleaf','point'..i) end
+            for i=1,270 do px=i/300;now=now+1;gather('Silverleaf','point'..i) end
             assert(count(points())==256)
             for i=1,70 do mapID=100+i;mapName='Zone '..i;gather('Silverleaf','map'..i) end
             assert(count(entry().locations)==64)

@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.13.30 (Beta)
+# Azeroth Fieldbook 0.13.37 (Beta)
 
 Atlas and Almanac maps support scroll-wheel zoom (1×–4×) toward the pointer,
 including over map pins. Scroll down to return to the full map. Changing maps
@@ -6,6 +6,9 @@ resets zoom; the map frame and border stay fixed. Player coordinates remain
 visible in the map's lower-left corner with a thin antialiased black outline.
 While zoomed in, hold the left mouse button and drag to pan, including from a
 marker. Movement stays within the map edges; a short click retains its usual action.
+
+Both maps show the native zone/continent glow under the pointer when map
+navigation is enabled, following the artwork through zoom and pan.
 
 Both maps also support world-map navigation: **left-click** a zone to open it,
 or **right-click** to open the parent map. Disable **World-map click navigation**
@@ -29,7 +32,7 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.13.30 includes sharing, addon-version compatibility
+spell databases. Version 0.13.37 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
@@ -137,6 +140,13 @@ sub-zone crossings and encountered weather are observed automatically.
   estimates regions from your crossings and interior observations, with a unique colour for each area
   on the map. New colours maximise their minimum perceptual distance from those
   already assigned, retaining existing colours as the visible map updates.
+  **Clean redundant points**, beside Map Layers, removes interior samples strictly
+  inside an area's perimeter on the displayed map. Cross-over points, edge samples
+  and interior evidence needed to separate overlapping regions are retained.
+  Cleanup reports a count and leaves other maps and discoveries untouched.
+  **Hide zone-name areas** hides shading and labels matching the displayed zone
+  name (such as Loch Modan in Loch Modan). It defaults off, saves per character,
+  and leaves sample points, neighbouring regions and recorded evidence intact.
   Checked **Points** shows every recorded crossing and interior sample, including
   incorporated samples, as small dots that stay the same size when zooming.
   Unchecked retains automatic isolated dots with shading and hides incorporated
@@ -162,8 +172,9 @@ sub-zone crossings and encountered weather are observed automatically.
   distinct. If map dimensions are unavailable, the existing same-direction
   0.25% coordinate-cell fallback applies for borders. With readable map dimensions,
   the Atlas also records your initial sub-zone position and further interior
-  samples about every 100 yards. Revisiting sampled ground adds no duplicate
-  interior observations; different named areas retain their own samples. Up to
+  samples only when more than 50 yards from every existing sample on that map,
+  including other named areas and
+  cross-over points. Cross-over recording keeps its separate ten-yard rule. Up to
   4,096 total samples per map are retained, with at most 1,024 interior samples
   to leave room for crossing evidence. Interior samples carry a name, position
   and time, never an invented from/to transition.
@@ -847,7 +858,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.13.30 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
+Version 0.13.37 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,
@@ -901,3 +912,12 @@ Developed with AI-assisted coding tools.
 Design, direction, testing and final development decisions by the author.
 
 Bestiary defaults to automatically observed drops; Show Damage toggles the panel to damage records and back. Loot is displayed, with icons, tooltips, quantities and corpse drop percentages. Rates use readable creature loot sources, including money-only sources, rather than all kills. Empty or unavailable loot is not inferred. The most recent 128 corpses per creature are deduplicated across openings and reloads.
+
+Gathering map positions for the same resource and map are kept more than 10 yards
+apart. Existing nearby positions are merged on load where map dimensions are
+available, retaining a stable position and the latest observation time. Different
+resources remain distinct; counts and notes are unchanged.
+
+Creature loot lists group leatherworking materials under **Skinning** after other
+drops. This uses item categories, including for older records; the original loot
+method was not recorded, and the displayed observed rates remain unchanged.

@@ -1,5 +1,75 @@
 # Changelog
 
+## v0.13.37-beta - 2026-09-28
+
+This release includes all changes since v0.13.30-beta and the previous push at
+`6475d750ef47d6610e981ba29bfdeeca6599bdcd` (local versions 0.13.31–0.13.37).
+
+- Atlas interior samples now require strictly more than 50 yards from every
+  recorded sample on the same map, including cross-over points and differently
+  named sub-zones. Exactly 50 yards is rejected; rejected attempts do not delay
+  the next eligible sample. Cached spatial checks apply to queued observations
+  and reloads. Cross-over recording retains its separate ten-yard border rule.
+- Atlas and Almanac maps show the client's native zone/continent hover glow,
+  positioned for the current zoom and pan. The highlight clears on mouse exit,
+  hidden maps, placement mode and disabled navigation; missing map APIs are safe.
+- Add the saved, opt-in Hide zone-name areas checkbox to Atlas Sub-zones controls.
+  It hides shading and labels matching the displayed zone name, while preserving
+  sample points, stored observations, neighbouring geometry and colours. Four
+  checkboxes fit within the existing controls box without moving the map.
+- Add Clean Redundant Points beside a narrowed Map Layers selector. Cleanup
+  removes strictly enclosed interior observations on the selected map, retaining
+  perimeter evidence, cross-over points and samples needed to separate overlapping
+  regions. It checks potential ownership changes rather than protecting every
+  point whose influence overlaps another area's perimeter. Consecutive removal
+  decisions account for already removed samples.
+- Run cleanup in small background work slices. Report the start, sample count,
+  progress, removals and retention reasons in chat. Preserve other maps and
+  discoveries; reject stale results if samples arrive during processing, and
+  prohibit cleanup of read-only journals. The cleanup button has extra text room.
+- Merge gathering positions within or exactly ten yards for the same herb/mineral
+  on the same map, on load and during interaction capture. Keep a stable position
+  and newest observation time, without changing resource identities, notes or
+  interaction counts. Use cached map dimensions; unavailable dimensions preserve
+  positions and defer cleanup until a subsequent interaction can resolve them.
+- Group leatherworking materials under a Skinning heading at the bottom of
+  creature loot lists. Use item categories for existing records as well as new
+  ones; leather armour remains ordinary loot. Historical loot method was not
+  recorded, so this is material grouping, not a new source attribution or drop
+  rate calculation. Quantities and observed rates are unchanged.
+- Expand regression coverage for spacing thresholds, reloads, pending samples,
+  cleanup boundaries and concurrency, display filtering, hover rendering,
+  gathering cleanup and loot grouping. The full 47-file test suite passes.
+
+## v0.13.35 - v0.13.37 - Included in v0.13.37-beta
+
+- Gathering locations now merge positions within or exactly 10 yards for the same resource on the same map. Existing saved nodes are cleaned on load, keeping a stable position and the newest observation time; nearby interactions update that position instead of adding another pin.
+- Different resources/maps, notes and interaction totals remain distinct. Distances use cached map dimensions; unavailable dimensions leave existing positions intact and cleanup retries on the next interaction.
+- Creature loot lists place leatherworking materials under a Skinning heading after other loot. Classification uses item metadata (including existing records); historical loot method and observed rates are unchanged. Leather armour remains ordinary loot.
+- Widened Clean Redundant Points and added chat progress and retention-reason counts. Cleanup now tests actual potential ownership changes instead of protecting every interior point whose influence overlaps another area's perimeter.
+
+
+
+## v0.13.34-beta - Included in v0.13.37-beta
+
+- Added “Clean redundant points” beside the narrowed Map Layers button. Cleanup removes strictly enclosed interior samples on the displayed map, preserving cross-over observations, perimeter samples and evidence influencing overlapping sub-zone boundaries.
+- Cleanup runs in small background work slices, reports the removal count and rejects stale results if new samples arrive. Read-only journals cannot be modified.
+
+## v0.13.33-beta - Included in v0.13.37-beta
+
+- Added a saved, opt-in “Hide zone-name areas” checkbox in the Atlas Sub-zones group. It hides shading and labels whose name exactly matches the displayed map's zone name, without altering sample points, recorded evidence, neighbouring geometry or colours.
+- Fits the fourth checkbox within the existing controls box and preserves the map layout.
+
+## v0.13.32-beta - Included in v0.13.37-beta
+
+- Interior samples now require strictly more than 50 yards from every other sample on the same map. Cross-over spacing is unchanged. Rejected attempts no longer impose a separate movement delay on the next eligible sample.
+- Atlas and Almanac maps use the client's native region-highlight artwork when hovering navigable zones or continents, with coordinates adjusted for zoom and pan. Highlights clear on mouse exit, hidden maps, placement mode and disabled navigation.
+
+## v0.13.31-beta - Included in v0.13.37-beta
+
+- New 100-yard interior observations are skipped when any recorded sample on the same map is less than 100 yards away, regardless of sub-zone name or sample type. A cached spatial grid keeps nearby-point checks inexpensive, including queued observations and reloads.
+- Cross-over points retain their existing border-pair spacing rules. Existing observations are preserved under their previous compaction rules.
+
 ## v0.13.30-beta - 2026-09-28
 
 Traveller's Atlas and Angler's Almanac are now working personal journals. This
