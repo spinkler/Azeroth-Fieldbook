@@ -4,6 +4,16 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to recover (does not move the tag)
+        required: true
+        type: string
+      github_only:
+        description: Skip CurseForge when its upload already succeeded
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -11,19 +21,47 @@ permissions:
 jobs:
   tests:
     uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ inputs.release_tag || github.ref }}
 
   release:
     needs: tests
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
 
     steps:
-      - name: Checkout
+      - name: Checkout release tooling
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      - name: Prepare version-specific release notes
+        run: python .github/scripts/prepare_release_notes.py "$RELEASE_TAG" "$RUNNER_TEMP/fieldbook-release-notes.md"
+
+      - name: Checkout release source
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Use prepared notes for publication
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import shutil
+          shutil.copyfile(Path(os.environ['RUNNER_TEMP']) / 'fieldbook-release-notes.md', 'RELEASE_NOTES.md')
+          meta = Path('.pkgmeta')
+          text = meta.read_text(encoding='utf-8')
+          old = 'filename: CHANGELOG.md'
+          assert text.count(old) == 1, 'Unexpected manual-changelog configuration'
+          meta.write_text(text.replace(old, 'filename: RELEASE_NOTES.md'), encoding='utf-8')
+
       - name: Package and release
         uses: BigWigsMods/packager@v2
+        with:
+          args: ${{ inputs.github_only && '-p 0' || '' }}
         env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_API_TOKEN: ${{ !inputs.github_only && secrets.CF_API_TOKEN || '' }}
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}

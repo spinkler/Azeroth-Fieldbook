@@ -8,6 +8,14 @@ operator-designated v0.11.0 milestone. The previous-push and previous-release
 baseline is `21abba4ba73d490d1f2d40cc7743ed26d59ea69c` (`v0.10.8-beta`).
 Both players must use the same installed addon version to share Bestiary records.
 
+- Recover publication after the full historical changelog exceeded GitHub's
+  release-description limit. Publish the complete current version summary with
+  a size check, preserve historical entries, and allow recovery from an existing
+  tag without uploading to CurseForge twice. Test the selected release source
+  before packaging; all 41 test files pass, including release-note regression
+  checks. Recovery baseline: `6460b95e73462df4c89faae904f2378a97937b51`;
+  the original v0.11.0-beta tag and addon files remain unchanged.
+
 - Replace the Herbs & Minerals wishlist with a working page styled after the
   Bestiary: parchment, left index, A-Z tabs, search and clear control, sorting,
   sixteen-row list, clipped hover-scrolling names, scrollbar and Previous/Next

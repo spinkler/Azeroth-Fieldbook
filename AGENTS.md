@@ -108,6 +108,13 @@ The tag push automatically:
 Do not manually create a GitHub Release or manually upload a CurseForge build
 unless explicitly requested or recovering from automation failure.
 
+Publication extracts the tagged version's dated, self-contained summary from
+`CHANGELOG.md`, validates its size, and supplies that summary to the packager.
+The full historical changelog remains in the repository. For a partial failure,
+the release workflow supports manual dispatch with an existing `release_tag`;
+leave `github_only` enabled if CurseForge already accepted the upload. Recovery
+must test and package the unchanged tag, never move it or duplicate that upload.
+
 ## Changelog coverage
 
 Group consecutive patch versions that each contain only one or two changes
