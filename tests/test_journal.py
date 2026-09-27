@@ -110,7 +110,8 @@ check(journal:SetOffense(42,'Fire',true) and journal.entries[42].offenses.Fire,'
 check(journal:SetResistance(42,'Frost',true) and journal.entries[42].resistances.Frost,'resistance stored on creature')
 check(journal:SetImmunity(42,'Shadow',true) and journal.entries[42].immunities.Shadow,'immunity stored on creature')
 check(not journal:SetOffense(42,'Physical',true),'non-magic school rejected')
-check(journal:SetBehaviour(42,'Hostile',true) and journal:SetBehaviour(42,'Neutral',true),'behaviour observations stored')
+check(journal:SetBehaviour(42,'Melee',true),'behaviour observations stored')
+check(not journal:SetBehaviour(42,'Hostile',true) and not journal:SetBehaviour(42,'Neutral',true),'dispositions are client-verified basic information')
 check(not journal:SetBehaviour(42,'Tameable',true),'tameability is no longer a behaviour')
 GetLocale=function() return 'enUS' end
 C_TooltipInfo={GetUnit=function() return {lines={{leftText='Tameable'}}} end}
@@ -128,7 +129,7 @@ C_TooltipInfo.GetUnit=function() error('restricted') end
 journal:ObserveTameability('target')
 check(journal.entries[42].tameable==true,'API failures preserve observed status')
 C_TooltipInfo=nil
-check(not journal.entries[42].behaviours.Hostile and journal.entries[42].behaviours.Neutral,'hostile and neutral remain mutually exclusive')
+check(not journal.entries[42].behaviours.Hostile and not journal.entries[42].behaviours.Neutral,'dispositions are absent from behaviours')
 journal.entries[77]={id=77,name='Unknown Test',category='Not specified',abilities={},locations={},confirmed=false}
 journal.entries[78]={id=78,name='Unreadable Test',category='Unclassified',abilities={},locations={},confirmed=false}
 journal.entries[79]={id=79,name='Totem Test',category='Totem',abilities={},locations={},confirmed=false}
@@ -217,15 +218,19 @@ function methods:SetEnabled(v) self.enabled=v end
 local function noop() end
 local function object(kind,parent)
     local o={kind=kind,parent=parent,scripts={},shown=true,enabled=true}
-    setmetatable(o,{__index=function(_,key) return methods[key] or noop end})
+    setmetatable(o,{__index=function(_,key) return methods[key] or (key:match('^%u') and noop or nil) end})
     objects[#objects+1]=o
     return o
 end
 function methods:CreateTexture() return object('Texture',self) end
 function methods:CreateFontString() return object('FontString',self) end
 function methods:GetName() return self.name end
-function CreateFrame(kind,name,parent)
+function CreateFrame(kind,name,parent,template)
     local o=object(kind,parent)
+    if template=='LargeSideTabButtonTemplate' then
+        o.Icon=object('Texture',o)
+        o:SetSize(64,59)
+    end
     if name then _G[name]=o; o.name=name end
     return o
 end

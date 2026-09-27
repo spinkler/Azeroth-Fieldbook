@@ -1,8 +1,14 @@
 <Bindings>
-    <Binding name="CLASSICBESTIARY_BOOK">
+    <Binding name="CLASSICBESTIARY_BOOK" category="BINDING_HEADER_AZEROTHFIELDBOOK">
         AzerothFieldbookToggleBestiary();
     </Binding>
-    <Binding name="CLASSICBESTIARY_MOUSEOVER_BOOK">
+    <Binding name="CLASSICBESTIARY_MOUSEOVER_BOOK" category="BINDING_HEADER_AZEROTHFIELDBOOK">
         AzerothFieldbookOpenMouseoverBestiary();
+    </Binding>
+    <Binding name="CLASSICBESTIARY_NEXT_ENTRY" category="BINDING_HEADER_AZEROTHFIELDBOOK">
+        AzerothFieldbookNextEntry();
+    </Binding>
+    <Binding name="CLASSICBESTIARY_PREVIOUS_ENTRY" category="BINDING_HEADER_AZEROTHFIELDBOOK">
+        AzerothFieldbookPreviousEntry();
     </Binding>
 </Bindings>

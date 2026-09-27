@@ -1,5 +1,130 @@
 # Changelog
 
+## v0.10.8-beta - 2026-09-27
+
+This release includes the complete batch from v0.9.151 through v0.10.8.
+The previous-push and previous-release baseline is
+`b48f2a011bb944c6f49ce07b69d794335068f4e1` (`v0.9.150-beta`).
+Both players must use the same installed addon version to share records.
+
+- Expand Azeroth Fieldbook with seven native icon tabs on the outside right edge:
+  Bestiary, Herbs & Minerals, Traveller's Atlas, Angler's Almanac, Merchant's
+  Ledger, Treasure & Salvage, and Lore & Landmarks. Bestiary remains the default
+  and fully functional section; the other six show their future-release wishlists.
+  Use native borders, hover feedback, gold selection and section-name tooltips.
+- Preserve Bestiary selection, filters, browsing positions and drafts when changing
+  sections, with background tracking continuing. Explicit creature actions select
+  the Bestiary. Keep section controls with their content and preserve pinned Notes.
+  Include the tab column in screen-fit scaling, clamping and auxiliary-window
+  placement, with attached windows reflowing after movement or scale changes.
+- Add violet Kills / cyan Observations map layers, selected beside map brightness.
+  Observations record the player's position only when targeting a creature, never
+  passive mouseovers or the mouseover-open binding. Both bounded histories persist
+  through reloads, backups and account merging and remain private to the journal.
+- Improve Locations with a live player-position/facing arrow, an empty-state
+  message below the map, and a compact footer. Simplify explanatory text and
+  darken the approximate-position note while retaining readable margins.
+- Fix deliberate creature discoveries while flying or on flight paths, including
+  readable explicit selections beyond visibility range. Passive airborne hovering
+  remains excluded. Log first personal encounters even if the creature's level is
+  unknown or its entry was previously received through sharing.
+- Use the client's effective creature level. Unknown levels show a skull and defer
+  discovery, location and kill-milestone Knowledge until a readable personal level
+  observation; kill counts and existing credited progress remain intact. Sort skull
+  entries above numeric maximum levels, show skulls in the list's marker slot, and
+  enlarge/raise the information-panel skull. Restore earned markers when resolved.
+- Automatically record Flees at low health from supported readable English monster
+  emotes, using a creature GUID or an unambiguous watched-creature fallback. Show
+  cyan [A] provenance and source tooltips. Manual toggles retain that history;
+  fresh evidence restores unchecked marks, including on locked entries. Verified
+  automatic abilities can also update locked entries while manual editing stays locked.
+- Give newly added/restored automatic abilities and flee behaviour one chat notice
+  and Event log record; unchanged repeat evidence stays silent. Add bounded flee
+  diagnostics to /fieldbook debug. Preserve behaviour provenance through reloads,
+  backups and account merging; shared behaviours remain unverified Rumours.
+- Move client-verified Hostile / Neutral into basic information using Blizzard's
+  tooltip reaction colours, with no Behaviour controls or [A] marker. Update these
+  facts quietly, even while locked, without chat/Event log notices. Migrate verified
+  marks; old manual marks require fresh client evidence and are no longer shared traits.
+- Colour each Level Range endpoint using Blizzard's creature-difficulty function,
+  including its orange band, and refresh when the player's effective level changes.
+  Colour Locations with the minimap territory palette learned as zones are visited.
+  Keep territory data faction-specific, bounded, persistent and silent; skip subzone
+  overrides and leave unknown territory uncoloured.
+- Group the four bindings under Azeroth Fieldbook using explicit categories. Toggle
+  Azeroth Fieldbook reopens the last selected tab; Open bestiary at mouseover opens
+  the pointed creature. Add Next Bestiary entry / Previous Bestiary entry, following
+  the filtered, sorted list with wrapping and scrolling. They work only while the
+  Bestiary is visible and no text field has focus. Existing assigned keys are retained.
+- Restore inset Index/A-Z layering beneath the trim. Extend letter buttons one pixel
+  left while preserving their right edges and letter positions. Match Dispel type
+  spacing to School immunity and preserve bottom margins; move ability tooltip
+  checkboxes up two pixels.
+- Update Help, README, architecture/versioning guidance and verification checklists.
+  All 39 test files pass and all 33 runtime Lua files compile under Lua 5.1; manifest,
+  bindings, version consistency and whitespace checks pass. All seven section icons
+  were verified in installed client archives. Native visual/keybinding acceptance
+  remains distinct from automated coverage; live Beast Lore awaits the beta level cap.
+
+### Local iteration notes for v0.10.8
+
+- Place Index and A–Z buttons one frame level beneath the main window trim and above the parchment, restoring their inset rolodex appearance. Keep native and fallback borders on the same decorative layer, leave mouse input unobstructed and retain title controls above the trim.
+- Extend the index letter buttons one pixel to the left beneath the border, preserving their right edges, height, spacing and letter positions.
+- Match the padding above Dispel type to School immunity in the ability-effects picker. Shift the lower sections and extend the window by 15px to preserve spacing and bottom margins.
+
+## v0.10.6 - v0.10.7 - Local development (included in v0.10.8-beta)
+
+- Fix the keybinding heading appearing as a bindable HEADER_AZEROTHFIELDBOOK action under Other. Use Forever's explicit category attribute on all four bindings and remove the legacy header attribute. Preserve action IDs, assigned keys and routing; update regression coverage and verification notes.
+- Shorten the navigation binding labels to Next Bestiary entry and Previous Bestiary entry, removing the parenthetical text. Their visibility restrictions and assigned keys are unchanged.
+
+## v0.10.5 - Local development (included in v0.10.8-beta)
+
+- Colour each Level Range endpoint using Blizzard's creature-difficulty function, including grey, green, yellow, orange and red. Refresh when the player's effective level changes, including locked pages; retain the skull for unknown levels and readable plain text when colour data is unavailable.
+- Use Blizzard's tooltip reaction palette for Hostile / Neutral instead of full-bright red/yellow. Add difficulty-boundary, range, level-change and unavailable-data checks and update visual verification guidance.
+- Colour Locations with Blizzard's minimap territory palette, learned from readable zone observations. Keep a bounded, faction-specific cache through reloads, backups and account merging; skip subzone overrides and leave unobserved territory uncoloured. Learning is silent and does not create creature entries.
+- Add optional Next / Previous Bestiary entry keybindings using existing filtered, sorted, wrapping navigation. Operate only while the Bestiary is visible and no text field has keyboard focus. Keep the selected row visible and leave bindings unassigned by default. Update Help and add binding/visibility regression coverage.
+- Group bindings under Azeroth Fieldbook. Rename the main binding to Toggle Azeroth Fieldbook and route it through the shared shell to reopen the last tab; rename the mouseover action to Open bestiary at mouseover. Retain existing binding IDs and assigned keys.
+
+## v0.10.4 - Local development (included in v0.10.8-beta)
+
+- Move client-verified Hostile / Neutral from Behaviours into basic information, coloured red / yellow without [A] markers or manual checkboxes. Update quietly on fresh readable reactions, including locked entries, without chat or Event log notices.
+- Migrate previously verified disposition marks, retain the value through backups and account merges, and remove obsolete behaviour/share claims. Manual legacy marks await fresh client evidence. Update Help, documentation and regression coverage for colours, silent updates, migration and persistence.
+
+## v0.10.3 - Local development (included in v0.10.8-beta)
+
+- Preserve automatic behaviour history and cyan [A] styling through unchecking, rechecking, reloads, backups and account merges. Fresh evidence restores an unchecked behaviour, with one new chat/Event log notice; unchanged repeats remain silent.
+- Allow verified automatic abilities and behaviours to update locked creatures while retaining the lock and manual-edit restrictions.
+- Automatically record mutually exclusive Hostile / Neutral behaviours from readable creature reactions, with source tooltips and the same [A] styling and notifications. Skip unknown, restricted and friendly reactions. Add reaction, lock and provenance regressions and update Help and verification guidance.
+
+## v0.10.2 - Local development (included in v0.10.8-beta)
+
+- Fix silent rejection of supported flee emotes with an absent sender GUID: match the readable sender to an eligible, currently watched creature, rejecting ambiguous IDs, invalid/restricted payloads, locked entries and manual removals. Add bounded session diagnostics to `/fieldbook debug` showing emote delivery, matching and rejection reasons.
+- Route automatic behaviour and ability additions through one chat/Event log notification path. Include the creature, behaviour, automatic provenance and identity source for flee; suppress duplicate notices for repeated evidence and reloads. Add missing-GUID, ambiguity, logging and diagnostics regressions and update Help/verification documentation.
+
+## v0.10.1 - Local development (included in v0.10.8-beta)
+
+- Fix deliberate airborne observations: the mouseover-open keybinding bypasses the passive flight filter, and explicit selections can record readable creatures beyond the visibility range. Log first personal encounters of already-named shared entries even when the level is still unknown; preserve Knowledge rules and passive flight exclusions.
+- Add a Kills / Observations toggle beside Locations' map-brightness slider. Keep violet kill tracking and add cyan observation tracking with bright borders, recording the player's position only on explicit targeting, never mouseovers or the mouseover-open binding. Both layers collect independently, retain their own bounded history and survive reloads, account merging and backups; coordinates remain private to the journal.
+- Sort skull entries above numeric maximum levels, show a skull beside their names in the existing marker slot, and enlarge the information-panel skull from 14 to 18 pixels with a 2px upward offset. Restore earned stars/crowns once a readable level is known.
+- Recognize the exact English flee monster emote when a readable creature GUID identifies an existing personal entry. Mark automatically recorded Flees at low health in blue with [A] and a source tooltip; respect locks, manual records and durable unchecked choices. Preserve provenance through backups/account merging; shared claims remain unverified Rumours.
+- Add event, storage, map-layer, sorting, marker and behaviour-provenance regressions, updated Help/README instructions and separate in-game verification checklists.
+
+## v0.10.0 - Local development (included in v0.10.8-beta)
+
+- Expand the shared Fieldbook window with native framed icon tabs on its outside right edge, in order: Bestiary, Herbs & Minerals, Traveller’s Atlas, Angler’s Almanac, Merchant’s Ledger, Treasure & Salvage, and Lore & Landmarks. Add gold selection, native hover feedback and section-name tooltips; default to the Bestiary on first opening.
+- Add six parchment wishlist pages with their supplied titles and future-release text. Keep presentation definitions easy to revise; introduce no new tracking, SavedVariables or sharing schema.
+- Preserve Bestiary selection, filters, browsing positions and draft fields across tab changes. Explicit creature-entry actions select the Bestiary; its toolbar and transient panels stay with its section, while pinned Notes retain their independent lifetime and tracking continues in the background.
+- Include the full tab column in saved-position clamping, screen-fit scaling and auxiliary-window placement. Reflow attached windows when the main window's footprint or UI scale changes; keep tabs accessible when the screen is crowded.
+- Add navigation, text, state-retention, scale and window-placement regressions, icon verification evidence and an in-game acceptance checklist.
+
+## v0.9.151 - v0.9.154 - Local development (included in v0.10.8-beta)
+
+- Moved the ability tooltip checkboxes up 2 pixels.
+- Locations now shows the empty-kill message below the map and a live player arrow in the currently viewed zone, with position and facing updates. The empty-map message is red. Removed the historical kill-coordinate and map-colour explanations, darkened the approximate-position note, and compacted the footer while preserving bottom padding.
+- Flight paths and flying now require explicit targeting for observations; passive mouseovers cannot collect Bestiary discoveries.
+- Follow the client's effective level instead of its raw level. Unknown ranges display a skull; discovery, location and kill-milestone Knowledge wait for a personally observed readable level. Existing credited history is preserved.
+- Updated in-game Help and regression coverage for flight discovery, hidden levels and deferred Knowledge.
+
 ## v0.9.150-beta - 2026-09-27
 
 This release includes the complete unpublished batch from v0.9.138 through

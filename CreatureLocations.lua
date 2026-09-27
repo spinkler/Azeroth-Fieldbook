@@ -1,6 +1,6 @@
 local _, ns = ...
 
--- Personal, bounded kill samples. Coordinates are integers so the literal
+-- Personal, bounded location samples. Coordinates are integers so the literal
 -- backup format preserves them exactly. No opaque values enter saved data.
 local locations = { SCALE=10000, MAX_MAPS=64, MAX_POINTS=256, EDGE_YARDS=180 }
 ns.CreatureLocations = locations
@@ -61,16 +61,29 @@ function locations.Sample(unit,guid,expectedMapID)
     map.point={x=x,y=y,approximate=approximate,seenAt=finite(stamp,0,9999999999) and math.floor(stamp) or 0}
     return map
 end
+function locations.Observation()
+    -- Target-selection observations describe the observer, never the creature's position.
+    local map=locations.CurrentMap()
+    if not map then return end
+    local x,y=coordinates(read(C_Map.GetPlayerMapPosition,map.mapID,"player"))
+    if not x then return end
+    local stamp=read(time)
+    map.point={x=x,y=y,approximate=false,seenAt=finite(stamp,0,9999999999) and math.floor(stamp) or 0}
+    return map
+end
 local function count(values) local n=0;for _ in pairs(values) do n=n+1 end;return n end
-function locations.RememberMap(entry,map)
+local function field(mode) return mode=="observations" and "observationLocations" or "killLocations" end
+function locations.RememberMap(entry,map,mode)
     if not entry or not map then return end
-    entry.killLocations=entry.killLocations or {}
-    local saved=entry.killLocations[map.mapID]
+    local key=field(mode)
+    entry[key]=entry[key] or {}
+    local maps=entry[key]
+    local saved=maps[map.mapID]
     local changed=false
     if not saved then
-        if count(entry.killLocations)>=locations.MAX_MAPS then return end
+        if count(maps)>=locations.MAX_MAPS then return end
         saved={name=map.name,points={}}
-        entry.killLocations[map.mapID]=saved;changed=true
+        maps[map.mapID]=saved;changed=true
     end
     for _,key in ipairs({"name","width","height"}) do
         if map[key] and saved[key]~=map[key] then saved[key]=map[key];changed=true end
@@ -86,8 +99,8 @@ function locations.TrimPoints(points)
     end)
     for i=locations.MAX_POINTS+1,#keys do points[keys[i]]=nil end
 end
-function locations.Record(entry,sample)
-    local saved=locations.RememberMap(entry,sample)
+function locations.Record(entry,sample,mode)
+    local saved=locations.RememberMap(entry,sample,mode)
     if not saved or not sample.point then return end
     local p=sample.point
     local key=1+p.x*10001+p.y
@@ -97,10 +110,11 @@ function locations.Record(entry,sample)
     saved.points[key]={x=p.x,y=p.y,seenAt=p.seenAt,
         approximate=p.approximate and (not previous or previous.approximate) or false}
     locations.TrimPoints(saved.points)
+    return true
 end
-function locations.Merge(target,source)
+function locations.Merge(target,source,mode)
     for id,map in pairs(source or {}) do
-        local saved=locations.RememberMap(target,{mapID=id,name=map.name,width=map.width,height=map.height})
+        local saved=locations.RememberMap(target,{mapID=id,name=map.name,width=map.width,height=map.height},mode)
         if saved then
             for key,p in pairs(map.points or {}) do
                 local old=saved.points[key]
@@ -139,10 +153,15 @@ local function mapForName(zone,current)
     -- Duplicate names/floors are ambiguous. Wait for a direct observation.
     return mapNames[zone] or nil
 end
-function locations.Zones(entry)
-    local result,known={},{}
-    for id,map in pairs(entry and entry.killLocations or {}) do
-        result[#result+1]={mapID=id,name=map.name,data=map};known[map.name]=true
+function locations.Zones(entry,mode)
+    local result,known,mapIDs={},{},{}
+    for id,map in pairs(entry and entry[field(mode)] or {}) do
+        result[#result+1]={mapID=id,name=map.name,data=map};known[map.name]=true;mapIDs[id]=true
+    end
+    -- Keep the zone selector stable while switching layers, including locked
+    -- entries whose newly observed map is absent from their frozen basics.
+    for id,map in pairs(entry and entry[field(mode=="observations" and "kills" or "observations")] or {}) do
+        if not mapIDs[id] then result[#result+1]={mapID=id,name=map.name};known[map.name]=true end
     end
     -- Old entries retain their zone names but contain no historical coordinates.
     local current=locations.CurrentMap()

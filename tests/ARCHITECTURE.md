@@ -20,6 +20,7 @@ register with that same shell without editing the Bestiary builder:
 ```lua
 shell:RegisterSection("section-id", {
     title = "Section title",
+    icon = "Interface\\Icons\\INV_Misc_Book_02",
     frameName = "AzerothFieldbookSectionContent",
     build = function(content, shell)
         -- Create this section's controls beneath content.
@@ -40,9 +41,25 @@ already shown. `Toggle()` reopens the last active section, defaulting to the
 first registration. Normal Bestiary bindings explicitly select the Bestiary;
 the minimap and general book command use the shared shell.
 
-Only the Bestiary is registered in this release. No speculative section or
-placeholder navigation button is shipped. A later section chooser should call
-these navigation methods; it should not create a second root window.
+The Bestiary registers first, followed by the six definitions in
+`FieldbookSections.lua`. That file owns their titles, icons and wishlist text;
+they have no tracking or saved data. The Bestiary's icon is in its registration
+in `BestiaryBook.lua`. The shell uses Forever's `LargeSideTabButtonTemplate` for
+the outside-right navigation. Native art provides the border, mask, gold selected
+state and hover; each definition supplies its tooltip name and section builder.
+Tab clicks call `ShowSection(id, {navigation=true})`. The Bestiary uses this
+context to resume selection and browsing without implicitly choosing a new target.
+Explicit `creatureID` context still takes priority. Clicking the active tab is a
+no-op. Toolbar controls are visible only when the active section supplies them.
+
+The shell sets `afbOutsideRight` to the native tab width plus decorative padding.
+`WindowPositions` includes this in clamp insets, restored bounds and overlap
+rectangles. It protects the tab strip even when content overlap is unavoidable.
+`afbMaxScale` lets `UIScale` cap the main window's effective scale to the available
+screen without changing the saved preference or scaling section children twice.
+Display changes and size changes recompute the cap; scale/footprint changes reflow
+visible auxiliary windows through the same placement rules. Keep position keys
+and pinned-window behavior intact when extending this system.
 
 Use `SetSectionSize(id, width, height)` for content-driven resizing. An inactive
 section may update its own size without changing the visible window. Content

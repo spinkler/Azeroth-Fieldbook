@@ -274,6 +274,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         incoming=nil; self:Refresh()
         if receiver and #engine:GetIncoming()>0 then receiver:Show() end
     end
+    function controller:Hide() if composer then composer:Hide() end end
     function controller:Open(id)
         buildComposer()
         transaction=engine:GetOutgoing()

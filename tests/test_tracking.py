@@ -58,7 +58,7 @@ bob.bestiary.entries[42].beastLore={level=11,observed=1000001,rows={{left='Diet:
 bob.bestiary.entries[42].beastLoreSource='gameTooltip'
 bob.bestiary.entries[43]={id=43,name='Other creature',category='Beast',kills=0,abilities={},damage={},locations={}}
 -- Ensure the additional entry has genuine credit, as normal observation does.
-ns.CreateBestiaryJournal(bob,function() end):Ensure(43)
+ns.CreateBestiaryJournal(bob,function() end):Ensure(43,false,nil,{level=9})
 local b,bobAccount=open(bob)
 assert(bobAccount==account and bob.accountTrackingKey~=key)
 eq(b.entries[42].kills,25,'different characters contribute their recorded kills')

@@ -71,7 +71,7 @@ sharing provenance, the option and the rendered marker/tooltip control flow.
 Additional regressions reproduce the saved wizard removal flag and check
 ID-based name resolution, optional metadata, restoration, chat/log deduplication
 and diagnostic output.
-`test_auto_casts.py` adds nine checks covering combat events and polling, instant
+`test_auto_casts.py` adds ten checks covering combat events and polling, instant
 casts, optional names/cache retries, secret IDs, saved options, fresh restoration,
 entry locks and reset hold, watched aliases, historical data, manual notes,
 account persistence, backups and sharing. The UI test checks both [A] sources.
@@ -79,7 +79,7 @@ Run them through `python -B -X utf8 tests/run_tests.py` with the rest of the sui
 
 ## In-game smoke check
 
-1. Reload 0.9.140. Leave the new option enabled and target an unlocked Defias
+1. Reload 0.10.3. Leave the option enabled and target an unlocked Defias
    Rogue Wizard with Frost Armor outside combat. Expect exactly one Frost Armor
    record with a blue [A], spell ID 12544 and its spell tooltip on hover. Existing
    manually confirmed Frost Armor remains a single personal record. Expect one
@@ -97,8 +97,9 @@ Run them through `python -B -X utf8 tests/run_tests.py` with the rest of the sui
 5. Reject or remove an automatic ability with the option enabled. A fresh
    observation should restore it with one new chat/log message. Turn the option
    off, then remove it; it should remain absent across targeting and reloads.
-   Locked entries stay unchanged; unlock before resuming recording. Edit/save
-   should remove the [A] marker.
+   Locked entries also accept fresh automatic [A] evidence in 0.10.3; verify the
+   lock stays enabled and manual edits remain disabled. After unlocking, edit/save
+   should remove the ability's [A] marker.
 6. Reload and perform a backup/restore. Automatic provenance and notes should
    survive. On another character/account scope, verify the chosen storage mode
    behaves like other Bestiary abilities.

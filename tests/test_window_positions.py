@@ -502,5 +502,77 @@ class WindowPositionTests(unittest.TestCase):
         ''')
 
 
+    def test_outside_tabs_survive_registration_restore_and_scale_changes(self):
+        self.lua.execute('''
+            UIParent.width=1280;UIParent.height=900
+            local book=CreateFrame();AzerothFieldbookBestiary=book
+            book.width=960;book.height=740;book.afbOutsideRight=70;book.afbMaxScale=1.1
+            ns.UIScale:Register(book,'Book')
+            assert(book.clampInsets[2]==-70,'registration must not discard the shell clamp')
+            db.windowPositions.Book={left=1200,top=900}
+            ns.WindowPositions:Restore(book)
+            near(book.left,250)
+            ns.UIScale:Set(1.5)
+            near(book:GetScale(),1.1)
+            near((book.left+book.width+70)*book:GetScale(),1280)
+            ns.UIScale:Set(0.5)
+            near(book:GetScale(),0.5)
+            assert((book.left+book.width+70)*book:GetScale()<=1280)
+        ''')
+
+    def test_every_right_anchored_window_clears_tabs_at_different_scales(self):
+        self.lua.execute('''
+            UIParent.width=2600;UIParent.height=1400
+            local book=CreateFrame();AzerothFieldbookBestiary=book
+            book.left=100;book.top=900;book.width=800;book.height=700;book.afbOutsideRight=70;book.shown=true
+            for _,scale in ipairs({0.5,1,1.5}) do
+                book.scale=scale
+                for _,rule in ipairs({'right','pages',''}) do
+                    local dialog=CreateFrame();dialog.width=300;dialog.height=200;dialog.scale=0.75
+                    dialog.afbPreferBookEdge=true;dialog.afbAnchorRule=rule
+                    dialog.left=(book.left+book.width+6)*scale/dialog.scale;dialog.top=book.top*scale/dialog.scale
+                    ns.WindowPositions:AvoidWindowOverlap(dialog)
+                    assert(dialog.left*dialog.scale>=(book.left+book.width+70)*scale,
+                        'Notes, Share, Locations, observations and pages reserve the full tab width')
+                end
+            end
+            db.alwaysAnchorToMain=false
+            local restored=CreateFrame();restored.width=300;restored.height=200
+            restored.left=(book.left+book.width+6)*1.5;restored.top=1000
+            ns.WindowPositions:AvoidWindowOverlap(restored)
+            assert(restored.left>=(book.left+book.width+70)*1.5,
+                'saved positions cannot overlap tabs even with automatic anchoring disabled')
+        ''')
+
+    def test_crowded_screen_protects_tabs_before_minimizing_content_overlap(self):
+        self.lua.execute('''
+            UIParent.width=1000;UIParent.height=700
+            local book=CreateFrame();AzerothFieldbookBestiary=book
+            book.left=0;book.top=700;book.width=800;book.height=700;book.afbOutsideRight=70;book.shown=true
+            local dialog=CreateFrame();dialog.width=400;dialog.height=600;dialog.left=805;dialog.top=700
+            dialog.afbPreferBookEdge=true;dialog.afbAnchorRule='right'
+            ns.WindowPositions:AvoidWindowOverlap(dialog)
+            assert(dialog.left>=0 and dialog.left+400<=800 and dialog.top<=700 and dialog.top>=600,
+                'an unavoidable content overlap must leave the entire tab column accessible')
+        ''')
+
+    def test_reflow_after_drag_preserves_book_position_and_clears_clamped_dialog(self):
+        self.lua.execute('''
+            UIParent.width=1400;UIParent.height=900
+            local book=CreateFrame();AzerothFieldbookBestiary=book
+            book.left=500;book.top=800;book.width=800;book.height=700;book.afbOutsideRight=70;book.shown=true
+            local dialog=CreateFrame();dialog.width=300;dialog.height=200;dialog.left=1100;dialog.top=700
+            dialog.afbPreferBookEdge=true;dialog.afbAnchorRule='right';dialog.shown=true
+            ns.WindowPositions:Track(dialog)
+            ns.WindowPositions:ReflowBookWindows(true)
+            near(book.left,500);near(book.top,800)
+            assert(dialog.left+300<=1300,'dragging to a screen edge cannot leave a clamped dialog over the tabs')
+            dialog.afbPreferBookEdge=nil;dialog.afbAnchorRule=nil
+            dialog:SetPoint('TOPLEFT',book,'TOPLEFT',1100,700)
+            ns.WindowPositions:ReflowBookWindows(true)
+            assert(dialog.left+300<=1300,'windows without a preference flag also reflow when anchored to the book')
+        ''')
+
+
 if __name__ == '__main__':
     unittest.main()

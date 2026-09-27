@@ -77,6 +77,16 @@ def new_ui_client(modules=()):
     function methods:SetAlpha(value) self.alpha=value end
     function methods:SetTextColor(...) self.textColor={...} end
     function methods:SetTexCoord(...) self.texCoord={...} end
+    function methods:SetTexture(value) self.texture=value;return true end
+    function methods:SetAtlas(value) self.atlas=value end
+    function methods:SetHighlightTexture(value) self.highlightTexture=value end
+    function methods:AddMaskTexture(value) self.mask=value end
+    function methods:SetClampRectInsets(...) self.clampInsets={...} end
+    function methods:SetWordWrap(value) self.wordWrap=value end
+    function methods:SetNonSpaceWrap(value) self.nonSpaceWrap=value end
+    function methods:SetSpacing(value) self.spacing=value end
+    function methods:SetValue(value) self.value=value end
+    function methods:GetValue() return self.value or 0 end
     function methods:GetPoint() return unpack(self.point or {'CENTER',UIParent,'CENTER',0,0}) end
     function methods:GetName() return self.name end
     function methods:GetLeft() return self.left end
@@ -122,9 +132,10 @@ def new_ui_client(modules=()):
     function methods:GetVerticalScroll() return rawget(self,'scroll') or 0 end
     function methods:GetVerticalScrollRange() return 0 end
     function methods:CreateTexture() return CreateFrame('Texture',nil,self) end
+    function methods:CreateMaskTexture() return CreateFrame('Texture',nil,self) end
     function methods:CreateFontString() return CreateFrame('FontString',nil,self) end
     function CreateFrame(kind,name,parent,template)
-        local f={kind=kind,name=name,parent=parent,scripts={},shown=true,enabled=true}
+        local f={kind=kind,name=name,parent=parent,template=template,scripts={},shown=true,enabled=true}
         local interactive=kind=='Button' or kind=='CheckButton' or kind=='EditBox' or kind=='Slider'
         f.mouseClick=interactive; f.mouseMotion=interactive
         setmetatable(f,{__index=function(_,k)
@@ -132,6 +143,29 @@ def new_ui_client(modules=()):
             if k:match('^%u') then return function() end end
         end})
         objects[#objects+1]=f; if name then _G[name]=f end
+        if template=='LargeSideTabButtonTemplate' then
+            -- Native template contract from Forever 1.60.1. Art is validated
+            -- separately; this host only exercises callbacks and selection.
+            f:SetSize(64,59)
+            for _,key in ipairs({'Icon','Background','SelectedTexture','HighlightTexture'}) do
+                f[key]=f:CreateTexture()
+            end
+            f.Background:SetAtlas('common-sidetab')
+            f.SelectedTexture:SetAtlas('common-sidetab-selected')
+            f.HighlightTexture:SetAtlas('common-sidetab-hover')
+            function f:SetFillToInterior(_,extent) self.Icon:SetSize(extent,extent) end
+            function f:SetChecked(value) self.checked=value;self.SelectedTexture:SetShown(value) end
+            function f:SetCustomOnMouseUpHandler(fn) self.customMouseUpHandler=fn end
+            function f:OnLeave() if GameTooltip then GameTooltip:Hide() end end
+            f:SetScript('OnMouseDown',function() end)
+            f:SetScript('OnMouseUp',function(self,button,inside) self.customMouseUpHandler(self,button,inside) end)
+            f:SetScript('OnEnter',function(self)
+                if GameTooltip then
+                    GameTooltip:SetOwner(self,'ANCHOR_RIGHT');GameTooltip:SetText(self.tooltipText);GameTooltip:Show()
+                end
+            end)
+            f:SetScript('OnLeave',f.OnLeave)
+        end
         if template=='UIPanelScrollFrameTemplate' then
             f.ScrollBar=CreateFrame('Slider',nil,f)
             f.ScrollBar:SetWidth(16)

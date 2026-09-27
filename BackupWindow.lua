@@ -179,5 +179,6 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
         else status("Select a dated backup, or import one you saved outside the game.") end
         refresh();frame:Show();frame:Raise()
     end
+    function controller:Hide() if frame then frame:Hide() end end
     return controller
 end

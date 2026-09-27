@@ -1,11 +1,48 @@
 local addonName, ns = ...
-BINDING_NAME_CLASSICBESTIARY_BOOK = "Open / close Azeroth Fieldbook Bestiary"
-BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK = "Open Azeroth Fieldbook Bestiary at mouseover"
+BINDING_HEADER_AZEROTHFIELDBOOK = "Azeroth Fieldbook"
+BINDING_NAME_CLASSICBESTIARY_BOOK = "Toggle Azeroth Fieldbook"
+BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK = "Open bestiary at mouseover"
+BINDING_NAME_CLASSICBESTIARY_NEXT_ENTRY = "Next Bestiary entry"
+BINDING_NAME_CLASSICBESTIARY_PREVIOUS_ENTRY = "Previous Bestiary entry"
 local effectGroups = {
     { "Control", { "Stun", "Root/Immobilize", "Slow/Snare", "Daze", "Fear", "Horror", "Disorient", "Sleep/Incapacitate", "Polymorph/Transform", "Charm/Possession", "Banish", "Knockback/Pull", "Disarm", "Silence" } },
     { "Combat", { "Interrupt", "School Lockout", "Damage over Time", "Heal", "Heal over Time", "Shield/Absorb", "Damage Reduction", "Damage Vulnerability", "Enrage", "Immunity/Invulnerability" } },
     { "Dispel type", { "Magic", "Curse", "Disease", "Poison" } },
 }
+local function behaviourText(entry,name)
+    return entry.behaviourSources and entry.behaviourSources[name] and ("|cff80d0ff"..name.." [A]|r") or name
+end
+
+local function readableNumber(value)
+    return not (issecretvalue and issecretvalue(value)) and type(value)=="number"
+        and value==value and value>-math.huge and value<math.huge
+end
+local function playerDifficultyLevel()
+    local api=type(UnitEffectiveLevel)=="function" and UnitEffectiveLevel or UnitLevel
+    if type(api)~="function" then return end
+    local ok,level=pcall(api,"player")
+    if ok and readableNumber(level) then return level end
+end
+local function colorText(text,color)
+    if (issecretvalue and issecretvalue(color)) or type(color)~="table" then return text end
+    local r,g,b=color.r,color.g,color.b
+    for _,value in ipairs({r,g,b}) do
+        if not readableNumber(value) or value<0 or value>1 then return text end
+    end
+    if r==nil or g==nil or b==nil then return text end
+    return string.format("|cff%02x%02x%02x%s|r",math.floor(r*255+0.5),math.floor(g*255+0.5),math.floor(b*255+0.5),text)
+end
+local function difficultyLevelText(level)
+    local text=tostring(level)
+    local api=GetCreatureDifficultyColor or (DifficultyUtil and DifficultyUtil.GetCreatureDifficultyColor)
+    if type(api)~="function" then return text end
+    -- Delegate thresholds (including the player's trivial range) to Blizzard.
+    local ok,color=pcall(api,level)
+    return ok and colorText(text,color) or text
+end
+-- Blizzard_Minimap/Mainline/Minimap.lua: Minimap_Update's zone-name palette.
+local territoryColors={friendly={r=0.1,g=1,b=0.1},hostile={r=1,g=0.1,b=0.1},
+    arena={r=1,g=0.1,b=0.1},contested={r=1,g=0.7,b=0},sanctuary={r=0.41,g=0.8,b=0.94}}
 
 -- Pack complete property groups before letting the font wrap an oversized
 -- group. Each returned paragraph gets its own hanging-indent FontString.
@@ -139,7 +176,7 @@ function ns.CreateBestiaryBook(journal,shell)
         { name="Frost", color="69ccf0" }, { name="Holy", color="fff09a" },
         { name="Nature", color="72d65b" }, { name="Shadow", color="b79cff" },
     }
-    local behaviourOrder = { "Hostile", "Neutral", "Melee", "Ranged", "Caster", "Flees at low health", "Calls allies", "Patrols", "Summons", "Heals", "Enrages", "Stealths" }
+    local behaviourOrder = { "Melee", "Ranged", "Caster", "Flees at low health", "Calls allies", "Patrols", "Summons", "Heals", "Enrages", "Stealths" }
 local ink = { 0.75, 0.8, 0.8 }
     local function layoutSummary(status,combat)
         local y=0
@@ -302,13 +339,14 @@ local ink = { 0.75, 0.8, 0.8 }
     end
     local function cycleEntry(direction)
         local rows=journal:List(category,book.search:GetText(),reviewOnly,initial,locationFilters,rankFilters)
-        if #rows==0 then return end
+        if #rows==0 then return false end
         local current
         for i,row in ipairs(rows) do if row.id==selected then current=i; break end end
         if not current then current=direction>0 and 0 or 1 end
         local nextIndex=((current-1+direction)%#rows)+1
         offset=math.floor((nextIndex-1)/creaturePageSize)*creaturePageSize
         choose(rows[nextIndex].id)
+        return true
     end
     refresh = function()
         if not book then return end
@@ -369,10 +407,12 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.text:SetText(data.name)
                 local _,reward=journal:GetKillReward(data.id)
                 local unknown=journal.entries[data.id].personalEncountered~=true
-                if unknown then reward=nil end
+                local skull=journal:IsSkull(data.id)
+                if unknown or skull then reward=nil end
                 row.killReward:SetReward(reward)
                 row.unknownMark:SetShown(unknown)
-                local hasMarker=unknown or reward~=nil
+                row.skullMark:SetShown(skull)
+                local hasMarker=unknown or skull or reward~=nil
                 if row.text:GetWidth()~=(hasMarker and 121 or 140) then row:StopNameScroll() end
                 row.text:SetWidth(hasMarker and 121 or 140)
                 -- Fade the last 20px of the name, ending before the icon's gap.
@@ -418,6 +458,7 @@ local ink = { 0.75, 0.8, 0.8 }
         else book.beastLore:Hide() end
         if creatureNotes then creatureNotes:Refresh() end
         if creatureLocations then creatureLocations:Refresh() end
+        if book.behaviourPicker:IsShown() then book.refreshBehaviourPicker() end
         if rumoursWindow then rumoursWindow:Refresh() end
         book.creatureNotesButton:SetEnabled(e ~= nil)
         book.creatureLocationsButton:SetEnabled(e ~= nil and creatureLocations ~= nil)
@@ -486,11 +527,16 @@ local ink = { 0.75, 0.8, 0.8 }
         if book.title:GetText()~=title then book.titleHover:StopNameScroll() end
         book.titleHover.id=selected
         book.title:SetText(title)
-        local levels = "Level Range: not yet observed"
-        if basic.levelMin then levels = "Level Range: " .. basic.levelMin
-            if basic.levelMax ~= basic.levelMin then levels = levels .. "-" .. basic.levelMax end
+        local levels = "Level Range: |TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:18:18:0:2|t"
+        if basic.levelMin then levels = "Level Range: " .. difficultyLevelText(basic.levelMin)
+            if basic.levelMax ~= basic.levelMin then levels = levels .. "-" .. difficultyLevelText(basic.levelMax) end
         end
         local status = { basic.category }
+        if basic.disposition=="Hostile" then
+            status[#status+1]=colorText("Hostile",FACTION_BAR_COLORS and FACTION_BAR_COLORS[2] or FACTION_RED_COLOR)
+        elseif basic.disposition=="Neutral" then
+            status[#status+1]=colorText("Neutral",FACTION_BAR_COLORS and FACTION_BAR_COLORS[4] or FACTION_YELLOW_COLOR)
+        end
         local sources=journal.GetSharedSources and journal:GetSharedSources(selected) or {}
         local sourceNames={}
         for i,name in ipairs(sources) do sourceNames[i]=ns.PlayerNames and ns.PlayerNames:Format(name) or name end
@@ -509,6 +555,10 @@ local ink = { 0.75, 0.8, 0.8 }
         local locations = {}
         for location in pairs(basic.locations or {}) do locations[#locations + 1] = location end
         table.sort(locations)
+        for i,location in ipairs(locations) do
+            local territory=journal.GetLocationTerritory and journal:GetLocationTerritory(location)
+            if territory then locations[i]=colorText(location,territoryColors[territory] or NORMAL_FONT_COLOR) end
+        end
         if #locations > 0 then status[#status + 1] = "Locations: " .. table.concat(locations, ", ") end
         local function schoolSummary(field)
             local names = {}
@@ -529,7 +579,7 @@ local ink = { 0.75, 0.8, 0.8 }
         local behaviours = {}
         book.tameableBadge:SetShown(e.tameable==true and e.tameabilitySource=="gameTooltip")
         for _,name in ipairs(behaviourOrder) do
-            if type(e.behaviours)=="table" and e.behaviours[name] then behaviours[#behaviours+1]=name end
+            if type(e.behaviours)=="table" and e.behaviours[name] then behaviours[#behaviours+1]=behaviourText(e,name) end
         end
         if #behaviours > 0 then combat[#combat + 1] = "Behaviour: " .. table.concat(behaviours, ", ") end
         layoutSummary(status,combat)
@@ -793,6 +843,10 @@ local ink = { 0.75, 0.8, 0.8 }
             row.unknownMark:SetShadowColor(0,0,0,0.7)
             row.unknownMark:SetShadowOffset(1,-1)
             row.unknownMark:Hide()
+            row.skullMark=row:CreateTexture(nil,"OVERLAY")
+            row.skullMark:SetPoint("CENTER",row.killReward,"CENTER",0,0);row.skullMark:SetSize(16,16)
+            row.skullMark:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
+            row.skullMark:Hide()
             row:SetScript("OnClick", function(self) if self.id then choose(self.id) end end)
             row:EnableMouseWheel(true)
             row:SetScript("OnMouseWheel", function(_, delta) offset=offset-delta*3; refresh() end)
@@ -861,14 +915,20 @@ local ink = { 0.75, 0.8, 0.8 }
             initial=nil; offset=0; refresh()
         end)
         styleSelection(book.indexButton)
+        book.indexButton:SetFrameLevel(shell:GetFrame().titleIcon:GetFrameLevel()-1)
         book.letterButtons = {}
         for i=1,26 do
             local letter = string.char(64+i)
-            local tab = button(book, letter, 4, -107-(i-1)*23, 28, function()
+            local tab = button(book, letter, 3, -107-(i-1)*23, 29, function()
                 if initial==letter then initial=nil else initial=letter end
                 offset=0; refresh()
             end)
             tab:SetHeight(21)
+            -- Extend only the left edge; compensate for the half-pixel shift
+            -- in its centre so the letter keeps its original screen position.
+            local text=tab:GetFontString()
+            if text then text:ClearAllPoints();text:SetPoint("CENTER",tab,"CENTER",0.5,0) end
+            tab:SetFrameLevel(shell:GetFrame().titleIcon:GetFrameLevel()-1)
             tab:SetDisabledFontObject("GameFontDisable")
             tab.letter=letter; styleSelection(tab)
             tab:Hide()
@@ -1121,7 +1181,7 @@ local ink = { 0.75, 0.8, 0.8 }
             row.divider:SetPoint("TOPLEFT",0,7);row.divider:SetPoint("TOPRIGHT",-9,7)
             row.divider:SetHeight(1)
             row.tooltipCheck=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate")
-            row.tooltipCheck:SetPoint("TOPLEFT",-2,3); row.tooltipCheck:SetSize(20,20)
+            row.tooltipCheck:SetPoint("TOPLEFT",-2,5); row.tooltipCheck:SetSize(20,20)
             row.tooltipCheck:SetScript("OnClick",function(self)
                 if selected and row.name then journal:SetAbilityTooltip(selected,row.name,self:GetChecked() == true); refresh() end
             end)
@@ -1325,7 +1385,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.message=label(detail,"",352,-716,583,"GameFontHighlightSmall")
         book.message:SetHeight(18); book.message:SetJustifyV("TOP")
         local effectPicker=CreateFrame("Frame",nil,UIParent,"BackdropTemplate")
-        effectPicker:SetSize(560,658); effectPicker:SetPoint("CENTER",book,"CENTER"); effectPicker:SetFrameStrata("FULLSCREEN_DIALOG")
+        effectPicker:SetSize(560,673); effectPicker:SetPoint("CENTER",book,"CENTER"); effectPicker:SetFrameStrata("FULLSCREEN_DIALOG")
         effectPicker:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         effectPicker:EnableMouse(true)
         effectPicker:SetMovable(true)
@@ -1355,13 +1415,14 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         for i,name in ipairs(effectGroups[1][2]) do addEffect(name,leftX,-105-(i-1)*23) end
         for i,name in ipairs(effectGroups[2][2]) do addEffect(name,rightX,-105-(i-1)*23) end
-        label(effectPicker,"Dispel type",rightX,-338,220,"GameFontHighlightSmall")
-        for i,name in ipairs(effectGroups[3][2]) do addEffect(name,rightX,-360-(i-1)*23) end
-        label(effectPicker,"School resistance",leftX,-470,235,"GameFontHighlightSmall")
-        label(effectPicker,"School immunity",rightX,-470,235,"GameFontHighlightSmall")
+        -- Both right-column subsection headings have 17px above them.
+        label(effectPicker,"Dispel type",rightX,-353,220,"GameFontHighlightSmall")
+        for i,name in ipairs(effectGroups[3][2]) do addEffect(name,rightX,-375-(i-1)*23) end
+        label(effectPicker,"School resistance",leftX,-485,235,"GameFontHighlightSmall")
+        label(effectPicker,"School immunity",rightX,-485,235,"GameFontHighlightSmall")
         for i, school in ipairs(magicSchools) do
-            addEffect(school.name .. " Resistance",leftX,-492-(i-1)*23)
-            addEffect(school.name .. " Immunity",rightX,-492-(i-1)*23)
+            addEffect(school.name .. " Resistance",leftX,-507-(i-1)*23)
+            addEffect(school.name .. " Immunity",rightX,-507-(i-1)*23)
         end
         book.refreshEffectPicker=function()
             for _,control in ipairs(effectPicker.effectButtons) do
@@ -1497,15 +1558,14 @@ local ink = { 0.75, 0.8, 0.8 }
         defensePicker:HookScript("OnShow",refreshDefensePicker)
         defensePicker:Hide(); book.defensePicker=defensePicker; book.refreshDefensePicker=refreshDefensePicker
 
-        local behaviourPicker=createObservationPicker("AzerothFieldbookBestiaryBehaviour","Observed behaviour","Record only behaviour you have personally seen\nfrom this creature.",350,430)
+        local behaviourPicker=createObservationPicker("AzerothFieldbookBestiaryBehaviour","Observed behaviour","Record behaviour you have seen. Blue [A] entries\ncome from automatic observations.",350,368)
         local behaviourGroups={
-            { "Disposition", { "Hostile", "Neutral" } },
             { "Combat style", { "Melee", "Ranged", "Caster" } },
             { "Traits", { "Flees at low health", "Calls allies", "Patrols", "Summons", "Heals", "Enrages", "Stealths" } },
         }
         behaviourPicker.controls={}
         local refreshBehaviourPicker
-        local groupY={-88,-150,-244}
+        local groupY={-88,-182}
         for groupIndex,group in ipairs(behaviourGroups) do
             label(behaviourPicker,group[1],30,groupY[groupIndex],180,"GameFontHighlightSmall")
             for i,name in ipairs(group[2]) do
@@ -1520,6 +1580,19 @@ local ink = { 0.75, 0.8, 0.8 }
                     journal:SetBehaviour(selected,self.behaviourName,self:GetChecked()==true)
                     refresh(); refreshBehaviourPicker()
                 end)
+                control:SetScript("OnEnter",function(self)
+                    if GameTooltip then
+                        local entry=selected and journal.entries[selected]
+                        local automatic=entry and entry.behaviourSources and entry.behaviourSources[self.behaviourName]
+                        GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(self.behaviourName)
+                        GameTooltip:AddLine(automatic and "[A] Automatically recorded from this creature's flee emote."
+                            or "A personal behaviour record.",automatic and 0.5 or 1,automatic and 0.82 or 1,1,true)
+                        GameTooltip:AddLine("Uncheck to remove the mark for now. Fresh automatic evidence will restore it. Previously observed behaviours keep their [A] provenance when rechecked.",0.7,0.7,0.7,true)
+                        GameTooltip:Show()
+                    end
+                end)
+                control:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+                control:SetScript("OnHide",function() if GameTooltip then GameTooltip:Hide() end end)
                 behaviourPicker.controls[#behaviourPicker.controls+1]=control
             end
         end
@@ -1528,6 +1601,7 @@ local ink = { 0.75, 0.8, 0.8 }
             for _,control in ipairs(behaviourPicker.controls) do
                 control:SetChecked(entry and type(entry.behaviours)=="table" and entry.behaviours[control.behaviourName] == true)
                 control:SetEnabled(entry ~= nil and not entry.confirmed)
+                control.text:SetText(entry and behaviourText(entry,control.behaviourName) or control.behaviourName)
             end
         end
         behaviourPicker:HookScript("OnShow",refreshBehaviourPicker)
@@ -1836,12 +1910,15 @@ local ink = { 0.75, 0.8, 0.8 }
         book:HookScript("OnHide",function() sortDismiss:Hide() end)
         book:HookScript("OnHide",function() if creatureLocations then creatureLocations:Hide() end end)
         local elapsed, revision, nameRevision = 0, -1, -1
+        local difficultyPlayerLevel=playerDifficultyLevel()
         book:SetScript("OnUpdate",function(_,dt)
             elapsed=elapsed+dt
             if elapsed>=0.5 then
                 elapsed=0
                 local currentNames=ns.PlayerNames and ns.PlayerNames.revision or 0
-                if revision~=journal.revision or nameRevision~=currentNames then
+                local currentLevel=playerDifficultyLevel()
+                if revision~=journal.revision or nameRevision~=currentNames or difficultyPlayerLevel~=currentLevel then
+                    difficultyPlayerLevel=currentLevel
                     revision,nameRevision=journal.revision,currentNames
                     refresh()
                 end
@@ -1892,21 +1969,40 @@ local ink = { 0.75, 0.8, 0.8 }
         book:Hide()
     end
     shell:RegisterSection("bestiary",{
-        title="Bestiary",frameName="AzerothFieldbookBestiarySection",build=build,
+        title="Bestiary",icon="Interface\\Icons\\Ability_Tracking",frameName="AzerothFieldbookBestiarySection",build=build,
         onOpen=function(context)
             if context and context.creatureID then choose(context.creatureID);return end
+            -- Returning through the tabs must not choose a new target or reset
+            -- ability browsing, filters, scroll positions or unfinished inputs.
+            if context and context.navigation and selected and journal.entries[selected] then
+                safeModel(selected);refresh();return
+            end
             local target=journal:Observe("target")
             if target then choose(target)
             elseif selected and journal.entries[selected] then safeModel(selected);refresh()
             else refresh() end
         end,
+        onLeave=function()
+            if creatureNotes then creatureNotes:Hide() end
+            if rumoursWindow then rumoursWindow:Hide() end
+            if sharingWindow then sharingWindow:Hide() end
+            if book and book.backupWindow then book.backupWindow:Hide() end
+            if StaticPopup_Hide then StaticPopup_Hide("AZEROTHFIELDBOOK_BESTIARY_RESET_CONFIRM") end
+        end,
     })
     local controller = {}
     function controller:GetShell() return shell end
+    function controller:CycleEntry(direction)
+        local root=shell:GetFrame()
+        if not book or not root or not root:IsShown() or not book:IsShown() or shell.active~="bestiary" then return false end
+        if direction~=1 and direction~=-1 then return false end
+        if GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus() then return false end
+        return cycleEntry(direction)
+    end
     function controller:Toggle() return shell:ToggleSection("bestiary") end
     function controller:OpenAtUnit(unit)
         shell:EnsureSection("bestiary")
-        local id=journal:Observe(unit)
+        local id=journal:Observe(unit,true)
         if not id then return false end
         return shell:ShowSection("bestiary",{creatureID=id})
     end

@@ -7,7 +7,7 @@ local report = { VERSION = 1, MAX_BYTES = 2048, MAX_LOCATIONS = 8,
 ns.SharingReport = report
 report.LORE_VERSION,report.MAX_LORE_BYTES=2,8192
 local schools = { Arcane=true, Fire=true, Frost=true, Holy=true, Nature=true, Shadow=true }
-local behaviours = { Hostile=true, Neutral=true, Melee=true, Ranged=true, Caster=true,
+local behaviours = { Melee=true, Ranged=true, Caster=true,
     ["Flees at low health"]=true, ["Calls allies"]=true, Patrols=true, Summons=true,
     Heals=true, Enrages=true, Stealths=true }
 function report.Public(value) return not (issecretvalue and issecretvalue(value)) end
@@ -267,6 +267,9 @@ function ns.InstallSharingRecords(journal)
         if not entry then return end
         local localBasic=entry.confirmed and entry.lockedBasic or entry
         local basic={name=self:GetCreatureName(id),category=localBasic.category,levelMin=localBasic.levelMin,levelMax=localBasic.levelMax,locations={}}
+        -- Reactions describe this player's own observation, never a shared claim
+        -- or the older frozen manual-review snapshot.
+        basic.disposition=entry.disposition
         for location in pairs(localBasic.locations or {}) do basic.locations[location]=true end
         for _,shared in ipairs(entry.sharedReports or {}) do
             basic.hasShared=true

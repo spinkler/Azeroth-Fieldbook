@@ -26,7 +26,7 @@ def client():
             local db={accountWideTracking=account==true}
             local store=account and ns.InitializeTracking(db) or db
             local j=ns.CreateBestiaryJournal(db,function() return 42 end,store)
-            local e=j:Ensure(42,false,'Forest Lurker')
+            local e=j:Ensure(42,false,'Forest Lurker',{level=9})
             e.category='Beast';e.levelMin=10;e.levelMax=11;e.locations['Loch Modan']=true
             assert(j:AddManual(42,'Poison','A note',nil,{Poison=true}))
             assert(j:AddDamage(42,10,4,7,11))
@@ -78,7 +78,7 @@ class BackupTests(unittest.TestCase):
         lua.execute('''
             local j,db,store,e=fresh()
             local snapshot=assert(j:CreateBackup())
-            j:Ensure(43,false,'Second creature');j:Ensure(44,false,'Third creature')
+            j:Ensure(43,false,'Second creature',{level=9});j:Ensure(44,false,'Third creature',{level=9})
             j:SetCreatureNotes(42,'After the backup')
             assert(j:ReserveShare('paid',1));assert(j:CommitShare('paid'))
             local sent={}
@@ -101,7 +101,7 @@ class BackupTests(unittest.TestCase):
             assert(recovery.bestiary.entries[43])
             assert(j:RestoreBackup(recovery));eq(j.entries[42].idNotes.text,'After the backup')
             assert(j:RestoreBackup(snapshot));eq(select(2,j:GetSharingBalance()),3)
-            j:Ensure(43,false,'Second creature');eq(select(2,j:GetSharingBalance()),3,'no repeat milestone')
+            j:Ensure(43,false,'Second creature',{level=9});eq(select(2,j:GetSharingBalance()),3,'no repeat milestone')
         ''')
 
     def test_backup_retention_reset_reload_and_scope(self):

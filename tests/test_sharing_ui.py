@@ -16,8 +16,8 @@ function native(registerResult,sendResult)
             calls=calls+1; return sendResult
         end}
     local j=ns.CreateBestiaryJournal({},function() return nil end)
-    local e=j:Ensure(42,false,'Defias Pillager');e.category='Humanoid';e.levelMin=9;e.levelMax=11;e.locations.Elwynn=true
-    j:Ensure(43,false,'Another creature')
+    local e=j:Ensure(42,false,'Defias Pillager',{level=9});e.category='Humanoid';e.levelMin=9;e.levelMax=11;e.locations.Elwynn=true
+    j:Ensure(43,false,'Another creature',{level=9})
     local engine=ns.InitializeSharing(j)
     return j,engine,function() return calls end,objects[#objects]
 end
@@ -108,7 +108,7 @@ do
         playerName,playerSurname=first,surname
         local j=ns.CreateBestiaryJournal({},function() return nil end)
         local entry=j:Ensure(id,false,name);entry.category='Humanoid';entry.levelMin=8;entry.levelMax=8;entry.locations['Elwynn Forest']=true
-        for i=1,4 do j:Ensure(id+100+i,false,'Funding creature') end
+        for i=1,4 do j:Ensure(id+100+i,false,'Funding creature',{level=9}) end
         local e=ns.InitializeSharing(j)
         local p={j=j,e=e,driver=objects[#objects]};peers[first..' '..surname]=p;return p
     end
@@ -124,7 +124,7 @@ do
             end
         end
     end
-    local traits={{kind='behaviour',value='Flees at low health'},{kind='behaviour',value='Hostile'},{kind='behaviour',value='Melee'}}
+    local traits={{kind='behaviour',value='Flees at low health'},{kind='behaviour',value='Ranged'},{kind='behaviour',value='Melee'}}
     local tx=assert(erna.e:Start(S.Capture(erna.j,327),'Peww Pewz',traits));pump(12)
     local incoming=assert(peww.e:GetIncoming()[1],'Peww Pewz receives the offer when the game returns separate name parts')
     eq(incoming.sender,'Erna Lionguard');assert(peww.e:Accept(incoming));pump(10)
@@ -181,7 +181,7 @@ local db={}
 ns.UIScale:Initialize(db)
 local j=ns.CreateBestiaryJournal(db,function() return npcID end)
 j:Observe('target')
-for i=1,5 do j:Ensure(100+i,false,'Funding '..i) end
+for i=1,5 do j:Ensure(100+i,false,'Funding '..i,{level=9}) end
 j:AddManual(42,'Fireball','A long private ability note',nil,{Fear=true,Stun=true})
 j:AddManual(42,'Arcane Volley With A Long Ability Name That Wraps Across Several Lines','',nil,{})
 j:SetResistance(42,'Fire',true);j:SetBehaviour(42,'Flees at low health',true)
@@ -390,7 +390,7 @@ local bEnv={ready=true,addonVersion=buildVersion,character='Bob Stonewell',now=f
 local b=ns.CreateSharing(bob,bEnv);local receiveUI=ns.CreateSharingWindow(bob,b)
 local offered={version=1,transaction='1000000-44-1',created=now,recipient='Bob Stonewell',creatureID=42,
     name='Defias Pillager',category='Humanoid',levelMin=9,levelMax=11,locations={'Elwynn'},
-    rumours={{kind='ability',value='Fireball'},{kind='behaviour',value='Melee'},{kind='behaviour',value='Hostile'}}}
+    rumours={{kind='ability',value='Fireball'},{kind='behaviour',value='Melee'},{kind='behaviour',value='Ranged'}}}
 local encoded=assert(S.Encode(offered))
 b:Receive('AFBShare','4~H~'..offered.transaction..'~'..buildVersion,'WHISPER','Alice Sunstrider')
 local n=math.ceil(#encoded/180)
@@ -602,7 +602,7 @@ eq(composer:GetHeight(),compactHeight,'reopening a short report removes the old 
 local entry=j.entries[43]
 entry.offenses={Nature=true};entry.resistances={Arcane=true};entry.immunities={Fire=true}
 entry.behaviours={}
-for _,name in ipairs({'Hostile','Melee','Flees at low health','Calls allies','Patrols','Summons','Heals','Enrages','Stealths'}) do
+for _,name in ipairs({'Ranged','Melee','Flees at low health','Calls allies','Patrols','Summons','Heals','Enrages','Stealths'}) do
     entry.behaviours[name]=true
 end
 book:Refresh()
@@ -653,7 +653,7 @@ function StaticPopup_Show(key,text,_,data) popup={key=key,text=text,data=data} e
 local options=main.options
 eq(options.backupButton.point[2],208);eq(options.restoreButton.point[2],378)
 eq(options.backupButton.point[3],-722,'backup shares the reset footer baseline')
-j:Ensure(43,false,'Saved creature');j:SetCreatureNotes(43,'A private note')
+j:Ensure(43,false,'Saved creature',{level=9});j:SetCreatureNotes(43,'A private note')
 options.backupButton.scripts.OnClick()
 local backups=main.backupWindow.frame
 assert(backups:IsShown() and backups.restoreButton.enabled)
@@ -898,7 +898,7 @@ local window=book:GetShell():GetFrame()
         {kind='ability',value='Dismissed report',sender='Erna Lionguard',dismissed=true}}
     j:Touch();book:Refresh()
     assert(isGreen(rowFor(42)),'selected entries keep the outstanding-rumour colour')
-    j:Ensure(43,false,'Another creature');book:Refresh()
+    j:Ensure(43,false,'Another creature',{level=9});book:Refresh()
     local other=rowFor(43);other.scripts.OnClick(other)
     assert(isGreen(rowFor(42)) and not isGreen(rowFor(43)))
     assert(j:DismissRumour(42,rejected));book:Refresh()

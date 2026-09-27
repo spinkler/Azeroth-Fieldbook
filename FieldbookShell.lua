@@ -54,8 +54,67 @@ function ns.CreateFieldbookShell(settings)
     local shell={sections={}, order={}}
     local book, addBackgroundLayer
     local baseScale=1
+    local tabTop, tabGap, tabPadding = 40, 2, 6
+    local layoutWidth,layoutHeight,layoutRight,layoutMaxScale
     function shell:GetFrame() return book end
     function shell:GetBaseScale() return baseScale end
+    function shell:UpdateLayout()
+        if not book then return end
+        -- Include the complete native tab art in dragging, saved-position
+        -- clamping and auxiliary-window placement, not just the content frame.
+        local width=book.navigation and book.navigation:GetWidth() or 0
+        book.afbOutsideRight=width>0 and width+tabPadding or 0
+        book:SetClampRectInsets(0,-book.afbOutsideRight,0,0)
+        if UIParent.GetWidth and UIParent.GetHeight then
+            book.afbMaxScale=math.min((UIParent:GetWidth()-30)/(book:GetWidth()+book.afbOutsideRight),
+                (UIParent:GetHeight()-30)/book:GetHeight())
+        end
+        if layoutWidth==book:GetWidth() and layoutHeight==book:GetHeight()
+            and layoutRight==book.afbOutsideRight and layoutMaxScale==book.afbMaxScale then return end
+        layoutWidth,layoutHeight,layoutRight,layoutMaxScale=book:GetWidth(),book:GetHeight(),book.afbOutsideRight,book.afbMaxScale
+        if ns.UIScale then ns.UIScale:ApplyFrame(book) end
+        if ns.WindowPositions then
+            ns.WindowPositions:Restore(book)
+            ns.WindowPositions:ReflowBookWindows()
+        end
+    end
+    function shell:UpdateNavigation()
+        if not book then return end
+        local navigation=book.navigation
+        if not navigation then
+            navigation=CreateFrame("Frame",nil,book)
+            navigation:SetPoint("TOPLEFT",book,"TOPRIGHT",0,-tabTop)
+            navigation:SetFrameLevel(book:GetFrameLevel()+20)
+            book.navigation=navigation
+            book.sectionTabs={}
+        end
+        -- The same frame art, mask, gold selection and hover used by Forever's
+        -- Character panel. Its template supplies the client-specific dimensions.
+        local width,height
+        for index,id in ipairs(self.order) do
+            local section=self.sections[id]
+            local tab=book.sectionTabs[index]
+            if not tab then
+                tab=CreateFrame("Frame",nil,navigation,"LargeSideTabButtonTemplate")
+                tab:SetFillToInterior(true,50)
+                tab.Icon:SetTexture(section.definition.icon or "Interface\\Icons\\INV_Misc_Book_02")
+                tab.tooltipText=section.definition.title
+                tab:SetCustomOnMouseUpHandler(function(_,button,upInside)
+                    if button~="LeftButton" or not upInside then return end
+                    if self.active==id and book:IsShown() then return end
+                    self:ShowSection(id,{navigation=true})
+                end)
+                tab:HookScript("OnHide",function() tab:OnLeave() end)
+                book.sectionTabs[index]=tab
+            end
+            width,height=tab:GetWidth(),tab:GetHeight()
+            tab:ClearAllPoints();tab:SetPoint("TOPLEFT",0,-(index-1)*(height+tabGap))
+            tab:SetChecked(id==(self.active or self.order[1]))
+        end
+        navigation:SetSize(width or 0,height and (#self.order*(height+tabGap)-tabGap) or 0)
+        navigation:SetShown(#self.order>0)
+        self:UpdateLayout()
+    end
     function shell:EnsureFrame()
         if book then return book end
         if UIParent.GetWidth and UIParent.GetHeight then
@@ -75,7 +134,10 @@ function ns.CreateFieldbookShell(settings)
         -- Native StartMoving reanchors scaled frames to screen space.
         local drag
         local function stopBookDrag()
-            if drag and ns.WindowPositions then ns.WindowPositions:Save(book) end
+            if drag and ns.WindowPositions then
+                ns.WindowPositions:ReflowBookWindows(true)
+                ns.WindowPositions:Save(book)
+            end
             drag = nil
         end
         local function startBookDrag()
@@ -137,8 +199,15 @@ function ns.CreateFieldbookShell(settings)
         end)
         -- Match the native character-sheet portrait: the icon is clipped by a
         -- real circular mask and surrounded by the UI-Frame portrait ring.
-        book.titleIcon=CreateFrame("Frame",nil,book)
+        book.titleIcon=CreateFrame("Frame",nil,book,"BackdropTemplate")
         book.titleIcon:SetAllPoints(book)
+        -- Keep native trim (and its fallback) above the inset index tabs,
+        -- while the parchment stays on the main frame below them.
+        book.titleIcon:SetFrameLevel(book:GetFrameLevel()+2)
+        book.titleIcon:EnableMouse(false)
+        book.titleIcon:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
+        book:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",tile=true,tileSize=32,
+            insets={left=8,right=8,top=8,bottom=8}})
         local trackingIcon=book.titleIcon:CreateTexture(nil,"ARTWORK")
         trackingIcon:SetSize(61,61); trackingIcon:SetPoint("TOPLEFT",0,4)
         trackingIcon:SetTexture("Interface\\Icons\\INV_Misc_Book_02")
@@ -166,6 +235,7 @@ function ns.CreateFieldbookShell(settings)
         end
         if hasFrameArt then
             book:SetBackdrop(nil)
+            book.titleIcon:SetBackdrop(nil)
             book.titleBar:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background-Dark",tile=true,tileSize=32})
             book.titleBar:SetBackdropColor(0.16,0.10,0.055,0.96)
             -- Retain the complete portrait sheet region above. Switching this
@@ -216,9 +286,11 @@ function ns.CreateFieldbookShell(settings)
         book.windowTitle:SetJustifyH("CENTER"); book.windowTitle:SetTextColor(1.00,0.82,0.14)
         book.windowTitle:SetText("Azeroth Fieldbook - v" .. addonVersion())
         book.closeButton=CreateFrame("Button",nil,book.titleBar,"UIPanelCloseButton")
+        book.closeButton:SetFrameLevel(book.titleIcon:GetFrameLevel()+1)
         book.closeButton:SetPoint("RIGHT",4,0); book.closeButton:SetSize(24,24); book.closeButton:SetScript("OnClick",function() book:Hide() end)
         local function titleButton(neighbour,action)
             local control=CreateFrame("Button",nil,book.titleBar,"UIPanelCloseButton")
+            control:SetFrameLevel(book.titleIcon:GetFrameLevel()+1)
             control:SetSize(24,24); control:SetPoint("RIGHT",neighbour,"LEFT",-2,0)
             local cover=control:CreateTexture(nil,"OVERLAY")
             cover:SetPoint("TOPLEFT",6,-6); cover:SetPoint("BOTTOMRIGHT",-6,6)
@@ -275,7 +347,10 @@ function ns.CreateFieldbookShell(settings)
             if section and section.frame then section.frame:Hide() end
         end)
         book:SetScale(baseScale)
+        self:UpdateNavigation()
         if ns.UIScale then ns.UIScale:Register(book) end
+        book:RegisterEvent("DISPLAY_SIZE_CHANGED");book:RegisterEvent("UI_SCALE_CHANGED")
+        book:SetScript("OnEvent",function() self:UpdateLayout() end)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]=book:GetName() end
         book:Hide()
         return book
@@ -448,6 +523,7 @@ function ns.CreateFieldbookShell(settings)
             "A Fieldbook section needs a title and builder")
         self.sections[id]={definition=definition,width=definition.width or 960,height=definition.height or 740}
         self.order[#self.order+1]=id
+        self:UpdateNavigation()
     end
     function shell:EnsureSection(id)
         local section=assert(self.sections[id],"Unknown Fieldbook section")
@@ -467,7 +543,7 @@ function ns.CreateFieldbookShell(settings)
         local section=assert(self.sections[id],"Unknown Fieldbook section")
         section.width,section.height=width,height
         if section.frame then section.frame:SetSize(width,height) end
-        if book and self.active==id then book:SetSize(width,height) end
+        if book and self.active==id then book:SetSize(width,height);self:UpdateLayout() end
     end
     function shell:IsSectionShown(id)
         return book~=nil and book:IsShown() and self.active==id
@@ -488,8 +564,11 @@ function ns.CreateFieldbookShell(settings)
         book:SetSize(section.width,section.height)
         book.windowTitle:SetText("Azeroth Fieldbook - "..section.definition.title.." - v"..addonVersion())
         for _,key in ipairs({"help","options","eventLog"}) do
-            book[key.."Button"]:SetEnabled(section.pages~=nil and section.pages[key]~=nil)
+            local available=section.pages~=nil and section.pages[key]~=nil
+            book[key.."Button"]:SetEnabled(available)
+            book[key.."Button"]:SetShown(available)
         end
+        self:UpdateNavigation()
         content:Show();book:Show()
         if ns.WindowFocus then ns.WindowFocus:Register(book) end
         if section.definition.onOpen then section.definition.onOpen(context) end

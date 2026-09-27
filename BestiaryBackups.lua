@@ -109,7 +109,8 @@ local function boundedMap(key,value,limit) return {key=key,value=value,limit=lim
 local names, words, prose = text(256), text(1024), text(4096,true)
 local flags=map(names,boolean)
 local levels=map(positive,boolean)
-local basic=record({name=names,category=names,levelMin=positive,levelMax=positive,locations=flags,personal=boolean,hasShared=boolean})
+local basic=record({name=names,category=names,levelMin=positive,levelMax=positive,locations=flags,personal=boolean,hasShared=boolean,
+    disposition=enum({Hostile=true,Neutral=true})})
 local progress=record({levels=levels,zones=flags,points=natural,killPoints=natural,initial=boolean,discovered=boolean,killGUIDs=array(names),firstEncounteredAt=timestamp})
 local ability=record({state=enum({pending=true,confirmed=true,rejected=true}),origin=words,note=prose,
     effects=flags,spellID=positive,showInTooltip=boolean},{"state"})
@@ -121,20 +122,25 @@ local shared=record({creatureID=positive,name=names,category=names,levelMin=posi
 local rumour=record({creatureID=positive,kind=enum({ability=true,offense=true,resistance=true,immunity=true,behaviour=true}),
     value=names,spellID=positive,sender=names,transaction=names,received=natural,source=names,
     previouslyRejected=boolean,dismissed=boolean,resolved=boolean,rejected=boolean},{"kind","value","sender"})
-local entry=record({id=positive,name=names,category=names,rank=names,levelMin=positive,levelMax=positive,
-    killLocations=boundedMap(positive,record({name=names,width=positive,height=positive,
+local locationSamples=boundedMap(positive,record({name=names,width=positive,height=positive,
         points=boundedMap(positive,record({x=function(v) return integer(v,0,10000) end,
             y=function(v) return integer(v,0,10000) end,approximate=boolean,seenAt=natural},
-            {"x","y","approximate","seenAt"}),256)},{"name","points"}),64),
+            {"x","y","approximate","seenAt"}),256)},{"name","points"}),64)
+local entry=record({id=positive,name=names,category=names,rank=names,levelMin=positive,levelMax=positive,
+    disposition=enum({Hostile=true,Neutral=true}),
+    killLocations=locationSamples,observationLocations=locationSamples,
     firstEncounteredAt=timestamp,
     kills=natural,sightings=natural,confirmed=boolean,personalEncountered=boolean,lockedBasic=basic,
     locations=flags,offenses=flags,resistances=flags,immunities=flags,behaviours=flags,
+    behaviourSources=map(names,enum({monsterEmote=true,unitReaction=true})),ignoredBehaviours=flags,
     abilities=map(names,ability),ignoredAbilities=flags,damage=map(positive,damage),
     idNotes=record({spells=array(positive),text=prose}),tameable=boolean,tameabilitySource=names,
     beastLore=record({level=positive,observed=timestamp,rows=array(record({left=names,right=names},{"left"}))},{"level","observed","rows"}),
     beastLoreSource=enum({gameTooltip=true,WHISPER=true}),beastLoreSender=names,
     discoveryProgress=progress,sharedReports=array(shared),rumours=array(rumour),unchangedKills=natural},{"id"})
 local bestiary=record({entries=map(positive,entry),creatures=map(positive,record({names=flags,spells=map(positive,record({name=names},{"name"}))})),
+    zoneTerritories=boundedMap(names,map(enum({Alliance=true,Horde=true,Neutral=true}),
+        enum({friendly=true,hostile=true,contested=true,sanctuary=true,arena=true,combat=true,none=true})),1024),
     points=record({version=positive,earned=natural,spent=natural,credits=map(positive,progress)},{"earned","spent","credits"}),
     recentKills=array(names)},{"entries","creatures","points"})
 local snapshotSchema=record({version=positive,created=natural,addonVersion=names,scope=enum({account=true,character=true}),
@@ -173,14 +179,21 @@ local function normalize(snapshot)
     local saved=snapshot.bestiary
     saved.recentKills=saved.recentKills or {}
     for id,e in pairs(saved.entries) do
+        if ns.MigrateDisposition then ns.MigrateDisposition(e) end
         if e.id~=id then error("identity") end
-        for _,map in pairs(e.killLocations or {}) do
-            if (map.width==nil)~=(map.height==nil) or (map.width and (map.width>100000 or map.height>100000)) then error("map size") end
-            for key,p in pairs(map.points) do if key~=1+p.x*10001+p.y then error("coordinate key") end end
+        for _,field in ipairs({"killLocations","observationLocations"}) do
+            for _,map in pairs(e[field] or {}) do
+                if (map.width==nil)~=(map.height==nil) or (map.width and (map.width>100000 or map.height>100000)) then error("map size") end
+                for key,p in pairs(map.points) do if key~=1+p.x*10001+p.y then error("coordinate key") end end
+            end
         end
         range(e,"levelMin","levelMax")
         e.category=e.category or "Unclassified";e.kills=e.kills or 0
         for _,field in ipairs({"abilities","locations","offenses","resistances","immunities","behaviours","damage"}) do e[field]=e[field] or {} end
+        -- Sources are historical evidence, independent of the current checkbox.
+        for name,ignored in pairs(e.ignoredBehaviours or {}) do
+            if ignored and e.behaviours[name] then error("ignored behaviour") end
+        end
         if e.lockedBasic then range(e.lockedBasic,"levelMin","levelMax") end
         if e.idNotes then e.idNotes.spells=e.idNotes.spells or {};e.idNotes.text=e.idNotes.text or "" end
         for _,r in ipairs(e.sharedReports or {}) do range(r,"levelMin","levelMax") end

@@ -266,6 +266,7 @@ class LocationsWindowTests(unittest.TestCase):
                     function object:SetColorTexture(...) self.rgba={...} end
                     function object:SetVertexColor(...) self.tint={...} end
                     function object:SetDesaturated(value) self.desaturated=value end
+                    function object:SetRotation(value) self.rotation=value end
                     function object:SetVertexOffset(i,x,y)
                         self.vertices=self.vertices or {};self.vertices[i]={x,y}
                     end
@@ -298,10 +299,37 @@ class LocationsWindowTests(unittest.TestCase):
             f.menu.next.scripts.OnClick();assert(f.menu.previous.enabled)
             local row=f.menu.rows[1];row.scripts.OnClick(row)
             assert(not f.menu:IsShown() and f.zoneButton.text:find(row.zone.name,1,true))
-            assert(f.empty:IsShown() and f.empty.text:find('No mapped kills',1,true))
+            assert(not f.empty:IsShown())
+            eq(f.status.text,'No mapped kills. Locations are collected from credited kills.')
             C_Map.GetMapArtLayers=function() return secret end
             window:Open(42);assert(f.empty:IsShown() and f.empty.text:find('map unavailable',1,true))
             j:DeleteEntry(42);window:Refresh();eq(f.zoneName.text,'No zones recorded')
+        ''')
+
+    def test_player_arrow_tracks_position_facing_and_hides_when_unavailable(self):
+        lua=self.client()
+        lua.execute('''
+            facing=0;function GetPlayerFacing() return facing end
+            window:Open(42);local f=window:GetFrame();local a=f.playerArrow
+            assert(a:IsShown());eq(a.rotation,0)
+            eq(a.point[4],px*f.map:GetWidth());eq(a.point[5],-py*f.map:GetHeight())
+            px=0.8;py=0.6;facing=1.2;f.scripts.OnUpdate(f,0.05)
+            eq(a.point[4],px*f.map:GetWidth());eq(a.rotation,1.2)
+            f.brightness.scripts.OnValueChanged(f.brightness,0.2)
+            assert(a:IsShown() and not a.tint,'terrain brightness does not dim player')
+            mapID=38;f.scripts.OnUpdate(f,0.05);assert(not a:IsShown())
+            mapID=37;f.scripts.OnUpdate(f,0.05);assert(a:IsShown())
+            for _,bad in ipairs({secret,-0.1,1.1,0/0}) do
+                px=bad;f.scripts.OnUpdate(f,0.05);assert(not a:IsShown())
+            end
+            px=0;py=1;f.scripts.OnUpdate(f,0.05);assert(a:IsShown())
+            facing=secret;f.scripts.OnUpdate(f,0.05);assert(not a:IsShown())
+            facing=0;C_Map.GetPlayerMapPosition=function() error('unavailable') end
+            f.scripts.OnUpdate(f,0.05);assert(not a:IsShown())
+            C_Map.GetPlayerMapPosition=function() return {x=0.5,y=0.5} end
+            f.scripts.OnUpdate(f,0.05);assert(a:IsShown())
+            C_Map.GetMapArtLayers=function() return nil end
+            window:Open(42);assert(not a:IsShown())
         ''')
 
     def test_close_scale_focus_book_button_selection_and_lifecycle(self):

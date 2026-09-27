@@ -5,10 +5,15 @@ local db, frames = nil, {}
 function scale:Get()
     return math.max(0.5, math.min(1.5, tonumber(db and db.uiScale) or 1))
 end
+function scale:ApplyFrame(frame)
+    if not frames[frame] then return end
+    local value=frames[frame]*self:Get()
+    if frame.afbMaxScale then value=math.min(value,frame.afbMaxScale) end
+    frame:SetScale(value)
+end
 function scale:Apply()
-    local value = self:Get()
-    for frame, base in pairs(frames) do frame:SetScale(base * value) end
-    if ns.WindowPositions then ns.WindowPositions:RestoreAll() end
+    for frame in pairs(frames) do self:ApplyFrame(frame) end
+    if ns.WindowPositions then ns.WindowPositions:RestoreAll();ns.WindowPositions:ReflowBookWindows() end
     if ns.MinimapButton then ns.MinimapButton:UpdatePosition() end
 end
 function scale:Initialize(settings)
@@ -24,7 +29,7 @@ function scale:Initialize(settings)
 end
 function scale:Register(frame, positionKey)
     if not frames[frame] then frames[frame] = frame:GetScale() or 1 end
-    frame:SetScale(frames[frame] * self:Get())
+    self:ApplyFrame(frame)
     if positionKey and ns.WindowPositions then ns.WindowPositions:Register(frame, positionKey) end
 end
 function scale:Set(value)

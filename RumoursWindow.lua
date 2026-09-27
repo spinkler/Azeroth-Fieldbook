@@ -232,6 +232,7 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
     end
     function controller:Refresh() self:SetCreature(selected) end
     function controller:IsShown() return frame~=nil and frame:IsShown() end
+    function controller:Hide() if frame then frame:Hide() end end
     function controller:Toggle(id)
         build()
         if frame:IsShown() then frame:Hide(); return end

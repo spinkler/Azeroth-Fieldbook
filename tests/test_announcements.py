@@ -131,7 +131,7 @@ class AnnouncementTests(unittest.TestCase):
             zone=secret; units.target=spawn('hidden',false); units.target.level=secret
             observe()
         ''')
-        self.assertEqual(self.messages(), [announcement('New discovery!', 'Unclassified')])
+        self.assertEqual(self.messages(), [announcement('Entry observed', 'Unclassified', points=None)])
 
 
     def test_deleted_creature_returns_on_hover_without_duplicate_knowledge(self):

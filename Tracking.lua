@@ -61,10 +61,14 @@ end
 
 local ranks = { Rare = 1, Elite = 2, ["Rare Elite"] = 3, ["World Boss"] = 4 }
 local function mergeEntry(target, source)
+    ns.MigrateDisposition(target);ns.MigrateDisposition(source)
     target.firstEncounteredAt=ns.EarliestEncounterTime(target.firstEncounteredAt,source.firstEncounteredAt)
     target.kills = (tonumber(target.kills) or 0) + (tonumber(source.kills) or 0)
     target.sightings = (tonumber(target.sightings) or 0) + (tonumber(source.sightings) or 0)
-    if ns.CreatureLocations then ns.CreatureLocations.Merge(target,source.killLocations) end
+    if ns.CreatureLocations then
+        ns.CreatureLocations.Merge(target,source.killLocations)
+        ns.CreatureLocations.Merge(target,source.observationLocations,"observations")
+    end
     target.levelMin = minimum(target.levelMin, source.levelMin)
     target.levelMax = maximum(target.levelMax, source.levelMax)
     if (ranks[source.rank] or 0) > (ranks[target.rank] or 0) then target.rank = source.rank end
@@ -84,7 +88,23 @@ local function mergeEntry(target, source)
     target.confirmed = target.confirmed == true and source.confirmed == true
     -- Preserve the account's locked snapshot until the page is unlocked.
     if not target.confirmed then target.lockedBasic = nil end
-    for _, field in ipairs({"locations", "offenses", "resistances", "immunities", "behaviours", "ignoredAbilities"}) do
+    target.behaviours=target.behaviours or {}
+    target.behaviourSources=target.behaviourSources or {}
+    target.ignoredBehaviours=target.ignoredBehaviours or {}
+    for name,ignored in pairs(source.ignoredBehaviours or {}) do
+        if ignored and (not target.behaviours[name] or target.behaviourSources[name]) then
+            target.behaviours[name]=nil
+            target.ignoredBehaviours[name]=true
+        end
+    end
+    for name,enabled in pairs(source.behaviours or {}) do
+        if enabled and not target.ignoredBehaviours[name] and not target.behaviours[name] then
+            target.behaviours[name]=true
+        end
+    end
+    -- Automatic evidence remains historical even while its checkbox is off.
+    mergeMissing(target.behaviourSources,source.behaviourSources)
+    for _, field in ipairs({"locations", "offenses", "resistances", "immunities", "ignoredAbilities"}) do
         target[field] = target[field] or {}
         mergeMissing(target[field], source[field])
     end
@@ -159,6 +179,14 @@ function ns.InitializeTracking(settings)
             else target.entries[id] = copy(entry) end
         end
         mergeMissing(target.creatures, source.creatures)
+        target.zoneTerritories=target.zoneTerritories or {}
+        for zone,territories in pairs(source.zoneTerritories or {}) do
+            if target.zoneTerritories[zone] then mergeMissing(target.zoneTerritories[zone],territories)
+            else
+                local count=0;for _ in pairs(target.zoneTerritories) do count=count+1 end
+                if count<1024 then target.zoneTerritories[zone]=copy(territories) end
+            end
+        end
         target.points.earned = target.points.earned + source.points.earned
         target.points.spent = target.points.spent + source.points.spent
         mergeMissing(target.points.reservations, source.points.reservations)

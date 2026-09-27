@@ -222,8 +222,8 @@ end
 function setup()
     now=1000000; clients={};wire={};delivered={};drop=nil
     a=endpoint('Alice Sunstrider'); b=endpoint('Bob Stonewell')
-    local e=a.j:Ensure(42,false,'Defias Pillager'); e.category='Humanoid'; e.levelMin=9; e.levelMax=11; e.locations.Elwynn=true
-    for i=1,9 do a.j:Ensure(100+i,false,'Funding creature') end
+    local e=a.j:Ensure(42,false,'Defias Pillager',{level=9}); e.category='Humanoid'; e.levelMin=9; e.levelMax=11; e.locations.Elwynn=true
+    for i=1,9 do a.j:Ensure(100+i,false,'Funding creature',{level=9}) end
     capture=assert(S.Capture(a.j,42))
 end
 function start(claims)
@@ -250,7 +250,7 @@ do
     setup(); clients['Bob Stonewell']=nil; b=endpoint('Erna Lionguard')
     local gold={version=1,creatureID=327,name='Goldtooth',category='Humanoid',levelMin=8,levelMax=8,
         locations={'Elwynn Forest'},rumours={}}
-    local traits={flee,{kind='behaviour',value='Hostile'},melee}
+    local traits={flee,{kind='behaviour',value='Ranged'},melee}
     local tx=assert(a.engine:Start(gold,'Erna Lionguard',traits));pump(20)
     local item=assert(b.engine:GetIncoming()[1],'Goldtooth reaches the preview before acceptance')
     eq(item.report.name,'Goldtooth');eq(#item.report.rumours,3);eq(select(3,a.j:GetSharingBalance()),0)
@@ -455,7 +455,7 @@ setup();assert(not a.engine:Start(capture,'Bob Stonewell',many),'larger selectio
 eq(a.j:GetSharingBalance(),10);eq(select(4,a.j:GetSharingBalance()),0)
 assert(not a.engine:Start(capture,'Bob Stonewell',oversized),'oversized report rejected before reservation')
 eq(select(4,a.j:GetSharingBalance()),0)
-for i=201,230 do a.j:Ensure(i,false,'Funding creature') end
+for i=201,230 do a.j:Ensure(i,false,'Funding creature',{level=9}) end
 tx,item=start(many);eq(#item.report.rumours,32);eq(tx.cost,33)
 assert(b.engine:Accept(item));pump(12)
 eq(tx.stage,'complete');eq(#b.j:GetRumours(42),32);eq(a.j:GetSharingBalance(),7);eq(select(3,a.j:GetSharingBalance()),33)
@@ -671,11 +671,11 @@ assert(not capacity:ImportReport(report('1000000-99-1',{{kind='ability',value='O
 eq(capacity.revision,revision)
 -- In-flight reservations cannot overlap into a negative available balance.
 local budget=ns.CreateBestiaryJournal({},identify)
-budget:Ensure(1,false,'First creature'); budget:Ensure(2,false,'Second creature'); budget:Ensure(3,false,'Third creature')
+budget:Ensure(1,false,'First creature',{level=9}); budget:Ensure(2,false,'Second creature',{level=9}); budget:Ensure(3,false,'Third creature',{level=9})
 assert(budget:ReserveShare('first',2)); assert(not budget:ReserveShare('second',2))
 assert(budget:ReserveShare('second',1)); eq(budget:GetSharingBalance(),0)
 assert(budget:CommitShare('second')); assert(budget:CommitShare('first')); eq(budget:GetSharingBalance(),0)
-for i=4,8 do budget:Ensure(i,false,'Funding creature') end
+for i=4,8 do budget:Ensure(i,false,'Funding creature',{level=9}) end
 for _,cost in ipairs({-1,1.5,math.huge,0/0,'4',secret}) do
     assert(not budget:ReserveShare('invalid',cost),'reservations require readable nonnegative finite integers')
 end

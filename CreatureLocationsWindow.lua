@@ -5,7 +5,17 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
     local frame,selected,zoneKey,revision,visibleKey
     local zones,tiles,exploration,fills,dots,glows={},{},{},{},{},{}
     local menuOffset=0
+    local displayedMapID
     local WIDTH,HEIGHT=640,426
+    local palettes={
+        kills={fill={0.9,0.18,1},border={1,0.55,1}},
+        observations={fill={0.05,0.8,1},border={0.45,1,1}},
+    }
+    local function mode() return journal:GetLocationTrackingMode() end
+    local function colour(texture,kind,alpha)
+        local c=palettes[mode()][kind]
+        texture:SetColorTexture(c[1],c[2],c[3],alpha)
+    end
     local function public(v) return not (issecretvalue and issecretvalue(v)) end
     local function number(v) return public(v) and type(v)=="number" and v>0 and v<=100000 end
     local function read(fn,...)
@@ -19,6 +29,21 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
     local function key(zone) return zone.mapID and ("map:"..zone.mapID) or ("name:"..zone.name) end
     local function hide(pool) for _,item in ipairs(pool) do item:Hide() end end
     local function tipLeave() if GameTooltip then GameTooltip:Hide() end end
+    local function updatePlayer()
+        local arrow=frame.playerArrow
+        arrow:Hide()
+        if not displayedMapID or not C_Map then return end
+        if read(C_Map.GetBestMapForUnit,"player")~=displayedMapID then return end
+        local position=read(C_Map.GetPlayerMapPosition,displayedMapID,"player")
+        if type(position)~="table" then return end
+        local x,y=read(function() return position.x end),read(function() return position.y end)
+        local facing=read(GetPlayerFacing)
+        local function finite(v,low,high) return type(v)=="number" and v>=low and v<=high end
+        if not finite(x,0,1) or not finite(y,0,1) or not finite(facing,0,2*math.pi) then return end
+        arrow:ClearAllPoints()
+        arrow:SetPoint("CENTER",frame.map,"TOPLEFT",x*frame.map:GetWidth(),-y*frame.map:GetHeight())
+        arrow:SetRotation(facing);arrow:Show()
+    end
     local function applyBrightness()
         local value=journal:GetLocationMapBrightness()
         for _,pool in ipairs({tiles,exploration}) do
@@ -57,7 +82,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
                     end
                     local tw,th=right-left,bottom-top
                     t:ClearAllPoints();t:SetPoint("TOPLEFT",frame.map,"TOPLEFT",left,-top);t:SetSize(tw,th)
-                    t:SetColorTexture(1,0.55,1,style[2]);t:SetBlendMode("ADD")
+                    colour(t,"border",style[2]);t:SetBlendMode("ADD")
                     local base={{0,0},{0,-th},{tw,0},{tw,-th}}
                     for i,p in ipairs(corners) do t:SetVertexOffset(i,p[1]-left-base[i][1],top-p[2]-base[i][2]) end
                     t:Show()
@@ -151,7 +176,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
             local left,top=math.min(a.u,b.u,c.u)*w,math.min(a.v,b.v,c.v)*h
             local tw,th=math.max(a.u,b.u,c.u)*w-left,math.max(a.v,b.v,c.v)*h-top
             texture:ClearAllPoints();texture:SetPoint("TOPLEFT",frame.map,"TOPLEFT",left,-top)
-            texture:SetSize(tw,th);texture:SetColorTexture(0.9,0.18,1,0.46)
+            texture:SetSize(tw,th);colour(texture,"fill",0.46)
             texture:SetVertexOffset(1,a.u*w-left,top-a.v*h)
             texture:SetVertexOffset(2,b.u*w-left,top+th-b.v*h)
             texture:SetVertexOffset(3,c.u*w-left-tw,top-c.v*h)
@@ -166,22 +191,25 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
                 local dot=dots[index]
                 if not dot then
                     dot=CreateFrame("Frame",nil,frame.map);dots[index]=dot;dot:SetSize(10,10)
-                    dot.texture=dot:CreateTexture(nil,"OVERLAY");dot.texture:SetAllPoints()
-                    dot.texture:SetTexture("Interface\\COMMON\\Indicator-Yellow")
+                    dot.border=dot:CreateTexture(nil,"BACKGROUND");dot.border:SetAllPoints()
+                    dot.texture=dot:CreateTexture(nil,"OVERLAY")
+                    dot.texture:SetPoint("TOPLEFT",2,-2);dot.texture:SetPoint("BOTTOMRIGHT",-2,2)
                     dot:EnableMouse(true)
                     dot:SetScript("OnEnter",function(self)
                         if GameTooltip then
                             GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
-                            GameTooltip:SetText(self.location.approximate and "Approximate kill location" or "Creature kill location")
+                            GameTooltip:SetText(mode()=="observations" and "Observation location"
+                                or self.location.approximate and "Approximate kill location" or "Creature kill location")
                             GameTooltip:AddLine(string.format("%.1f, %.1f",self.location.u*100,self.location.v*100),1,1,1)
-                            if self.location.approximate then GameTooltip:AddLine("Your position when the kill was credited.",0.7,0.7,0.7) end
+                            if mode()=="observations" then GameTooltip:AddLine("Your position when you targeted this creature.",0.7,0.7,0.7)
+                            elseif self.location.approximate then GameTooltip:AddLine("Your position when the kill was credited.",0.7,0.7,0.7) end
                             GameTooltip:Show()
                         end
                     end)
                     dot:SetScript("OnLeave",tipLeave);dot:SetScript("OnHide",tipLeave)
                 end
                 dot.location=p;dot:ClearAllPoints();dot:SetPoint("CENTER",frame.map,"TOPLEFT",p.u*w,-p.v*h)
-                dot.texture:SetVertexColor(1,p.approximate and 0.7 or 0.3,0.1);dot:Show()
+                colour(dot.border,"border",1);colour(dot.texture,"fill",1);dot:Show()
             end
         end
         return #points,approx,#triangles
@@ -200,13 +228,13 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
     render=function(force)
         if not frame or not frame:IsShown() then return end
         local entry=selected and journal.entries[selected]
-        local signature=tostring(selected)..":"..tostring(zoneKey)
+        local signature=tostring(selected)..":"..tostring(zoneKey)..":"..mode()
         if not force and revision==journal.revision and visibleKey==signature then return end
         revision=journal.revision
         local brightness=0.504*journal:GetBackgroundBrightness()*0.34
         frame.paper:SetVertexColor(brightness,brightness,brightness)
         frame.menu.paper:SetVertexColor(brightness,brightness,brightness)
-        zones=ns.CreatureLocations.Zones(entry)
+        zones=ns.CreatureLocations.Zones(entry,mode())
         local chosen
         for _,zone in ipairs(zones) do if key(zone)==zoneKey then chosen=zone;break end end
         if not chosen then
@@ -215,25 +243,32 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
             chosen=chosen or zones[1]
         end
         zoneKey=chosen and key(chosen)
-        visibleKey=tostring(selected)..":"..tostring(zoneKey)
+        visibleKey=tostring(selected)..":"..tostring(zoneKey)..":"..mode()
         frame.creature:SetText(entry and (journal:GetCreatureName(selected) or "Creature") or "Select a creature in the Bestiary.")
         frame.zoneName:SetText(chosen and chosen.name or "No zones recorded")
         frame.zoneName:SetShown(#zones<=1)
         frame.zoneButton:SetShown(#zones>1);frame.zoneButton:SetText((chosen and chosen.name or "Select zone").."  v")
         frame.menu:Hide();renderMenu()
         local available=drawMap(chosen and chosen.mapID)
+        displayedMapID=available and chosen.mapID or nil
+        updatePlayer()
         hide(fills);hide(dots);hide(glows)
         local count,approx,triangles=0,0,0
         if available then count,approx,triangles=drawSamples(chosen.data) end
-        frame.empty:SetShown(not available or count==0)
-        frame.empty:SetText(not available and (chosen and "Zone map unavailable. Visit this zone and observe a creature to link its map." or "No locations recorded yet.")
-            or "No mapped kills yet. Locations are collected from new credited kills.")
-        frame.status:SetText(count>0 and (count.." mapped positions • "..approx.." approximate"..(triangles>0 and " • nearby groups shaded" or ""))
-            or "Earlier kill totals do not contain coordinates.")
+        frame.empty:SetShown(not available)
+        frame.empty:SetText(chosen and "Zone map unavailable. Visit this zone and observe a creature to link its map." or "No locations recorded yet.")
+        local observations=mode()=="observations"
+        local status=count..(observations and " observation positions" or " mapped positions • "..approx.." approximate")
+        frame.status:SetText(count>0 and (status..(triangles>0 and " • nearby groups shaded" or ""))
+            or observations and "No mapped observations. Target this creature to record your position."
+            or "No mapped kills. Locations are collected from credited kills.")
+        if count>0 then frame.status:SetTextColor(1,1,1) else frame.status:SetTextColor(1,0.2,0.2) end
         if count>=3 and chosen.data and (not chosen.data.width or not chosen.data.height) then
-            frame.status:SetText(count.." mapped positions • "..approx.." approximate • map scale unavailable; dots only")
+            frame.status:SetText(status.." • map scale unavailable; dots only")
         end
-        frame.legend:SetText("Orange dots and violet areas mark kill locations. Nearby points join within 180 yards.\nApproximate positions use your location when the kill was credited.")
+        frame.legend:SetText(observations and "Cyan: your position when you targeted the creature, including during flight."
+            or "Violet: credited kills. Approximate positions use your location at the time.")
+        frame.trackingMode:SetText(observations and "Tracking: Observations" or "Tracking: Kills")
         frame.brightness:SetValue(journal:GetLocationMapBrightness())
         applyBrightness()
     end
@@ -241,10 +276,10 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         if frame then return end
         frame=CreateFrame("Frame","AzerothFieldbookCreatureLocations",UIParent,"BackdropTemplate")
         frame.afbPreferBookEdge=true;frame.afbAnchorRule="right";frame.afbAlignBookTop=true
-        frame:SetSize(676,628);frame:SetFrameStrata("DIALOG");frame:SetClampedToScreen(true)
+        frame:SetSize(676,614);frame:SetFrameStrata("DIALOG");frame:SetClampedToScreen(true)
         local book=getBook and getBook()
         if book then frame:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0) else frame:SetPoint("CENTER") end
-        frame:SetScale(math.min(1,(UIParent:GetWidth()-30)/(676*1.5),(UIParent:GetHeight()-30)/(628*1.5)))
+        frame:SetScale(math.min(1,(UIParent:GetWidth()-30)/(676*1.5),(UIParent:GetHeight()-30)/(614*1.5)))
         frame:SetMovable(true);frame:EnableMouse(true);frame:RegisterForDrag("LeftButton")
         frame:SetScript("OnDragStart",frame.StartMoving);frame:SetScript("OnDragStop",frame.StopMovingOrSizing)
         frame:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=20})
@@ -260,22 +295,43 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         frame.zoneButton:SetSize(420,24);frame.zoneButton:SetPoint("TOPLEFT",16,-60)
         frame.map=CreateFrame("Frame",nil,frame)
         frame.map:SetPoint("TOP",frame,"TOP",0,-92);frame.map:SetSize(WIDTH,HEIGHT)
+        frame.playerArrow=frame.map:CreateTexture(nil,"OVERLAY",nil,7)
+        frame.playerArrow:SetSize(18,18)
+        frame.playerArrow:SetTexture("Interface\\Minimap\\MinimapArrow")
+        frame.playerArrow:Hide()
         frame.empty=label(frame.map,"",0,0,596,"GameFontHighlight")
         frame.empty:ClearAllPoints();frame.empty:SetPoint("CENTER",frame.map,"CENTER",0,0)
         frame.empty:SetJustifyH("CENTER");frame.empty:SetHeight(60)
         frame.status=label(frame,"",18,-524,640)
-        frame.legend=label(frame,"",18,-545,640);frame.legend:SetTextColor(0.65,0.65,0.65);frame.legend:SetHeight(29)
-        label(frame,"Map brightness",18,-585,150)
+        frame.legend=label(frame,"",18,-545,640);frame.legend:SetTextColor(0.45,0.45,0.45);frame.legend:SetHeight(15)
+        label(frame,"Map brightness",18,-571,150)
         frame.brightness=CreateFrame("Slider",nil,frame,"OptionsSliderTemplate")
-        frame.brightness:SetPoint("TOPLEFT",180,-584);frame.brightness:SetSize(180,16)
+        frame.brightness:SetPoint("TOPLEFT",180,-570);frame.brightness:SetSize(180,16)
         local brightnessTrack=frame.brightness:CreateTexture(nil,"BACKGROUND")
         brightnessTrack:SetPoint("TOPLEFT",2,-4);brightnessTrack:SetPoint("BOTTOMRIGHT",-2,4)
         brightnessTrack:SetColorTexture(0.045,0.032,0.018,1)
         frame.brightness:SetMinMaxValues(0.2,1);frame.brightness:SetValueStep(0.05);frame.brightness:SetObeyStepOnDrag(true)
-        frame.brightnessValue=label(frame,"",374,-585,80)
+        frame.brightnessValue=label(frame,"",374,-571,80)
         frame.brightness:SetScript("OnValueChanged",function(_,value)
             journal:SetLocationMapBrightness(value);applyBrightness()
         end)
+        frame.trackingMode=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate")
+        frame.trackingMode:SetPoint("TOPLEFT",458,-565);frame.trackingMode:SetSize(200,24)
+        frame.trackingMode:SetScript("OnClick",function()
+            tipLeave()
+            journal:SetLocationTrackingMode(mode()=="kills" and "observations" or "kills")
+            render(true)
+        end)
+        frame.trackingMode:SetScript("OnEnter",function(self)
+            if GameTooltip then
+                GameTooltip:SetOwner(self,"ANCHOR_TOP")
+                GameTooltip:SetText("Location tracking")
+                GameTooltip:AddLine("Switch between violet kill positions and cyan observation positions. Both are recorded while you explore.",1,1,1,true)
+                GameTooltip:Show()
+            end
+        end)
+        frame.trackingMode:SetScript("OnLeave",tipLeave)
+        frame.trackingMode:SetScript("OnHide",tipLeave)
         local close=CreateFrame("Button",nil,frame,"UIPanelCloseButton")
         close:SetPoint("TOPRIGHT",-3,-3);close:SetScript("OnClick",function() frame:Hide() end)
         frame.menu=CreateFrame("Frame",nil,frame,"BackdropTemplate")
@@ -306,8 +362,12 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
             frame:StopMovingOrSizing();frame.menu:Hide();tipLeave()
             if controller.visibilityCallback then controller.visibilityCallback(false) end
         end)
-        local elapsed=0
-        frame:SetScript("OnUpdate",function(_,dt) elapsed=elapsed+dt;if elapsed>=0.5 then elapsed=0;render() end end)
+        local elapsed,playerElapsed=0,0
+        frame:SetScript("OnUpdate",function(_,dt)
+            elapsed=elapsed+dt;playerElapsed=playerElapsed+dt
+            if elapsed>=0.5 then elapsed=0;render() end
+            if playerElapsed>=0.05 then playerElapsed=0;updatePlayer() end
+        end)
         frame:RegisterEvent("MAP_EXPLORATION_UPDATED")
         frame:SetScript("OnEvent",function() render(true) end)
         if ns.WindowFocus then ns.WindowFocus:Register(frame) end

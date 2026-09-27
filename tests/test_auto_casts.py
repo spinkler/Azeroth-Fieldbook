@@ -30,6 +30,19 @@ def cast_client(account=False):
 
 
 class AutomaticCastTests(unittest.TestCase):
+    def test_locked_entry_accepts_automatic_cast_and_keeps_manual_edits_locked(self):
+        lua = cast_client()
+        lua.execute('''
+            journal:SetEntryConfirmed(42,true)
+            local snapshot=entry().lockedBasic
+            cast()
+            assert(entry().confirmed and entry().lockedBasic==snapshot)
+            assert(ability().state=='confirmed' and ability().origin=='Automatic cast observation')
+            assert(#messages==1 and castEvents()==1)
+            assert(not journal:RemoveAbility(42,'Frost Armor'))
+            cast();tick();assert(#messages==1 and castEvents()==1)
+        ''')
+
     def test_cast_events_in_combat_confirm_and_announce_once(self):
         for event in ['UNIT_SPELLCAST_START', 'UNIT_SPELLCAST_SUCCEEDED',
                       'UNIT_SPELLCAST_CHANNEL_START', 'UNIT_SPELLCAST_EMPOWER_START']:
@@ -136,7 +149,7 @@ class AutomaticCastTests(unittest.TestCase):
             entry().name=nil;units.target.name=secret
             cast();assert(not ability(), 'legacy nameless entries cannot receive new records')
             entry().name=name;units.target.name=name
-            journal:SetEntryConfirmed(42,true);cast();assert(not ability())
+            journal:SetEntryConfirmed(42,true);cast();assert(ability() and entry().confirmed)
             journal:SetEntryConfirmed(42,false)
             units.nameplate1=units.target;cast(nil,'nameplate1');assert(ability())
             SlashCmdList.AZEROTHFIELDBOOK('wipe');SlashCmdList.AZEROTHFIELDBOOK('wipe confirm')

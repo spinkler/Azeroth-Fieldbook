@@ -233,6 +233,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         render()
     end
     function controller:GetFrame() return frame end
+    function controller:Hide() if frame and not pinned then frame:Hide() end end
     function controller:Refresh()
         self:SetCreature(selected)
     end

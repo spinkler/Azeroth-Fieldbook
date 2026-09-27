@@ -1,5 +1,24 @@
 local _, ns = ...
 
+-- Only client-observed legacy marks can become verified basic information.
+-- Old manual dispositions are removed and will be filled by a readable reaction.
+function ns.MigrateDisposition(entry)
+    local marks,sources=entry.behaviours or {},entry.behaviourSources or {}
+    if not entry.disposition and entry.personalEncountered then
+        local hostile=marks.Hostile and sources.Hostile=="unitReaction"
+        local neutral=marks.Neutral and sources.Neutral=="unitReaction"
+        if hostile and not neutral then entry.disposition="Hostile"
+        elseif neutral and not hostile then entry.disposition="Neutral" end
+    end
+    for _,field in ipairs({"behaviours","behaviourSources","ignoredBehaviours"}) do
+        if entry[field] then entry[field].Hostile=nil;entry[field].Neutral=nil end
+    end
+    for i=#(entry.rumours or {}),1,-1 do
+        local claim=entry.rumours[i]
+        if claim.kind=="behaviour" and (claim.value=="Hostile" or claim.value=="Neutral") then table.remove(entry.rumours,i) end
+    end
+end
+
 function ns.EarliestEncounterTime(left, right)
     local function valid(value)
         return not (issecretvalue and issecretvalue(value)) and type(value)=="number"
@@ -16,6 +35,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     trackingDB.bestiary.entries = type(trackingDB.bestiary.entries) == "table" and trackingDB.bestiary.entries or {}
     trackingDB.bestiary.creatures = type(trackingDB.bestiary.creatures) == "table" and trackingDB.bestiary.creatures or {}
     local journal = { entries = trackingDB.bestiary.entries, revision = 0 }
+    for _,entry in pairs(journal.entries) do ns.MigrateDisposition(entry) end
     local activeAccountWideTracking = db.accountWideTracking ~= false
     local seenGUIDs = {}
     local killedGUIDs = {}
@@ -23,13 +43,15 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     local recentKills
     local instanceLimit, observationSeconds, pendingSeconds, recentLimit = 64, 120, 10, 512
     local onEntryAdded, onPointsAwarded, onPointsRecorded, onEventLogChanged
+    local onAutomaticRecorded
+    local behaviourDiagnostics={events=0,matched=0,recorded=0,last="No monster emote received.",lastFlee="No readable flee emote received."}
     local restoreObservations
     local ledger
     local rankLabels = { elite = "Elite", rare = "Rare", rareelite = "Rare Elite", worldboss = "World Boss" }
     local rankPriority = { ["Rare"] = 1, ["Elite"] = 2, ["Rare Elite"] = 3, ["World Boss"] = 4 }
     local magicSchools = { Arcane=true, Fire=true, Frost=true, Holy=true, Nature=true, Shadow=true }
     local behaviourNames = {
-        Hostile=true, Neutral=true, Melee=true, Ranged=true, Caster=true,
+        Melee=true, Ranged=true, Caster=true,
         ["Flees at low health"]=true, ["Calls allies"]=true, Patrols=true,
         Summons=true, Heals=true, Enrages=true, Stealths=true,
     }
@@ -151,6 +173,13 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         log.entries[#log.entries+1]={timestamp=read(time),message=message,details=details}
         if onEventLogChanged then onEventLogChanged() end
     end
+    function journal:SetAutomaticRecordCallback(callback)
+        onAutomaticRecorded=type(callback)=="function" and callback or nil
+    end
+    function journal:RecordAutomaticEvent(message,details)
+        self:RecordEvent(message,details)
+        if onAutomaticRecorded then onAutomaticRecorded(message) end
+    end
     local firstEncounterHistory={}
     for _,event in ipairs(journal:GetEventLog().entries) do
         local details=event.details
@@ -247,6 +276,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         return credit
     end
     local function recordDiscovery(self, entry, level, zone, observation)
+        -- Unknown/skull levels cannot earn discovery or new-zone Knowledge.
+        if not number(level) then return end
         local progress = creditFor(entry.id)
         local newLevel=number(level) and not progress.levels[level]
         local newZone=str(zone) and not progress.zones[zone]
@@ -368,7 +399,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not entry then return end
         local content={}
         for _,key in ipairs({"name","category","rank","levelMin","levelMax","locations","abilities","ignoredAbilities",
-            "offenses","resistances","immunities","behaviours","damage","idNotes","tameable","discoveryProgress"}) do
+            "offenses","resistances","immunities","behaviours","behaviourSources","ignoredBehaviours","disposition","damage","idNotes","tameable","discoveryProgress"}) do
             content[key]=entry[key]
         end
         local signature=contentSignature(content)
@@ -489,6 +520,13 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not public(value) or type(value)~="number" or value~=value then return end
         db.locationMapBrightness=math.max(0.2,math.min(1,value))
     end
+    function journal:GetLocationTrackingMode()
+        return db.locationTrackingMode=="observations" and "observations" or "kills"
+    end
+    function journal:SetLocationTrackingMode(mode)
+        if mode~="kills" and mode~="observations" then return end
+        db.locationTrackingMode=mode
+    end
     function journal:SetBackgroundBrightness(value)
         value = tonumber(value)
         if not value then return end
@@ -530,10 +568,16 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             entry.firstEncounteredAt,credit.firstEncounteredAt=stamp,stamp
             firstEncounterHistory[id]=stamp
             if not entry.personalEncountered then entry.personalEncountered = true; self:Touch() end
-            if not credit.discovered then
+            if not credit.discovered and observation and number(observation.level) then
                 credit.discovered, credit.initial = true, true
                 discovered = true
                 award(self, entry, 1, "new creature entry", observation)
+                -- Kills still count while the level is unknown, but their
+                -- milestones cannot pay out before personal level discovery.
+                local reward, star = self:GetKillReward(id)
+                local deferred = math.max(0, reward - credit.killPoints)
+                credit.killPoints = math.max(credit.killPoints, reward)
+                award(self, entry, deferred, star == "crown" and "gold crown" or (star or "kill") .. " star")
                 self:Touch()
             end
         end
@@ -576,10 +620,13 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             self:Touch()
         end
     end
-    function journal:Observe(unit)
-        local id = identify(unit)
+    function journal:Observe(unit, explicit)
+        local id = identify(unit, explicit)
         if not id then return end
-        local category, level = read(UnitCreatureType, unit), read(UnitLevel, unit)
+        -- Match Blizzard's target-frame level/skull decision. Never fall back
+        -- to the raw level when the effective value is hidden or unknown.
+        local levelAPI = type(UnitEffectiveLevel)=="function" and UnitEffectiveLevel or UnitLevel
+        local category, level = read(UnitCreatureType, unit), read(levelAPI, unit)
         local location = read(GetRealZoneText) or read(GetZoneText)
         local observation = {
             category = clean(category, 100),
@@ -597,18 +644,31 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             end
         end
         if self.entries[id] and self.entries[id].confirmed and self:GetCreatureName(id) then
+            local entry=self.entries[id]
+            local wasPersonal=entry.personalEncountered
+            -- A locked skull placeholder can acquire its first readable level;
+            -- an already observed, locked range remains frozen.
+            if not number(entry.levelMin) and number(level) then
+                entry.levelMin,entry.levelMax=level,level
+                if entry.lockedBasic and not number(entry.lockedBasic.levelMin) then
+                    entry.lockedBasic.levelMin,entry.lockedBasic.levelMax=level,level
+                end
+                self:Touch()
+            end
             self:ObserveTameability(unit)
-            self:Ensure(id, false, nil, observation)
+            local _,discovered=self:Ensure(id, false, nil, observation)
             recordDiscovery(self, self.entries[id], level, location, observation)
             if ns.CreatureLocations then
                 local _, changed=ns.CreatureLocations.RememberMap(self.entries[id],locationMap)
                 if changed then self:Touch() end
             end
+            if not wasPersonal and onEntryAdded then onEntryAdded(entry,discovered,observation,creditFor(id).discovered) end
             return id
         end
         local name = creatureName(read(UnitName, unit))
         if not name then return end
         local wasNamed = self.entries[id] and creatureName(self.entries[id].name)
+        local wasPersonal = self.entries[id] and self.entries[id].personalEncountered
         local unclassified = not self.entries[id] or self.entries[id].category == "Unclassified"
         local entry, discovered = self:Ensure(id, false, name, observation)
         if not entry then return end
@@ -655,7 +715,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if unclassified and entry.category == "Critter" and self:GetLockNewCritters() then
             self:SetEntryConfirmed(id,true)
         end
-        if not wasNamed and onEntryAdded then onEntryAdded(entry, discovered, observation) end
+        if (not wasNamed or not wasPersonal) and onEntryAdded then onEntryAdded(entry, discovered, observation, creditFor(id).discovered) end
         if changed then self:Touch() end
         return id
     end
@@ -686,14 +746,143 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local entry = self.entries[id]
         if not entry or entry.confirmed or not behaviourNames[name] then return false end
         entry.behaviours = type(entry.behaviours) == "table" and entry.behaviours or {}
+        entry.behaviourSources=entry.behaviourSources or {}
+        entry.ignoredBehaviours=entry.ignoredBehaviours or {}
         local value = enabled == true and true or nil
-        if value and name == "Hostile" then entry.behaviours.Neutral = nil end
-        if value and name == "Neutral" then entry.behaviours.Hostile = nil end
         if value and self.ResolveRumours then self:ResolveRumours(id,{kind="behaviour",value=name}) end
-        if entry.behaviours[name] == value then return true end
+        local changed=entry.behaviours[name]~=value
+            or entry.ignoredBehaviours[name]~=(not value or nil)
         entry.behaviours[name] = value
+        -- The checkbox changes the current mark, not its observation history.
+        -- Retain automatic provenance while unchecked and after rechecking.
+        entry.ignoredBehaviours[name]=not value or nil
+        if changed then self:Touch() end
+        return true
+    end
+    function journal:RecordAutomaticBehaviour(id,name,source,identity)
+        local entry=self.entries[id]
+        local sourceLabel=source=="monsterEmote" and "monster emote"
+        if not entry or not entry.personalEncountered or not behaviourNames[name] or not sourceLabel then return false end
+        local creature=self:GetCreatureName(id)
+        if not creature then return false end
+        entry.behaviours=entry.behaviours or {}
+        entry.behaviourSources=entry.behaviourSources or {}
+        if entry.behaviours[name] and entry.behaviourSources[name]==source then return false end
+        entry.behaviours[name]=true;entry.behaviourSources[name]=source
+        if entry.ignoredBehaviours then entry.ignoredBehaviours[name]=nil end
+        if self.ResolveRumours then self:ResolveRumours(id,{kind="behaviour",value=name}) end
+        self:Touch();self:TrackStableContent(id)
+        self:RecordAutomaticEvent("Automatically recorded: "..name.." |cff80d0ff[A]|r — "..creature.." ("..sourceLabel..")",
+            {kind="behaviour",creatureID=id,behaviour=name,source=source,identity=identity})
+        return true
+    end
+    function journal:ObserveDisposition(unit,id,guid)
+        if creatureID(guid)~=id then return false end
+        local reaction=read(UnitReaction,unit,"player")
+        if not number(reaction) or reaction>4 or read(UnitGUID,unit)~=guid then return false end
+        local entry=self.entries[id]
+        if not entry or not entry.personalEncountered then return false end
+        local disposition=reaction==4 and "Neutral" or "Hostile"
+        if entry.disposition==disposition then return false end
+        entry.disposition=disposition
+        -- Basic client facts update quietly, even when manual editing is locked.
+        self:Touch();self:TrackStableContent(id)
+        return true
+    end
+    local territoryTypes={friendly=true,hostile=true,contested=true,sanctuary=true,arena=true,combat=true,none=true}
+    local function playerFaction()
+        local faction=read(UnitFactionGroup,"player")
+        if faction=="Alliance" or faction=="Horde" or faction=="Neutral" then return faction end
+    end
+    function journal:ObserveZoneTerritory()
+        local zone=clean(read(GetRealZoneText) or read(GetZoneText),200)
+        local faction=playerFaction()
+        local api=C_PvP and C_PvP.GetZonePVPInfo or GetZonePVPInfo
+        if not zone or not faction or type(api)~="function" then return false end
+        local ok,kind,subzone=pcall(api)
+        if not ok or not public(kind) or not public(subzone) or subzone~=false then return false end
+        if kind=="" then kind="none" end
+        if not str(kind) or not territoryTypes[kind] then return false end
+        -- Do not give a whole zone the colour of a temporary subzone override.
+        if zone~=clean(read(GetRealZoneText) or read(GetZoneText),200) then return false end
+        local zones=trackingDB.bestiary.zoneTerritories or {}
+        if not zones[zone] then
+            local count=0;for _ in pairs(zones) do count=count+1 end
+            if count>=1024 then return false end
+            zones[zone]={}
+        end
+        if zones[zone][faction]==kind then return false end
+        zones[zone][faction]=kind;trackingDB.bestiary.zoneTerritories=zones
         self:Touch()
         return true
+    end
+    function journal:GetLocationTerritory(zone)
+        local faction=playerFaction()
+        local zones=trackingDB.bestiary.zoneTerritories
+        return faction and zones and zones[zone] and zones[zone][faction]
+    end
+    function journal:RecordMonsterEmote(message, sender, guid)
+        behaviourDiagnostics.events=behaviourDiagnostics.events+1
+        local matched=false
+        local function skip(reason)
+            behaviourDiagnostics.last=reason
+            if matched then behaviourDiagnostics.lastFlee=reason end
+            return false,reason
+        end
+        -- Readability checks must precede comparison, trimming or formatting.
+        if not public(message) then return skip("Emote text is restricted.") end
+        if not str(message) then return skip("Emote text is missing.") end
+        if not public(sender) then return skip("Emote sender is restricted.") end
+        if not str(sender) then return skip("Emote sender is missing.") end
+        message=message:match("^%s*(.-)%s*$")
+        -- Exact English server text supplied by the client, before or after
+        -- chat-frame %s substitution. Other languages need verified phrases.
+        if message~="%s attempts to run away in fear!" and message~=sender.." attempts to run away in fear!" then
+            return skip("Not the supported flee emote.")
+        end
+        matched=true;behaviourDiagnostics.matched=behaviourDiagnostics.matched+1
+        if not public(guid) then return skip("Flee GUID is restricted.") end
+        local id,identity=creatureID(guid),"event GUID"
+        if guid==nil or guid=="" then
+            -- Some monster-emote payloads omit the GUID. Bind the server's
+            -- readable sender to a currently watched, readable creature, never
+            -- to an arbitrary historical name match. Conflicting IDs fail closed.
+            identity="watched creature"
+            for _,unit in ipairs({"target","mouseover"}) do
+                local candidate=identify(unit)
+                if candidate and read(UnitName,unit)==sender and creatureID(read(UnitGUID,unit))==candidate then
+                    if id and id~=candidate then return skip("Flee sender matches multiple watched creature IDs.") end
+                    id=candidate
+                end
+            end
+            if not id then return skip("Flee GUID missing; no matching readable watched creature.") end
+            for otherID,other in pairs(self.entries) do
+                if otherID~=id and other.personalEncountered and creatureName(other.name)==sender then
+                    return skip("Flee sender has ambiguous personal creature IDs.")
+                end
+            end
+        elseif not id then return skip("Flee GUID is not a valid creature GUID.") end
+        local entry=self.entries[id]
+        if not entry or not entry.personalEncountered then return skip("Flee speaker has no personal entry.") end
+        if sender~=creatureName(entry.name) then return skip("Flee sender does not match the creature entry.") end
+        if not self:RecordAutomaticBehaviour(id,"Flees at low health","monsterEmote",identity) then
+            return skip("Flee behaviour is already recorded.")
+        end
+        behaviourDiagnostics.recorded=behaviourDiagnostics.recorded+1
+        behaviourDiagnostics.last="Recorded flee behaviour using "..identity.."."
+        behaviourDiagnostics.lastFlee=behaviourDiagnostics.last
+        return true,behaviourDiagnostics.last
+    end
+    function journal:ReportBehaviours(say)
+        say("Automatic behaviours: "..behaviourDiagnostics.events.." monster emotes; "..behaviourDiagnostics.matched
+            .." readable flee messages; "..behaviourDiagnostics.recorded.." behaviours added this session.")
+        say("Last monster emote: "..behaviourDiagnostics.last)
+        say("Last readable flee: "..behaviourDiagnostics.lastFlee)
+    end
+    function journal:IsSkull(id)
+        local entry=self.entries[id]
+        local basic=entry and (self.GetBasicInfo and self:GetBasicInfo(id) or entry)
+        return entry~=nil and entry.personalEncountered==true and not number(basic.levelMin)
     end
     local function getInstance(guid, at)
         if not at or not creatureID(guid) then return end
@@ -758,8 +947,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         end
         self:Touch()
         local points, star = self:GetKillReward(id)
-        local newlyEarned = math.max(0, points - credit.killPoints)
-        credit.killPoints = math.max(credit.killPoints, points)
+        local newlyEarned = credit.discovered and math.max(0, points - credit.killPoints) or 0
+        if credit.discovered then credit.killPoints = math.max(credit.killPoints, points) end
         award(self, entry, newlyEarned, star == "crown" and "gold crown" or (star or "kill") .. " star")
         return decision(guid, "accepted", newlyEarned)
     end
@@ -842,7 +1031,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             entry.abilities[name].spellID = spellID
             self:Touch()
         end
-        if not wasNamed and onEntryAdded then onEntryAdded(entry, discovered) end
+        if not wasNamed and onEntryAdded then onEntryAdded(entry, discovered, nil, creditFor(id).discovered) end
         return true
     end
     function journal:SetEntryConfirmed(id, confirmed)
@@ -1135,7 +1324,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
                     and (name:lower():find(query, 1, true) or basic.category:lower():find(query, 1, true)) then
                     local sortValue=name:lower()
                     if sortField=="kills" then sortValue=entry.kills or 0
-                    elseif sortField=="maxLevel" then sortValue=basic.levelMax
+                    elseif sortField=="maxLevel" then sortValue=self:IsSkull(id) and math.huge or basic.levelMax
                     elseif sortField=="minLevel" then sortValue=basic.levelMin
                     elseif sortField=="firstEncountered" then sortValue=self:GetFirstEncounteredAt(id) end
                     rows[#rows + 1] = { id = id, name = name, review = review, sortValue=sortValue }
@@ -1143,7 +1332,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             end
         end
         table.sort(rows, function(a,b)
-            -- Unknown levels or encounter dates stay last in either direction. Ties are stable,
+            -- Skull entries sort above numeric maximum levels. Other missing
+            -- values stay last in either direction. Ties are stable,
             -- using alphabetical names and then creature IDs.
             if a.sortValue~=b.sortValue then
                 if a.sortValue==nil then return false end
@@ -1235,8 +1425,15 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         end
     end
     local originalObserve=journal.Observe
-    function journal:Observe(unit)
-        local id=originalObserve(self,unit)
+    function journal:Observe(unit, explicit)
+        self:ObserveZoneTerritory()
+        local guid=read(UnitGUID,unit)
+        local id=originalObserve(self,unit,explicit)
+        if id then self:ObserveDisposition(unit,id,guid) end
+        if id and explicit and unit=="target" and ns.CreatureLocations and creatureID(guid)==id then
+            local sample=ns.CreatureLocations.Observation()
+            if read(UnitGUID,unit)==guid and ns.CreatureLocations.Record(self.entries[id],sample,"observations") then self:Touch() end
+        end
         if id then self:TrackStableContent(id) end
         return id
     end

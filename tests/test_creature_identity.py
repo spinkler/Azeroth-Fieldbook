@@ -61,12 +61,12 @@ class CreatureIdentityTests(unittest.TestCase):
             assert(entry.abilities['Bottle of Poison'].state=='pending')
             assert(journal:GetBasicInfo(1176).name==entry.name, 'book and Creature Notes use the same named record')
             assert(journal:List()[1].name==entry.name and select(1,journal:GetTotals())==1)
-            assert(output():find('[+1 knowledge: New discovery!]|r Bestiary: Tunnel Rat Forager',1,true))
+            assert(output():find('[Entry observed]|r Bestiary: Tunnel Rat Forager',1,true))
             assert(not output():find('Creature #',1,true))
             local _, announcements=output():gsub(' Bestiary: ', '')
             assert(announcements==1, 'discovery and reward share one announcement alongside scan diagnostics')
             scan()
-            assert(select(2,journal:GetTotals())==1, 'repeat scans do not duplicate discovery points')
+            assert(select(2,journal:GetTotals())==0, 'meter names without levels earn no discovery points')
             assert(not entry.levelMin and not next(entry.locations), 'meter cannot invent level or location')
         ''')
 
@@ -119,6 +119,7 @@ class CreatureIdentityTests(unittest.TestCase):
         lua = client()
         lua.execute(r'''
             scan()
+            journal:Ensure(1176,false,nil,{level=9}) -- Previously earned legacy credit.
             local saved=journal.entries[1176]
             saved.name=nil
             saved.abilities['Bottle of Poison'].note='Keep my evidence'
@@ -187,10 +188,10 @@ class CreatureIdentityTests(unittest.TestCase):
             assert(journal.entries[1176].name=='Tunnel Rat Forager')
             assert(journal.entries[1176].idNotes.text=='Keep account migration notes')
             assert(journal.entries[1176].abilities['Bottle of Poison'])
-            assert(select(2,journal:GetTotals())==1)
+            assert(select(2,journal:GetTotals())==0)
             assert(originalEntry.name==nil, 'character backup remains independent')
             fire('ADDON_LOADED','AzerothFieldbook')
-            assert(journal:List()[1].name=='Tunnel Rat Forager' and select(2,journal:GetTotals())==1)
+            assert(journal:List()[1].name=='Tunnel Rat Forager' and select(2,journal:GetTotals())==0)
         ''')
 
 

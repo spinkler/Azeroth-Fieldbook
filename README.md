@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.9.150 (Beta)
+# Azeroth Fieldbook 0.10.8 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,12 +6,19 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.9.150 includes sharing, addon-version compatibility
+spell databases. Version 0.10.8 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
-The project may later contain gathering or collection journals. Those sections
-are not part of version 0.9.150. Development will continue through 0.x Beta
-milestones as those sections are added. Stable 1.0 is reserved until Beast Lore
+The main window now has seven native icon tabs down its outside right edge:
+**Bestiary**, **Herbs & Minerals**, **Traveller’s Atlas**, **Angler’s Almanac**,
+**Merchant’s Ledger**, **Treasure & Salvage**, and **Lore & Landmarks**.
+Bestiary is selected on first opening and remains the functional journal. The
+other six sections display their wishlist for future releases; they collect no
+data yet. Hover a tab for its name; the selected tab has a gold border. Switching
+tabs retains the Bestiary's creature selection, filters, list/ability browsing
+positions and unfinished fields. Creature-entry actions select the Bestiary.
+
+Development will continue through 0.x Beta milestones. Stable 1.0 is reserved until Beast Lore
 has been tested in game; it does not require every future section to be complete.
 
 ## Installation and opening
@@ -30,11 +37,16 @@ shared-only pages stay available for review until a personal encounter.
 Install the addon as `Interface/AddOns/AzerothFieldbook` and enable
 **Azeroth Fieldbook** in the addon list.
 
-- `/fieldbook` or `/fieldbook book` opens the Bestiary.
+- `/fieldbook` or `/fieldbook book` toggles the journal, reopening its last section.
 - The minimap button opens or closes the journal; its visibility is optional.
 - `/bestiary` remains available as a compatibility alias.
-- The two keybindings open the Bestiary normally or directly at the creature
-  beneath the mouse pointer.
+- Under the **Azeroth Fieldbook** keybinding heading, **Toggle Azeroth Fieldbook**
+  opens/closes the journal at its last selected tab. **Open bestiary at mouseover**
+  opens the Bestiary directly at the creature beneath the mouse pointer.
+- Assign **Next Bestiary entry** and **Previous Bestiary entry**
+  in WoW's keybinding options to browse the filtered, sorted list. They
+  wrap at the ends and keep the selected entry visible. They act only while the
+  Bestiary section is open and no text field has keyboard focus.
 
 No existing keybinding is overwritten. Escape closes the primary and secondary
 windows. The book and its dialogs can be dragged and are clamped to the screen.
@@ -63,7 +75,14 @@ windows shrink to fit the screen. Clicking an
 addon window or one of its controls brings that window to the front of the other
 addon windows.
 
-The list button left of Options opens the **Event log**. It records timestamped discoveries, knowledge awards, observed-cast alerts and sharing activity even with chat announcements disabled. This per-character history starts on first use, survives reloads and Bestiary resets, and keeps all events with newest-first pages of 50. Earlier events cannot be reconstructed. Transfer entries record the other character, creature, rumour count, Knowledge cost and outcome, including retries and failed delivery.
+The window's tab column is included in screen clamping and auxiliary-window
+placement. At large UI scales the main window fits the screen with every tab
+accessible. Windows opening on the right clear the tabs, including restored
+positions; when space is crowded, placement protects the tabs before minimizing
+content overlap. Unpinned Bestiary panels close when changing sections; explicitly
+pinned Notes and the independent spell-ID utility retain their existing lifetime.
+
+In the Bestiary, the list button left of Options opens the **Event log**. It records timestamped discoveries, knowledge awards, observed-cast alerts and sharing activity even with chat announcements disabled. This per-character history starts on first use, survives reloads and Bestiary resets, and keeps all events with newest-first pages of 50. Earlier events cannot be reconstructed. Transfer entries record the other character, creature, rumour count, Knowledge cost and outcome, including retries and failed delivery.
 
 The gold cog immediately left of **?** opens **Options**, containing all settings
 and **Reset Bestiary**, **Backup Bestiary** and **Restore Bestiary**. **?** opens instructions and About. Both buttons toggle
@@ -109,20 +128,29 @@ A single known zone appears as a heading; multiple zones use a dropdown. The map
 uses the client's own artwork and explored terrain. Kill locations begin with
 new credited kills after this update; old totals have no coordinates to recover.
 
+The **Tracking: Kills / Observations** button beside Map brightness switches
+between violet kill positions and cyan observation positions, each with a bright
+border. Both layers record independently of which one is displayed. Observation
+tracking records **your position when you target the creature**, including from
+the air. Hovering, the mouseover-open keybinding and repeated background scans
+do not add observation points. These positions describe where
+you observed the creature, not its exact position. The selected layer is saved
+per character; unavailable coordinates never prevent the entry itself being added.
+
 Readable creature coordinates are preferred. When those are unavailable, the
 addon uses your position when the kill is credited and labels it **approximate**.
 Hover a dot to see its coordinates and whether it is approximate. If neither
 position is readable, the kill still counts but receives no map marker.
 
 One or two distinct positions remain dots. Three or more nearby positions can
-form translucent violet triangles with a soft pink glow around their outer
+form translucent triangles with a soft glow around their outer
 boundary, with every edge limited to **180 yards**. The window's **Map brightness**
 slider adjusts only the terrain underneath (20–100%, default 80%); markers and
 areas retain their brightness. This preference is saved per character.
 Distant groups and isolated points stay separate; points in a straight line
-remain dots. Areas estimate where kills occurred, rather than an exact spawn
-boundary. Repeated kills at the same coordinate share one marker. The journal
-keeps up to 256 recent distinct positions per creature per map, across 64 maps.
+remain dots. Areas estimate kill locations or observer positions, rather than
+an exact spawn boundary. Repeated samples at the same coordinate share one marker.
+Each layer keeps up to 256 recent distinct positions per creature per map, across 64 maps.
 Maps without a readable yard scale display dots only.
 
 Location history follows the active account/character Bestiary, is included in
@@ -151,7 +179,13 @@ type, level range, location and model. Players, pets, vehicles and
 player-controlled creatures are excluded.
 
 The index supports creature-type, location, rank, review-state, text and A-Z filters.
-Earned stars and crowns appear beside creature names. Hover over an overflowing
+Earned stars and crowns appear beside creature names. Personally encountered
+creatures with an unknown level show a skull in that slot until a readable level
+is recorded; shared-only creatures keep their question mark. Skull entries sort
+above all numeric levels for maximum-level sorting (first descending, last
+ascending). The information panel also uses a slightly larger skull raised by
+2 pixels to align with the text.
+Hover over an overflowing
 name to slowly reveal the full text; leaving the row resets it to the beginning.
 Creature tooltips also show recorded kill counts by default, including on
 unlocked entries. Toggle **Show kill count in creature tooltips** under Options
@@ -160,7 +194,8 @@ The square arrow beside Search opens **Sort**, with **Name**, **Kills**, **Max
 Level**, **Min Level**, and **First Encountered** and separate **Ascending** / **Descending** choices.
 It defaults to **Name / Ascending** and remembers your character's selection.
 First Encountered sorts oldest first when ascending and newest first when descending.
-Unknown levels or encounter dates stay last in either direction; Previous/Next follows the same
+Skulls count as the highest maximum level; other missing levels or encounter
+dates stay last in either direction. Previous/Next follows the same
 order as the filtered index.
 The **Index** button starts red with the letters hidden and no letter filter.
 Click it to highlight the button and reveal all 26 letter buttons. Click it again
@@ -188,6 +223,51 @@ Each creature entry can contain:
 Magic schools are color-coded in the creature summary. Creature observations
 remain manual where the client does not expose reliable addon-readable evidence.
 
+The exact English monster emote **"attempts to run away in fear!"** can record
+**Flees at low health** automatically for an existing personal entry when the
+client supplies readable text and sender. A readable creature GUID identifies
+the entry directly; if the GUID is absent, the sender must match a currently
+watched, readable creature with no conflicting personal IDs. The summary and
+Behaviour panel show it in blue with **[A]**, and its checkbox tooltip explains
+the source. Player chat, ambiguous names and restricted payloads cannot establish
+the behaviour. Unchecking removes the mark until fresh automatic evidence
+restores it. Previously observed behaviours retain their cyan **[A]** provenance
+when unchecked or rechecked. Backups and account merging preserve that history;
+recipients receive normal unverified Rumours, not automatic confirmation.
+
+**Hostile** and **Neutral** use Blizzard's tooltip red/yellow reaction colours
+in basic information, based on
+the watched creature's readable reaction to you. They have no Behaviour checkboxes
+or **[A]** marker. Fresh observations quietly update the single disposition, even
+on locked entries, without chat or Event log notices. Unknown, restricted and
+friendly reactions are skipped. Existing client-verified marks migrate into this
+field; old manual marks require a fresh client observation. Disposition reflects
+your own observations and is not offered as a shared behaviour claim.
+
+Each **Level Range** number uses Blizzard's creature-difficulty colour relative
+to your effective player level: grey, green, yellow, orange or red. Range endpoints
+are coloured independently and refresh when your level changes, including on
+locked pages. Unknown levels retain the skull; unavailable colour data leaves
+the recorded numbers readable without colour.
+
+**Locations** use the minimap's territory colours: green for friendly, amber for
+contested, red for hostile/arena and blue for sanctuary. Other readable territory
+types use the minimap's normal font colour. Zone status is learned quietly as
+you visit, stored separately for each faction, and retained through backups and
+account merging. Older or shared locations remain uncoloured until their territory
+has been observed for your faction. Subzone PvP overrides do not recolour a whole
+zone; restricted or unavailable data is ignored.
+Automatic behaviours and verified abilities can update locked entries; manual
+editing still requires unlocking.
+
+Each newly automatic or restored behaviour or ability produces one chat notice and one
+Event log record naming the creature and observation. Repeated evidence produces
+no duplicate notices, including after reload. The discovery/Knowledge chat
+settings do not suppress these automatic-record notices.
+If a flee message does not record, `/fieldbook debug` now reports monster-emote
+counts, readable flee matches and the last decision: missing identity, restricted
+data, ambiguous matches, missing personal entry or already recorded.
+
 **Automatically record verified creature abilities** is on by default under
 Options → **Ability recording**. Enemy casts with readable spell IDs are confirmed
 automatically, including during combat, for an attackable target or mouseover.
@@ -199,8 +279,8 @@ Pending matches become confirmed; manual notes and tooltip choices are preserved
 For buffs, the marker means the buff was present on the creature; its caster may
 be unknown. Buffs with a known different caster are skipped.
 
-Buff capture requires both you and the creature outside combat. Locked entries,
-player-controlled units and restricted data are skipped. While enabled, a fresh
+Buff capture requires both you and the creature outside combat.
+Player-controlled units and restricted data are skipped. While enabled, a fresh
 verified observation restores a removed or rejected ability, including old
 name-only removal flags. Turn the option off to keep a verified ability removed.
 Each newly recorded or restored ability produces a chat message and an Event log
@@ -237,8 +317,10 @@ Restricted IDs cannot be compared against the blacklist, even when entered
 manually; Ctrl+Right-click dismisses the section and opens the manager with that
 limitation explained. Empty windows retain the header unless auto-faded.
 
-Locking freezes the creature's recorded abilities, traits, damage observations,
-and metadata. Knowledge from kills and discoveries continues while locked. Unlock to resume recording.
+Locking protects manual edits, pending observations and the displayed basic snapshot.
+Client-verified disposition continues to update quietly.
+Fresh automatic **[A]** abilities and behaviours can still be recorded or restored.
+Knowledge from kills and discoveries continues while locked. Unlock to resume manual editing.
 Personal ID Logs and Notes remain editable while locked.
 
 On an unlocked entry, **Resolve** beside an ability looks up its recorded spell
@@ -255,7 +337,7 @@ credited milestones and spending survive deletion, so deleting and rediscovering
 an entry cannot repeatedly earn its knowledge. Ability effects include
 school-specific resistance and immunity tags.
 
-Each personal creature discovery awards 1 knowledge, including its initial zone.
+Each personal creature discovery awards 1 knowledge once the client exposes a readable effective level, including the zone of that observation. Unknown level ranges display a skull. Flying and flight paths require active targeting or the mouseover-open keybinding; passive mouseovers cannot record observations from the air. Explicit selections with readable identity and attackability work beyond the visibility range. New personal entries appear in the Event log even before their level is known, including previously shared entries. Skull/unknown-level observations earn no discovery or location Knowledge. Kill counts still advance, but their milestone Knowledge waits for a personally observed readable level. Existing credited history is retained.
 Discovering a new location for an existing creature awards 1 knowledge. New levels
 are still recorded but award no knowledge. Previously earned balances are kept.
 Repeat sightings award nothing. Ten kills award a silver star and 1 additional
@@ -538,7 +620,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.9.150 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.10.8 stores account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,

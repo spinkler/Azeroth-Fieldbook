@@ -19,7 +19,7 @@ lua.execute(r'''
 local S=ns.SharingReport
 local fire={kind='ability',value='Fireball',spellID=133}
 local traits={{kind='offense',value='Fire'},{kind='resistance',value='Frost'},
-    {kind='immunity',value='Shadow'},{kind='behaviour',value='Hostile'}}
+    {kind='immunity',value='Shadow'},{kind='behaviour',value='Ranged'}}
 local sequence=0
 local function report(claims)
     sequence=sequence+1
@@ -44,10 +44,8 @@ assert(j:ConfirmRumour(42,j:GetRumours(42)[1]))
 eq(entry.abilities.Fireball.state,'confirmed'); eq(entry.abilities.Fireball.spellID,133)
 eq(#j:GetRumours(42),4); eq(#j:ConfirmedNames(42),0,'verification does not lock the entry')
 eq(#S.Candidates(entry),1,'only the verified claim is eligible to be shared')
-entry.behaviours.Neutral=true
 while #j:GetRumours(42)>0 do assert(j:ConfirmRumour(42,j:GetRumours(42)[1])) end
-assert(entry.offenses.Fire and entry.resistances.Frost and entry.immunities.Shadow and entry.behaviours.Hostile)
-assert(not entry.behaviours.Neutral,'normal mutually exclusive behaviour rules apply')
+assert(entry.offenses.Fire and entry.resistances.Frost and entry.immunities.Shadow and entry.behaviours.Ranged)
 eq(j:GetSharingBalance(),0); eq(select(2,j:GetTotals()),0)
 assert(not entry.personalEncountered and not entry.confirmed and entry.kills==0)
 eq(#S.Candidates(entry),5)
@@ -78,7 +76,7 @@ eq(#j:GetRumours(42),10)
 assert(j:AddManual(42,'fireball','Private manual note',nil,{Stun=true}))
 eq(#j:GetRumours(42),8);eq(j.entries[42].abilities.fireball.note,'Private manual note')
 j:SetOffense(42,'Fire',true);j:SetResistance(42,'Frost',true)
-j:SetImmunity(42,'Shadow',true);j:SetBehaviour(42,'Hostile',true)
+j:SetImmunity(42,'Shadow',true);j:SetBehaviour(42,'Ranged',true)
 eq(#j:GetRumours(42),0)
 import(j,{{kind='ability',value='Foreign Spell Name',spellID=133}})
 assert(j:AddManual(42,'Fireball','', '133',{}));eq(#j:GetRumours(42),0,'manual spell ID matches alternate name')
@@ -99,7 +97,7 @@ for _,claim in ipairs(j:GetRumours(42)) do
 end
 assert(not j:AddManual(42,'Fireball',''))
 assert(not j:SetOffense(42,'Fire',true));assert(not j:SetResistance(42,'Frost',true))
-assert(not j:SetImmunity(42,'Shadow',true));assert(not j:SetBehaviour(42,'Hostile',true))
+assert(not j:SetImmunity(42,'Shadow',true));assert(not j:SetBehaviour(42,'Ranged',true))
 eq(j.revision,revision);eq(#j:GetRumours(42),5);eq(j:GetSharingBalance(),0)
 assert(j:DismissRumour(42,j:GetRumours(42)[1]));eq(#j:GetRumours(42),4)
 

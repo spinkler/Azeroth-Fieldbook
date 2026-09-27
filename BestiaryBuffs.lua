@@ -5,7 +5,6 @@ local _, ns = ...
 -- The ID window can display secrets; its text is never recording evidence.
 function ns.InstallBestiaryBuffs(journal, identify)
     local elapsed = 0
-    local onRecorded
     local status = {target="not scanned", mouseover="not scanned"}
     local function public(value) return not (issecretvalue and issecretvalue(value)) end
     local function read(fn, ...)
@@ -44,7 +43,7 @@ function ns.InstallBestiaryBuffs(journal, identify)
     end
     local function record(id, name, spellID, kind)
         local entry = journal.entries[id]
-        if not entry or entry.confirmed then return false, "entry locked or unavailable" end
+        if not entry then return false, "entry unavailable" end
         local creatureName = journal:GetCreatureName(id)
         if not creatureName then return false, "creature name unavailable" end
         local ability = entry.abilities[name]
@@ -70,12 +69,11 @@ function ns.InstallBestiaryBuffs(journal, identify)
         journal:Touch()
         journal:TrackStableContent(id)
         local message = "Automatically recorded: " .. name .. " (Spell ID: " .. spellID .. ") — " .. creatureName
-        journal:RecordEvent(message, {kind=kind, creatureID=id, spellID=spellID})
-        if onRecorded then onRecorded(message) end
+        journal:RecordAutomaticEvent(message, {kind=kind, creatureID=id, spellID=spellID})
         return true, "recorded spell ID " .. spellID
     end
     function journal:SetAutomaticAbilityRecordedCallback(callback)
-        onRecorded = type(callback) == "function" and callback or nil
+        self:SetAutomaticRecordCallback(callback)
     end
     function journal:RecordVerifiedCast(id, spellID, observedName)
         if not self:GetAutoRecordAbilities() then return false, "automatic recording disabled" end
@@ -96,8 +94,7 @@ function ns.InstallBestiaryBuffs(journal, identify)
             or read(UnitAffectingCombat, unit) ~= false or read(UnitIsDead, unit) ~= false then return skip("combat, dead unit or state unavailable") end
         local id = identify(unit)
         if not number(id) or not C_UnitAuras then return skip("NPC or aura API unavailable") end
-        if self.entries[id] and self.entries[id].confirmed then return skip("entry locked") end
-        if self:Observe(unit) ~= id or self.entries[id].confirmed then return skip("entry locked or identity unavailable") end
+        if self:Observe(unit) ~= id then return skip("identity unavailable") end
         local changed = false
         status[unit] = "no readable buffs found"
         local function accept(aura)

@@ -75,14 +75,30 @@ local function npcID(unit)
     return id, id and "NPC identity readable." or "Not a Creature GUID."
 end
 
-local function watchedEnemy(unit)
+local function watchedEnemy(unit, explicit)
     if not publicString(unit) then return nil, "Unit token unavailable/restricted." end
     -- Deliberately exclude focus, bosses, group targets and background nameplates.
     if unit ~= "target" and unit ~= "mouseover" then return nil, "Not target/mouseover." end
+    if unit == "mouseover" and not explicit then
+        -- Taxi flights do not necessarily report IsFlying. Explicit targets
+        -- remain observable from either kind of flight.
+        for _, flight in ipairs({{UnitOnTaxi, "player"}, {IsFlying}}) do
+            if type(flight[1]) == "function" then
+                local ok, value = pcall(flight[1], flight[2])
+                if not ok or not public(value) or value ~= false then
+                    return nil, "Mouseover discovery excluded while flying or flight state unavailable."
+                end
+            end
+        end
+    end
     local ok, reason = booleanCheck("UnitExists", UnitExists, true, unit)
     if not ok then return nil, reason end
-    ok, reason = booleanCheck("UnitIsVisible", UnitIsVisible, true, unit)
-    if not ok then return nil, reason end
+    -- An explicitly selected creature can be outside the render/visibility
+    -- range while flying. Its readable identity and attackability still count.
+    if not explicit then
+        ok, reason = booleanCheck("UnitIsVisible", UnitIsVisible, true, unit)
+        if not ok then return nil, reason end
+    end
     ok, reason = booleanCheck("UnitCanAttack", UnitCanAttack, true, "player", unit)
     if not ok then return nil, reason end
     return npcID(unit)
@@ -235,12 +251,12 @@ local function remember(unit, spellID, observedName, castBarID)
     return storeObserved(id, spellID, observedName)
 end
 
-local function observeCurrent(unit)
+local function observeCurrent(unit, explicit)
     if afterWipeHold then return end
     if not db then return end
     if journal then journal:RecordKill(unit) end
-    if not watchedEnemy(unit) then return end
-    if journal then journal:Observe(unit) end
+    if not watchedEnemy(unit, explicit) then return end
+    if journal then journal:Observe(unit, explicit) end
     local castPresent=false
     local function inspect(label, fn, channel)
         local source = unit .. " " .. label
@@ -373,7 +389,7 @@ local function initialize()
     if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
     if journal then
-        if journal.SetAutomaticAbilityRecordedCallback then journal:SetAutomaticAbilityRecordedCallback(say) end
+        if journal.SetAutomaticRecordCallback then journal:SetAutomaticRecordCallback(say) end
         journal:SetPointsRecordedCallback(function(entry, amount, reason, observation)
             local killTitles = { ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
             local discoveryTitles = { location = "New observed location" }
@@ -381,9 +397,10 @@ local function initialize()
                 or (observation and discoveryTitles[observation.kind])
             if title then announceBestiary(entry, title, amount, observation, killTitles[reason] ~= nil,journal:GetPointAnnouncements()) end
         end)
-        journal:SetEntryAddedCallback(function(entry, discovered, observation)
+        journal:SetEntryAddedCallback(function(entry, discovered, observation, previouslyCredited)
             local chatEnabled=journal:GetCreatureAnnouncement() and not (discovered and journal:GetPointAnnouncements())
-            announceBestiary(entry,discovered and "New discovery!" or "Entry restored",nil,observation,false,chatEnabled,discovered)
+            local title=discovered and "New discovery!" or (previouslyCredited and "Entry restored" or "Entry observed")
+            announceBestiary(entry,title,nil,observation,false,chatEnabled,discovered)
         end)
     end
     if journal and ns.InitializeSharing then ns.InitializeSharing(journal) end
@@ -391,6 +408,7 @@ local function initialize()
         fieldbook=ns.CreateFieldbookShell({getBrightness=function() return journal:GetBackgroundBrightness() end})
     end
     if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal,fieldbook) end
+    if fieldbook and ns.RegisterFieldbookWishlistSections then ns.RegisterFieldbookWishlistSections(fieldbook) end
     if journal and journal.sharing then
         journal.sharing:SetImportedCallback(function() if book then book:Refresh() end end)
         journal.sharing:SetCostAdjustedCallback(function(tx)
@@ -419,11 +437,19 @@ local function remindAboutUnboundBookKey()
 end
 
 function AzerothFieldbookToggleBestiary()
-    if book then book:Toggle() end
+    if fieldbook or book then (fieldbook or book):Toggle() end
 end
 
 function AzerothFieldbookOpenMouseoverBestiary()
     if book then book:OpenAtUnit("mouseover") end
+end
+
+function AzerothFieldbookNextEntry()
+    if book then return book:CycleEntry(1) end
+end
+
+function AzerothFieldbookPreviousEntry()
+    if book then return book:CycleEntry(-1) end
 end
 
 local function watchedAlias(unit)
@@ -436,7 +462,8 @@ local function watchedAlias(unit)
     end
 end
 
-frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID, sentSpellID)
+frame:SetScript("OnEvent", function(_, event, ...)
+    local unit, castGUID, spellID, sentSpellID = ...
     if journal and not afterWipeHold and journal.BeastLoreEvent then
         journal:BeastLoreEvent(event,unit,castGUID,spellID,sentSpellID)
     end
@@ -447,22 +474,27 @@ frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID, sentSpell
         remindAboutUnboundBookKey()
     elseif event == "PLAYER_TARGET_CHANGED" then
         afterWipeHold = false
-        observeCurrent("target")
+        observeCurrent("target", true)
         if journal and journal.ObserveBuffs then journal:ObserveBuffs("target") end
         if book then book:FollowNotesTarget() end
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
         afterWipeHold = false
         observeCurrent("mouseover")
         if journal and journal.ObserveBuffs then journal:ObserveBuffs("mouseover") end
+    elseif event == "CHAT_MSG_MONSTER_EMOTE" then
+        if journal and not afterWipeHold then journal:RecordMonsterEmote(unit,castGUID,select(12,...)) end
     elseif event == "PARTY_KILL" then
         if journal and not afterWipeHold then journal:RecordPartyKill(unit, castGUID) end
     elseif event == "UNIT_DIED" then
         if journal and not afterWipeHold then journal:RecordUnitDeath(unit) end
     elseif event == "PLAYER_ENTERING_WORLD" then
+        if journal then journal:ObserveZoneTerritory() end
         if journal then journal:ClearKillEvidence() end
         if journal and not afterWipeHold and journal.ObserveBuffs then
             journal:ObserveBuffs("target"); journal:ObserveBuffs("mouseover")
         end
+    elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" or event == "ZONE_CHANGED_INDOORS" then
+        if journal then journal:ObserveZoneTerritory() end
     elseif event == "PLAYER_REGEN_ENABLED" then
         if journal and not afterWipeHold and journal.ObserveBuffs then
             journal:ObserveBuffs("target"); journal:ObserveBuffs("mouseover")
@@ -508,9 +540,10 @@ frame:SetScript("OnUpdate", function(_, elapsed)
 end)
 
 for _, event in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT",
-    "UNIT_HEALTH", "UNIT_AURA",
+    "UNIT_HEALTH", "UNIT_AURA", "CHAT_MSG_MONSTER_EMOTE",
     "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_EMPOWER_START",
     "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED", "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD",
+    "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS",
     "DAMAGE_METER_COMBAT_SESSION_UPDATED", "DAMAGE_METER_CURRENT_SESSION_UPDATED", "DAMAGE_METER_RESET" }) do
     frame:RegisterEvent(event)
 end
@@ -600,6 +633,7 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
             section("Cast ID display", ns.CastIDs, "Report")
             section("Spell ID window", ns.SpellIDWindow, "Report")
             section("Automatic abilities", journal, "ReportBuffs")
+            section("Automatic behaviours", journal, "ReportBehaviours")
             if ns.KillDiagnostics then
                 say("Kill evidence recorder: " .. (ns.KillDiagnostics.enabled and "ON" or "OFF")
                     .. ". /fieldbook debug kills opens its separate report.")

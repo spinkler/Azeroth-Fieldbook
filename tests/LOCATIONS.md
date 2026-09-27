@@ -1,14 +1,22 @@
-# Creature Locations — 0.9.148
+# Creature Locations — 0.10.1
 
 The button beside Creature Notes is separate from the existing Locations index
-filter. This feature records positions only when the existing kill-credit path
-accepts a kill. It does not change tag eligibility, pet credit or kill rewards.
+filter. The button beside Map brightness switches between violet kill tracking
+and cyan observation tracking. Kill positions still require accepted kill credit;
+observation positions record the player's location when the creature is explicitly
+targeted. Both layers collect independently of the displayed layer. Tag eligibility,
+pet credit and kill rewards are unchanged.
 
 ## Data and algorithm
 
 - Observe stores map IDs/names even before a kill. Accepted kills store normalized
   coordinates quantized to integers from 0 to 10000. No historical positions are
   inferred from old kill counts.
+- Target changes record the player's current readable map position, including
+  during flight. Passive mouseovers, explicitly opening a mouseover entry and
+  0.2-second observation polls do not record map points. An explicit mouseover
+  entry can still be added to the Bestiary during flight. Missing/secret position
+  data prevents a map sample without preventing a readable creature entry or log.
 - Old zone names resolve through the client's map hierarchy when the name is
   unique. Ambiguous names/floors wait for a direct observation instead of choosing
   an arbitrary map. This resolves artwork only, never past kill coordinates.
@@ -20,7 +28,7 @@ accepts a kill. It does not change tag eligibility, pet credit or kill rewards.
   explicitly approximate fallback. Sample at the kill/death notification when
   possible; keep that first fallback while waiting for credit. Do not move a
   delayed kill to a different map or reuse a sample after an evade/living reset.
-- Position samples require existing accepted kill evidence. Duplicate terminal
+- Kill samples require existing accepted kill evidence. Duplicate terminal
   events do not append data. A locked creature still gains location history,
   just as its kill count continues to grow.
 - `killLocations[mapID]` holds a name, optional map dimensions in yards, and up to
@@ -28,11 +36,21 @@ accepts a kill. It does not change tag eligibility, pet credit or kill rewards.
   approximate ones at the same coordinate. Cap at 64 maps per creature. Retained
   samples follow the active tracking scope and literal backup/restore validation;
   merging characters unions coordinates without downgrading precise samples.
+- `observationLocations` has the same bounded format and independent limits.
+  Its points represent the player's position at targeting, not an estimated
+  creature position, so they do not use the kill fallback's approximate flag.
+  Reload, merge, backup, restore and deletion handle both optional fields; neither
+  coordinate layer is sent through sharing. Old backups still restore unchanged.
+- `locationTrackingMode` is a per-character display preference, defaulting to
+  kills. Switching layers retains the selected creature and map and reuses the
+  map, fill, border and marker pools. Cyan and violet each have a bright border;
+  terrain brightness never dims either layer. The zone selector includes maps
+  from both layers, without mistaking same-named map IDs for the same map.
 - Deterministic Delaunay triangulation in world-yard dimensions, then retain only
   triangles whose **three** edges are at most 180 yards. Render these with a
-  translucent violet texture whose fourth vertex is collapsed. Points belonging
+  translucent violet or cyan texture whose fourth vertex is collapsed. Points belonging
   to no retained triangle remain dots. Collinear samples and maps with no world
-  dimensions remain dots. This estimates kill areas, not spawn boundaries, and
+  dimensions remain dots. These estimate kill areas or observer positions, not spawn boundaries, and
   does not infer terrain passability, walls or floors absent a separate map ID.
 - Approximate positions can be offset by attack range or pet distance. Several
   kills while standing still may produce one point, not a region. This is expected.
@@ -89,8 +107,18 @@ particular enemy's coordinates. Live exact-coordinate availability is unverified
 7. `/reload`, switch account/character tracking, and backup/export/import/restore.
    Verify locations persist in the chosen scope and through backups. Restore an
    old backup with no locations and verify an empty map rather than stale markers.
+8. Select Observations beside Map brightness. Target the creature in several
+   places, including from a flight path: cyan points and nearby areas should use
+   your position at targeting. Hover and use the mouseover-open binding while
+   moving: neither should add map points. Leave one creature targeted while
+   moving: periodic scans must not draw a trail. Untarget/re-target to add another
+   observation. Switch layers, zones and creatures; check matching marker
+   tooltips, red empty messages, bright borders and saved layer choice. Verify
+   the new button fits beside the slider at 50–150% UI scales, and the window
+   continues to clear the main window's right-side section tabs.
 
-`test_locations.py` has 19 scenarios covering the real addon kill-event path, storage, secrecy,
-deduplication, scopes, backups, distance filtering, triangulation area and mocked
+`test_locations.py` and `test_observation_tracking.py` cover the real addon event
+paths, storage, secrecy, targeting-only observations, deduplication, scopes,
+backups, distance filtering, triangulation area, layer palettes/tooltips and mocked
 window controls. Mock widgets cannot validate native map textures, alpha blending,
 vertex winding, font fit, or Forever's live coordinate availability.

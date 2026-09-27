@@ -4,6 +4,27 @@ from kill_test_harness import ROOT, LuaRuntime
 
 
 class SortingTests(unittest.TestCase):
+    def test_skulls_are_highest_maximum_level_and_resolve_to_observed_levels(self):
+        lua = LuaRuntime(unpack_returned_tuples=True)
+        lua.execute('ns={};db={}')
+        for filename in ['SharingReport.lua', 'BestiaryJournal.lua']:
+            lua.execute((ROOT / filename).read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
+        lua.execute('''
+            local j=ns.CreateBestiaryJournal(db,function() end)
+            for id,name in ipairs({'Wolf','Skull B','Skull A','Shared unknown'}) do
+                j:Ensure(id,id==4,name)
+            end
+            j.entries[1].levelMin=60;j.entries[1].levelMax=60
+            local function order()
+                local ids={};for _,row in ipairs(j:List()) do ids[#ids+1]=row.id end;return table.concat(ids,',')
+            end
+            j:SetListSort('maxLevel',true);assert(order()=='3,2,1,4')
+            j:SetListSort('maxLevel',false);assert(order()=='1,3,2,4')
+            j.entries[3].levelMin=5;j.entries[3].levelMax=5
+            assert(order()=='3,1,2,4' and not j:IsSkull(3))
+            j:SetListSort('maxLevel',true);assert(order()=='2,1,3,4')
+        ''')
+
     def test_sort_orders_filters_unknown_levels_and_saved_preference(self):
         lua = LuaRuntime(unpack_returned_tuples=True)
         lua.execute('ns={};db={}')

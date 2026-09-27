@@ -13,6 +13,14 @@ local function finite(value)
     return public(value) and type(value) == "number" and value == value and math.abs(value) < math.huge
 end
 
+local function outsideRight(frame)
+    return finite(frame.afbOutsideRight) and math.max(0,frame.afbOutsideRight) or 0
+end
+
+local function clampInsets(frame)
+    if frame.SetClampRectInsets then frame:SetClampRectInsets(0,-outsideRight(frame),0,0) end
+end
+
 local function shown(frame)
     local value=frame:IsShown()
     return public(value) and value==true
@@ -67,6 +75,7 @@ function positions:Restore(frame, key)
     if not finite(scale) or scale <= 0 or not finite(parentScale) or parentScale <= 0 then return false end
     local left, top = saved.left, saved.top
     local width = frame.GetWidth and frame:GetWidth()
+    if finite(width) then width=width+outsideRight(frame) end
     local height = frame.GetHeight and frame:GetHeight()
     local screenWidth = UIParent.GetWidth and UIParent:GetWidth()
     local screenHeight = UIParent.GetHeight and UIParent:GetHeight()
@@ -128,7 +137,9 @@ function positions:AvoidWindowOverlap(frame)
         if not finite(left) or not finite(top) or not finite(width) or not finite(height)
             or not finite(scale) or scale <= 0 or width <= 0 or height <= 0 then return end
         local ratio = scale / parentScale
-        return {frame=window,left=left*ratio, top=top*ratio, width=width*ratio, height=height*ratio, ratio=ratio}
+        local extension=outsideRight(window)*ratio
+        return {frame=window,left=left*ratio, top=top*ratio, width=width*ratio+extension,
+            height=height*ratio, ratio=ratio, outsideRight=extension}
     end
     local box = rectangle(frame)
     if not box then return end
@@ -173,6 +184,24 @@ function positions:AvoidWindowOverlap(frame)
         end
         return area
     end
+    -- Even when there is insufficient space for two whole windows, leave the
+    -- navigation usable. Overlapping page content is a last resort; tabs are
+    -- a protected strip of the book's measured footprint.
+    local function tabOverlap(x,y)
+        local area=0
+        for _,other in ipairs(obstacles) do
+            local vertical=math.max(0,math.min(y,other.top)-math.max(y-box.height,other.top-other.height))
+            if other.outsideRight>0 then
+                area=area+vertical*math.max(0,math.min(x+box.width,other.left+other.width)
+                    -math.max(x,other.left+other.width-other.outsideRight))
+            end
+            if box.outsideRight>0 then
+                area=area+vertical*math.max(0,math.min(x+box.width,other.left+other.width)
+                    -math.max(x+box.width-box.outsideRight,other.left))
+            end
+        end
+        return area
+    end
     local alwaysAnchor=main and frame.afbPreferBookEdge==true and (not db or db.alwaysAnchorToMain~=false)
     if frame.afbPinned~=true and (alwaysAnchor or overlap(left, top) > 0) then
         -- Cross edge coordinates from every neighbour, so avoiding one window
@@ -189,6 +218,12 @@ function positions:AvoidWindowOverlap(frame)
             candidate(other.left+other.width,other.top-other.height)
             candidate(other.left,other.top)
             candidate(other.left+other.width-box.width,other.top-other.height+box.height)
+            if other.outsideRight>0 then
+                candidate(other.left+other.width-other.outsideRight-box.width,other.top)
+            end
+            if box.outsideRight>0 then
+                candidate(other.left+other.width-box.width+box.outsideRight,other.top)
+            end
         end
         local function touches(x,y,other,side)
             local vertical=math.min(y,other.top)-math.max(y-box.height,other.top-other.height)
@@ -224,9 +259,10 @@ function positions:AvoidWindowOverlap(frame)
             end
             return alwaysAnchor and 4 or 1
         end
-        local bestArea, bestPriority, bestDistance
+        local bestTabs, bestArea, bestPriority, bestDistance
         for _, x in ipairs(xs) do for _, y in ipairs(ys) do
             local area = overlap(x, y)
+            local tabs=tabOverlap(x,y)
             -- A free position touching the launching book wins over a nearer
             -- unrelated window. Screen bounds and avoiding overlap still win.
             local priority=priorityAt(x,y)
@@ -237,9 +273,9 @@ function positions:AvoidWindowOverlap(frame)
                 preferredLeft,preferredTop=clamp(main.left+main.width,main.top-main.height+box.height)
             end
             local distance = (x-preferredLeft)^2+(y-preferredTop)^2
-            if not bestArea or area < bestArea or (area == bestArea and
-                (priority < bestPriority or (priority == bestPriority and distance < bestDistance))) then
-                left, top, bestArea, bestPriority, bestDistance = x, y, area, priority, distance
+            if not bestTabs or tabs<bestTabs or (tabs==bestTabs and (area < bestArea or (area == bestArea and
+                (priority < bestPriority or (priority == bestPriority and distance < bestDistance))))) then
+                left, top, bestTabs, bestArea, bestPriority, bestDistance = x, y, tabs, area, priority, distance
             end
         end end
     end
@@ -274,11 +310,33 @@ function positions:AvoidWindowOverlap(frame)
     end
 end
 
+function positions:ReflowBookWindows(keepBookPosition)
+    local book=AzerothFieldbookBestiary
+    if not book or not shown(book) then return end
+    if not keepBookPosition then self:AvoidWindowOverlap(book) end
+    local function anchoredToBook(window)
+        local visited={}
+        while window and window~=UIParent and not visited[window] do
+            if window==book then return true end
+            visited[window]=true
+            local _,relative=window:GetPoint()
+            if type(relative)~="table" and type(relative)~="userdata" then return false end
+            window=relative
+        end
+        return false
+    end
+    for _,window in ipairs(windows) do
+        if window~=book and shown(window) and (window.afbPreferBookEdge or anchoredToBook(window)) then
+            self:AvoidWindowOverlap(window)
+        end
+    end
+end
+
 function positions:Track(frame)
     if tracked[frame] then return end
     tracked[frame]=true;windows[#windows+1]=frame
     frame:SetClampedToScreen(true)
-    if frame.SetClampRectInsets then frame:SetClampRectInsets(0,0,0,0) end
+    clampInsets(frame)
     frame:HookScript("OnShow",function(self)
         if not frames[self] then positions:AvoidWindowOverlap(self) end
         if C_Timer and C_Timer.After then
@@ -295,7 +353,7 @@ function positions:Register(frame, key, sharedKey, defaultPosition)
     frames[frame] = { key = key, default = defaultPosition or { frame:GetPoint() }, sharedKey = sharedKey }
     self:Track(frame)
     frame:SetClampedToScreen(true)
-    if frame.SetClampRectInsets then frame:SetClampRectInsets(0, 0, 0, 0) end
+    clampInsets(frame)
     frame:HookScript("OnDragStop", function(self) positions:Save(self) end)
     frame:HookScript("OnHide", function(self) positions:SaveIfMoved(self) end)
     frame:HookScript("OnShow", function(self)

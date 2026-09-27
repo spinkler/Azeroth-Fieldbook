@@ -6,6 +6,8 @@ Azeroth Fieldbook is a World of Warcraft addon created by Spinkler.
 
 Current functionality is the Bestiary: a personal monster journal that learns
 about creatures from the player's own encounters.
+The v0.10.0 shell also presents six future-section wishlist pages; those sections
+do not collect or save data yet.
 
 Canonical public repository:
 
@@ -182,7 +184,7 @@ fixes, tests, documentation and workflow changes. Read-only work needs no bump.
 
 Routine changes increment the **last numeric component**:
 `0.9.0` → `0.9.1` → `0.9.2`. The operator explicitly designated the sharing
-feature milestone as **0.9.0**. Larger version jumps follow explicit operator
+feature milestone as **0.9.0** and the section-navigation milestone as **0.10.0**. Larger version jumps follow explicit operator
 instructions; otherwise keep the first two components unchanged.
 
 - Increment `## Version:` in `AzerothFieldbook.toc` once per completed change set.
@@ -246,8 +248,9 @@ sections. Preserve existing window-position keys and Bestiary data compatibility
 The operator reserves stable 1.0 for successful live Beast Lore testing after
 the Forever beta level cap permits it, regardless of other sections' progress.
 Additional sections may use later 0.x Beta milestones such as 0.10.0 and 0.11.0.
-This preparation batch remains on the current 0.9 line; future milestone jumps
-follow the operator's requested scope/version.
+The section-navigation milestone is 0.10.0 at the operator's request. Subsequent
+routine changes increment its last component; further milestone jumps follow
+the operator's requested scope/version.
 
 Azeroth Fieldbook may later expand beyond the Bestiary into gathering or
 collection journals such as herbs, minerals, or skinning.
