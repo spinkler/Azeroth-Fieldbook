@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.10.8 (Beta)
+# Azeroth Fieldbook 0.11.0 (Beta)
 
 *A personal monster journal for World of Warcraft.*
 
@@ -6,17 +6,59 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.10.8 includes sharing, addon-version compatibility
+spell databases. Version 0.11.0 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
 **Bestiary**, **Herbs & Minerals**, **Traveller’s Atlas**, **Angler’s Almanac**,
 **Merchant’s Ledger**, **Treasure & Salvage**, and **Lore & Landmarks**.
-Bestiary is selected on first opening and remains the functional journal. The
-other six sections display their wishlist for future releases; they collect no
+Bestiary is selected on first opening. **Herbs & Minerals** is a personal gathering
+journal; the other five sections display their wishlist for future releases and collect no
 data yet. Hover a tab for its name; the selected tab has a gold border. Switching
 tabs retains the Bestiary's creature selection, filters, list/ability browsing
 positions and unfinished fields. Creature-entry actions select the Bestiary.
+
+## Herbs & Minerals
+
+The gathering journal starts empty. Mouse over a herb or mineral to discover
+its name, type and zone from its readable world-object tooltip, even without
+Herbalism or Mining. Hovered zones appear under **Locations** in basic info.
+Discovery adds no coordinate markers or interaction counts.
+Targeting, minimap tracking, unrelated loot and opening the page never add markers.
+
+Coordinate markers require an interaction. Starting a Herbalism or Mining cast records
+one, even if interrupted; a matching successful cast also counts as a completed
+gather. Without the profession or required rank, right-clicking the node can
+still record a location when the client reports its matching skill requirement.
+A matching skill error can identify the attempted resource from its live
+world-object tooltip even when the client does not deliver a mouse-click event.
+World clicks also retain the recent hovered identity briefly if the tooltip
+clears before the click handler runs. A cached click must match the skill error
+within two seconds; cached hover identity alone cannot create markers. Actual UI
+controls, out-of-range failures and unrelated errors are excluded. Player
+coordinates are sampled when the interaction is confirmed by the error. Completed gathers are casts, not quantities of looted materials.
+
+The page follows the Bestiary's parchment, left index, A–Z filters, search,
+sort menu, sixteen-row list and Previous/Next controls. Filter by Herbs,
+Minerals or known locations, search names or zones, and sort by name, type,
+interactions, completed gathers or encounter dates. Each entry includes saved
+field notes and a draggable 3D preview using the classic node's own model in
+the same frame as the Bestiary. The model catalog supplies presentation assets
+only; it never seeds discoveries or locations. Unknown/new resource models
+show an unavailable caption. Each entry also has **Locations**, with zone
+selection, map brightness and a live
+player arrow. Small round green herb markers and gold mineral markers show
+your position when gathering, so node positions are approximate. Each marker
+represents a discrete recorded position; gathering never triangulates or shades
+areas between nodes. Missing map coordinates
+leave the interaction and readable zone recorded without inventing a marker.
+
+Gathering progress, notes and sort/map preferences are saved per character in
+`AzerothFieldbookGatheringDB`. Location histories retain up to 256 positions per
+map and 64 maps per resource, consolidating repeated coordinates. Gathering is
+independent of Bestiary account tracking, resets, backups and sharing. Click the field-notes area to edit and use **Save notes** to persist notes for
+that entry. Saved notes are independent for every herb and mineral. Unsaved
+note drafts remain when switching entries or sections during the same session.
 
 Development will continue through 0.x Beta milestones. Stable 1.0 is reserved until Beast Lore
 has been tested in game; it does not require every future section to be complete.
@@ -620,7 +662,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.10.8 stores account progress in `AzerothFieldbookAccountDB` and character
+Version 0.11.0 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,

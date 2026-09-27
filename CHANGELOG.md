@@ -1,5 +1,154 @@
 # Changelog
 
+## v0.11.0-beta - 2026-09-27
+
+Herbs & Minerals is now a complete personal gathering journal. This release
+includes the full local development batch from v0.10.9 through v0.10.17 and the
+operator-designated v0.11.0 milestone. The previous-push and previous-release
+baseline is `21abba4ba73d490d1f2d40cc7743ed26d59ea69c` (`v0.10.8-beta`).
+Both players must use the same installed addon version to share Bestiary records.
+
+- Replace the Herbs & Minerals wishlist with a working page styled after the
+  Bestiary: parchment, left index, A-Z tabs, search and clear control, sorting,
+  sixteen-row list, clipped hover-scrolling names, scrollbar and Previous/Next
+  navigation. Filter by Herbs, Minerals or known locations and search by name
+  or zone. Sort by name, type, interactions, completed gathers or encounter dates.
+- Discover herbs and mineral nodes from readable world-object mouseovers,
+  including on characters without Herbalism or Mining. Record name, type,
+  first encounter, zones and map identity. Hovered zones appear under Locations
+  in basic info and participate in search/filtering, without creating coordinate
+  markers or increasing interaction counts.
+- Record approximate player coordinates only for identified interactions.
+  Gathering casts count when they start, retain interrupted attempts and add a
+  completed gather on matching success. Missing-profession or insufficient-rank
+  errors can record a location from a live node tooltip even without a global
+  click event; briefly retained world-click identities also survive tooltip
+  dismissal. Reject unrelated errors, UI controls, stale/unreadable identities
+  and mismatched casts; deduplicate repeated error/cast notifications. Completed
+  gathers count successful casts, not quantities of looted materials.
+- Give every resource its own Locations map, with zone selection, brightness,
+  exploration art and a live player-position/facing arrow. Display small round
+  green herb/gold mineral markers at discrete recorded positions, with no
+  triangulation, connecting lines or shaded coverage. Consolidate repeated
+  coordinates and bound histories to 256 positions per map and 64 maps per
+  resource. Missing coordinates preserve readable entry/zone data without
+  inventing markers; unavailable maps have an explicit empty state.
+- Display draggable native 3D models for classic herbs and mineral nodes,
+  including rare and ooze-covered variants. Use client-verified model file IDs
+  and recognized object IDs for localized identities when available. The catalog
+  supplies presentation assets only, never discovered entries or spawn locations.
+  Keep previews at approximately 40% of their original apparent size, show an
+  unavailable caption for unknown assets and avoid stale models. Load only once
+  the page is visible and reload on tab/book reopening to fix blank previews.
+- Simplify basic info to Herb or Mineral and provide interaction/completion
+  totals and encounter dates. Make field notes editable by clicking the editor
+  or its border, with Save notes bound to the displayed entry. Preserve separate
+  saved notes and unsaved drafts for every resource, including clearing notes.
+- Store gathering progress, notes and sort/map preferences separately per
+  character in AzerothFieldbookGatheringDB. Preserve browsing state and drafts
+  across section changes, continue collection while the page is closed and close
+  gathering dialogs when leaving. Bestiary data, zoom, account tracking, resets,
+  backups, sharing and the other five wishlist pages remain unchanged.
+- Update documentation, architecture and milestone/versioning guidance. Add
+  gathering event, persistence, model lifecycle, marker, note-editing and section
+  navigation regression coverage. All 40 test files pass; all 38 runtime Lua files
+  compile under Lua 5.1, with manifest, binding and version checks passing.
+  Native in-game rendering remains a separate acceptance check.
+
+## v0.10.17 - Local development (included in v0.11.0-beta)
+
+- Fix blank Herbs & Minerals previews by waiting until the section and book are
+  visible before requesting a model, and reloading the selected asset whenever
+  the page opens. Keep the model above its backdrop and preserve the current zoom.
+- Add regression coverage for hidden page construction, tab/book reopening,
+  failed-load retries and preserved selection, search and note drafts.
+
+
+## v0.10.16 - Local development (included in v0.11.0-beta)
+
+- Replace gathering-map squares with smaller 6-pixel circular markers, retaining
+  herb/mineral colours and a dark outline. Keep node positions discrete, with
+  no triangulation, connecting lines or shaded coverage areas.
+- Simplify gathering basic info to Herb or Mineral, removing the redundant
+  Herbalism/Mining profession label.
+- Make blank space and borders in the field-notes editor focus the text box.
+  Keep Save notes bound to the displayed entry, clear focus on selection changes,
+  and verify separate herb/mineral notes, unsaved drafts, clearing and reloads.
+- Add regression coverage for circular markers at recorded coordinates and
+  independent per-entry note editing/saving. Other pages remain unchanged.
+
+## v0.10.15 - Local development (included in v0.11.0-beta)
+
+- Fix missing-profession location recording when the client omits the global
+  right-click event: a matching Herbalism/Mining error plus a live readable
+  world-node tooltip now identifies the interaction and records player coordinates.
+- Accept empty/root-only world mouse focus and retain a recent hovered identity
+  briefly for clicks that clear the tooltip before the input handler runs. Keep
+  markers interaction-only, approximate and separate from completed gathers.
+- Add regression coverage for both professions, missing input events, focus
+  variants, tooltip clearing, stale/replaced identities and error/cast deduplication.
+  Preserve the other pages and current model zoom settings.
+
+## v0.10.12 - v0.10.14 - Local development (included in v0.11.0-beta)
+
+- Zoom herb and mineral 3D previews out to approximately 40% of their original
+  apparent size, superseding the two earlier 20% adjustments. Apply the camera
+  settings after loading each model as well as when creating the preview.
+  Preserve frame dimensions and the Bestiary's original camera distance of 1.25.
+
+## v0.10.11 - Local development (included in v0.11.0-beta)
+
+- Record hovered herb/mineral zones under Locations in basic info, even without
+  the profession. Make those zones searchable and filterable, and retain their
+  map identity without sampling coordinates or increasing interaction counts.
+- Replace resource icons with draggable 3D previews matching the Bestiary's
+  model frame. Use verified native model file IDs for classic herbs and mineral
+  nodes, including rare and ooze-covered variants. Recognized object IDs also
+  resolve localized names; unavailable models never retain a previous preview.
+- Keep the clicked node identity when a skill-rejected interaction dismisses its
+  tooltip, allowing approximate player coordinates without Herbalism or Mining.
+  Match the recent world click to the profession error and deduplicate cast/error
+  event ordering. Hovering alone still cannot create a coordinate marker.
+- Add regression coverage for hovered zone persistence, model selection and
+  rotation, localized identities, stale model callbacks and dismissed tooltips.
+  Preserve Bestiary and all other pages.
+
+## v0.10.10 - Local development (included in v0.11.0-beta)
+
+- Discover herbs and mineral nodes from readable world-object mouseover tooltips
+  without requiring Herbalism or Mining. Keep discovery separate from interaction
+  counts, known zones and location markers; show when an entry has not yet been
+  interacted with.
+- Record skill-rejected gathering interactions without the profession or required
+  rank when a recent world right-click and matching client error identify the
+  same resource. Do not count these as completed gathers. Exclude UI clicks,
+  unrelated or out-of-range failures, fading/replaced tooltips and stale input.
+- Add localized requirement parsing and regression coverage for skill-free
+  discovery, rejected interactions, restricted tooltip data and deduplication
+  with gathering casts. Preserve existing records and other pages.
+
+## v0.10.9 - Local development (included in v0.11.0-beta)
+
+- Implement Herbs & Minerals with the Bestiary's parchment, left index, A–Z
+  filters, search and clear control, sorting, sixteen-row list, hover-scrolling
+  names, scrollbar and Previous/Next navigation. Add herb/mineral and location
+  filters, interaction totals, encounter dates and saved field notes.
+- Discover resources only from the player's matched Herbalism or Mining casts.
+  Record a position when gathering starts, retain interrupted interactions,
+  and count matching successful casts separately. Reject passive observations,
+  unrelated spells/loot, pre-cast failures, stale or mismatched events and
+  unreadable identities. Duplicate events never add another interaction.
+- Give every discovered resource its own Locations map with recorded zones,
+  green herb/gold mineral markers, brightness and a live player arrow. Mark
+  gathering positions approximate, consolidate repeated coordinates and bound
+  map histories. Missing coordinates never create invented positions.
+- Save gathering data separately per character, outside Bestiary resets,
+  account merging, backups and sharing. Preserve browsing state and unsaved
+  notes across section changes; close gathering dialogs when leaving the page.
+  Other page implementations are unchanged.
+- Add gathering event, persistence, map and UI regression coverage; update
+  section navigation tests for the implemented page and five remaining wishlists.
+
 ## v0.10.8-beta - 2026-09-27
 
 This release includes the complete batch from v0.9.151 through v0.10.8.

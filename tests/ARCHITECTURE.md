@@ -41,7 +41,8 @@ already shown. `Toggle()` reopens the last active section, defaulting to the
 first registration. Normal Bestiary bindings explicitly select the Bestiary;
 the minimap and general book command use the shared shell.
 
-The Bestiary registers first, followed by the six definitions in
+The Bestiary registers first, followed by Herbs & Minerals (`GatheringBook.lua`),
+then the five definitions in
 `FieldbookSections.lua`. That file owns their titles, icons and wishlist text;
 they have no tracking or saved data. The Bestiary's icon is in its registration
 in `BestiaryBook.lua`. The shell uses Forever's `LargeSideTabButtonTemplate` for
@@ -88,3 +89,39 @@ it will automatically survive the existing reset.
 Sharing remains a Bestiary protocol with exact installed-version checks. Other
 sections should not reuse creature IDs or report schemas implicitly. Preserve
 old journal and backup compatibility when implementing their storage.
+
+## Herbs & Minerals
+
+`GatheringJournal.lua` owns a separate per-character `AzerothFieldbookGatheringDB`
+(schema 1), with resource identities keyed by profession kind and normalized
+observed name. It shares no entries, settings or reset/backup/sharing paths with
+the Bestiary. The main addon initialization registers the gathering section
+between Bestiary and the five wishlist sections and starts its event frame even
+when its UI has never been opened.
+
+`GatheringTracking.lua` reads the current world-object tooltip for mouseover
+discovery, independent of professions. `Discover` creates identity/type, first
+encounter time, zone names and map identity, but never coordinates or interaction
+counts. `GatheringModels.lua` resolves presentation-only native model file IDs
+by observed object ID (when available) or name; it does not prefill the journal.
+Item/unit tooltips, unreadable fields and non-gathering requirements
+are excluded.
+
+Coordinate recording pairs the player's readable gathering SENT target with the
+same cast GUID and spell ID at START/SUCCEEDED. A matching skill-requirement
+error also confirms attempted use when there is a live readable world-node
+tooltip and no focused UI control, even without a global mouse event. Empty or
+root-only mouse focus is valid world input. A captured world right-click can
+instead retain the resource identity for two seconds after its tooltip clears;
+if the tooltip clears before the click callback, that callback may capture the
+last observed identity only within 0.5 seconds. Cached hover alone, UI clicks,
+unrelated errors and stale/replaced identities cannot create markers. Duplicate
+error/cast notifications share one interaction. The existing pure location
+sampler supplies player coordinates at confirmed interaction time; all gathering
+markers are approximate. No target, minimap, bag or loot hooks collect data.
+
+`GatheringBook.lua` and `GatheringLocationsWindow.lua` mirror Bestiary controls
+in section-owned frames. Their local style/map code is intentionally separate to
+preserve the other pages. Names, counts, notes, map history and sort preferences
+survive reloads; filters, selection, scroll and unsaved notes survive section
+changes during the session. `tests/GATHERING.md` defines the acceptance checks.

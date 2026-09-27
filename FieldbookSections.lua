@@ -1,12 +1,8 @@
 local _, ns = ...
 
 -- Presentation only. These sections deliberately have no tracking or saved data.
--- Registration order is the order of the tabs after the Bestiary.
+-- Registration order is the order of the tabs after the two implemented journals.
 ns.FieldbookWishlistSections = {
-    {
-        id="gathering", title="Herbs & Minerals", icon="Interface\\Icons\\INV_Misc_Flower_02",
-        wishlist="Record herbs and mineral deposits encountered in the world, including known zones and personal notes. Future additions may track harvested materials and connect them to known crafting recipes.",
-    },
     {
         id="atlas", title="Traveller’s Atlas", icon="Interface\\Icons\\INV_Misc_Map_01",
         wishlist="Build a personal record of caves, ruins, routes, crossings and useful places. Add expedition notes, connect discoveries across Fieldbook sections, and eventually share regional field reports.",

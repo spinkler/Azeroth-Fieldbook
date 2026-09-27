@@ -75,6 +75,8 @@ class FieldbookTabsTests(unittest.TestCase):
             'Scrollbars.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
             'ActionButtons.lua', 'SharingReport.lua', 'BestiaryBackups.lua', 'BestiaryJournal.lua', 'BackupWindow.lua',
             'CreatureNotes.lua', 'RumoursWindow.lua', 'FieldbookShell.lua',
+            'CreatureLocations.lua', 'GatheringJournal.lua', 'GatheringModels.lua', 'GatheringTracking.lua',
+            'GatheringLocationsWindow.lua', 'GatheringBook.lua',
             'FieldbookSections.lua', 'BestiaryPages.lua', 'BestiaryBook.lua',
         ])
         self.lua.execute('''
@@ -86,6 +88,7 @@ class FieldbookTabsTests(unittest.TestCase):
             journal=ns.CreateBestiaryJournal(settings,function() return npcID end)
             shell=ns.CreateFieldbookShell()
             controller=ns.CreateBestiaryBook(journal,shell)
+            gathering=ns.InitializeGathering(shell)
             ns.RegisterFieldbookWishlistSections(shell)
             function click(index,button,inside)
                 local tab=shell:GetFrame().sectionTabs[index]
@@ -142,7 +145,6 @@ class FieldbookTabsTests(unittest.TestCase):
 
     def test_exact_copy_and_wrapping_bounds(self):
         paragraphs = [
-            'Record herbs and mineral deposits encountered in the world, including known zones and personal notes. Future additions may track harvested materials and connect them to known crafting recipes.',
             'Build a personal record of caves, ruins, routes, crossings and useful places. Add expedition notes, connect discoveries across Fieldbook sections, and eventually share regional field reports.',
             'Record fish and other catches alongside the waters and fishing spots where they were found. Build a personal catch history and share useful findings with other anglers.',
             'Remember merchants, trainers and useful services encountered during exploration. Record observed goods, recipe sources, locations and access notes.',
@@ -154,7 +156,7 @@ class FieldbookTabsTests(unittest.TestCase):
             shell:Toggle()
             local entry=journal.entries[42]
             for index,text in ipairs(paragraphs) do
-                click(index+1)
+                click(index+2)
                 local content=shell.sections[shell.active].frame
                 assert(content.title:GetText()==shell.sections[shell.active].definition.title)
                 assert(content.heading:GetText()=='Wishlist for future releases')

@@ -408,6 +408,9 @@ local function initialize()
         fieldbook=ns.CreateFieldbookShell({getBrightness=function() return journal:GetBackgroundBrightness() end})
     end
     if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal,fieldbook) end
+    if fieldbook and ns.InitializeGathering then
+        ns.InitializeGathering(fieldbook,function() return journal:GetBackgroundBrightness() end)
+    end
     if fieldbook and ns.RegisterFieldbookWishlistSections then ns.RegisterFieldbookWishlistSections(fieldbook) end
     if journal and journal.sharing then
         journal.sharing:SetImportedCallback(function() if book then book:Refresh() end end)
