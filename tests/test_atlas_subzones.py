@@ -4,6 +4,80 @@ from atlas_test_harness import new_atlas
 
 
 class SubzoneTests(unittest.TestCase):
+    def test_ctrl_cleanup_cleans_all_saved_maps_and_preserves_selection(self):
+        self.lua.execute('''
+            for _,id in ipairs({101,102,999}) do
+                local function point(x,y) return {kind='interior',mapID=id,name='Lake',x=x,y=y,at=100} end
+                local border=crossing('Lake','Bank',2500,2000);border.mapID=id
+                s.store[id]={point(2000,2000),point(8000,2000),point(8000,8000),point(2000,8000),
+                    point(5000,2000),point(5000,5000),point(6000,6000),border,{invalid='preserve'}}
+                s:Changed(id)
+            end
+            s.index={};local selected=j.state.mapID
+            local records=snapshot(j.records);local messages={}
+            DEFAULT_CHAT_FRAME={AddMessage=function(_,text) messages[#messages+1]=text end}
+            IsControlKeyDown=function() return true end
+            m.cleanPoints.scripts.OnEnter(m.cleanPoints)
+            local tip=GameTooltip.lines[1].text
+            assert(tip:find('Ctrl+Click',1,true) and tip:find('ALL saved Atlas maps',1,true))
+            click(m.cleanPoints);assert(not m.cleanPoints.enabled and s.cleaning)
+            assert(not S.CleanInterior(j,102) and not S.CleanAllInterior(j),'Batch prevents overlapping cleanup')
+            settle()
+            for _,id in ipairs({101,102,999}) do
+                assert(#s.store[id]==7 and #s:Crossings(id)==1)
+                assert(s.store[id][5].y==2000 and s.store[id][7].invalid=='preserve')
+            end
+            assert(m.cleanPoints.enabled and not s.cleaning)
+            assert(j.state.mapID==selected and snapshot(j.records)==records)
+            assert(messages[#messages]:find('removed 6',1,true) and messages[#messages]:find('3 maps',1,true))
+            click(m.cleanPoints);settle();assert(m.message:GetText():find('removed 0',1,true))
+        ''')
+
+    def test_all_map_cleanup_skips_stale_map_and_continues(self):
+        self.lua.execute('''
+            for _,id in ipairs({101,102}) do
+                s.store[id]={}
+                for _,p in ipairs({{2000,2000},{8000,2000},{8000,8000},{2000,8000},{5000,5000}}) do
+                    s.store[id][#s.store[id]+1]={kind='interior',mapID=id,name='Lake',x=p[1],y=p[2],at=100}
+                end
+                s:Changed(id)
+            end
+            s.index={};s:Index(101)
+            local removed,message
+            assert(S.CleanAllInterior(j,function(n,text) removed=n;message=text end))
+            local clock=0;debugprofilestop=function() clock=clock+2;return clock end
+            S.Step();debugprofilestop=nil
+            table.insert(s.store[101],{kind='interior',mapID=101,name='Lake',x=5500,y=5500,at=100})
+            s:Changed(101);local unchanged=snapshot(s.store[101]);settle()
+            assert(snapshot(s.store[101])==unchanged and #s.store[102]==4)
+            assert(removed==1 and message:find('1 map could not be cleaned',1,true) and not s.cleaning)
+            local readOnly=ns.CreateAtlasJournal({schema=999})
+            assert(not S.CleanAllInterior(readOnly,function() error('read only') end))
+            local empty=ns.CreateAtlasJournal({});local finished=false
+            assert(not S.CleanAllInterior(empty,function(n) assert(n==0);finished=true end))
+            assert(finished and not empty.subzones.cleaning)
+        ''')
+
+    def test_great_sea_pauses_automatic_mapping_without_excluding_the_coast(self):
+        self.lua.execute('''
+            C_Map.GetMapWorldSize=function() return 1000,1000 end
+            for _,signal in ipairs({'subzone','zone','realZone'}) do
+                s:Reset();s.store[101]={};s.index={}
+                GetRealZoneText=function() return 'Coast' end
+                GetZoneText=function() return 'Coast' end
+                sample('Meadow',.4,.4);local before=snapshot(s.store)
+                if signal=='zone' then GetZoneText=function() return 'The Great Sea' end end
+                if signal=='realZone' then GetRealZoneText=function() return 'The Great Sea' end end
+                local sea=signal=='subzone' and 'The Great Sea' or 'Coastal waters'
+                assert(not sample(sea,.401,.4) and not sample(sea,.6,.6))
+                assert(snapshot(s.store)==before and not s.previous and j.state.automaticMapping~=false)
+                assert(s:RecordPoint(),'Deliberate manual points remain allowed at sea')
+                GetRealZoneText=function() return 'Coast' end;GetZoneText=function() return 'Coast' end
+                sample('Forest',.402,.4);assert(#s:Crossings(101)==0,'No crossing across the excluded sea')
+                sample('Hill',.403,.4);assert(#s:Crossings(101)==1,'Nearby land still maps normally')
+            end
+        ''')
+
     def setUp(self):
         self.lua = new_atlas(ui=True)
         self.lua.execute('''

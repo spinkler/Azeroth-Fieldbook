@@ -289,3 +289,12 @@ of Bestiary announcement preferences; logging also works without a chat frame.
 Live check: capture a readable item with Lore closed, check chat, then open Lore
 and its Event log. Reopen the same item and turn pages; verify no duplicate
 announcement. Save a manual landmark and confirm both messages.
+
+Object gossip readers: native GameObject GUIDs with a displayed source name are
+archived as writings on gossip events. Draconic for Dummies also supports a
+missing-GUID title fallback. NPC gossip remains deliberate. Capture preserves
+only displayed text. Draconic for Dummies has confirmed single-page boundaries;
+other readers retain unknown boundaries. It neither translates nor
+traverses dialogue options. Test in Forever by reopening the book, checking one
+writing and one initial chat/event-log notice, then disabling automatic capture
+and using Capture / retry current text. Native API behavior still needs live QA.

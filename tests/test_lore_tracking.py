@@ -66,6 +66,35 @@ def client(settings='{}'):
 
 
 class LoreTrackingTests(unittest.TestCase):
+    def test_native_object_dialogue_capture_and_manual_retry(self):
+        lua = client()
+        lua.execute("""
+            local title='Draconic for Dummies'
+            local guid='GameObject-0-1-2-3-180665-ABC'
+            function UnitName(token) assert(token=='npc');return title end
+            function UnitGUID(token) assert(token=='npc');return guid end
+            function UnitIsPlayer() return false end
+            C_GossipInfo={GetText=function() return 'Zenn tiros me enkil...' end}
+            t=ns.CreateLoreTracking(j,settings)
+            local notices=0;j.onRecorded=function() notices=notices+1 end
+            t:Event('GOSSIP_SHOW')
+            local e=writing();assert(e and e.title==title and e.pages[1].raw=='Zenn tiros me enkil...')
+            assert(e.pages[1].personallyViewed and e.firstPage==1 and e.lastPage==1)
+            e.firstPage=nil;e.lastPage=nil;e.pages[1].first=false;e.pages[1].last=false
+            t:Event('GOSSIP_UPDATE');t:Event('GOSSIP_CLOSED');t:Event('GOSSIP_SHOW')
+            assert(writing().lastPage==1,'reread repairs the previous partial archive')
+            assert(#j:List({kind='writing'})==1 and notices==1)
+            assert(next(j.sessions)==nil)
+            t:Event('GOSSIP_CLOSED');assert(not t:CaptureCurrent())
+            guid='Creature-0-1-2-3-91-ABC';title='Ordinary NPC'
+            t:Event('GOSSIP_SHOW');assert(#j:List({kind='writing'})==1)
+            guid=nil;title='Draconic for Dummies';settings.autoArchiveLore=false
+            saved={};j=ns.CreateLoreJournal(saved);t=ns.CreateLoreTracking(j,settings)
+            t:Event('GOSSIP_SHOW');assert(not writing())
+            assert(t:CaptureCurrent());assert(writing().title==title)
+            title='Unknown dialogue';t:Event('GOSSIP_SHOW');assert(not t.dialogue.writing)
+        """)
+
     def test_defaults_false_values_and_no_default_navigation(self):
         lua = client()
         lua.execute('''

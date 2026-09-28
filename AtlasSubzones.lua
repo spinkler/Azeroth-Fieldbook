@@ -356,6 +356,11 @@ function S.Attach(j)
         local name=A.Read(GetSubZoneText)
         if name=="" then name=A.Read(GetRealZoneText) end
         if not A.Text(name,160) then self:Reset();return end
+        -- Offshore water can retain a coastal map ID. Check the current area
+        -- labels rather than excluding that whole coastal map from surveys.
+        if name=="The Great Sea" or A.Read(GetRealZoneText)=="The Great Sea" or A.Read(GetZoneText)=="The Great Sea" then
+            self:Reset();return
+        end
         -- Map ancestry excludes capitals; world dimensions are cached once per
         -- map index and proximity queries use the cached spatial grids.
         local id=A.Read(C_Map and C_Map.GetBestMapForUnit,"player")
@@ -481,10 +486,10 @@ local function inside(points,x,y,checkpoint)
 end
 -- Test whether removing each interior anchor can let a competing area take
 -- ownership anywhere in their overlapping hulls; keep all perimeter evidence.
-function S.CleanInterior(journal,id,done,progress)
+local function cleanInterior(journal,id,done,progress,batch)
     local survey=journal.subzones
-    if journal.readOnly or not A.Integer(id,1,2147483647) or survey.cleaning then return false end
-    survey.cleaning=true
+    if journal.readOnly or not A.Integer(id,1,2147483647) or (survey.cleaning and survey.cleaning~=batch) then return false end
+    survey.cleaning=batch or true
     if progress then progress("Starting cleanup on map "..id.."; preparing saved samples.") end
     S.Queue(function(checkpoint)
         local index=survey:Index(id,true)
@@ -578,7 +583,7 @@ function S.CleanInterior(journal,id,done,progress)
         end
         return {source=source,revision=revision,kept=kept,removed=removed,counts=counts}
     end,function(ok,result)
-        survey.cleaning=nil
+        if not batch then survey.cleaning=nil end
         if not ok then if done then done(nil,"Cleanup could not complete; no samples were removed.") end;return end
         if result.removed>0 then
             if survey.store[id]~=result.source or survey:Revision(id)~=result.revision then
@@ -595,6 +600,53 @@ function S.CleanInterior(journal,id,done,progress)
         end
         if done then done(result.removed) end
     end)
+    return true
+end
+
+function S.CleanInterior(journal,id,done,progress)
+    return cleanInterior(journal,id,done,progress)
+end
+
+function S.CleanAllInterior(journal,done,progress)
+    local survey=journal.subzones
+    if journal.readOnly or survey.cleaning then return false end
+    local maps={}
+    for id in pairs(survey.store) do
+        if A.Integer(id,1,2147483647) then maps[#maps+1]=id end
+    end
+    table.sort(maps)
+    if #maps==0 then
+        if done then done(0,"No saved Atlas maps to clean.") end
+        return false
+    end
+    -- Keep one lock across the batch. Each map gets the same budgeted cleanup
+    -- and revision checks as a normal click; never build all maps at once.
+    local batch={};survey.cleaning=batch
+    local index,total,skipped=0,0,0
+    local function nextMap()
+        index=index+1
+        if index>#maps then
+            survey.cleaning=nil
+            local message="All-map cleanup complete: removed "..total.." redundant interior points across "..#maps..(#maps==1 and " map." or " maps.")
+            if skipped>0 then message=message.." "..skipped..(skipped==1 and " map" or " maps").." could not be cleaned; try again while stationary." end
+            if done then done(total,message) end
+            return
+        end
+        local id=maps[index]
+        local function report(message)
+            if progress then progress("Map "..index.."/"..#maps.." ("..id.."): "..message) end
+        end
+        local started=cleanInterior(journal,id,function(count,message)
+            if count==nil then skipped=skipped+1;report(message)
+            else total=total+count end
+            nextMap()
+        end,report,batch)
+        if not started then
+            survey.cleaning=nil
+            if done then done(total,"All-map cleanup stopped; remaining maps were not changed.") end
+        end
+    end
+    nextMap()
     return true
 end
 

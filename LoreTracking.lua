@@ -102,7 +102,21 @@ local function defaultAdapter()
             or kind=="quest-complete" and GetRewardText
         local raw=read(fn)
         if type(raw)~="string" or raw=="" then return end
-        return {raw=raw,speaker=unit("npc"),sourceTitle=kind~="gossip" and label(read(GetTitleText)) or nil}
+        local d={raw=raw,speaker=unit("npc"),sourceTitle=kind~="gossip" and label(read(GetTitleText)) or nil}
+        if kind=="gossip" and not d.speaker and read(UnitIsPlayer,"npc")~=true then
+            local guid=read(UnitGUID,"npc")
+            local title=label(read(UnitName,"npc"))
+            local nameFrame=GossipFrame and GossipFrame.NameFrame and GossipFrame.NameFrame.Name or GossipFrameNpcNameText
+            title=title or (nameFrame and label(read(nameFrame.GetText,nameFrame)))
+            local objectID=type(guid)=="string" and tonumber(guid:match('^GameObject%-%d+%-%d+%-%d+%-%d+%-(%d+)%-%x+$'))
+            -- Some object readers expose a title but no unit GUID. Limit that
+            -- fallback to the observed book, never an unrelated target unit.
+            if title and (number(objectID,1,2147483647) or (guid==nil and title=="Draconic for Dummies")) then
+                d.writing=true;d.sourceTitle=title
+                d.identity=objectID and "gameobject:"..objectID or "gossip-book:"..title
+            end
+        end
+        return d
     end
     return a
 end
@@ -315,7 +329,30 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         changed()
     end
     function t:GetStatus() return self.status end
+    local function captureDialogue(d)
+        serial=serial+1
+        -- This observed reader contains one text panel and only Goodbye.
+        -- Other object dialogues may have additional branches or pages.
+        local complete=d.sourceTitle=="Draconic for Dummies"
+        local sessionID="gossip:"..tostring(L.Now())..":"..serial
+        local e,err=journal:CapturePage({sessionID=sessionID,title=d.sourceTitle,identity=d.identity,
+            sourceKind="object-dialogue",locale=read(GetLocale) or "unknown",location=d.location,
+            firstPage=complete and 1 or nil,lastPage=complete and 1 or nil},
+            {number=1,raw=d.raw,method="displayed",personallyViewed=true,first=complete,last=complete})
+        journal:EndCapture(sessionID)
+        t.status=e and (complete and "Complete archive: single-page object reader."
+            or "Displayed object text archived; source page boundaries are unknown.") or err
+        return e,err
+    end
     function t:CaptureCurrent()
+        if self.dialogue and self.dialogue.writing then
+            local d=a.Dialogue and a.Dialogue("gossip")
+            if not d or not d.writing or d.identity~=self.dialogue.identity or d.sourceTitle~=self.dialogue.sourceTitle then
+                return nil,"The readable object changed; reopen it before capturing."
+            end
+            d.location=self.dialogue.location
+            return captureDialogue(d)
+        end
         local s=self.active
         if s and s.pending and s.pending.cancelled then
             local current=snapshot(s)
@@ -413,7 +450,10 @@ function ns.CreateLoreTracking(journal,settings,adapter)
                 QUEST_DETAIL="quest-detail",QUEST_PROGRESS="quest-progress",QUEST_COMPLETE="quest-complete"})[event]
             if kind then
                 local d=a.Dialogue and a.Dialogue(kind);self.dialogue=d
-                if d then d.kind=kind;d.location=L.CurrentLocation("encounter") end
+                if d then
+                    d.kind=kind;d.location=L.CurrentLocation(d.writing and "read-here" or "encounter")
+                    if d.writing and settings.autoArchiveLore==true then captureDialogue(d) end
+                end
             end
         end
     end

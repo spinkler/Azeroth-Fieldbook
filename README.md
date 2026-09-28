@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.16.6 (Beta)
+# Azeroth Fieldbook 0.16.9 (Beta)
 
 **Lore & Landmarks** is a personal archive of writings, landmarks, noteworthy
 people and mysteries. Open a supported readable source to preserve its displayed
@@ -12,6 +12,10 @@ Rereading matching captured pages reuses the archive; different source text is
 retained separately. Delete a selected record through **Sources / manage →
 Delete entry…**. Deleted books can be archived again. Exact saved duplicate
 captures are consolidated on load while retaining private annotations.
+Object dialogue readers such as **Draconic for Dummies** also archive their
+displayed text as writings. Draconic for Dummies is a complete single-page reader;
+other object readers retain unconfirmed page boundaries.
+**Capture / retry current text** works when automatic archiving is disabled.
 
 Record people and deliberately save displayed gossip or quest passages; record
 landmarks, private thoughts, related evidence and a mystery's next step. Entry
@@ -85,7 +89,7 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.16.6 includes sharing, addon-version compatibility
+spell databases. Version 0.16.9 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
@@ -224,7 +228,7 @@ sub-zone crossings and encountered weather are observed automatically.
   from crossings. Convex estimates may bridge bays or holes;
   these are personal approximations, not exact game borders. Crossings collect
   with the Atlas closed or the layer hidden, persist per character, and stay out
-  of discovery entries and field reports. Automatic mapping pauses on flight
+  of discovery entries and field reports. Automatic mapping pauses in The Great Sea, on flight
   paths, while flying and in Stormwind, Ironforge, Darnassus, Orgrimmar,
   Thunder Bluff and Undercity. Existing evidence and manual survey points remain
   available; ordinary inns and settlements are not excluded. Sampling resumes
@@ -356,7 +360,9 @@ Install the addon as `Interface/AddOns/AzerothFieldbook` and enable
 **Record Atlas survey point** adds a sub-zone survey sample at your current
 position, provided all existing survey samples on that map are more than 15 yards
 away. It works with the Atlas closed. Manual points survive reloads; use
-**Clean Redundant Points** when you want to simplify the survey.
+**Clean Redundant Points** to simplify the displayed map, or **Ctrl+Click** it
+to clean every map with saved survey points. Each map retains crossing, perimeter
+and overlap-boundary evidence; your displayed map and discoveries stay unchanged.
 **Toggle Automatic Mapping**, above that button, starts enabled and saves your
 preference. Turning it off pauses automatic sampling but keeps the manual keybind available.
 
@@ -1001,7 +1007,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.16.6 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
+Version 0.16.9 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,

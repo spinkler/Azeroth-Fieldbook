@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.16.9-beta - 2026-09-29
+
+This release includes all changes since v0.16.6-beta and the previous push at
+`142276e6cfea5c0478e156c4dfbef9649b5dde38` (local versions 0.16.7–0.16.9).
+
+- Ctrl+Click Clean Redundant Points to clean all saved Atlas maps; ordinary clicks
+  still clean the displayed map. Update the tooltip and help, reuse the budgeted
+  cleanup and per-map safety checks, and report total removals and skipped maps.
+- Pause automatic Atlas mapping in The Great Sea, including offshore areas that
+  retain a coastal map ID. Preserve saved evidence and manual survey points, and
+  break crossing continuity when automatic recording pauses.
+- Capture object gossip readers such as Draconic for Dummies as writings, including
+  manual retry when automatic capture is disabled. Preserve the displayed language,
+  deduplicate repeated reads, and avoid claiming unverified page completeness.
+- Mark Draconic for Dummies as a complete single-page writing; reopening it
+  upgrades the earlier partial archive without creating a duplicate.
+
+- Add regression coverage and usage documentation for all-map cleanup, Great Sea
+  exclusions, object-reader capture, repeated reads and completeness upgrades.
+
 ## v0.16.6-beta - 2026-09-29
 
 This release includes all changes since v0.15.39-beta and the previous push at

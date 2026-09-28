@@ -689,3 +689,27 @@ rejections also appear in chat. Overlap protection clips the potential region
 where removing the candidate would allow a rival anchor to beat all remaining
 same-area anchors. Removed anchors are excluded from subsequent decisions to
 prevent collective removals from changing ownership.
+
+### v0.16.7 — all-map cleanup and The Great Sea
+
+Ordinary Clean Redundant Points clicks keep the displayed-map behavior.
+Ctrl+Click snapshots every valid saved survey map ID in the active journal,
+including maps not currently loaded/displayed, and cleans them sequentially
+through the existing budgeted worker. One batch lock prevents overlapping runs.
+Each map retains perimeter/crossing/overlap evidence and its revision safeguard;
+a stale map is skipped while other maps continue. Progress identifies the map,
+and completion reports total removals and skipped maps. Selection and discovery
+records remain unchanged. Empty and read-only journals do not start a batch.
+
+Automatic mapping pauses when the readable current sub-zone, zone or real-zone
+label is The Great Sea. This handles offshore water still using a coastal map ID
+without excluding the adjacent land. The existing automatic-mapping preference
+is preserved, no old evidence is erased, crossing continuity resets, and manual
+survey points remain available. The English area label matches the target client.
+
+Regression coverage checks Ctrl+Click/tooltip behavior, undisplayed maps, batch
+locking, stale-map continuation, read-only/empty journals, all three sea label
+sources, preserved evidence, manual points and resumed coastal sampling.
+Live check: Ctrl+Click with multiple saved maps, then cross between a coastal
+sub-zone and The Great Sea and verify no automatic offshore points or bridging
+crossing is recorded.
