@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 
 function ns.CreateBackupWindow(journal, ui, onRestored)
     local data=ns.BestiaryBackups
@@ -60,7 +61,7 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
         frame.textScroll=CreateFrame("ScrollFrame",nil,frame.textBorder,"UIPanelScrollFrameTemplate")
         frame.textScroll:SetPoint("TOPLEFT",8,-8);frame.textScroll:SetPoint("BOTTOMRIGHT",-30,8)
         frame.text=CreateFrame("EditBox",nil,frame.textScroll)
-        frame.text:SetMultiLine(true);frame.text:SetAutoFocus(false);frame.text:SetFontObject("GameFontHighlightSmall")
+        frame.text:SetMultiLine(true);frame.text:SetAutoFocus(false);frame.text:SetFontObject(textFont("GameFontHighlightSmall"))
         frame.text:SetWidth(464);frame.text:SetHeight(152);frame.text:SetMaxLetters(data.MAX_BYTES+1)
         frame.textScroll:SetScrollChild(frame.text);ns.AutoHideScrollBar(frame.textScroll)
         local bar=frame.textScroll.ScrollBar

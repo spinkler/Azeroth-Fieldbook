@@ -1,5 +1,110 @@
 # Changelog
 
+## v0.16.6-beta - 2026-09-29
+
+This release includes all changes since v0.15.39-beta and the previous push at
+`ede3c2cf73cd65d2be3f13da75545da3442bb4a1` (local versions 0.15.40–0.16.6).
+
+- Add Lore & Landmarks as the seventh functional journal: a separate character
+  archive for writings, landmarks, people and mysteries, with searchable filters,
+  private annotations, related-record links, revisit flags and investigation status.
+  Keep source evidence, personal interpretation and received reports distinct.
+- Automatically preserve displayed pages from supported readable sources. Both
+  capture preferences default on; disabling Only archive pages I open enables
+  bounded whole-book navigation where supported. Retain original text, page order,
+  partial captures and source provenance; distinguish automatic retrieval from
+  personally displayed pages. Preserve player control and stop interrupted work.
+- Add manual transcription, deliberate NPC and displayed-passage recording, a
+  stored-text reader with retained positions, and an independent Location view
+  using the Atlas map layout. Preserve Lore settings through Bestiary resets.
+- Fix the readable-source lifecycle, early READY events and Classic next-page
+  flags. Reuse exact matching page evidence on rereads, preserve conflicting text
+  separately, and repair exact saved duplicates while retaining annotations and
+  related-entry links. Deleting an entry allows later recapture.
+- Add bounded copy/paste Lore reports with exact previews and explicit, atomic
+  acceptance. Private notes require opt-in; imported material remains reported
+  and grants no personal credit or Knowledge.
+- Announce every newly recorded Lore entry in chat and the persistent Event log,
+  including captures, manual records and new imports. Make the shared Event log
+  accessible from Lore; avoid duplicate announcements for rereads and extra pages.
+- Show darkened current-map fallbacks in Merchant's Ledger and Lore when no
+  recorded map is available, preserving empty-state explanations and selections.
+- Pause automatic Atlas sub-zone mapping on flight paths, while flying and inside
+  Classic capitals. Break crossing continuity across pauses while preserving
+  existing evidence, ordinary inn sampling and deliberate survey points.
+- Add an account-wide Text size slider with seven one-point steps from -3 to +3,
+  centred on the unchanged default. Include Default and Apply / reload controls;
+  preserve relative heading sizes and independent UI scaling. Fix the native
+  edit-box font reassignment that caused a client stack overflow.
+- Move the seven section tabs inward by two UI units to close the border seam,
+  preserving native artwork, dimensions and vertical spacing.
+- Expand Lua 5.1 regression coverage for Lore storage, capture, reports, UI and
+  announcements; font-wrapper safety; Atlas exclusions; and tab geometry at
+  1920x1200 and 7680x2160. Update architecture, storage and live-check documentation.
+  Automated coverage does not substitute for native Forever client verification.
+
+## v0.16.4 - v0.16.6 - Development notes (included in v0.16.6-beta)
+
+- Add an account-wide Text size slider in Options with seven steps from -3 to
+  +3 points, centred on the unchanged default. Include Default and Apply / reload
+  buttons; preserve heading/body size differences and independent UI scaling.
+- Fix a native client stack overflow when opening the book: leave template fonts
+  untouched at Default and size edit boxes directly without assigning their own
+  font wrappers back to them. Add regression coverage for this native API hazard.
+- Move the seven section tabs inward by just two UI units to seal the border seam;
+  preserve native art, dimensions and vertical spacing. Check screen-fit geometry
+  at 1920x1200 and 7680x2160 as well as the existing resolutions.
+- Announce each newly recorded Lore entry in chat and the persistent Event log,
+  including captured writings, manual records and new imported entries. Expose
+  the shared Event log from Lore; do not repeat messages for rereads or extra pages.
+
+## v0.16.3 - Development notes (included in v0.16.6-beta)
+
+- Keep readable page-load events in the active book session, preserve READY
+  delivered before native navigation hooks, and accept Classic truthy/nil
+  next-page flags. Capture opened pages into their ordered archive.
+- Reuse exact overlapping source text on rereads without relying on a title
+  alone. Preserve conflicting versions separately. Repair exact saved duplicates
+  on load while retaining private annotations and related-entry references.
+- Verify deletion through Sources / manage allows later recapture without
+  blacklisting the book; add native lifecycle, reread and duplicate-repair tests.
+
+## v0.16.1 - v0.16.2 - Development notes (included in v0.16.6-beta)
+
+- Show a darkened copy of the player's current map when Lore & Landmarks has
+  no recorded or selected map, using the shared Atlas size, position and border.
+  Keep the fallback display-only and preserve deliberate map selection.
+- Pause automatic Atlas sub-zone sampling on flight paths, while flying and
+  inside Classic capitals. Break crossing continuity across pauses; preserve
+  existing evidence, ordinary inn sampling and deliberate manual points.
+
+## v0.16.0 - Development notes (included in v0.16.6-beta)
+
+- Implement Lore & Landmarks as a separate character archive for writings,
+  landmarks, people and mysteries in the existing seventh section tab.
+- Preserve supported readable text through the item-text lifecycle. Default
+  capture stores only displayed pages; disabling Only archive pages I open
+  enables bounded asynchronous whole-book navigation where supported, including
+  earlier pages, interruption handling and same-interaction restoration. Keep
+  partial text, original formatting, capture methods and evidence-based gaps.
+- Add the two default-on capture preferences to shared Options, manual
+  transcription, deliberate NPC and passage recording, source-labelled notes,
+  searchable filters, related-record references, revisit flags and investigation
+  status. Keep source text separate from private interpretation and reports.
+- Add a stored-text reader with retained positions and an independent Location
+  view using the Atlas map factory and geometry. Location meanings distinguish
+  reading, observations and deliberately placed landmarks.
+- Add selected-source copy/paste reports, exact previews, bounded validation and
+  atomic acceptance. Notes and interpretations require explicit inclusion;
+  received material remains reported and grants no personal credit or Knowledge.
+- Add Lua 5.1 model, capture, UI, report and integration regression coverage and
+  document capability assumptions and outstanding Forever in-game checks.
+
+## v0.15.40 - Development notes (included in v0.16.6-beta)
+
+- Show a darkened current local map in Merchant’s Ledger when no contact map
+  is recorded, keeping the empty-state message visible, matching Treasure & Salvage.
+
 ## v0.15.39-beta - 2026-09-28
 
 This release includes all changes since v0.15.37-beta and the previous push at

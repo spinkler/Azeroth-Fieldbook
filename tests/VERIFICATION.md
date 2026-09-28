@@ -1,6 +1,6 @@
 # Current verification record
 
-Updated 2026-09-27 for 0.10.8 Beta. Older research documents retain historical
+Updated 2026-09-28 for 0.16.0 Beta. Older research documents retain historical
 captures and limitations; this record distinguishes their status from current
 operator confirmations.
 
@@ -12,7 +12,8 @@ operator confirmations.
 | Beast Lore | Live capture and two-player lore delivery await a beta level cap that permits testing the spell. Automated event, tooltip, storage and protocol tests do not replace this check. |
 | Index layering | 0.10.8 places Index/A–Z buttons exactly one frame level below native/fallback trim and above parchment, with mouse-disabled trim and title controls above it. Widget checks pass; the inset rolodex appearance and native hit regions await in-game verification. |
 | Shared shell extraction | Automated tests cover lazy construction, section switching, preserved selection, page routing, closing, focus, legacy position restoration and inherited scaling. In-game visual acceptance of the refactor is not claimed. |
-| Seven-section navigation | 0.10.0 adds the native right-side tabs and six wishlist pages. Automated checks cover order, default/active selection, tooltip routing, exact text, section lifetimes, Bestiary state, explicit creature opening, supported scales, full-column bounds and auxiliary placement. All seven icon files were read and decoded from installed Forever 1.60.1.70009 archives. Native rendering remains pending; see [SECTION_NAVIGATION.md](SECTION_NAVIGATION.md). |
+| Seven-section navigation | 0.10.0 introduced the native right-side tabs and six wishlist pages; all seven slots now have implementations in 0.16.0. Automated checks cover order, default/active selection, tooltip routing, section lifetimes, Bestiary state, explicit creature opening, supported scales, full-column bounds and auxiliary placement. All seven icon files were read and decoded from installed Forever 1.60.1.70009 archives during the navigation work. That historical asset check is not a current native-rendering pass; see [SECTION_NAVIGATION.md](SECTION_NAVIGATION.md). |
+| Lore & Landmarks | 0.16.0 adds the personal archive, guarded ItemText preservation, opt-in full-book traversal, deliberate NPC passages, investigation records and copy/paste reports. Focused capture tests pass with the actual Lore journal and mocked client APIs. Model, report and widget coverage and static boundaries are documented in [LORE.md](LORE.md). No actual Forever capture, traversal, attribution or visual pass is claimed. |
 | Airborne observations and map layers | 0.10.1 covers explicit flight selection, mouseover-open entries without map points, visibility range, first personal Event log entries, target-time player coordinates, violet/cyan layer switching, brightness independence, scope merging, backup validation and sharing isolation. Full live acceptance remains pending in [LOCATIONS.md](LOCATIONS.md). |
 | Skull presentation | Automated checks cover maximum-level sorting, marker replacement and the 18px info skull. The operator confirmed list placement; the 2px upward info-skull adjustment awaits visual acceptance. See [BEHAVIOUR_EMOTES.md](BEHAVIOUR_EMOTES.md). |
 | Basic information colours | 0.10.5 uses Blizzard's creature-difficulty API for each Level Range endpoint and its tooltip faction palette for disposition. Three difficulty scenarios cover native-band delegation, independent endpoints, effective-level refresh on locked pages and missing/restricted/error fallbacks; disposition tests check palette use. Native colours, wrapping and level-up rendering still require an in-game check. |
@@ -32,6 +33,12 @@ independently of how many other sections have shipped.
 
 ## Automated checks
 
+The 0.16.0 Lore implementation's final run on 2026-09-28 passed all 56 test files,
+including 68 focused Lore cases and the 14 section-navigation/integration cases.
+The runner validated all 77 Lua 5.1 files, TOC, bindings and version consistency;
+`git diff --check` also passed. These results are automated/static evidence,
+not an observed Forever capture, traversal, rendering or two-player report pass.
+
 From the repository root, using Python 3.12:
 
 ```text
@@ -45,7 +52,7 @@ the TOC when running in GitHub Actions. It executes every `test_*.py` file in a
 separate process, including the scripts that do not use unittest discovery.
 Any failed validation or script fails the run.
 
-Local validation for 0.10.8 passed all 39 test files and compiled all 33
+Historical local validation for 0.10.8 passed all 39 test files and compiled all 33
 runtime Lua files. Automatic recording has fourteen buff capture/storage/UI checks
 and ten combat-cast checks. Native rendering remains outside the mock test host.
 
@@ -54,11 +61,38 @@ workflow also calls it for the exact tagged commit and requires its success
 before invoking the packager. Local `.codex-test-deps` is optional; a clean
 checkout uses the pinned pip dependency.
 
+## Lore & Landmarks verification boundaries (0.16.0)
+
+Automated capture checks exercise the actual Lua journal with controlled client
+events, including defaults, explicit OFF values, displayed-only capture,
+whole-book and mid-book traversal, interruption, readiness, translation, duplicate
+events, privacy guards, explicit retry, dialogue attribution and archive reloads.
+Those focused checks were run successfully. The full current-version suite result
+is recorded separately when the complete repository runner finishes; no current
+suite count is inferred from the historical runs above.
+
+Static review checks the section-owned UI and storage, exact shared Atlas map
+factory/anchor, separate source and annotation fields, read-only cross-section
+references, bounded report validation, private defaults and no Knowledge awards.
+The inspected Classic ItemText source documents a possible adapter contract;
+it does not verify that Forever exposes the same event timing or return values.
+
+No actual client behavior was observed for this Lore implementation. Run the
+concrete [LORE.md](LORE.md) checklist for world books, whole-book capture without
+manual page turning, cancellation and takeover, carried sources and correspondence,
+NPC passages, manual transcription, map placement, reports, Unicode, UI scales
+and section-switching regressions. Existing operator confirmations elsewhere in
+this record retain their original scope and dates.
+
 ## Candidate smoke check
 
 For the seven-section window, follow [SECTION_NAVIGATION.md](SECTION_NAVIGATION.md).
 It separates local asset verification and automated behavior/geometry checks from
 the pending in-game tab, text, scale and Bestiary acceptance pass.
+
+For Lore & Landmarks, also follow [LORE.md](LORE.md). Native page traversal and
+source attribution require actual client observation, even when mocked lifecycle
+and persisted-data checks pass.
 
 For automatic buff recording, use [AUTO_BUFFS.md](AUTO_BUFFS.md), including the
 Frost Armor reproduction, option persistence, combat recovery, combat casts and
@@ -173,3 +207,31 @@ ID/reference preservation, catch totals and future schema protection. Immunity
 checks cover default-OFF suggestions, supported type exclusions, override and
 option persistence, and the compact checkbox dropdown. Native dropdown placement
 and cross-character journal acceptance remain pending; see ACCOUNT_TRACKING.md.
+
+### Text size (v0.16.4)
+
+- At 100% UI scale, Text size **Default** must match the previous fonts.
+- Try -3 and +3, choose **Apply / reload**, and check headings, rows, notes,
+  buttons and scrollable text in all seven sections and shared Options.
+- Check Options sections remain separated, long labels wrap legibly, and the
+  final Lore options remain reachable. Native text clipping requires a live check.
+- Open a previously unopened section before reloading: its text must still use
+  the active size. Reset with **Default**, then reload to restore original sizes.
+- Switch characters and verify the setting persists independently of UI scale.
+
+### Native font crash and tab seam (v0.16.5)
+
+The supplied 2026-09-29_00.24.26_Crash_10268 log identifies a native
+STACK_OVERFLOW in EditBox:SetFontObject, called by TextSize:StyleControl on
+the Bestiary search field. The former tests treated edit-box fonts as detached
+font objects and missed this native wrapper hazard. The regression now rejects
+all font API access at Default and rejects EditBox font-wrapper reads/assignments
+at adjusted sizes; direct SetFont is checked for preserved flags and no compounding.
+
+- Restart WoW and open the book at Default; check search and other edit fields.
+- Try both text-size endpoints with Apply / reload and open all seven sections.
+- Check the two-unit tab overlap at 1920x1200 and 7680x2160, including the normal
+  game UI scale and 50%, 100%, 150% addon scales. Confirm the tiny seam is closed
+  and icons, hover, selection, vertical spacing and clicks remain unchanged.
+- The automated suite checks behavior and geometry; a native client retest
+  is still required to confirm rendering and the crash no longer occurs.

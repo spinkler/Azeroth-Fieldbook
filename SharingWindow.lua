@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local schema=ns.SharingReport
 
 function ns.CreateSharingWindow(journal,engine,getBook)
@@ -6,13 +7,13 @@ function ns.CreateSharingWindow(journal,engine,getBook)
     local composer,receiver,captured,candidates,chosen,transaction,incoming
     local refreshing=false
     local function label(parent,text,x,y,width,font)
-        local value=parent:CreateFontString(nil,"OVERLAY",font or "GameFontHighlightSmall")
+        local value=parent:CreateFontString(nil,"OVERLAY",textFont(font or "GameFontHighlightSmall"))
         value:SetPoint("TOPLEFT",x,y); value:SetWidth(width); value:SetJustifyH("LEFT")
         value:SetWordWrap(true); value:SetText(text)
         return value
     end
     local function button(parent,text,x,y,width,callback)
-        local value=CreateFrame("Button",nil,parent,"UIPanelButtonTemplate")
+        local value=CreateFrame("Button",nil,parent,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(value) end
         value:SetPoint("TOPLEFT",x,y); value:SetSize(width,24); value:SetText(text)
         value:SetScript("OnClick",callback)
         return value
@@ -107,7 +108,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             composer:SetPoint("BOTTOMLEFT",book,"BOTTOMRIGHT",6,0)
         end
         label(composer,"Recipient character (include surname)",24,-60,260)
-        composer.recipient=CreateFrame("EditBox",nil,composer,"InputBoxTemplate")
+        composer.recipient=CreateFrame("EditBox",nil,composer,"InputBoxTemplate"); if ns.TextSize then ns.TextSize:StyleControl(composer.recipient) end
         composer.recipient:SetPoint("TOPLEFT",30,-82); composer.recipient:SetSize(390,24)
         composer.recipient:SetAutoFocus(false); composer.recipient:SetMaxLetters(100)
         composer.recipient:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)

@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A,U,R=ns.Atlas,ns.AtlasUI,ns.AtlasReports
 local function sourceName()
     local fn=UnitNameUnmodified or UnitName
@@ -55,7 +56,7 @@ function ns.InstallAtlasReportUI(c)
                     else if d.expeditions[id]~=nil then d.expeditions[id]=nil else d.expeditions[id]="" end end
                     p:Render()
                 end)
-                row:SetHeight(35);row:SetNormalFontObject("GameFontHighlightSmall")
+                row:SetHeight(35);row:SetNormalFontObject(textFont("GameFontHighlightSmall"))
                 row.note=U.Button(p,"",641,y,210,function()
                     if not row.data then return end
                     local id=row.data.id

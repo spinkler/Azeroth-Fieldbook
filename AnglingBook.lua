@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A,U,R=ns.Angling,ns.AtlasUI,ns.AnglingReports
 local PAGE_SIZE=9
 local function cycle(value,values)
@@ -255,7 +256,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
                         local e,err=journal:MergeSpots(p.selected,self.data.id);if e then c:Select(e.id) else c:Message(err) end
                     else c:Select(self.data.id,self.data.focus) end
                 end)
-                row:SetHeight(40);row:SetNormalFontObject("GameFontHighlightSmall")
+                row:SetHeight(40);row:SetNormalFontObject(textFont("GameFontHighlightSmall"))
                 row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetSize(24,24);row.icon:SetPoint("LEFT",8,0)
                 row.itemName=U.Label(row,"",39,-7,180,"GameFontHighlightSmall");row.itemName:SetWordWrap(true)
                 row:SetScript("OnEnter",function(self) if p.kind=="items" then showEntryTooltip(self,self.data) end end)

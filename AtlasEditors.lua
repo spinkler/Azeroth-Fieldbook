@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A,U=ns.Atlas,ns.AtlasUI
 function ns.InstallAtlasEditors(c)
     local j=c.journal
@@ -235,7 +236,7 @@ function ns.InstallAtlasEditors(c)
                         else p.message:SetText("This stop references a deleted place. Remove it or keep its unresolved history.") end
                     end
                 end)
-                row:SetHeight(38);row:SetNormalFontObject("GameFontHighlightSmall")
+                row:SetHeight(38);row:SetNormalFontObject(textFont("GameFontHighlightSmall"))
                 row.up=U.Button(p,"Up",573,y,64,function() local d=j:Get(p.id);if j:MoveStop(d,row.index,row.index-1) then j:Save(d,p.id);p:Render();c:Refresh() end end)
                 row.down=U.Button(p,"Down",644,y,74,function() local d=j:Get(p.id);if j:MoveStop(d,row.index,row.index+1) then j:Save(d,p.id);p:Render();c:Refresh() end end)
                 row.remove=U.Button(p,"Remove",726,y,124,function() local d=j:Get(p.id);table.remove(d.stops,row.index);j:Save(d,p.id);p:Render();c:Refresh() end)

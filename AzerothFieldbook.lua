@@ -432,6 +432,7 @@ local function initialize()
         GameTooltip:HookScript("OnTooltipSetUnit", addTooltip)
     end
     if ns.UIScale then ns.UIScale:Initialize(db) end
+    if ns.TextSize then ns.TextSize:Initialize() end
     if ns.CastIDs then ns.CastIDs:Initialize(db) end
     if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
@@ -459,10 +460,15 @@ local function initialize()
     if fieldbook and ns.InitializeGathering then
         gatheringBook=ns.InitializeGathering(fieldbook,function() return journal:GetBackgroundBrightness() end)
     end
-    if fieldbook and ns.InitializeAtlas then ns.InitializeAtlas(fieldbook,journal) end
-    if fieldbook and ns.InitializeAngling then ns.InitializeAngling(fieldbook) end
+    local atlasBook,anglingBook,treasureBook
+    if fieldbook and ns.InitializeAtlas then atlasBook=ns.InitializeAtlas(fieldbook,journal) end
+    if fieldbook and ns.InitializeAngling then anglingBook=ns.InitializeAngling(fieldbook) end
     if fieldbook and ns.InitializeLedger then ledgerBook=ns.InitializeLedger(fieldbook) end
-    if fieldbook and ns.InitializeTreasure then ns.InitializeTreasure(fieldbook) end
+    if fieldbook and ns.InitializeTreasure then treasureBook=ns.InitializeTreasure(fieldbook) end
+    if fieldbook and ns.InitializeLore then
+        ns.InitializeLore(fieldbook,db,{bestiary=journal,gathering=gatheringBook,atlas=atlasBook,
+            angling=anglingBook,merchants=ledgerBook,treasure=treasureBook})
+    end
     if fieldbook and ns.RegisterFieldbookWishlistSections then ns.RegisterFieldbookWishlistSections(fieldbook) end
     if journal and journal.sharing then
         journal.sharing:SetImportedCallback(function() if book then book:Refresh() end end)

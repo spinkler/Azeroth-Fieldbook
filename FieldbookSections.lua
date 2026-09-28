@@ -1,13 +1,8 @@
 local _, ns = ...
 
--- Presentation only. These sections deliberately have no tracking or saved data.
--- Registration order is the order of the tabs after the six implemented journals.
-ns.FieldbookWishlistSections = {
-    {
-        id="lore", title="Lore & Landmarks", icon="Interface\\Icons\\INV_Misc_Book_09",
-        wishlist="Collect references to books, inscriptions, landmarks and noteworthy characters. Keep source-labelled notes, connect related discoveries and record mysteries worth revisiting.",
-    },
-}
+-- All seven section slots now have implementations. Keep the extension point
+-- for registration callers without retaining a duplicate Lore placeholder.
+ns.FieldbookWishlistSections = {}
 
 function ns.RegisterFieldbookWishlistSections(shell)
     for _, definition in ipairs(ns.FieldbookWishlistSections) do

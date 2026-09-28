@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A=ns.Atlas
 function A.MapCatalog(journal)
     local maps,seen={},{}
@@ -419,7 +420,7 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
                 p:EnableMouseWheel(true);p:SetScript("OnMouseWheel",function(_,delta) map:ZoomBy(delta) end)
                 p:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8})
                 p.icon=p:CreateTexture(nil,"ARTWORK");p.icon:SetPoint("TOPLEFT",3,-3);p.icon:SetPoint("BOTTOMRIGHT",-3,3)
-                p.text=p:CreateFontString(nil,"OVERLAY","GameFontNormalSmall");p.text:SetPoint("BOTTOMRIGHT",5,-4)
+                p.text=p:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalSmall"));p.text:SetPoint("BOTTOMRIGHT",5,-4)
                 p:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
                 p:RegisterForClicks("LeftButtonUp","RightButtonUp")
                 p:SetScript("OnMouseDown",function(_,button) map:StartPan(button) end)

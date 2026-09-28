@@ -8,8 +8,90 @@ from angling_test_harness import ANGLING_MODULES
 from ledger_test_harness import LEDGER_MODULES
 from treasure_test_harness import TREASURE_MODULES
 
+LORE_MODULES = ['LoreJournal.lua', 'LoreSettings.lua', 'LoreTracking.lua', 'LoreReports.lua',
+                'LoreReportUI.lua', 'LoreReferences.lua', 'LoreMap.lua', 'LoreEditors.lua',
+                'LoreBook.lua', 'LoreIntegration.lua']
+
 
 class FieldbookTabsTests(unittest.TestCase):
+    def test_lore_records_announce_and_persist_in_shared_event_log(self):
+        self.lua.execute('''
+            local chat={};DEFAULT_CHAT_FRAME={AddMessage=function(_,message) chat[#chat+1]=message end}
+            local entries=journal:GetEventLog().entries;local before=#entries
+            journal:SetPointAnnouncements(false);journal:SetCreatureAnnouncement(false)
+            local e=assert(lore.journal:Create('landmark',{title='Old tower',notes='Private annotation'}))
+            assert(#chat==1 and #entries==before+1)
+            local event=entries[#entries]
+            assert(event.message=='Lore recorded: Old tower (Landmark).')
+            assert(chat[1]:find(event.message,1,true) and not chat[1]:find('Private annotation',1,true))
+            assert(event.timestamp and event.details.kind=='lore-recorded' and event.details.loreID==e.id)
+            lore.journal:Update(e.id,{notes='Changed'});assert(#chat==1 and #entries==before+1)
+            shell:ShowSection('lore');local root=shell:GetFrame()
+            assert(root.eventLogButton:IsShown() and root.eventLogButton.enabled)
+            root.eventLogButton.scripts.OnClick()
+            local page=shell.sections.bestiary.pages.eventLog
+            page.scripts.OnShow(page) -- The widget host does not dispatch native OnShow.
+            assert(shell.active=='lore' and page:IsShown() and page.text:GetText():find(event.message,1,true))
+            DEFAULT_CHAT_FRAME=nil
+            assert(lore.journal:Create('mystery',{title='Lost inscription'}))
+            assert(#entries==before+2 and page.text:GetText():find('Lost inscription',1,true))
+            shell:ShowSection('atlas');assert(not page:IsShown())
+            journal:ResetDatabase();assert(#journal:GetEventLog().entries==before+2)
+        ''')
+
+    def test_text_size_slider_default_reset_reload_and_shared_setting(self):
+        self.lua.execute('''
+            shell:ShowSection('bestiary');shell:TogglePage('options')
+            local options=shell.sections.bestiary.pages.options
+            assert(options.textSize:GetValue()==0 and not ns.TextSize:NeedsReload())
+            options.textSize:SetValue(3);options.textSize.scripts.OnValueChanged(options.textSize,3)
+            assert(ns.TextSize:Get()==3 and ns.TextSize:NeedsReload())
+            shell:ShowSection('lore');shell:TogglePage('options')
+            assert(shell.sections.bestiary.pages.options==options and options.textSize:GetValue()==3)
+            local reloaded=false;ReloadUI=function() reloaded=true end
+            options.textSizeReload.scripts.OnClick();assert(reloaded)
+            options.textSizeReset.scripts.OnClick()
+            assert(ns.TextSize:Get()==0 and options.textSize:GetValue()==0 and not ns.TextSize:NeedsReload())
+            options.textSize.scripts.OnValueChanged(options.textSize,-3)
+            ns.UIScale:Set(1.25);journal:ResetDatabase()
+            assert(ns.TextSize:Get()==-3 and ns.UIScale:Get()==1.25)
+        ''')
+
+    def test_lore_options_defaults_false_persistence_and_bestiary_reset_scope(self):
+        self.lua.execute('''
+            assert(settings.autoArchiveLore==true and settings.loreOnlyOpenedPages==true)
+            shell:ShowSection('lore');shell:TogglePage('options')
+            local options=shell.sections.bestiary.pages.options
+            options.autoArchiveLore:SetChecked(false);options.autoArchiveLore.scripts.OnClick(options.autoArchiveLore)
+            options.loreOnlyOpenedPages:SetChecked(false);options.loreOnlyOpenedPages.scripts.OnClick(options.loreOnlyOpenedPages)
+            ns.LoreSettings.Initialize(settings)
+            assert(settings.autoArchiveLore==false and settings.loreOnlyOpenedPages==false)
+            local e=assert(lore.journal:Create('mystery',{title='Preserved investigation',notes='Keep this'}))
+            local db=lore.journal.db;local atlasStore=atlas.journal.records
+            journal:ResetDatabase()
+            assert(settings.autoArchiveLore==false and settings.loreOnlyOpenedPages==false)
+            assert(lore.journal.db==db and lore.journal:Get(e.id).notes=='Keep this')
+            assert(atlas.journal.records==atlasStore)
+        ''')
+
+    def test_lore_references_use_known_source_stores_and_never_redirect_deleted_refs(self):
+        self.lua.execute('''
+            atlas.journal.records['fixture']={id='fixture',name='Known Atlas place',created=1}
+            ledger.journal.db.contacts['fixture']={id='fixture',name='Known person',reference='ledger:scope:1'}
+            treasure.journal.kinds['fixture']={id='fixture',name='Known find',reference='treasure:scope:1'}
+            local references=lore.references
+            for _,section in ipairs({'atlas','merchants','treasure'}) do
+                local rows=references.adapters[section].list();assert(#rows==1 and rows[1].key)
+                local ref={section=section,key=rows[1].key,name=rows[1].name}
+                assert(not references:Resolve(ref).missing)
+                if section=='atlas' then atlas.journal.records.fixture=nil
+                elseif section=='merchants' then ledger.journal.db.contacts.fixture.reference='ledger:other-scope:1'
+                else treasure.journal.kinds.fixture.reference='treasure:other-scope:1' end
+                assert(references:Resolve(ref).missing)
+                assert(not references:Open(ref))
+            end
+        ''')
+
     def test_first_open_title_then_reopen_last_selected_entry(self):
         self.lua.execute('''
             npcID=42;journal:Observe('target')
@@ -184,12 +266,12 @@ class FieldbookTabsTests(unittest.TestCase):
 
     def setUp(self):
         self.lua = new_ui_client([
-            'Scrollbars.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
+            'Scrollbars.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua', 'TextSize.lua',
             'ActionButtons.lua', 'SharingReport.lua', 'BestiaryBackups.lua', 'BestiaryJournal.lua', 'BackupWindow.lua',
             'CreatureNotes.lua', 'RumoursWindow.lua', 'FieldbookShell.lua',
             'CreatureLocations.lua', 'GatheringJournal.lua', 'GatheringModels.lua', 'GatheringTracking.lua',
             'GatheringLocationsWindow.lua', 'GatheringMapPins.lua', 'GatheringBook.lua',
-            *ATLAS_MODULES, *ANGLING_MODULES, *LEDGER_MODULES, *TREASURE_MODULES,
+            *ATLAS_MODULES, *ANGLING_MODULES, *LEDGER_MODULES, *TREASURE_MODULES, *LORE_MODULES,
             'FieldbookSections.lua', 'BestiaryPages.lua', 'BestiaryBook.lua',
         ])
         self.lua.execute('''
@@ -206,6 +288,7 @@ class FieldbookTabsTests(unittest.TestCase):
             angling=ns.InitializeAngling(shell)
             ledger=ns.InitializeLedger(shell)
             treasure=ns.InitializeTreasure(shell)
+            lore=ns.InitializeLore(shell,settings,{bestiary=journal,gathering=gathering,atlas=atlas,angling=angling,merchants=ledger,treasure=treasure})
             ns.RegisterFieldbookWishlistSections(shell)
             function click(index,button,inside)
                 local tab=shell:GetFrame().sectionTabs[index]
@@ -230,7 +313,7 @@ class FieldbookTabsTests(unittest.TestCase):
                 'Merchant’s Ledger','Treasure & Salvage','Lore & Landmarks'}
             assert(shell.active=='bestiary' and #root.sectionTabs==7)
             assert(root.navigation.point[2]==root and root.navigation.point[3]=='TOPRIGHT')
-            assert(root.navigation.point[4]==0,'tabs attach to the outside edge')
+            assert(root.navigation.point[4]==-2,'native tab art overlaps the trim only enough to seal the seam')
             assert(root.sectionTabs[1].Icon.texture=='Interface\\\\Icons\\\\Ability_Tracking')
             for index,tab in ipairs(root.sectionTabs) do
                 assert(tab.template=='LargeSideTabButtonTemplate' and tab.tooltipText==names[index])
@@ -252,7 +335,7 @@ class FieldbookTabsTests(unittest.TestCase):
                         shell.sections[shell.order[other]].frame:IsShown()==(other==index))
                 end
                 assert(root.helpButton:IsShown() and root.optionsButton:IsShown())
-                assert(root.eventLogButton:IsShown()==(shell.active=='angling'))
+                assert(root.eventLogButton:IsShown()==(shell.active=='angling' or shell.active=='lore'))
                 local content=shell.sections[shell.active].frame
                 click(index);assert(shell.sections[shell.active].frame==content and root:IsShown())
             end
@@ -261,25 +344,17 @@ class FieldbookTabsTests(unittest.TestCase):
             click(1);assert(root.helpButton:IsShown() and root.optionsButton:IsShown() and root.eventLogButton:IsShown())
         ''')
 
-    def test_exact_copy_and_wrapping_bounds(self):
-        paragraphs = [
-            'Collect references to books, inscriptions, landmarks and noteworthy characters. Keep source-labelled notes, connect related discoveries and record mysteries worth revisiting.',
-        ]
-        self.lua.globals().paragraphs = self.lua.table_from(paragraphs)
+    def test_lore_is_a_functional_archive_without_changing_bestiary(self):
         self.lua.execute('''
             shell:Toggle()
             local entry=journal.entries[42]
-            for index,text in ipairs(paragraphs) do
-                click(index+6)
-                local content=shell.sections[shell.active].frame
-                assert(content.title:GetText()==shell.sections[shell.active].definition.title)
-                assert(content.heading:GetText()=='Wishlist for future releases')
-                assert(content.wishlist:GetText()==text)
-                assert(content.wishlist.wordWrap and not content.wishlist.nonSpaceWrap)
-                assert(content.wishlist.point[2]>=40 and content.wishlist:GetWidth()<=content:GetWidth()-96)
-                assert(-content.wishlist.point[3]+content.wishlist:GetStringHeight()<content:GetHeight()-48)
-                assert(journal.entries[42]==entry,'placeholder visits preserve the journal data')
-            end
+            click(7)
+            assert(shell.active=='lore' and lore.main and lore.main.reader and lore.main.map)
+            assert(next(lore.journal.entries)==nil)
+            local record=assert(lore.journal:Create('mystery',{title='My question',nextStep='Visit again'}))
+            lore:Select(record.id)
+            assert(lore.main.reader.text:GetText():find('Visit again',1,true))
+            assert(journal.entries[42]==entry,'Lore edits preserve Bestiary data')
         ''')
 
     def test_return_keeps_creature_filters_scroll_and_draft_with_different_target(self):
@@ -337,7 +412,7 @@ class FieldbookTabsTests(unittest.TestCase):
         self.lua.execute('''
             shell:Toggle()
             local root=shell:GetFrame()
-            for _,size in ipairs({{1920,1080},{1280,720},{1024,768}}) do
+            for _,size in ipairs({{7680,2160},{1920,1200},{1920,1080},{1280,720},{1024,768}}) do
                 UIParent:SetSize(size[1],size[2])
                 root.scripts.OnEvent(root,'DISPLAY_SIZE_CHANGED')
                 for _,value in ipairs({0.5,0.75,1,1.25,1.5}) do
@@ -347,6 +422,8 @@ class FieldbookTabsTests(unittest.TestCase):
                     assert(root:GetHeight()*scale<=size[2]-30+0.001)
                     assert(40+root.navigation:GetHeight()+6<root:GetHeight())
                     assert(root.clampInsets[2]==-root.afbOutsideRight)
+                    assert(root.afbOutsideRight==root.navigation:GetWidth()+root.navigation.point[4]+6)
+                    assert(root.navigation.point[4]==-2 and root.navigation.point[5]==-40)
                     for _,tab in ipairs(root.sectionTabs) do assert(tab:GetEffectiveScale()==root:GetEffectiveScale()) end
                 end
             end

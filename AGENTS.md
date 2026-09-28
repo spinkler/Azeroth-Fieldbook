@@ -13,8 +13,10 @@ Merchant’s Ledger adds a personal contact and offering directory with a separa
 storage and validation boundaries.
 Treasure & Salvage adds a per-character historical container journal in
 `AzerothFieldbookTreasureDB`; see `tests/TREASURE.md` for attribution, report
-adapter and manual-recording boundaries. Lore & Landmarks is the one remaining
-wishlist page and collects no data.
+adapter and manual-recording boundaries. Lore & Landmarks adds a personal archive
+of writings, landmarks, people and mysteries in per-character
+`AzerothFieldbookLoreDB`; see `tests/LORE.md` for capture, provenance, report and
+live-verification boundaries. All seven section slots are implemented.
 Account-wide tracking applies to the five journals preceding Treasure. Bestiary uses
 `AzerothFieldbookAccountDB.bestiary`; `AccountSections.lua` selects shared stores
 under `.sections` for gathering, Atlas, angling and Ledger. Each character's
@@ -210,7 +212,8 @@ Routine changes increment the **last numeric component**:
 feature milestone as **0.9.0**, the section-navigation milestone as **0.10.0**,
 the Herbs & Minerals milestone as **0.11.0**, Traveller’s Atlas as **0.12.0**,
 Angler’s Almanac as **0.13.0**, and Merchant’s Ledger as **0.14.0**.
-The operator designated Treasure & Salvage as **0.15.0**.
+The operator designated Treasure & Salvage as **0.15.0** and Lore & Landmarks as
+**0.16.0**.
 Larger version jumps follow explicit operator instructions; otherwise keep the
 first two components unchanged.
 
@@ -276,12 +279,12 @@ The operator reserves stable 1.0 for successful live Beast Lore testing after
 the Forever beta level cap permits it, regardless of other sections' progress.
 The operator designated section navigation as 0.10.0 and Herbs & Minerals as
 0.11.0, Traveller’s Atlas as 0.12.0, Angler’s Almanac as 0.13.0, Merchant’s Ledger as 0.14.0,
-and Treasure & Salvage as 0.15.0.
+Treasure & Salvage as 0.15.0, and Lore & Landmarks as 0.16.0.
 Subsequent routine changes increment the
 last component; further milestone jumps follow the operator's requested scope/version.
 
 Azeroth Fieldbook may later add further gathering or collection journals,
-such as skinning, beyond its six implemented sections.
+such as skinning, beyond its seven implemented sections.
 
 Do not implement speculative future sections unless explicitly requested.
 

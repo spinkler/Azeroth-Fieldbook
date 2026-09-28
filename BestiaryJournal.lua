@@ -1534,7 +1534,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:ResetDatabase()
         local personalBestiary, trackingKey, eventLog = db.bestiary, db.accountTrackingKey, self:GetEventLog()
         local savedBackups = db.bestiaryBackups
+        local autoArchiveLore,loreOnlyOpenedPages=db.autoArchiveLore,db.loreOnlyOpenedPages
         for key in pairs(db) do db[key] = nil end
+        db.autoArchiveLore,db.loreOnlyOpenedPages=autoArchiveLore,loreOnlyOpenedPages
         db.eventLog=eventLog
         db.bestiaryBackups=savedBackups
         db.version, db.announce, db.creatureAnnouncements = 1, false, true

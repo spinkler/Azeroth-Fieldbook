@@ -1,4 +1,5 @@
 local addonName, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 
 -- Shared window chrome and navigation. Sections own their content and data;
 -- the legacy root name preserves saved positions and external window anchors.
@@ -12,7 +13,7 @@ local function addonVersion()
 end
 
 local function label(parent, text, x, y, width, size)
-    local font = parent:CreateFontString(nil, "OVERLAY", size or "GameFontHighlight")
+    local font = parent:CreateFontString(nil, "OVERLAY", textFont(size or "GameFontHighlight"))
     font:SetPoint("TOPLEFT", x, y)
     font:SetWidth(width)
     font:SetJustifyH("LEFT")
@@ -22,7 +23,7 @@ local function label(parent, text, x, y, width, size)
     return font
 end
 local function button(parent, text, x, y, width, action)
-    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(b) end
     b:SetSize(width, 24)
     b:SetPoint("TOPLEFT", x, y)
     b:SetText(text)
@@ -53,7 +54,7 @@ local function cornerClose(parent)
     return close
 end
 local function edit(parent, x, y, width, limit)
-    local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate"); if ns.TextSize then ns.TextSize:StyleControl(e) end
     e:SetSize(width, 22)
     e:SetPoint("TOPLEFT", x, y)
     e:SetAutoFocus(false)
@@ -70,7 +71,7 @@ function ns.CreateFieldbookShell(settings)
     local shell={sections={}, order={}}
     local book, addBackgroundLayer
     local baseScale=1
-    local tabTop, tabGap, tabPadding = 40, 2, 6
+    local tabTop, tabGap, tabPadding, tabInset = 40, 2, 6, 2
     local layoutWidth,layoutHeight,layoutRight,layoutMaxScale
     function shell:GetFrame() return book end
     function shell:GetBaseScale() return baseScale end
@@ -79,7 +80,7 @@ function ns.CreateFieldbookShell(settings)
         -- Include the complete native tab art in dragging, saved-position
         -- clamping and auxiliary-window placement, not just the content frame.
         local width=book.navigation and book.navigation:GetWidth() or 0
-        book.afbOutsideRight=width>0 and width+tabPadding or 0
+        book.afbOutsideRight=width>0 and width-tabInset+tabPadding or 0
         book:SetClampRectInsets(0,-book.afbOutsideRight,0,0)
         if UIParent.GetWidth and UIParent.GetHeight then
             book.afbMaxScale=math.min((UIParent:GetWidth()-30)/(book:GetWidth()+book.afbOutsideRight),
@@ -99,7 +100,10 @@ function ns.CreateFieldbookShell(settings)
         local navigation=book.navigation
         if not navigation then
             navigation=CreateFrame("Frame",nil,book)
-            navigation:SetPoint("TOPLEFT",book,"TOPRIGHT",0,-tabTop)
+            -- Frame bounds meet at zero, but the native border/tab artwork has
+            -- transparent edge pixels. A tiny overlap seals that seam at small
+            -- resolutions without resizing or recropping any of the tab art.
+            navigation:SetPoint("TOPLEFT",book,"TOPRIGHT",-tabInset,-tabTop)
             navigation:SetFrameLevel(book:GetFrameLevel()+20)
             book.navigation=navigation
             book.sectionTabs={}
@@ -315,7 +319,7 @@ function ns.CreateFieldbookShell(settings)
             right:SetPoint("TOPRIGHT",book,"TOPRIGHT",0,-27)
             right:SetPoint("BOTTOMRIGHT",bottomRight,"TOPRIGHT",0,0)
         end
-        book.windowTitle=book.titleBar:CreateFontString(nil,"OVERLAY","GameFontNormal")
+        book.windowTitle=book.titleBar:CreateFontString(nil,"OVERLAY",textFont("GameFontNormal"))
         book.windowTitle:SetPoint("CENTER",book,"TOP",0,-15)
         book.windowTitle:SetWidth(700)
         book.windowTitle:SetJustifyH("CENTER"); book.windowTitle:SetTextColor(1.00,0.82,0.14)
@@ -336,7 +340,7 @@ function ns.CreateFieldbookShell(settings)
         book.helpButton=titleButton(book.closeButton,function()
             shell:TogglePage("help")
         end)
-        local helpGlyph=book.helpButton:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
+        local helpGlyph=book.helpButton:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
         helpGlyph:SetAllPoints(); helpGlyph:SetJustifyH("CENTER"); helpGlyph:SetJustifyV("MIDDLE")
         helpGlyph:SetTextColor(1.00,0.82,0.14); helpGlyph:SetText("?")
         book.optionsButton=titleButton(book.helpButton,function()
@@ -451,7 +455,7 @@ function ns.CreateFieldbookShell(settings)
             trim:SetAtlas("_UI-Frame-TitleTile");trim:SetHorizTile(true)
             trim:SetPoint("TOPLEFT");trim:SetPoint("TOPRIGHT");trim:SetHeight(28)
         end
-        page.windowTitle=page.titleBar:CreateFontString(nil,"OVERLAY","GameFontNormal")
+        page.windowTitle=page.titleBar:CreateFontString(nil,"OVERLAY",textFont("GameFontNormal"))
         page.windowTitle:SetPoint("LEFT",12,-3);page.windowTitle:SetPoint("RIGHT",-28,-3)
         page.windowTitle:SetJustifyH("CENTER");page.windowTitle:SetTextColor(1,0.82,0.14)
         page.windowTitle:SetText(title)
@@ -549,10 +553,13 @@ function ns.CreateFieldbookShell(settings)
         local section=self.sections[self.active]
         local pages=section and section.pages
         local page=pages and pages[key]
-        if not page and key=="options" and self.sections.bestiary then
+        local useShared=key=="options" or (key=="eventLog" and section and section.definition.sharedEventLog)
+        if not page and useShared and self.sections.bestiary then
             self:EnsureSection("bestiary")
             local shared=self.sections.bestiary.pages
-            page=shared and shared.options
+            page=shared and shared[key]
+            -- Share the existing log and keep normal section-hide behavior.
+            if key=="eventLog" and pages then pages.eventLog=page end
         end
         if not page then return false end
         if key=="help" and self.sections.bestiary then
@@ -625,7 +632,7 @@ function ns.CreateFieldbookShell(settings)
         book.windowTitle:SetText("Azeroth Fieldbook - "..section.definition.title.." - v"..addonVersion())
         for _,key in ipairs({"help","options","eventLog"}) do
             local available=section.pages~=nil and section.pages[key]~=nil
-            if key=="options" and self.sections.bestiary then available=true end
+            if self.sections.bestiary and (key=="options" or (key=="eventLog" and section.definition.sharedEventLog)) then available=true end
             book[key.."Button"]:SetEnabled(available)
             book[key.."Button"]:SetShown(available)
         end

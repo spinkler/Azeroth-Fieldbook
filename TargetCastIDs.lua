@@ -1,5 +1,6 @@
 -- Direct presentation of Forever cast IDs. Never read back or measure secret text.
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local enabled, panel, idText, stateText, debugEnabled
 local settings
 local display = {}
@@ -88,16 +89,16 @@ local function Setup()
             Clear("dismissed")
         end
     end)
-    local label = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local label = panel:CreateFontString(nil, "OVERLAY", textFont("GameFontNormalSmall"))
     label:SetPoint("TOPLEFT", 0, 0)
     label:SetSize(85, 14)
     label:SetJustifyH("LEFT")
     label:SetText("Last Spell ID:")
-    idText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    idText = panel:CreateFontString(nil, "OVERLAY", textFont("GameFontHighlightSmall"))
     idText:SetPoint("TOPLEFT", 88, 0)
     idText:SetSize(92, 14)
     idText:SetJustifyH("LEFT")
-    stateText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    stateText = panel:CreateFontString(nil, "OVERLAY", textFont("GameFontNormalSmall"))
     stateText:SetPoint("BOTTOM", panel, "TOP", 0, 2)
     stateText:SetSize(240, 14)
     stateText:SetJustifyH("LEFT")

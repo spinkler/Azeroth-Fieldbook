@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 
 function ns.CreateCreatureLocationsWindow(journal,getBook)
     local controller={}
@@ -23,7 +24,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         local ok,v=pcall(fn,...);if ok and public(v) then return v end
     end
     local function label(parent,text,x,y,w,font)
-        local t=parent:CreateFontString(nil,"OVERLAY",font or "GameFontHighlightSmall")
+        local t=parent:CreateFontString(nil,"OVERLAY",textFont(font or "GameFontHighlightSmall"))
         t:SetPoint("TOPLEFT",x,y);t:SetWidth(w);t:SetJustifyH("LEFT");t:SetText(text);return t
     end
     local function key(zone) return zone.mapID and ("map:"..zone.mapID) or ("name:"..zone.name) end
@@ -291,7 +292,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         frame.creature=label(frame,"",18,-40,640,"GameFontNormal")
         frame.creature:SetWordWrap(false)
         frame.zoneName=label(frame,"",18,-66,640,"GameFontHighlight")
-        frame.zoneButton=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate")
+        frame.zoneButton=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(frame.zoneButton) end
         frame.zoneButton:SetSize(420,24);frame.zoneButton:SetPoint("TOPLEFT",16,-60)
         frame.map=CreateFrame("Frame",nil,frame)
         frame.map:SetPoint("TOP",frame,"TOP",0,-92);frame.map:SetSize(WIDTH,HEIGHT)
@@ -315,7 +316,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         frame.brightness:SetScript("OnValueChanged",function(_,value)
             journal:SetLocationMapBrightness(value);applyBrightness()
         end)
-        frame.trackingMode=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate")
+        frame.trackingMode=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(frame.trackingMode) end
         frame.trackingMode:SetPoint("TOPLEFT",458,-565);frame.trackingMode:SetSize(200,24)
         frame.trackingMode:SetScript("OnClick",function()
             tipLeave()
@@ -344,13 +345,13 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         frame.menu.paper:SetDesaturated(true)
         frame.menu.rows={}
         for i=1,8 do
-            local row=CreateFrame("Button",nil,frame.menu,"UIPanelButtonTemplate")
+            local row=CreateFrame("Button",nil,frame.menu,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(row) end
             row:SetPoint("TOPLEFT",8,-8-(i-1)*23);row:SetSize(404,22)
             row:SetScript("OnClick",function(self) zoneKey=key(self.zone);render(true) end)
             frame.menu.rows[i]=row
         end
         for _,spec in ipairs({{"previous","Previous",8,-8},{"next","Next",216,8}}) do
-            local b=CreateFrame("Button",nil,frame.menu,"UIPanelButtonTemplate")
+            local b=CreateFrame("Button",nil,frame.menu,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(b) end
             b:SetSize(196,22);b:SetPoint("TOPLEFT",spec[3],-197);b:SetText(spec[2])
             local step=spec[4];b:SetScript("OnClick",function() menuOffset=menuOffset+step;renderMenu() end)
             frame.menu[spec[1]]=b

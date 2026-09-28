@@ -1,4 +1,26 @@
-# Azeroth Fieldbook 0.15.39 (Beta)
+# Azeroth Fieldbook 0.16.6 (Beta)
+
+**Lore & Landmarks** is a personal archive of writings, landmarks, noteworthy
+people and mysteries. Open a supported readable source to preserve its displayed
+pages, then read them later in the Fieldbook. Both capture options start on:
+**Automatically archive readable lore** and **Only archive pages I open**. Turn
+off the second option for best-effort whole-book archiving through supported
+page navigation; keep the source open while it runs. Automatically retrieved
+pages remain distinct from pages you personally opened. Partial captures retain
+their text, and unavailable sources can be transcribed manually.
+Rereading matching captured pages reuses the archive; different source text is
+retained separately. Delete a selected record through **Sources / manage →
+Delete entry…**. Deleted books can be archived again. Exact saved duplicate
+captures are consolidated on load while retaining private annotations.
+
+Record people and deliberately save displayed gossip or quest passages; record
+landmarks, private thoughts, related evidence and a mystery's next step. Entry
+and Location views share the existing window. The separate character archive
+`AzerothFieldbookLoreDB` is independent of account tracking and other journals.
+Lore reports use bounded copy/paste, exact previews and explicit acceptance;
+private annotations are excluded by default. There is no Lore addon-message
+delivery, Knowledge charge or reward. Captured statements and received reports
+never establish their truth. See [Lore capture, limits and live checklist](tests/LORE.md).
 
 **Treasure & Salvage** now records container kinds and historical encounters in
 its existing tab. Use **Record a find** for world finds, portable acquisitions,
@@ -63,7 +85,7 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.15.39 includes sharing, addon-version compatibility
+spell databases. Version 0.16.6 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
@@ -73,11 +95,14 @@ Bestiary is selected on first opening. **Gatherer's Compendium** is a personal g
 journal; **Traveller’s Atlas** is a personal geographical journal, and **Angler’s
 Almanac** records personal fishing knowledge. **Merchant’s Ledger** remembers
 encountered contacts, goods, training and useful services. **Treasure & Salvage**
-records historical container knowledge. **Lore & Landmarks** retains its
-wishlist for future releases and collects no data yet.
+records historical container knowledge. **Lore & Landmarks** preserves encountered
+writings, significant places, noteworthy people and personal investigations.
 Hover a tab for its name; the selected tab has a gold border. Switching
 tabs retains the Bestiary's creature selection, filters, list/ability browsing
 positions and unfinished fields. Creature-entry actions select the Bestiary.
+
+Each newly recorded Lore entry is announced in chat and the persistent Event log,
+available from Lore & Landmarks. Rereads and extra pages do not repeat the announcement.
 
 ## Angler’s Almanac
 
@@ -199,7 +224,11 @@ sub-zone crossings and encountered weather are observed automatically.
   from crossings. Convex estimates may bridge bays or holes;
   these are personal approximations, not exact game borders. Crossings collect
   with the Atlas closed or the layer hidden, persist per character, and stay out
-  of discovery entries and field reports. Loading screens, unavailable positions
+  of discovery entries and field reports. Automatic mapping pauses on flight
+  paths, while flying and in Stormwind, Ironforge, Darnassus, Orgrimmar,
+  Thunder Bluff and Undercity. Existing evidence and manual survey points remain
+  available; ordinary inns and settlements are not excluded. Sampling resumes
+  without drawing a crossing across the pause. Loading screens, unavailable positions
   and large jumps break continuity. Samples of the same border within about
   10 yards coalesce, including reverse crossings. Redundant saved samples are
   thinned when you visit or display their map; different border pairs remain
@@ -247,8 +276,8 @@ live node availability. Minimap pins hide when position or view-radius informati
 is unavailable. Dense maps display up to 512 recent world-map positions and 128
 nearest minimap positions; all recorded positions remain in the journal and its
 per-resource Locations view. The main window's **Options** cog is accessible from every section. Every section
-also has a **? Help** button in the same title-bar position: established journals
-show usage instructions and placeholder sections show their wishlists.
+also has a **? Help** button in the same title-bar position with instructions for
+the active journal.
 
 The gathering journal starts empty. Mouse over a herb or mineral to discover
 its name, type and zone from its readable world-object tooltip, even without
@@ -446,7 +475,7 @@ the Bestiary also closes its Locations window.
 **Account-wide tracking** is enabled by default in Options and applies to these five
 journals: Bestiary, Herbs & Minerals, Traveller’s Atlas, Angler’s Almanac and
 Merchant’s Ledger. Turning it off uses this character’s separate journals.
-Treasure & Salvage uses its own per-character store in this first iteration.
+Treasure & Salvage and Lore & Landmarks each use their own per-character store.
 Changes apply after `/reload`. Shell appearance and Bestiary display options
 remain character preferences; each other section keeps its browsing state with
 its active journal.
@@ -856,6 +885,10 @@ SavedVariables cannot provide crash-proof delivery or resist edited saves/client
 The ? menu includes account-wide UI scale (50–150%, default 100%), applied when the slider
 is released. The minus and plus buttons beside **100%** apply five-percentage-point
 changes immediately, so you can adjust scale without dragging the slider.
+The account-wide Text size slider offers seven one-point steps from -3 to +3,
+centred on Default (the existing fonts at 100% UI scale). It preserves the
+relative sizes of headings and body text. Choose **Apply / reload** to apply it;
+**Default** restores the original text sizes. UI scale remains independent.
 Offenses, Defenses and Behaviour share a position and replace
 one another by default; disable that option to keep multiple windows open.
 Knowledge award chat messages are enabled by default and can be disabled. Discoveries
@@ -968,7 +1001,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.15.39 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
+Version 0.16.6 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,
@@ -988,6 +1021,14 @@ only. Malformed records are preserved but excluded from the view with a notice;
 an unknown future schema uses a detached read-only view. Capacity limits refuse
 new records without discarding detailed history or notes.
 
+Lore adds schema 1 in `AzerothFieldbookLoreDB`, independent of account tracking
+and the other journals' resets and backups. Preserved pages, provenance,
+annotations, reports and browsing positions survive reloads. Capture sessions
+are temporary and never resume against stale text after reload. Loading missing
+settings defaults preserves explicit OFF choices; Bestiary reset preserves both
+Lore capture preferences. Unknown future Lore schemas open read-only without
+rewriting their saved data. See [Lore data and validation boundaries](tests/LORE.md).
+
 The previous binding action IDs remain registered behind the newly branded
 binding labels, preserving assigned keys across the rename.
 
@@ -998,6 +1039,12 @@ that the Forever SavedVariables bug is fixed: data and settings persist across
 reloads/logins. Earlier research notes describing those checks as blocked or
 unverified are historical. In-session sharing delivery and attribution were
 also verified during Beta development.
+
+**Lore & Landmarks has not been verified in the actual Forever client.** Its
+capture state machine, journal, reports and widgets have automated coverage and
+static review. The Classic ItemText reference is compatibility research, not a
+Forever live pass. Whole-book traversal, source attribution, reader restoration,
+dialogue surfaces and native layout still require the [Lore checklist](tests/LORE.md).
 
 **Beast Lore remains pending live verification** until the Forever beta level
 cap allows testing the spell. Its automated tests use public-tooltip mocks;

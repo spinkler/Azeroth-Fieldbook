@@ -1,5 +1,25 @@
 # Traveller’s Atlas — v0.12.1 (unreleased)
 
+## Automatic survey exclusions (0.16.2)
+
+Automatic crossing and interior sampling pauses when `UnitOnTaxi("player")`
+or `IsFlying()` reports flight. Missing optional APIs are tolerated; errors or
+secret results from an available flight API pause recording until readable.
+Classic capital map IDs 1453–1458 and their child maps are excluded using
+bounded map ancestry checks. This covers Stormwind, Orgrimmar, Ironforge,
+Thunder Bluff, Darnassus and Undercity without treating all inns as cities.
+No new polling, saved-data migration or deletion is introduced. Every skipped
+observation clears crossing continuity. Manual survey points remain deliberate
+and available under their existing spacing rules.
+
+Focused mocked tests cover taxi/flying suppression, resumed ground crossings,
+capital maps and children, ordinary resting areas, preserved evidence and
+manual points. Actual Forever flight signals and capital map IDs still need
+live verification: take a flight across sub-zone boundaries with the Atlas
+closed, confirm no new points, land and confirm sampling resumes without a
+bridging crossing; repeat across capital districts, then visit an ordinary inn.
+Check an existing capital survey remains visible and a manual point still saves.
+
 Current storage scope: the global Account-wide tracking option selects this
 section's account or character journal. The original per-character SavedVariable
 is preserved. Earlier per-character implementation notes below describe the

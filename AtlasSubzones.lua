@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A=ns.Atlas
 local S={MAX_MAPS=256,MAX_CROSSINGS=4096,MAX_AREAS=128,GRID=64,MAX_TRIANGLES=3000,SPACING_YARDS=10,DEFAULT_LABEL_SIZE=4}
 S.INTERIOR_YARDS=50
@@ -120,6 +121,27 @@ end
 local function key(p)
     if p.kind=="interior" then return "interior\t"..p.name.."\t"..math.floor(p.x/25)..":"..math.floor(p.y/25) end
     return p.from.."\t"..p.to.."\t"..math.floor(p.x/25)..":"..math.floor(p.y/25)
+end
+-- Classic UI map IDs, not localized zone names or the resting flag (inns rest too).
+local capitals={[1453]=true,[1454]=true,[1455]=true,[1456]=true,[1457]=true,[1458]=true}
+local function inCapital(id)
+    for _=1,12 do
+        if not A.Integer(id,1,2147483647) then return false end
+        if capitals[id] then return true end
+        local info=A.Read(C_Map and C_Map.GetMapInfo,id)
+        if type(info)~="table" then return false end
+        local parent=info.parentMapID
+        if not A.Integer(parent,1,2147483647) or parent==id then return false end
+        id=parent
+    end
+    return false
+end
+local function airborne(fn,...)
+    if type(fn)~="function" then return false end
+    local ok,value=pcall(fn,...)
+    -- Do not record while an available flight signal cannot safely be read.
+    if not ok or not A.Public(value) then return true end
+    return value==true or value==1
 end
 function S.Attach(j)
     if not j.readOnly then
@@ -328,14 +350,16 @@ function S.Attach(j)
     end
     function s:Observe(deferred)
         if j.readOnly or j.state.automaticMapping==false then self:Reset();return end
+        if airborne(UnitOnTaxi,"player") or airborne(IsFlying) then self:Reset();return end
         -- Read the raw labels: unavailable/secret values must not become an
         -- invented sub-zone called "Unavailable". Blank sub-zones are the zone.
         local name=A.Read(GetSubZoneText)
         if name=="" then name=A.Read(GetRealZoneText) end
         if not A.Text(name,160) then self:Reset();return end
-        -- Sampling needs no display metadata. World dimensions are cached once
-        -- per map index; proximity queries use the cached spatial grids.
+        -- Map ancestry excludes capitals; world dimensions are cached once per
+        -- map index and proximity queries use the cached spatial grids.
         local id=A.Read(C_Map and C_Map.GetBestMapForUnit,"player")
+        if inCapital(id) then self:Reset();return end
         local position=A.Integer(id,1,2147483647) and A.Read(C_Map and C_Map.GetPlayerMapPosition,id,"player")
         local clock=A.Read(GetTime) or A.Now()
         if type(position)~="table" or not A.Number(position.x,0,1) or not A.Number(position.y,0,1)
@@ -910,7 +934,7 @@ function S.InstallMap(map,journal,cursorPoint)
             if name~=hidden then
                 local a=model.areas[name]
                 local i=#placed+1
-                local label=labels[i] or target.frame:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");labels[i]=label
+                local label=labels[i] or target.frame:CreateFontString(nil,"OVERLAY",textFont("GameFontHighlightSmall"));labels[i]=label
                 local font=label:GetFont();label:SetFont(font,size,"OUTLINE")
                 label:SetWordWrap(false);label:SetWidth(0);label:SetHeight(0)
                 local text=A.Safe(name)

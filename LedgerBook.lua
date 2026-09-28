@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local L,U,R=ns.Ledger,ns.AtlasUI,ns.LedgerReports
 local date=L.Date
 local function money(n) return n~=nil and string.format("%dg %ds %dc",math.floor(n/10000),math.floor(n/100)%100,n%100) or "Unknown" end
@@ -216,10 +217,10 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 local label=self.blocks[i]
                 if not label then label=U.Label(body,"",0,0,width,"GameFontHighlightSmall");self.blocks[i]=label end
                 local fontName=block.heading and "GameFontNormal" or "GameFontHighlightSmall"
-                label:SetFontObject(fontName)
+                label:SetFontObject(textFont(fontName))
                 -- SetFont overrides survive SetFontObject. Always size from the
                 -- shared base font, never from this reused label's current size.
-                local base=_G[fontName]
+                local base=textFont(_G[fontName])
                 if base and type(base.GetFont)=="function" then
                     local path,size,flags=base:GetFont()
                     if type(path)=="string" and type(size)=="number" then

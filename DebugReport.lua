@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local panel, edit, scroll
 
 -- Opt-in, bounded evidence capture. The journal's decision records distinguish
@@ -149,15 +150,15 @@ function ns.ShowDebugReport(report)
         panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
         panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=16})
         panel:SetBackdropColor(0.04, 0.04, 0.04, 0.97)
-        local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        local title = panel:CreateFontString(nil, "OVERLAY", textFont("GameFontNormalLarge"))
         title:SetPoint("TOPLEFT", 18, -18); title:SetText("Azeroth Fieldbook — Debug report")
-        local hint = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local hint = panel:CreateFontString(nil, "OVERLAY", textFont("GameFontHighlightSmall"))
         hint:SetPoint("TOPLEFT", 18, -43)
         hint:SetText("Press Ctrl+C to copy the selected report. Run /fieldbook debug again to refresh.")
         scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
         scroll:SetPoint("TOPLEFT", 18, -70); scroll:SetPoint("BOTTOMRIGHT", -38, 55)
         edit = CreateFrame("EditBox", nil, scroll)
-        edit:SetMultiLine(true); edit:SetAutoFocus(false); edit:SetFontObject(ChatFontNormal)
+        edit:SetMultiLine(true); edit:SetAutoFocus(false); edit:SetFontObject(textFont(ChatFontNormal))
         edit:SetMaxLetters(0); edit:SetWidth(684); edit:SetHeight(1)
         edit:SetScript("OnEscapePressed", function() panel:Hide() end)
         edit:SetScript("OnCursorChanged", function(_, _, y, _, height)
@@ -170,11 +171,11 @@ function ns.ShowDebugReport(report)
         end)
         scroll:SetScrollChild(edit)
         ns.AutoHideScrollBar(scroll)
-        local selectAll = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+        local selectAll = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(selectAll) end
         selectAll:SetSize(130, 24); selectAll:SetPoint("BOTTOMLEFT", 18, 17)
         selectAll:SetText("Select all")
         selectAll:SetScript("OnClick", function() edit:SetFocus(); edit:HighlightText() end)
-        local close = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+        local close = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(close) end
         close:SetSize(100, 24); close:SetPoint("BOTTOMRIGHT", -18, 17); close:SetText("Close")
         close:SetScript("OnClick", function() panel:Hide() end)
         panel:SetScript("OnHide", function() edit:ClearFocus(); panel:StopMovingOrSizing() end)

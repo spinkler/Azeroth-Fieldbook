@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 
 -- Session-only display evidence. Opaque spell fields go only to rendering APIs;
 -- never serialize them, compare them, or read their rendered text back.
@@ -87,7 +88,7 @@ function ns.CreateDetectedAbilityHint(parent,journal)
     local frame=CreateFrame("Frame",nil,parent)
     frame:SetSize(583,30)
     local function text(x,y,width)
-        local f=frame:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+        local f=frame:CreateFontString(nil,"OVERLAY",textFont("GameFontHighlightSmall"))
         f:SetPoint("TOPLEFT",x,y);f:SetSize(width,14);f:SetJustifyH("LEFT");f:SetWordWrap(false)
         return f
     end

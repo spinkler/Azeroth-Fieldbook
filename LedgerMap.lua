@@ -19,11 +19,27 @@ function ns.CreateLedgerMap(parent,journal,getSelection,onSighting)
     -- The existing factory supplies exact Atlas geometry, tiles, clipping and
     -- independent pan/zoom/cache state. No Atlas-owned frame or data is borrowed.
     local map=ns.CreateAtlasMap(parent,adapter,function(id) onSighting(tonumber(id)) end,function() end)
+    local emptyOverlay=CreateFrame("Frame",nil,map)
+    emptyOverlay:SetAllPoints();emptyOverlay:SetFrameLevel(map:GetFrameLevel()+5);emptyOverlay:EnableMouse(false)
+    map.emptyShade=emptyOverlay:CreateTexture(nil,"BACKGROUND")
+    map.emptyShade:SetAllPoints();map.emptyShade:SetColorTexture(0,0,0,0.48);map.emptyShade:Hide()
+    map.empty:SetParent(emptyOverlay);map.empty:ClearAllPoints();map.empty:SetPoint("CENTER",map,"CENTER",0,0)
     local render=map.Render
     function map:Render()
         local _,index=getSelection();local all=points();local selected=all[index or 1]
-        render(self,selected and selected.mapID,selected and selected.id)
-        if not selected or not selected.mapID then self.empty:SetText("No map was recorded for this contact.\nIts services and notes remain available.") end
+        local noMap=not selected or not selected.mapID
+        local displayed=selected and selected.mapID
+        if noMap then
+            local current=ns.Atlas.CurrentLocation()
+            displayed=current and current.mapID
+        end
+        render(self,displayed,selected and selected.id)
+        self.emptyShade:SetShown(noMap and self.available)
+        self.empty:SetWidth(self:GetWidth()-24)
+        if noMap then
+            self.empty:SetText("No map was recorded for this contact.\nIts services and notes remain available.")
+            self.empty:Show()
+        end
         for _,pin in ipairs(self.pins or {}) do if pin.group and pin:IsShown() then
             local point=pin.group[1].point
             pin.icon:SetTexture("Interface\\Icons\\INV_Misc_Coin_01")

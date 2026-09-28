@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local U={};ns.AtlasUI=U
 local ui=ns.FieldbookUI
 U.Button=ui.Button;U.Edit=ui.Edit
@@ -164,7 +165,7 @@ function U.TextArea(parent,x,y,width,height,limit)
     border:SetBackdropColor(0.05,0.04,0.025,0.6);border:SetBackdropBorderColor(0.45,0.30,0.13,1)
     border:EnableMouse(false)
     local e=CreateFrame("EditBox",nil,s)
-    e:SetMultiLine(true);e:SetAutoFocus(false);e:SetFontObject("GameFontHighlight")
+    e:SetMultiLine(true);e:SetAutoFocus(false);e:SetFontObject(textFont("GameFontHighlight"))
     e:SetWidth(width);e:SetHeight(height);e:SetMaxLetters(limit or 8000)
     e:SetTextInsets(5,5,5,5);e:SetScript("OnEscapePressed",e.ClearFocus)
     s:SetScrollChild(e);ns.AutoHideScrollBar(s)

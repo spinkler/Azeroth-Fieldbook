@@ -1,5 +1,6 @@
 BINDING_NAME_AZEROTHFIELDBOOK_ATLAS_POINT = "Record Atlas survey point"
 local addonName, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 BINDING_HEADER_AZEROTHFIELDBOOK = "Azeroth Fieldbook"
 BINDING_NAME_CLASSICBESTIARY_BOOK = "Toggle Azeroth Fieldbook"
 BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK = "Open Azeroth Fieldbook at mouseover"
@@ -109,13 +110,13 @@ local function addNameScroller(row,heading)
     viewport:SetPoint("TOPLEFT",17,0);viewport:SetSize(140,28);viewport:EnableMouse(false)
     local body=CreateFrame("Frame",nil,viewport)
     body:SetSize(140,28);body:EnableMouse(false);viewport:SetScrollChild(body)
-    local text=body:CreateFontString(nil,"OVERLAY","GameFontHighlight")
+    local text=body:CreateFontString(nil,"OVERLAY",textFont("GameFontHighlight"))
     text:SetPoint("TOPLEFT",0,-8);text:SetJustifyH("LEFT");text:SetWordWrap(false)
     text:SetShadowColor(0.05,0.05,0.05)
     if heading then
         viewport:ClearAllPoints();viewport:SetAllPoints(row)
         text:ClearAllPoints();text:SetPoint("TOPLEFT",0,0)
-        text:SetFontObject("GameFontNormalLarge")
+        text:SetFontObject(textFont("GameFontNormalLarge"))
         local path,size,flags=row.text:GetFont()
         if path then text:SetFont(path,size,flags) end
     end
@@ -182,7 +183,7 @@ local ink = { 0.75, 0.8, 0.8 }
     local function layoutSummary(status,combat)
         local y=0
         local function section(groups,rows,fontObject)
-            book.summaryMeasure:SetFontObject(fontObject)
+            book.summaryMeasure:SetFontObject(textFont(fontObject))
             local lines=ns.GroupPropertyLines(groups,574,function(text)
                 book.summaryMeasure:SetText(text)
                 return book.summaryMeasure:GetStringWidth()
@@ -226,7 +227,7 @@ local ink = { 0.75, 0.8, 0.8 }
     local function styleSelection(control,keepGoldText,borderOnly)
         if not borderOnly then
             control:SetHighlightTexture("")
-            control:SetDisabledFontObject(filterFont("GameFontDisable"))
+            control:SetDisabledFontObject(textFont(filterFont("GameFontDisable")))
         end
         -- Crop the native bevel only; the red face is never tinted or brightened.
         local borders={}
@@ -269,8 +270,8 @@ local ink = { 0.75, 0.8, 0.8 }
         control.SetSelected=function(self,selected)
             if not borderOnly then
                 local font=filterFont((selected or keepGoldText) and "GameFontNormal" or "GameFontDisable")
-                self:SetNormalFontObject(font)
-                self:SetHighlightFontObject(font)
+                self:SetNormalFontObject(textFont(font))
+                self:SetHighlightFontObject(textFont(font))
             end
             self.afbSelected=selected
             if selected and #borders==0 then createBorder() end
@@ -809,7 +810,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.searchClear=CreateFrame("Button",nil,book.search)
         book.searchClear:SetSize(18,18)
         book.searchClear:SetPoint("RIGHT",book.search,"RIGHT",-2,0)
-        local clearGlyph=book.searchClear:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
+        local clearGlyph=book.searchClear:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
         clearGlyph:SetPoint("CENTER");clearGlyph:SetText("×")
         clearGlyph:SetTextColor(0.95,0.15,0.12)
         book.searchClear:SetScript("OnEnter",function() clearGlyph:SetTextColor(1,0.4,0.3) end)
@@ -921,7 +922,7 @@ local ink = { 0.75, 0.8, 0.8 }
             addNameScroller(row)
             row.killReward=createKillReward(row,1)
             row.killReward:SetPoint("RIGHT",row,"RIGHT",-5,0)
-            row.unknownMark=row:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
+            row.unknownMark=row:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
             row.unknownMark:SetPoint("CENTER",row.killReward,"CENTER",0,0)
             row.unknownMark:SetText("?")
             row.unknownMark:SetTextColor(1,0.82,0.14)
@@ -1014,7 +1015,7 @@ local ink = { 0.75, 0.8, 0.8 }
             local text=tab:GetFontString()
             if text then text:ClearAllPoints();text:SetPoint("CENTER",tab,"CENTER",0.5,0) end
             tab:SetFrameLevel(shell:GetFrame().titleIcon:GetFrameLevel()-1)
-            tab:SetDisabledFontObject("GameFontDisable")
+            tab:SetDisabledFontObject(textFont("GameFontDisable"))
             tab.letter=letter; styleSelection(tab)
             tab:Hide()
             book.letterButtons[i]=tab
@@ -1071,7 +1072,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         book.summaryArea:SetScript("OnHyperlinkLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         book.summaryArea:SetScript("OnHide",function() if GameTooltip then GameTooltip:Hide() end end)
-        book.summaryMeasure=book:CreateFontString(nil,"OVERLAY","GameFontHighlight")
+        book.summaryMeasure=book:CreateFontString(nil,"OVERLAY",textFont("GameFontHighlight"))
         book.summaryMeasure:SetWordWrap(false); book.summaryMeasure:Hide()
         book.summaryBasicRows,book.summaryCombatRows={},{}
         book.empty = label(book, "Every page begins with an encounter or an accepted report.\n\nSelect an entry from the index to review your notes.", 366, -210, 494)
@@ -1087,7 +1088,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.model:SetPoint("TOPLEFT", 366, -135); book.model:SetSize(203, 164)
         book.model:SetPortraitZoom(0); book.model:SetCamDistanceScale(1.25)
         book.model:EnableMouse(true)
-        book.modelUnknown=book.modelBorder:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
+        book.modelUnknown=book.modelBorder:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
         book.modelUnknown:SetPoint("CENTER",book.modelBorder,"CENTER",0,6)
         book.modelUnknown:SetFont(STANDARD_TEXT_FONT,72,"OUTLINE")
         book.modelUnknown:SetText("?")

@@ -1,4 +1,7 @@
-# Section navigation — 0.10.0
+# Section navigation — 0.16.0
+
+The navigation milestone was 0.10.0. The historical validation and asset evidence
+below retain that scope; all seven slots now contain functional journals.
 
 ## Automated validation
 
@@ -12,18 +15,18 @@ this machine's PATH; the runner and arguments were unchanged:
 python -B -X utf8 tests/run_tests.py
 ```
 
-`test_fieldbook_tabs.py` runs the real shell, Bestiary and wishlist builders in
+`test_fieldbook_tabs.py` runs the real shell and all seven section builders in
 the widget host. It verifies the seven-section order, default selection, native
 template selection, single active highlight, tooltip text/ownership/dismissal,
-mouse-release routing, no-op active clicks, lazy content reuse, exact wishlist
-copy and wrapping bounds. It also checks Bestiary creature/category/search/list
+mouse-release routing, no-op active clicks, lazy content reuse and shared Help
+and Options routing. It also checks Bestiary creature/category/search/list
 and ability browsing state, unfinished fields, observation while hidden, explicit
 mouseover entry opening, Help/observation/Notes/Rumours/backup closure, reset-popup
 dismissal and the existing pinned Notes lifetime.
 
-Scale coverage includes 50%, 75%, 100%, 125% and 150% at 1920×1080, 1280×720 and
-1024×768 UIParent dimensions. It verifies screen-fit bounds including every tab,
-unchanged clamp insets and one inherited scale. `test_window_positions.py` checks
+Scale coverage includes 50%, 75%, 100%, 125% and 150% at 7680×2160, 1920×1200,
+1920×1080, 1280×720 and 1024×768 UIParent dimensions. It verifies screen-fit bounds
+including every tab, clamp insets matching the outside width and one inherited scale. `test_window_positions.py` checks
 the extra width during registration, restore and scaling; right-side placement
 with different main/dialog scales and with automatic anchoring disabled; crowded
 screens that must overlap content; and reflow after dragging, including windows
@@ -54,8 +57,9 @@ the addon repository and package; the addon uses Blizzard's installed assets.
 | Lore & Landmarks | `INV_Misc_Book_09` | Old bound book |
 
 The initial chest name without the final `a` did not resolve and was replaced
-before delivery. The six future-page definitions live in `FieldbookSections.lua`;
-the Bestiary title/icon remain in its `RegisterSection` definition.
+before delivery. Each implemented section now owns its title/icon registration;
+`FieldbookSections.lua` retains an empty wishlist extension point. Adding Lore
+does not alter the shared native tabs, their order or positioning conventions.
 
 The native `LargeSideTabButtonTemplate` and its Camelot behavior were checked
 against the repository's pinned
@@ -72,20 +76,22 @@ tab column has been rendered in game.
    seven framed icons attached outside the right edge, in the specified order.
    Bestiary is initially gold; hover each tab for its exact section name and
    native feedback. Check clicks and release-outside behavior, including combat.
-2. Open every future section. Confirm its exact title, gold wishlist heading and
-   complete paragraph with readable wrapping and comfortable margins. Check
-   background brightness at its supported extremes. The shared frame, close
-   control and all tabs must remain available; Bestiary toolbar controls disappear.
+2. Open every journal. Confirm its title, section controls and readable content
+   with comfortable margins. Check background brightness at its supported
+   extremes. The shared frame, close control and all tabs must remain available;
+   controls specific to the preceding section must disappear. For Lore, verify
+   the catalogue, reader and internal Entry / Location switch against [LORE.md](LORE.md).
 3. Select a creature, apply category/search/location/rank/letter filters and
    scroll the creature and ability lists. Enter an unfinished manual field.
    Change the target while on another tab, then return: selection, filters,
    browsing and the draft should remain. Use the mouseover creature binding
-   from a placeholder and confirm that it selects the Bestiary and that creature.
+   from another journal and confirm that it selects the Bestiary and that creature.
 4. Open Notes, Locations, Rumours, Share, damage/trait/effect panels, Help,
    Options, Event log and backups. Switch sections and confirm section-owned
    panels close. Pinned Notes and the independent spell-ID utility keep their
    existing lifetime. Accepted sharing and background discovery/kill/ability
-   tracking must continue while a placeholder is selected.
+   tracking must continue while another journal is selected. Supported lore
+   capture must continue with Lore hidden without opening or switching the book.
 5. Repeat at 50%, 100% and 150% addon scale and the user's normal WoW UI scale,
    including a small window/resolution. Drag the main frame to every screen edge,
    with auxiliary windows open, then reopen saved windows. Verify the full tab
@@ -97,5 +103,17 @@ tab column has been rendered in game.
    bindings. Reload to confirm the default is Bestiary, saved frame positions
    still work and existing creature data/settings remain intact.
 
-No in-game pass is claimed for these new visuals. No future-section tracking or
-storage is implemented, and no SavedVariables or sharing schema was changed.
+No new in-game pass is claimed for these visuals. The original 0.10.0 navigation
+change introduced no future-section tracking or SavedVariables; later section
+milestones have their own storage and validation boundaries. Lore's per-character
+archive, capture lifecycle and report format are documented in [LORE.md](LORE.md).
+
+## v0.16.5 seam adjustment
+
+The original zero-offset anchor joined logical frame boundaries. Native tab and
+window-border artwork can leave a visible seam at those boundaries. The column
+now overlaps the main frame by only two UI units, with the outside-width
+calculation reduced by the same amount. The native 64×59 tab dimensions, icon
+crop, selection and hover art, top offset and two-unit vertical gaps are unchanged.
+This is a conservative art-seam correction; it needs visual confirmation on the
+reported laptop and ultrawide resolutions. No new in-game pass is claimed.

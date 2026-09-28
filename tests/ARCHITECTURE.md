@@ -47,9 +47,10 @@ first registration. Normal Bestiary bindings explicitly select the Bestiary;
 the minimap and general book command use the shared shell.
 
 The Bestiary registers first, followed by Herbs & Minerals (`GatheringBook.lua`),
-Traveller’s Atlas (`AtlasBook.lua`), Angler’s Almanac (`AnglingBook.lua`), Merchant’s Ledger (`LedgerBook.lua`), Treasure & Salvage (`TreasureBook.lua`), then the remaining definition in
-`FieldbookSections.lua`. That file owns their titles, icons and wishlist text;
-they have no tracking or saved data. The Bestiary's icon is in its registration
+Traveller’s Atlas (`AtlasBook.lua`), Angler’s Almanac (`AnglingBook.lua`), Merchant’s Ledger (`LedgerBook.lua`), Treasure & Salvage (`TreasureBook.lua`), and Lore & Landmarks (`LoreBook.lua`).
+Each section owns its registration, title, icon and content.
+`FieldbookSections.lua` retains an empty wishlist extension point; it registers
+no additional section. The Bestiary's icon is in its registration
 in `BestiaryBook.lua`. The shell uses Forever's `LargeSideTabButtonTemplate` for
 the outside-right navigation. Native art provides the border, mask, gold selected
 state and hover; each definition supplies its tooltip name and section builder.
@@ -101,7 +102,7 @@ old journal and backup compatibility when implementing their storage.
 (schema 1), with resource identities keyed by profession kind and normalized
 observed name. It shares no entries, settings or reset/backup/sharing paths with
 the Bestiary. The main addon initialization registers the gathering section
-after Bestiary, before Atlas, Angling, Ledger, Treasure and the remaining wishlist section, and starts its event frame even
+after Bestiary, before Atlas, Angling, Ledger, Treasure and Lore, and starts its event frame even
 when its UI has never been opened.
 
 `GatheringTracking.lua` reads the current world-object tooltip for mouseover
@@ -137,7 +138,7 @@ changes during the session. `tests/GATHERING.md` defines the acceptance checks.
 `AzerothFieldbookAtlasDB`, outside Bestiary/gathering resets, backups and transport. Deliberate
 recording uses stable local IDs and map-relative positions; no Atlas background
 tracking frame is created. `AtlasBook.lua` registers after gathering and before
-Angling, Ledger, Treasure and the remaining wishlist definition without resizing the shell.
+Angling, Ledger, Treasure and Lore without resizing the shell.
 
 Atlas controls, editors, pickers and report previews are children of the section.
 Leaving the page hides them by ancestry and clears focus/tooltips, while retaining
@@ -152,7 +153,7 @@ See `tests/ATLAS.md` for the complete data contract and live acceptance checklis
 
 `AnglingJournal.lua` owns schema 1 in the active account store or character `AzerothFieldbookAnglingDB`.
 The Almanac registers after Atlas in the existing `angling` slot, before the
-Ledger, Treasure and the remaining wishlist definition. `AnglingTracking.lua` starts during addon
+Ledger, Treasure and Lore. `AnglingTracking.lua` starts during addon
 initialization and collects guarded fishing/loot events and world-tooltip pool
 sightings. Native tooltips that bypass callbacks are checked only while visible,
 at most five times per second; there is no hidden world or bag scan.
@@ -176,7 +177,7 @@ Forever API evidence, limits and remaining live checks.
 
 `LedgerJournal.lua` owns schema 1 in the active account store or character `AzerothFieldbookLedgerDB`.
 Five Ledger-owned modules register the existing `merchants` slot after Angling,
-before Treasure and the remaining wishlist. `LedgerTracking.lua` starts
+before Treasure and Lore. `LedgerTracking.lua` starts
 before the page is built. `LedgerMap.lua` adapts observations to the existing
 `CreateAtlasMap` factory with an independent instance and exact Atlas anchor.
 `LedgerReports.lua` follows the existing literal, versioned section report and
@@ -191,8 +192,8 @@ one-time imports, identity remapping, original-store preservation and limits.
 
 ## Treasure & Salvage
 
-Six Treasure-owned modules initialize immediately after Ledger and before the
-remaining wishlist. `TreasureJournal.lua` owns schema 1 in the separate
+Six Treasure-owned modules initialize immediately after Ledger and before Lore.
+`TreasureJournal.lua` owns schema 1 in the separate
 per-character `AzerothFieldbookTreasureDB`; it does not call account selectors or
 write another journal. `TreasureTracking.lua` starts before lazy UI construction.
 The manual editors, item rows, details and controls belong to the Treasure page.
@@ -201,3 +202,42 @@ anchor. `TreasureReports.lua` provides data-only builder/validation/preview/merg
 hooks: the existing fixed Bestiary transport/cost policy cannot dispatch them.
 There is no alternate export protocol or inert sharing control. See
 [Treasure boundaries and validation](TREASURE.md).
+
+## Lore & Landmarks
+
+`LoreJournal.lua` owns schema 1 in the separate per-character
+`AzerothFieldbookLoreDB`. Lore and Treasure do not use the account-wide selectors
+that serve the five preceding journals. Lore stores captured pages, manual
+passages, personal annotations, locations, relationships and received reports
+with separate provenance. Its bounded additive loader retains malformed saved
+records outside the active view and opens unknown future schemas read-only.
+
+`LoreIntegration.lua` initializes the journal, starts `LoreTracking.lua` and
+registers `LoreBook.lua` in the existing final tab before its UI is built.
+Tracking continues while the Fieldbook is closed or another section is active.
+The ItemText adapter waits for ready text and uses bounded asynchronous page
+navigation for opt-in whole-book capture. Native API availability and mocked
+lifecycle checks do not establish Forever compatibility; see [LORE.md](LORE.md).
+NPC and supported quest passages require deliberate capture actions.
+
+`LoreBook.lua` and `LoreEditors.lua` own the catalogue, source reader, private
+drafts, entry editors and location/relationship controls. `LoreMap.lua` creates
+an independent instance of the existing Atlas map factory at the exact Atlas
+anchor. It never writes Atlas discoveries. `LoreReferences.lua` and the narrow
+read-only adapters in `LoreIntegration.lua` enumerate already-known entries and
+use existing supported navigation; missing references retain their labels.
+
+`LoreReports.lua` and `LoreReportUI.lua` follow the existing bounded, versioned
+section-report copy/paste and preview/accept conventions. Received material
+remains separate from local evidence and private notes. The fixed Bestiary
+addon-message transport has no Lore dispatch or pricing adapter, so Lore does
+not claim network delivery or charge Knowledge.
+
+Outside these Lore modules, integration is limited to TOC loading and the new
+SavedVariable, initialization in `AzerothFieldbook.lua`, removal of the Lore
+wishlist definition, and the existing Options/reset interfaces.
+`LoreSettings.lua` initializes `autoArchiveLore` and `loreOnlyOpenedPages` on the
+existing character settings root only when absent. `BestiaryPages.lua` presents
+the two controls in the shared Options page; `BestiaryJournal.lua` preserves
+their explicit values during Bestiary reset. Other section data, tracking,
+appearance and navigation contracts remain independent.

@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 
 -- Keep gathering camera settings independent of the Bestiary. A camera distance
 -- of 1.25 / 0.40 gives approximately 40% of the original apparent model size.
@@ -14,13 +15,13 @@ local function addNameScroller(row,heading)
     viewport:SetPoint("TOPLEFT",17,0);viewport:SetSize(140,28);viewport:EnableMouse(false)
     local body=CreateFrame("Frame",nil,viewport)
     body:SetSize(140,28);body:EnableMouse(false);viewport:SetScrollChild(body)
-    local text=body:CreateFontString(nil,"OVERLAY","GameFontHighlight")
+    local text=body:CreateFontString(nil,"OVERLAY",textFont("GameFontHighlight"))
     text:SetPoint("TOPLEFT",0,-8);text:SetJustifyH("LEFT");text:SetWordWrap(false)
     text:SetShadowColor(0.05,0.05,0.05)
     if heading then
         viewport:ClearAllPoints();viewport:SetAllPoints(row)
         text:ClearAllPoints();text:SetPoint("TOPLEFT",0,0)
-        text:SetFontObject("GameFontNormalLarge")
+        text:SetFontObject(textFont("GameFontNormalLarge"))
         local path,size,flags=row.text:GetFont()
         if path then text:SetFont(path,size,flags) end
     end
@@ -77,7 +78,7 @@ end
     local function styleSelection(control,keepGoldText,borderOnly)
         if not borderOnly then
             control:SetHighlightTexture("")
-            control:SetDisabledFontObject(filterFont("GameFontDisable"))
+            control:SetDisabledFontObject(textFont(filterFont("GameFontDisable")))
         end
         -- Crop the native bevel only; the red face is never tinted or brightened.
         local borders={}
@@ -120,8 +121,8 @@ end
         control.SetSelected=function(self,selected)
             if not borderOnly then
                 local font=filterFont((selected or keepGoldText) and "GameFontNormal" or "GameFontDisable")
-                self:SetNormalFontObject(font)
-                self:SetHighlightFontObject(font)
+                self:SetNormalFontObject(textFont(font))
+                self:SetHighlightFontObject(textFont(font))
             end
             self.afbSelected=selected
             if selected and #borders==0 then createBorder() end
@@ -282,8 +283,8 @@ function ns.CreateGatheringBook(journal,shell)
                 row=button(book.zoneChild,"",0,-(i-1)*28,304,function(self)
                     locations:Open(selected,self.zone.mapID)
                 end)
-                row:SetNormalFontObject("GameFontHighlightSmall")
-                row:SetHighlightFontObject("GameFontHighlightSmall")
+                row:SetNormalFontObject(textFont("GameFontHighlightSmall"))
+                row:SetHighlightFontObject(textFont("GameFontHighlightSmall"))
                 book.zoneRows[i]=row
             end
             local count=0;for _ in pairs(zone.data and zone.data.points or {}) do count=count+1 end
@@ -330,7 +331,7 @@ function ns.CreateGatheringBook(journal,shell)
         book.search=edit(book,145,-78,146,100);book.search:SetTextInsets(0,22,0,0)
         book.searchClear=CreateFrame("Button",nil,book.search)
         book.searchClear:SetSize(18,18);book.searchClear:SetPoint("RIGHT",book.search,"RIGHT",-2,0)
-        local glyph=book.searchClear:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
+        local glyph=book.searchClear:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
         glyph:SetPoint("CENTER");glyph:SetText("×");glyph:SetTextColor(0.95,0.15,0.12)
         book.searchClear:SetScript("OnEnter",function() glyph:SetTextColor(1,0.4,0.3) end)
         book.searchClear:SetScript("OnLeave",function() glyph:SetTextColor(0.95,0.15,0.12) end)
@@ -504,7 +505,7 @@ function ns.CreateGatheringBook(journal,shell)
         book.note=CreateFrame("EditBox",nil,book.noteScroll)
         book.note:SetMultiLine(true);book.note:SetAutoFocus(false);book.note:SetMaxLetters(1000)
         book.note:EnableMouse(true);book.note:EnableKeyboard(true)
-        book.note:SetFontObject("GameFontHighlight");book.note:SetSize(222,169)
+        book.note:SetFontObject(textFont("GameFontHighlight"));book.note:SetSize(222,169)
         book.noteScroll:SetScrollChild(book.note);ns.AutoHideScrollBar(book.noteScroll)
         local function focusNotes(_,mouseButton)
             if mouseButton=="LeftButton" and selected and book.noteID==selected then book.note:SetFocus() end

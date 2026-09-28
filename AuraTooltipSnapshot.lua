@@ -1,5 +1,6 @@
 -- Experimental relay of rendered tooltip text. Never parse or save its contents.
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local snapshot = {}
 ns.AuraTooltipSnapshot = snapshot
 local db, panel, scroll, body, heading, eligible
@@ -51,7 +52,7 @@ local function capture(tooltip, unit, kind, filter)
         if not lines[index] then
             lines[index] = {}
             for side = 1, 2 do
-                local text = body:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                local text = body:CreateFontString(nil, "OVERLAY", textFont("GameFontHighlightSmall"))
                 text:SetSize(side == 1 and 305 or 105, 32)
                 text:SetJustifyH(side == 1 and "LEFT" or "RIGHT"); text:SetJustifyV("TOP")
                 lines[index][side] = text
@@ -105,9 +106,9 @@ function snapshot:Initialize(settings, anchor, eligibility)
         panel:SetSize(455,340); panel:SetClampedToScreen(true); panel:SetFrameStrata("MEDIUM")
         panel:SetPoint("TOPLEFT",anchor,"TOPRIGHT",8,0)
         panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12})
-        heading = panel:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
+        heading = panel:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalSmall"))
         heading:SetPoint("TOPLEFT",10,-10)
-        local note = panel:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+        local note = panel:CreateFontString(nil,"OVERLAY",textFont("GameFontHighlightSmall"))
         note:SetPoint("TOPLEFT",10,-28); note:SetText("Timers frozen. Right-click to dismiss.")
         panel:EnableMouse(true)
         panel:SetScript("OnMouseUp",function(_,button) if button == "RightButton" then clear() end end)

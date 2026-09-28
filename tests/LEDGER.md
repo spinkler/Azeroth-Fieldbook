@@ -307,6 +307,10 @@ loads Ledger and still checks all seven tabs and auxiliary/window behaviour.
    label and observation/receipt times must agree with the selected sighting.
    Pan/zoom Ledger, switch to Atlas/Almanac and back: other map state is unchanged.
    Scrolling a long inventory or editing long notes must not move the map.
+   With no selected contact or no recorded map, verify the current local map is
+   darkened behind the empty-state message, with the same fitted dimensions,
+   border and position as Atlas, Almanac and Treasure. Select a mapped contact
+   again and verify the shading and empty-state message disappear.
 8. **Reports:** Prepare without notes; explicitly opt in; copy/paste on another
    same-version installation; preview and accept; try a version mismatch and
    malformed text. Forward an old report and verify original ages. Encounter

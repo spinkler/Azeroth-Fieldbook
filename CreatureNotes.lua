@@ -1,10 +1,11 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 
 function ns.CreateCreatureNotesWindow(journal,getBook)
     local frame, selected, entry, loading, expanded, pinned
     local controller = {}
     local function label(parent, value, x, y, width, font)
-        local text = parent:CreateFontString(nil,"OVERLAY",font or "GameFontHighlightSmall")
+        local text = parent:CreateFontString(nil,"OVERLAY",textFont(font or "GameFontHighlightSmall"))
         text:SetPoint("TOPLEFT",x,y); text:SetWidth(width); text:SetJustifyH("LEFT"); text:SetText(value)
         return text
     end
@@ -140,7 +141,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
             end
         end)
         frame.inputLabel=label(frame,"Spell ID — press Enter to record",18,-99,300)
-        frame.spellInput=CreateFrame("EditBox",nil,frame,"InputBoxTemplate")
+        frame.spellInput=CreateFrame("EditBox",nil,frame,"InputBoxTemplate"); if ns.TextSize then ns.TextSize:StyleControl(frame.spellInput) end
         frame.spellInput:SetSize(145,22); frame.spellInput:SetPoint("TOPLEFT",23,-116)
         frame.spellInput:SetAutoFocus(false); frame.spellInput:SetMaxLetters(10)
         frame.spellInput:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
@@ -172,7 +173,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
             end)
             frame.rows[index]=row
         end
-        frame.notesToggle=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate")
+        frame.notesToggle=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(frame.notesToggle) end
         frame.notesToggle:SetSize(90,22)
         frame.notesToggle:SetScript("OnClick",function() expanded=not expanded; render() end)
         frame.notesBorder=CreateFrame("Frame",nil,frame,"BackdropTemplate")
@@ -186,7 +187,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         frame.notesBorder:SetPoint("TOPLEFT",frame.notesArea,"TOPLEFT",-5,5)
         frame.notesBorder:SetPoint("BOTTOMRIGHT",frame.notesArea,"BOTTOMRIGHT",25,-5)
         frame.notes=CreateFrame("EditBox",nil,frame.notesArea)
-        frame.notes:SetMultiLine(true); frame.notes:SetAutoFocus(false); frame.notes:SetFontObject(ChatFontNormal)
+        frame.notes:SetMultiLine(true); frame.notes:SetAutoFocus(false); frame.notes:SetFontObject(textFont(ChatFontNormal))
         frame.notes:SetWidth(332); frame.notes:SetHeight(116); frame.notes:SetMaxLetters(400)
         frame.notesArea:SetScrollChild(frame.notes)
         ns.AutoHideScrollBar(frame.notesArea)

@@ -45,6 +45,44 @@ class SubzoneTests(unittest.TestCase):
             end
         ''')
 
+    def test_automatic_survey_pauses_in_flight_and_breaks_continuity(self):
+        self.lua.execute('''
+            C_Map.GetMapWorldSize=function() return 1000,1000 end
+            for _,signal in ipairs({'UnitOnTaxi','IsFlying'}) do
+                s:Reset();s.store[101]={};s.index={}
+                _G[signal]=function(unit) if signal=='UnitOnTaxi' then assert(unit=='player') end;return false end
+                sample('Meadow',.4,.4);local before=snapshot(s.store)
+                _G[signal]=function() return true end
+                assert(not sample('Forest',.401,.4) and not sample('Hill',.6,.6))
+                assert(s.previous==nil and snapshot(s.store)==before)
+                _G[signal]=function() return false end
+                sample('Forest',.402,.4);assert(#s:Crossings(101)==0,'Do not bridge the flight')
+                sample('Hill',.403,.4);assert(#s:Crossings(101)==1,'Ground sampling resumes')
+                _G[signal]=nil
+            end
+            UnitOnTaxi=function() error('Unavailable') end
+            local before=snapshot(s.store);assert(not sample('Other',.404,.4) and snapshot(s.store)==before and not s.previous)
+            UnitOnTaxi=function() return 1 end
+            assert(not sample('Other',.405,.4),'Legacy taxi flag also blocks sampling')
+        ''')
+
+    def test_capitals_pause_automatic_survey_but_not_manual_or_ordinary_inns(self):
+        self.lua.execute('''
+            C_Map.GetMapWorldSize=function() return 1000,1000 end
+            local info=C_Map.GetMapInfo
+            C_Map.GetMapInfo=function(id) if id==900 then return {parentMapID=1453} end;return info(id) end
+            local before=snapshot(s.store)
+            for _,id in ipairs({1453,1454,1455,1456,1457,1458,900}) do
+                mapID=id;assert(not sample('City district',.4,.4) and s.previous==nil)
+            end
+            assert(snapshot(s.store)==before,'Capital checks preserve existing points')
+            mapID=1453;assert(s:RecordPoint(),'Deliberate manual points remain available')
+            assert(#s:Samples(1453)==1)
+            mapID=101;IsResting=function() return true end
+            sample('Inn',.401,.4);assert(#s:Crossings(101)==0,'Do not bridge city visits')
+            sample('Road',.402,.4);assert(#s:Crossings(101)==1,'Ordinary resting areas are not capitals')
+        ''')
+
     def test_cleanup_keeps_edges_crossings_and_other_maps(self):
         self.lua.execute('''
             local function point(x,y) return {kind='interior',mapID=101,name='Lake',x=x,y=y,at=100} end

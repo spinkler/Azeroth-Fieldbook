@@ -1,4 +1,5 @@
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 
 function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
     local frame,selected,entry,revision,nameRevision
@@ -8,7 +9,7 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
     local controller={}
     local function playerName(name) return ns.PlayerNames and ns.PlayerNames:Format(name) or name end
     local function label(parent,text,x,y,width,font)
-        local value=parent:CreateFontString(nil,"OVERLAY",font or "GameFontHighlightSmall")
+        local value=parent:CreateFontString(nil,"OVERLAY",textFont(font or "GameFontHighlightSmall"))
         value:SetPoint("TOPLEFT",x,y); value:SetWidth(width); value:SetJustifyH("LEFT")
         value:SetWordWrap(true); value:SetText(text)
         return value
@@ -41,7 +42,7 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
                 "\nLocations: " .. (#shared.locations>0 and table.concat(shared.locations,", ") or "not recorded")}
         end
         local function measure(text,font)
-            frame.measure:SetFontObject(font)
+            frame.measure:SetFontObject(textFont(font))
             local width=0
             for line in text:gmatch("[^\n]+") do
                 frame.measure:SetText(line)
@@ -193,7 +194,7 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
         frame.paper:SetPoint("TOPLEFT",6,-6); frame.paper:SetPoint("BOTTOMRIGHT",-6,6)
         frame.paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         frame.title=label(frame,"Rumours",18,-18,maxWidth-60,"GameFontNormalLarge")
-        frame.measure=frame:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+        frame.measure=frame:CreateFontString(nil,"OVERLAY",textFont("GameFontHighlightSmall"))
         frame.measure:SetWordWrap(false);frame.measure:Hide()
         frame.creature=label(frame,"",18,-48,maxWidth-36,"GameFontNormal")
         frame.instructions=label(frame,"",18,-86,maxWidth-36)

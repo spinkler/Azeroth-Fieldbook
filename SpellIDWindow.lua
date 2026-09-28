@@ -1,5 +1,6 @@
 -- Ephemeral observations only. Secret values go directly to FontStrings, never SavedVariables.
 local _, ns = ...
+local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local window = {}
 ns.SpellIDWindow = window
 local db, panel, background
@@ -108,7 +109,7 @@ function window:OpenBlacklist(message)
     if blacklistWindow then blacklistWindow:Open(message) end
 end
 local function text(parent, x, y, width, template)
-    local value = parent:CreateFontString(nil, "OVERLAY", template or "GameFontHighlightSmall")
+    local value = parent:CreateFontString(nil, "OVERLAY", textFont(template or "GameFontHighlightSmall"))
     value:SetPoint("TOPLEFT", x, y); value:SetSize(width, 14); value:SetJustifyH("LEFT")
     return value
 end

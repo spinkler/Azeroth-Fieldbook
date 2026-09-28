@@ -1,0 +1,71 @@
+local _,ns=...
+local L=ns.Lore
+local titles={bestiary='Bestiary',gathering="Gatherer’s Compendium",atlas='Traveller’s Atlas',
+    angling='Angler’s Almanac',merchants='Merchant’s Ledger',treasure='Treasure & Salvage'}
+local function stamp(e)
+    if type(e.reference)=='string' then return e.reference end
+    local time=e.created or e.firstSeen or e.firstEncounter or e.first
+    if type(time)=='number' then return tostring(time) end
+    local name=tostring(e.name or e.title or '')
+    local hash=0;for i=1,#name do hash=(hash*31+name:byte(i))%2147483647 end
+    return tostring(hash)
+end
+-- Enumerate only active, already-known records. No discoveries are synthesized,
+-- no source database is changed, and foreign report references use labels only.
+function ns.RegisterLoreReferences(controller,shell,sources)
+    for section,source in pairs(sources or {}) do if type(source)=='table' then
+        local id,owner=section,source
+        local journal=owner.journal or owner
+        local function records()
+            local all={}
+            if id=='angling' then
+                for _,bucket in ipairs({'waters','spots','pools','items'}) do for key,e in pairs(journal.db and journal.db[bucket] or {}) do
+                    if type(e)=='table' and not e.removed then all[key]=e end
+                end end
+            else
+                local known=id=='atlas' and journal.records or id=='merchants' and journal.db and journal.db.contacts
+                    or id=='treasure' and journal.kinds or journal.entries or {}
+                for key,e in pairs(known) do if type(e)=='table' and not e.removed then all[key]=e end end
+            end
+            return all
+        end
+        local function ref(key,e)
+            local scope=id=='angling' and journal.db and journal.db.origin or ''
+            return {key=tostring(key)..'@'..scope..':'..stamp(e),name=tostring(e.name or e.title or (journal.GetCreatureName and journal:GetCreatureName(key)) or key)}
+        end
+        local function find(key)
+            if type(key)~='string' then return end
+            for recordID,e in pairs(records()) do if ref(recordID,e).key==key then return recordID,e end end
+        end
+        controller.references:Register(id,{title=titles[id] or id,list=function()
+            local rows={};for key,e in pairs(records()) do rows[#rows+1]=ref(key,e) end;return rows
+        end,resolve=function(key) local recordID,e=find(key);if e then return ref(recordID,e) end end,
+        open=function(key)
+            local recordID,e=find(key);if not e then return false,'The linked record is no longer available.' end
+            if id=='bestiary' then return shell:ShowSection(id,{creatureID=recordID}) end
+            if type(owner.Select)=='function' then shell:ShowSection(id);owner:Select(recordID);return true end
+            if type(owner.OpenEntry)=='function' then return owner:OpenEntry(recordID) end
+            return false,(titles[id] or id)..': '..ref(recordID,e).name..'. Select this known entry in its journal; direct entry navigation is unavailable.'
+        end})
+    end end
+end
+function ns.InitializeLore(shell,settings,sources)
+    if AzerothFieldbookLoreDB==nil then AzerothFieldbookLoreDB={} end
+    ns.LoreSettings.Initialize(settings or AzerothFieldbookDB or {})
+    local journal=ns.CreateLoreJournal(AzerothFieldbookLoreDB)
+    local eventJournal=sources and sources.bestiary
+    local kindNames={writing="Writing",landmark="Landmark",person="Person",mystery="Mystery"}
+    journal.onRecorded=function(entry)
+        local title=L.Safe(entry.title):gsub("[\r\n]+"," ")
+        local message="Lore recorded: "..title.." ("..(kindNames[entry.kind] or "Lore")..")."
+        if eventJournal and eventJournal.RecordEvent then
+            eventJournal:RecordEvent(message,{kind="lore-recorded",loreID=entry.id,loreKind=entry.kind,origin=entry.origin})
+        end
+        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAzeroth Fieldbook:|r "..message) end
+    end
+    local tracking=ns.CreateLoreTracking(journal,ns.LoreSettings.db)
+    ns.LoreSettings.tracking=tracking
+    local controller=ns.CreateLoreBook(journal,tracking,shell)
+    ns.RegisterLoreReferences(controller,shell,sources)
+    return controller
+end
