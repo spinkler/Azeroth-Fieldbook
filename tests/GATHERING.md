@@ -1,5 +1,19 @@
 # Gatherer's Compendium
 
+Current storage scope: the global Account-wide tracking option selects this
+section's account or character journal. The original per-character SavedVariable
+is preserved. Earlier per-character implementation notes below describe the
+original section boundary; see [account tracking](ACCOUNT_TRACKING.md) for the
+current migration and storage contract.
+
+Unsupported future schemas are never normalized or downgraded. The constructor
+creates a detached empty read-only view; edits, map preferences, hover discovery,
+interaction capture and loot recording cannot write to that journal. The section
+explains that an addon update is required to view the preserved data.
+`test_account_sections.py` checks the real initializer, UI, background handlers
+and reload with account tracking enabled and disabled.
+
+
 World-map visibility investigation and regression evidence are documented in
 [GATHERING_MAP_PINS.md](GATHERING_MAP_PINS.md), including the matching Forever
 70009 layer ordering and remaining live checks.

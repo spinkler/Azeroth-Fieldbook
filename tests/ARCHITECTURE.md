@@ -47,7 +47,7 @@ first registration. Normal Bestiary bindings explicitly select the Bestiary;
 the minimap and general book command use the shared shell.
 
 The Bestiary registers first, followed by Herbs & Minerals (`GatheringBook.lua`),
-Traveller’s Atlas (`AtlasBook.lua`), Angler’s Almanac (`AnglingBook.lua`), then the three definitions in
+Traveller’s Atlas (`AtlasBook.lua`), Angler’s Almanac (`AnglingBook.lua`), Merchant’s Ledger (`LedgerBook.lua`), Treasure & Salvage (`TreasureBook.lua`), then the remaining definition in
 `FieldbookSections.lua`. That file owns their titles, icons and wishlist text;
 they have no tracking or saved data. The Bestiary's icon is in its registration
 in `BestiaryBook.lua`. The shell uses Forever's `LargeSideTabButtonTemplate` for
@@ -97,11 +97,11 @@ old journal and backup compatibility when implementing their storage.
 
 ## Herbs & Minerals
 
-`GatheringJournal.lua` owns a separate per-character `AzerothFieldbookGatheringDB`
+`GatheringJournal.lua` uses the active account store or character `AzerothFieldbookGatheringDB`
 (schema 1), with resource identities keyed by profession kind and normalized
 observed name. It shares no entries, settings or reset/backup/sharing paths with
 the Bestiary. The main addon initialization registers the gathering section
-after Bestiary, before Atlas, Angling and the three wishlist sections, and starts its event frame even
+after Bestiary, before Atlas, Angling, Ledger, Treasure and the remaining wishlist section, and starts its event frame even
 when its UI has never been opened.
 
 `GatheringTracking.lua` reads the current world-object tooltip for mouseover
@@ -133,11 +133,11 @@ changes during the session. `tests/GATHERING.md` defines the acceptance checks.
 
 ## Traveller’s Atlas
 
-`AtlasJournal.lua` owns schema 1 in per-character `AzerothFieldbookAtlasDB`, outside
-Bestiary/gathering resets, backups, account tracking and transport. Deliberate
+`AtlasJournal.lua` owns schema 1 in the active account store or character
+`AzerothFieldbookAtlasDB`, outside Bestiary/gathering resets, backups and transport. Deliberate
 recording uses stable local IDs and map-relative positions; no Atlas background
 tracking frame is created. `AtlasBook.lua` registers after gathering and before
-Angling and the three remaining wishlist definitions without resizing the shell.
+Angling, Ledger, Treasure and the remaining wishlist definition without resizing the shell.
 
 Atlas controls, editors, pickers and report previews are children of the section.
 Leaving the page hides them by ancestry and clears focus/tooltips, while retaining
@@ -150,9 +150,9 @@ See `tests/ATLAS.md` for the complete data contract and live acceptance checklis
 
 ## Angler’s Almanac
 
-`AnglingJournal.lua` owns schema 1 in per-character `AzerothFieldbookAnglingDB`.
+`AnglingJournal.lua` owns schema 1 in the active account store or character `AzerothFieldbookAnglingDB`.
 The Almanac registers after Atlas in the existing `angling` slot, before the
-three wishlist definitions. `AnglingTracking.lua` starts during addon
+Ledger, Treasure and the remaining wishlist definition. `AnglingTracking.lua` starts during addon
 initialization and collects guarded fishing/loot events and world-tooltip pool
 sightings. Native tooltips that bypass callbacks are checked only while visible,
 at most five times per second; there is no hidden world or bag scan.
@@ -171,3 +171,33 @@ or opened Atlas page is needed. `AnglingReports.lua` implements a fishing-only
 report boundary and reported storage. It does not change Bestiary transport,
 permissions, costs or rewards. See `tests/ANGLING.md` for the full contract,
 Forever API evidence, limits and remaining live checks.
+
+## Merchant’s Ledger
+
+`LedgerJournal.lua` owns schema 1 in the active account store or character `AzerothFieldbookLedgerDB`.
+Five Ledger-owned modules register the existing `merchants` slot after Angling,
+before Treasure and the remaining wishlist. `LedgerTracking.lua` starts
+before the page is built. `LedgerMap.lua` adapts observations to the existing
+`CreateAtlasMap` factory with an independent instance and exact Atlas anchor.
+`LedgerReports.lua` follows the existing literal, versioned section report and
+preview/accept conventions. Bestiary's fixed-schema transport and rewards have
+no generic contact hook, so the Ledger boundary explicitly stops at copy/paste.
+Neither other pages' code nor their data are modified. `tests/LEDGER.md` records
+the identity model, completeness rules, storage limits and live checklist.
+
+`AccountSections.lua` routes the four additional journals under the same global
+tracking option as Bestiary. See [account migration](ACCOUNT_TRACKING.md) for
+one-time imports, identity remapping, original-store preservation and limits.
+
+## Treasure & Salvage
+
+Six Treasure-owned modules initialize immediately after Ledger and before the
+remaining wishlist. `TreasureJournal.lua` owns schema 1 in the separate
+per-character `AzerothFieldbookTreasureDB`; it does not call account selectors or
+write another journal. `TreasureTracking.lua` starts before lazy UI construction.
+The manual editors, item rows, details and controls belong to the Treasure page.
+`TreasureMap.lua` uses the exposed independent Atlas map factory and exact Atlas
+anchor. `TreasureReports.lua` provides data-only builder/validation/preview/merge
+hooks: the existing fixed Bestiary transport/cost policy cannot dispatch them.
+There is no alternate export protocol or inert sharing control. See
+[Treasure boundaries and validation](TREASURE.md).

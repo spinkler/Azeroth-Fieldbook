@@ -5,7 +5,7 @@ local addonName, ns = ...
 ns = ns or {}
 local db, trackingDB
 local encounters
-local journal, book, fieldbook
+local journal, book, fieldbook, ledgerBook, gatheringBook
 local wipeDeadline = 0
 local afterWipeHold = false
 local skipped = 0
@@ -296,8 +296,40 @@ local function observeCurrent(unit, explicit)
     end
 end
 
+-- Display metadata is requested only for saved, visible, confirmed abilities.
+-- Never persist descriptions or inspect restricted spell values.
+local tooltipCreatureID, refreshingTooltip
+local function spellDisplay(ability)
+    if not ability or not positiveID(ability.spellID) then return end
+    local icon, description
+    local iconAPI = C_Spell and C_Spell.GetSpellTexture or GetSpellTexture
+    if type(iconAPI) == "function" then
+        local ok, value = pcall(iconAPI, ability.spellID)
+        if ok and (positiveID(value) or publicString(value)) then icon = value end
+    end
+    local descriptionAPI = C_Spell and C_Spell.GetSpellDescription or GetSpellDescription
+    if type(descriptionAPI) == "function" then
+        local ok, value = pcall(descriptionAPI, ability.spellID)
+        if ok and publicString(value) then description = value end
+    end
+    return icon, description
+end
+
+local function refreshAbilityTooltip()
+    local tooltip = GameTooltip
+    if refreshingTooltip or not tooltipCreatureID or not tooltip
+        or not readTrue(tooltip.IsShown, tooltip) or type(tooltip.SetUnit) ~= "function" then return end
+    local ok, _, unit = pcall(tooltip.GetUnit, tooltip)
+    if not ok or not publicString(unit) or npcID(unit) ~= tooltipCreatureID then return end
+    -- Rebuild the native unit tooltip so Ctrl changes cannot append duplicate lines.
+    refreshingTooltip = true
+    pcall(tooltip.SetUnit, tooltip, unit)
+    refreshingTooltip = false
+end
+
 local function addTooltip(tooltip)
     if not db or tooltip ~= GameTooltip then return end
+    tooltipCreatureID = nil
     diagnostics.tooltips = diagnostics.tooltips + 1
     local ok, _, unit = pcall(tooltip.GetUnit, tooltip)
     if not ok then tooltipStatus = "GetUnit: API ERROR."; return end
@@ -311,7 +343,21 @@ local function addTooltip(tooltip)
         local showKills=journal:GetKillCountTooltips() and journal.entries[id]~=nil
         if #names == 0 and not showKills then tooltipStatus = "No confirmed abilities: review this entry in /fieldbook."; return end
         tooltip:AddLine("Azeroth Fieldbook - Bestiary", 0.5, 0.82, 1)
-        for _, name in ipairs(names) do tooltip:AddLine(name, 1, 1, 1, true) end
+        local expanded = readTrue(IsControlKeyDown)
+        local hasDetails = false
+        for _, name in ipairs(names) do
+            local icon, description = spellDisplay(journal.entries[id].abilities[name])
+            local label = icon and ("|T" .. icon .. ":16:16:0:0|t " .. name) or name
+            tooltip:AddLine(label, 1, 1, 1, true)
+            if description then
+                hasDetails = true
+                if expanded then tooltip:AddLine(description, 1, 0.82, 0.14, true) end
+            end
+        end
+        if #names > 0 then tooltipCreatureID = id end
+        if hasDetails and not expanded then
+            tooltip:AddLine("(Ctrl for details)", 0.6, 0.6, 0.6, true)
+        end
         if showKills then
             local _,_,kills=journal:GetKillReward(id)
             tooltip:AddLine("Kills: " .. kills,1,0.82,0.14)
@@ -358,6 +404,7 @@ local function initialize()
     end
     db = AzerothFieldbookDB
     trackingDB = ns.InitializeTracking and ns.InitializeTracking(db) or db
+    if ns.InitializeSectionTracking then ns.InitializeSectionTracking(db) end
     trackingDB.bestiary = type(trackingDB.bestiary) == "table" and trackingDB.bestiary or {}
     trackingDB.bestiary.creatures = type(trackingDB.bestiary.creatures) == "table" and trackingDB.bestiary.creatures or {}
     trackingDB.bestiary.entries = type(trackingDB.bestiary.entries) == "table" and trackingDB.bestiary.entries or {}
@@ -410,10 +457,12 @@ local function initialize()
     end
     if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal,fieldbook) end
     if fieldbook and ns.InitializeGathering then
-        ns.InitializeGathering(fieldbook,function() return journal:GetBackgroundBrightness() end)
+        gatheringBook=ns.InitializeGathering(fieldbook,function() return journal:GetBackgroundBrightness() end)
     end
     if fieldbook and ns.InitializeAtlas then ns.InitializeAtlas(fieldbook,journal) end
     if fieldbook and ns.InitializeAngling then ns.InitializeAngling(fieldbook) end
+    if fieldbook and ns.InitializeLedger then ledgerBook=ns.InitializeLedger(fieldbook) end
+    if fieldbook and ns.InitializeTreasure then ns.InitializeTreasure(fieldbook) end
     if fieldbook and ns.RegisterFieldbookWishlistSections then ns.RegisterFieldbookWishlistSections(fieldbook) end
     if journal and journal.sharing then
         journal.sharing:SetImportedCallback(function() if book then book:Refresh() end end)
@@ -446,8 +495,17 @@ function AzerothFieldbookToggleBestiary()
     if fieldbook or book then (fieldbook or book):Toggle() end
 end
 
+function AzerothFieldbookOpenMouseover()
+    if gatheringBook and gatheringBook.OpenAtMouseover and gatheringBook:OpenAtMouseover() then return true end
+    if ledgerBook and ledgerBook.OpenAtUnit and ledgerBook:OpenAtUnit("mouseover") then return true end
+    if book and book:OpenAtUnit("mouseover") then return true end
+    if fieldbook and fieldbook.ShowSection then fieldbook:ShowSection(fieldbook.active or "bestiary") end
+    return false
+end
+
+-- Keep existing macros and the saved binding action compatible.
 function AzerothFieldbookOpenMouseoverBestiary()
-    if book then book:OpenAtUnit("mouseover") end
+    return AzerothFieldbookOpenMouseover()
 end
 
 function AzerothFieldbookNextEntry()
@@ -476,6 +534,10 @@ frame:SetScript("OnEvent", function(_, event, ...)
     if encounters then encounters:Event(event) end
     if event == "ADDON_LOADED" then
         if unit == addonName then initialize() end
+    elseif event == "MODIFIER_STATE_CHANGED" then
+        if unit == "LCTRL" or unit == "RCTRL" then refreshAbilityTooltip() end
+    elseif event == "SPELL_TEXT_UPDATE" then
+        refreshAbilityTooltip()
     elseif event == "PLAYER_LOGIN" then
         remindAboutUnboundBookKey()
     elseif event == "PLAYER_TARGET_CHANGED" then
@@ -556,7 +618,7 @@ end
 -- Standalone GUID events in Forever 69977 (not combat-log subevents). Missing
 -- registration can fail; a watched alive-to-dead transition can still count
 -- with readable tag eligibility. PARTY_KILL is optional (pets may not emit it).
-for _, event in ipairs({ "PARTY_KILL", "UNIT_DIED" }) do
+for _, event in ipairs({ "PARTY_KILL", "UNIT_DIED", "MODIFIER_STATE_CHANGED", "SPELL_TEXT_UPDATE" }) do
     pcall(frame.RegisterEvent, frame, event)
 end
 

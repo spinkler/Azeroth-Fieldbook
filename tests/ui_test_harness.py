@@ -66,6 +66,10 @@ def new_ui_client(modules=()):
         self.text=tostring(text)
         if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self) end
     end
+    function methods:GetFontString()
+        if not rawget(self,'fontString') then self.fontString=self:CreateFontString() end
+        return self.fontString
+    end
     function methods:GetText() return rawget(self,'text') or '' end
     function methods:SetSize(w,h) self.width=w;self.height=h end
     function methods:SetWidth(w) self.width=w end
@@ -98,6 +102,7 @@ def new_ui_client(modules=()):
     function methods:GetHeight() return rawget(self,'height') or 100 end
     function methods:GetStringHeight() return math.max(14,math.ceil(#self:GetText()/math.max(1,math.floor(self:GetWidth()/7)))*14) end
     function methods:SetHorizontalScroll(value) self.horizontalScroll=value end
+    function methods:GetHorizontalScroll() return self.horizontalScroll or 0 end
     function methods:GetStringWidth()
         local text=self:GetText():gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','')
         local _,characters=text:gsub('[^\128-\191]','')

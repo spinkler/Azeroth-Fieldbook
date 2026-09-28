@@ -33,7 +33,7 @@ Next / Previous keybindings reuse the existing `cycleEntry` path and wrap at lis
 ends. They never create/open a window, change section or act while a text field
 has keyboard focus. Both are unassigned until configured by the player.
 All bindings appear under Azeroth Fieldbook. Toggle Azeroth Fieldbook uses the
-shared shell, preserving the last selected tab; Open bestiary at mouseover still
+shared shell, preserving the last selected tab; Open Azeroth Fieldbook at mouseover now prefers remembered Ledger contacts and otherwise
 selects the Bestiary explicitly. Existing action IDs and assigned keys are retained.
 
 The operator's 0.10.5 screenshot showed the legacy XML `header` becoming a bindable

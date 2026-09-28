@@ -24,7 +24,7 @@ function ns.StartBestiaryLoot(journal)
                 local id=type(guid)=="string" and tonumber(guid:match("^Creature%-%d+%-%d+%-%d+%-%d+%-(%d+)%-"))
                 local entry=id and journal.entries[id]
                 if entry and entry.personalEncountered then
-                    local sample=corpses[guid] or {entry=entry,items={}}
+                    local sample=corpses[guid] or {id=id,entry=entry,items={}}
                     corpses[guid]=sample
                     if itemID and type(quantity)=="number" and quantity>0 then
                         sample.items[itemID]=(sample.items[itemID] or 0)+quantity
@@ -46,9 +46,11 @@ function ns.StartBestiaryLoot(journal)
                 loot.samples=loot.samples+1;changed=true
             end
             -- Preserve the maximum snapshot across autoloot and repeated opens.
+            local learned=false
             for id,quantity in pairs(sample.items) do
                 local old=previous.items[id] or 0
                 if quantity>old then
+                    if not loot.items[id] then learned=true end
                     local item=loot.items[id] or {quantity=0,drops=0}
                     loot.items[id]=item
                     item.quantity=item.quantity+quantity-old
@@ -56,6 +58,7 @@ function ns.StartBestiaryLoot(journal)
                     previous.items[id]=quantity;changed=true
                 end
             end
+            if learned and journal.TrackStableContent then journal:TrackStableContent(sample.id) end
         end
         if changed then journal:Touch() end
     end

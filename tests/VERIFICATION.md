@@ -110,3 +110,66 @@ Pending live checks:
   does not independently establish whether Forever's level visibility is a bug.
 
 Locations 0.9.152: automated coverage verifies the empty-state footer and player-arrow movement, facing, zone changes, terrain-brightness independence and unavailable/restricted coordinates. Pending live check: confirm arrow orientation and size while moving/turning, and its disappearance when another zone is selected.
+
+## Bestiary ability tooltip visibility (0.14.1)
+
+Automated journal, automatic-recording and rumour tests cover confirmed abilities
+appearing without an entry lock and per-ability visibility choices. Native UI
+acceptance remains pending:
+
+1. On an unlocked entry, confirm an ability and check that its checkbox defaults
+   to ON and its name appears when hovering the creature.
+2. Uncheck it and re-hover the creature; the ability should disappear. Recheck
+   it and confirm the name returns.
+3. Lock the entry and repeat both checkbox toggles. The checkbox must remain
+   visible and usable; locking and unlocking must preserve its choice.
+4. Reload with the checkbox OFF and verify it stays OFF. Pending and rejected
+   abilities must remain absent from the creature tooltip.
+
+## Bestiary tooltip icons and Ctrl details (0.14.3)
+
+Automated tooltip checks cover saved-ID-only metadata lookup, left-side icons,
+grey hints, Ctrl press/release rebuilds, hidden tooltips, checkbox and confirmation
+filtering, unresolved names and unavailable/restricted spell metadata.
+
+In-game acceptance remains pending: hover a creature with a resolved ability,
+confirm its icon and grey (Ctrl for details) hint, then press and release Ctrl
+without moving the cursor. Verify descriptions wrap without duplicated lines,
+including when Ctrl is already held before hovering. Check a name-only ability
+and an unchecked ability, and confirm kill counts and native tooltip content
+remain intact.
+
+## Bestiary zones and subzones (0.14.4)
+
+Automated checks cover parent-map selection, zone-only summary text, sorted
+per-zone hover contents, locked observations, legacy migration without changing
+earned Knowledge, idempotence, backup round trips, account merging and unreadable
+subzone/map data. Unidentifiable historical names are preserved.
+
+In-game acceptance remains pending: observe a creature from Sentinel Tower and
+Moonbrook in Westfall. Confirm Locations lists Westfall once; hover Westfall and
+check both observed subzones appear. Repeat while locked, change creature, and
+reload. Check old Sentinel Tower/Westfall pairs migrate and their old spelling
+is retained in the hover details. Confirm territory colours, line wrapping,
+location filters and map markers still behave correctly.
+
+## Effect immunities and Mechanical expectations (0.14.5)
+
+Automated checks cover all effect setters, school-only resistance/offense guards,
+summary and checkbox wiring, entry locks, mechanical type expectations, durable
+overrides, backup/account persistence, and report encode/decode/rumour review.
+Type-derived Bleed/Fear guidance is unverified for Forever and is never shared as
+an observed mark. No immunity is inferred from a resisted cast or targeting error.
+
+In-game acceptance remains pending: open Defenses at supported UI scales and
+check the school/effect columns fit. Record Fear, Polymorph and Bleed. Encounter
+a Mechanical and check [Type] labels, uncheck an expectation, reload and confirm
+the override remains. Confirm unlocked/locked controls and summary wrapping.
+
+## Global tracking and optional immunity UI (0.14.6)
+
+Account migration tests cover four additional sections, one-time imports, opt-out,
+ID/reference preservation, catch totals and future schema protection. Immunity
+checks cover default-OFF suggestions, supported type exclusions, override and
+option persistence, and the compact checkbox dropdown. Native dropdown placement
+and cross-character journal acceptance remain pending; see ACCOUNT_TRACKING.md.

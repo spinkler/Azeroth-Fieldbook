@@ -169,7 +169,7 @@ sender attribution are not cryptographic truth or anti-cheat guarantees.
   sources. Locking captures the display basics, including for an imported-only
   entry, so later reports cannot change its locked metadata.
 - Rumour candidates are individual pending/confirmed ability names, including
-  manual abilities, or existing offense/resistance/immunity school and behaviour
+  manual abilities, or existing offense/resistance school, school/effect immunity and behaviour
   toggles. Each ability contributes only its name and optional spell identifier;
   neither its many effect tags nor freeform note is a selection. ID-log-only
   spells, rejected abilities, sentence-bundled names and unverified received rumours

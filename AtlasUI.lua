@@ -2,22 +2,7 @@ local _, ns = ...
 local U={};ns.AtlasUI=U
 local ui=ns.FieldbookUI
 U.Button=ui.Button;U.Edit=ui.Edit
-function U.MenuButton(parent,text,x,y,width,action)
-    local button=U.Button(parent,text,x,y,width,action)
-    button.arrowShadow=button:CreateTexture(nil,"OVERLAY",nil,-1)
-    button.arrowShadow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
-    button.arrowShadow:SetPoint("RIGHT",-11,-1);button.arrowShadow:SetSize(10,12)
-    button.arrowShadow:SetVertexColor(0,0,0,0.85)
-    button.arrow=button:CreateTexture(nil,"OVERLAY")
-    button.arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
-    button.arrow:SetPoint("RIGHT",-12,0);button.arrow:SetSize(10,12)
-    local label=button:GetFontString()
-    if label then
-        label:ClearAllPoints();label:SetPoint("LEFT",10,0);label:SetPoint("RIGHT",-28,0)
-        label:SetJustifyH("CENTER");label:SetWordWrap(false)
-    end
-    return button
-end
+U.MenuButton=ui.MenuButton
 function U.ZoneMenu(parent,x,y,width,getMaps,onSelect)
     local button
     button=U.MenuButton(parent,"Choose zone",x,y,width,function()
@@ -50,6 +35,74 @@ function U.Label(parent,text,x,y,width,font)
     elseif font and font:find("Disable",1,true) then label:SetTextColor(0.55,0.57,0.57) end
     return label
 end
+function U.SavedIcon(saved)
+    local texture=saved and "Interface\\Buttons\\UI-CheckBox-Check" or "Interface\\Buttons\\UI-CheckBox-Up"
+    return "|T"..texture..":14:14:0:0|t "
+end
+function U.SavedButton(parent,text,x,y,width,action)
+    local button=U.Button(parent,text,x,y,width,action)
+    local box=button:CreateTexture(nil,"ARTWORK")
+    box:SetTexture("Interface\\Buttons\\UI-CheckBox-Up");box:SetSize(14,14);box:SetPoint("LEFT",14,0)
+    local check=button:CreateTexture(nil,"OVERLAY")
+    check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check");check:SetAllPoints(box);check:Hide()
+    local label=button:GetFontString()
+    label:ClearAllPoints();label:SetPoint("LEFT",32,0);label:SetPoint("RIGHT",-8,0);label:SetJustifyH("LEFT")
+    button.savedBox=box;button.savedCheck=check
+    function button:SetSaved(saved,enabled)
+        check:SetShown(saved==true)
+        box:SetAlpha(enabled==false and 0.45 or 1);check:SetAlpha(enabled==false and 0.45 or 1)
+    end
+    return button
+end
+function U.StyleSelection(control)
+        -- Crop the native bevel only; the red face is never tinted or brightened.
+        local borders={}
+        local function border(source,l,r,t,b,x1,y1,x2,y2)
+            for layer=0,1 do
+                local piece=control:CreateTexture(nil,"BORDER",nil,layer)
+                piece:SetPoint("TOPLEFT",source,"TOPLEFT",x1,y1)
+                piece:SetPoint("BOTTOMRIGHT",source,"BOTTOMRIGHT",x2,y2)
+                piece:SetTexCoord(l,r,t,b)
+                piece:SetVertexColor(1,1,0)
+                piece:SetBlendMode(layer==0 and "BLEND" or "ADD")
+                borders[#borders+1]={texture=piece,source=source}
+            end
+        end
+        local function refreshBorder()
+            for _,part in ipairs(borders) do
+                part.texture:SetTexture(part.source:GetTexture())
+                part.texture:SetShown(control.afbSelected and control:IsEnabled())
+            end
+        end
+        -- UIPanelButtonTemplate uses a 128x32 texture with an 80x22 button,
+        -- split into 12px end caps and a stretching middle. Its outer 4px
+        -- contain the bevel; copying those pixels preserves the native shape.
+        local function createBorder()
+            local height=control:GetHeight()
+            local edge=height*4/22
+            for _,slice in ipairs({{"Left",0,12},{"Middle",12,68},{"Right",68,80}}) do
+                local source=control[slice[1]]
+                if source and type(source)~="function" then
+                    border(source,slice[2]/128,slice[3]/128,0,4/32,0,0,0,height-edge)
+                    border(source,slice[2]/128,slice[3]/128,18/32,22/32,0,-height+edge,0,0)
+                    if slice[1]=="Left" then
+                        border(source,0,4/128,4/32,18/32,0,-edge,-8,edge)
+                    elseif slice[1]=="Right" then
+                        border(source,76/128,80/128,4/32,18/32,8,-edge,0,edge)
+                    end
+                end
+            end
+        end
+        control.SetSelected=function(self,selected)
+            self.afbSelected=selected
+            if selected and #borders==0 then createBorder() end
+            refreshBorder()
+        end
+        for _,event in ipairs({"OnMouseDown","OnMouseUp","OnEnable","OnDisable","OnShow"}) do
+            control:HookScript(event,refreshBorder)
+        end
+        control:SetSelected(false)
+    end
 function U.Tip(control,text)
     control:SetScript("OnEnter",function(self)
         if GameTooltip then

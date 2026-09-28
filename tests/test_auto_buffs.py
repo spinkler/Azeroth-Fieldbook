@@ -144,7 +144,7 @@ class AutomaticBuffTests(unittest.TestCase):
             fire('PLAYER_TARGET_CHANGED')
             for i=1,10 do tick() end
             assert(ability()==original and buffEvents()==2)
-            assert(#journal:ConfirmedNames(42)==0, 'unlocked entry still hides tooltip abilities')
+            assert(#journal:ConfirmedNames(42)==2, 'unlocked entry shows confirmed abilities by default')
             journal:SetEntryConfirmed(42,true)
             assert(#journal:ConfirmedNames(42)==2)
             fire('ADDON_LOADED','AzerothFieldbook')

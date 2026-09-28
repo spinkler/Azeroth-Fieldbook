@@ -1,4 +1,33 @@
-# Azeroth Fieldbook 0.13.37 (Beta)
+# Azeroth Fieldbook 0.15.37 (Beta)
+
+**Treasure & Salvage** now records container kinds and historical encounters in
+its existing tab. Use **Record a find** for world finds, portable acquisitions,
+salvage, access attempts and observed contents. Browse known names, zones, items
+and notes with combinable filters; save **Look for again** bookmarks and correct
+or remove individual encounters. Its independent map uses the Atlas viewport:
+**Past finds — current availability unknown.**
+
+Readable openable bag items are recorded in the background as **Observed
+carried**. Strictly matched portable loot can record a partial contents
+inspection; neither bag changes nor loot visibility prove personal recovery.
+World identity, acquisition context and recovery claims require manual input.
+Treasure remains per character in `AzerothFieldbookTreasureDB`. Sharing has tested
+report-builder, validator, preview and merge hooks; delivery/import/export UI
+awaits an extension to the existing transport and points policy. See
+[Treasure model, capture limits and pending in-game checks](tests/TREASURE.md).
+
+**Merchant’s Ledger** is now a personal directory of encountered merchants,
+trainers and services. Open an NPC's service interface to remember readable
+offerings, quoted bundle prices, stock and training without buying anything.
+Search goods, recipes, lessons, NPC sublabels, places and access notes; use
+role, zone, provenance, favourite and recipe filters. Its independent map uses
+the exact Atlas viewport. All availability is explicitly historical.
+
+Ledger reports support selected-contact preparation, copy/paste, validation,
+preview and acceptance into separate reported facts. Notes are opt-in. Ledger
+addon-message delivery and contact discovery rewards remain deferred because
+the existing transport and reward policy are Bestiary-specific. See
+[Ledger data/API boundaries and in-game checklist](tests/LEDGER.md).
 
 Atlas and Almanac maps support scroll-wheel zoom (1×–4×) toward the pointer,
 including over map pins. Scroll down to return to the full map. Changing maps
@@ -32,7 +61,7 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.13.37 includes sharing, addon-version compatibility
+spell databases. Version 0.15.37 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
@@ -40,15 +69,17 @@ The main window now has seven native icon tabs down its outside right edge:
 **Merchant’s Ledger**, **Treasure & Salvage**, and **Lore & Landmarks**.
 Bestiary is selected on first opening. **Gatherer's Compendium** is a personal gathering
 journal; **Traveller’s Atlas** is a personal geographical journal, and **Angler’s
-Almanac** records personal fishing knowledge. The other three
-sections display their wishlist for future releases and collect no data yet.
+Almanac** records personal fishing knowledge. **Merchant’s Ledger** remembers
+encountered contacts, goods, training and useful services. **Treasure & Salvage**
+records historical container knowledge. **Lore & Landmarks** retains its
+wishlist for future releases and collects no data yet.
 Hover a tab for its name; the selected tab has a gold border. Switching
 tabs retains the Bestiary's creature selection, filters, list/ability browsing
 positions and unfinished fields. Creature-entry actions select the Bestiary.
 
 ## Angler’s Almanac
 
-The title-bar **Event log** button opens this character’s ongoing history of Almanac
+The title-bar **Event log** button opens the active journal’s ongoing history of Almanac
 events: acquired catches, fish getting away, pool discoveries, source changes,
 skipped captures and journal corrections. Events survive reloads and appear
 newest first, in pages of 50. Partial loot updates share one catch entry. **Clear
@@ -100,8 +131,9 @@ Use **Sources / spots** on a caught item to find where you caught it before.
   duplicate results. Addon-message transport, fishing prices and rewards are not
   configured; Bestiary sharing and its point rules remain unchanged.
 
-`AzerothFieldbookAnglingDB` is per-character and independent of other sections'
-resets, backups and account tracking. The last 200 catch events and 32 sessions
+`AzerothFieldbookAnglingDB` holds the separate character journal. Account-wide
+tracking selects the shared Almanac store; other sections' resets and backups
+remain independent. The last 200 catch events and 32 sessions
 are retained alongside durable source-specific totals. Browsing, notes and map
 selection persist. The map uses the Atlas renderer and exactly the same anchor,
 dimensions and aspect-fit policy, with independent state. See the
@@ -195,9 +227,9 @@ sub-zone crossings and encountered weather are observed automatically.
   serialization and recipient staging are implemented; transport, inbox and import
   UI are deferred. No report is sent or imported by this page.
 
-Atlas data and layer/browsing settings use the per-character
-`AzerothFieldbookAtlasDB`, independent of Bestiary resets, account scope, sharing
-and backups. Explored status is always a player assertion, separate from Recorded
+Atlas data and layer/browsing settings use the active account or character
+journal. `AzerothFieldbookAtlasDB` retains the separate character store. Atlas
+remains independent of Bestiary resets, sharing and backups. Explored status is always a player assertion, separate from Recorded
 or Reported provenance. Deleted entries leave clearly unresolved links, allowing
 the player to preserve or remove their history. See [Atlas implementation and
 validation](tests/ATLAS.md) for limits, sharing contracts and the live-client checklist.
@@ -249,10 +281,10 @@ represents a discrete recorded position; gathering never triangulates or shades
 areas between nodes. Missing map coordinates
 leave the interaction and readable zone recorded without inventing a marker.
 
-Gathering progress, notes and sort/map preferences are saved per character in
-`AzerothFieldbookGatheringDB`. Location histories retain up to 256 positions per
+Gathering progress, notes and sort/map preferences use the active account or
+character journal. `AzerothFieldbookGatheringDB` retains the character store. Location histories retain up to 256 positions per
 map and 64 maps per resource, consolidating repeated coordinates. Gathering is
-independent of Bestiary account tracking, resets, backups and sharing. Click the field-notes area to edit and use **Save notes** to persist notes for
+independent of Bestiary resets, backups and sharing. Click the field-notes area to edit and use **Save notes** to persist notes for
 that entry. Saved notes are independent for every herb and mineral. Unsaved
 note drafts remain when switching entries or sections during the same session.
 
@@ -263,7 +295,8 @@ has been tested in game; it does not require every future section to be complete
 
 Options → Tracking includes **Auto-lock after X kills without changes**, enabled
 by default at 10. Only credited kills count. Recorded-information changes and manual
-unlocking restart the count; repeated sightings do not. Progress persists across
+unlocking restart the count; repeated sightings do not. Newly learned loot items
+restart the count; repeated drops, quantities and corpse samples do not. Progress persists across
 sessions, and automatic locking does not confirm pending abilities. Existing kills
 are not counted retroactively. Automatic locks appear in the Event log.
 
@@ -279,12 +312,20 @@ Install the addon as `Interface/AddOns/AzerothFieldbook` and enable
 - The minimap button opens or closes the journal; its visibility is optional.
 - `/bestiary` remains available as a compatibility alias.
 - Under the **Azeroth Fieldbook** keybinding heading, **Toggle Azeroth Fieldbook**
-  opens/closes the journal at its last selected tab. **Open bestiary at mouseover**
-  opens the Bestiary directly at the creature beneath the mouse pointer.
+  opens/closes the journal at its last selected tab. **Open Azeroth Fieldbook at mouseover**
+  opens the Gatherer’s Compendium for a hovered herb/mining node, a matching
+  remembered Merchant’s Ledger contact, or the Bestiary entry for a creature. Existing key assignments remain valid.
 - Assign **Next Bestiary entry** and **Previous Bestiary entry**
   in WoW's keybinding options to browse the filtered, sorted list. They
   wrap at the ends and keep the selected entry visible. They act only while the
   Bestiary section is open and no text field has keyboard focus.
+
+**Record Atlas survey point** adds a sub-zone survey sample at your current
+position, provided all existing survey samples on that map are more than 15 yards
+away. It works with the Atlas closed. Manual points survive reloads; use
+**Clean Redundant Points** when you want to simplify the survey.
+**Toggle Automatic Mapping**, above that button, starts enabled and saves your
+preference. Turning it off pauses automatic sampling but keeps the manual keybind available.
 
 No existing keybinding is overwritten. Escape closes the primary and secondary
 windows. The book and its dialogs can be dragged and are clamped to the screen.
@@ -398,9 +439,25 @@ ambiguous or unavailable map may need another observation in that zone. Close
 with Escape or the window's X; closing
 the Bestiary also closes its Locations window.
 
-**Account-wide tracking** is enabled by default in Options. It shares the Bestiary
-across characters while keeping display preferences per character. Turning it off
-uses the current character's separate journal. Changes apply after `/reload`.
+**Account-wide tracking** is enabled by default in Options and applies to these five
+journals: Bestiary, Herbs & Minerals, Traveller’s Atlas, Angler’s Almanac and
+Merchant’s Ledger. Turning it off uses this character’s separate journals.
+Treasure & Salvage uses its own per-character store in this first iteration.
+Changes apply after `/reload`. Shell appearance and Bestiary display options
+remain character preferences; each other section keeps its browsing state with
+its active journal.
+
+Each additional section merges the character’s existing data once into
+`AzerothFieldbookAccountDB.sections`. Original character databases remain intact.
+Gathering combines resource observations; Atlas preserves records and remaps
+route/place links; fishing combines identities while retaining distinct catch
+facts; Ledger preserves distinct contact identities and references. Repeated
+logins do not repeat imports. Opting out returns to the original character
+journals; later edits in the two modes remain independent after their first
+import. Section resets, reports and Bestiary backups retain their existing scope.
+Shared storage is loaded as each character logs in; it cannot read an offline
+character’s SavedVariables. Unsupported future schemas defer account migration
+and leave the original data untouched.
 
 Each character's existing journal is merged into the account journal once, the
 first time that character loads with account tracking enabled. Creature records,
@@ -425,6 +482,22 @@ ascending). The information panel also uses a slightly larger skull raised by
 2 pixels to align with the text.
 Hover over an overflowing
 name to slowly reveal the full text; leaving the row resets it to the beginning.
+Bestiary **Locations** lists zones, using the client’s parent zone map when
+available. Hover an individual zone name in the creature summary to see the
+sorted subzones from which that creature was observed. These are observer
+locations, not exact creature positions. Fresh subzone observations are retained
+while an entry is locked; they do not award extra zone-discovery Knowledge.
+Subzone history survives backups and account-wide merges.
+
+Existing location data is repaired where a subzone’s parent zone is supported by
+recorded evidence. This includes Sentinel Tower when Westfall is also recorded
+as a location or observation/kill map. Known associations learned from later
+observations can repair other entries with matching zone evidence. Repairs also
+update locked location snapshots and discovery-credit keys, preserving earned
+Knowledge. Ambiguous old names remain intact rather than being guessed or deleted.
+Reports continue to share zone names only; private subzone history is not added
+to the sharing protocol.
+
 Creature tooltips also show recorded kill counts by default, including on
 unlocked entries. Toggle **Show kill count in creature tooltips** under Options
 → **Tooltips and cast IDs** to hide them; the preference is saved per character.
@@ -533,7 +606,16 @@ hidden. Buff capture retries
 after combat, on target/mouseover and aura changes, and once a second while watching
 a creature. Editing and saving an automatic entry makes it a personal note.
 
-Only confirmed abilities from a locked creature entry appear in NPC tooltips.
+Confirmed abilities appear in NPC tooltips whether the creature entry is locked or
+unlocked. Each ability checkbox toggles its tooltip display and defaults to on;
+the checkbox remains available while the entry is locked. Existing OFF choices
+are preserved. Pending and rejected abilities remain hidden; locking or unlocking
+an entry does not change tooltip visibility. Resolved abilities include their spell
+icon on the left when available. Hold Ctrl while hovering over a creature to
+expand available spell descriptions beneath the ability names; release Ctrl to
+collapse them. A grey **(Ctrl for details)** hint appears when a displayed ability
+has readable details. Unresolved abilities remain name-only, and unavailable or
+restricted descriptions are omitted.
 
 The **last detected enemy ability** hint beneath the optional spell ID field
 shows the latest cast's name, ID and local date/time for that creature. It remains
@@ -573,7 +655,31 @@ Delete removes the selected creature and its saved records after you type
 the Event log calls this **Entry restored**, with no repeat discovery award. Previously
 credited milestones and spending survive deletion, so deleting and rediscovering
 an entry cannot repeatedly earn its knowledge. Ability effects include
-school-specific resistance and immunity tags.
+school-specific resistance and immunity tags, plus effect immunities including
+Fear, Polymorph, Bleed, Stun, Root, Snare, Silence, Interrupt, Poison and Disease.
+Use **Defenses → Effect immunities** to open the checkbox dropdown and record
+or remove an immunity you have observed. The main window keeps school defenses
+visible. Burning Fire-damage effects use the existing **Fire → Immune** checkbox;
+there is no separate generic Burn entry.
+
+**Options → Expected immunities → Show expected immunities** defaults to OFF.
+This is optional type-based guidance, not knowledge your character has observed.
+When enabled, personally encountered Mechanical creatures show expected **Bleed**
+and **Fear** immunity. Known types other than Humanoid, Beast or Critter also show expected
+**Polymorph** immunity. Unknown/unclassified types produce no Polymorph suggestion.
+The summary says **Expected Immunities:** and checkbox labels carry **[Type]**.
+Uncheck an expectation on an unlocked entry to override it; the choice survives
+reloads, backups and account merges. Checking it again records your own immunity
+mark. Hiding expectations preserves both recorded marks and overrides.
+Expectations are excluded from shared reports; explicit marks are shared as
+unverified rumours. An unmarked effect means unknown.
+
+Mechanical guidance follows the general Classic rules described by
+[Mechanical](https://warcraft.wiki.gg/wiki/Mechanical) and
+[Fear effects](https://warcraft.wiki.gg/wiki/Fear_effect). Polymorph guidance follows its
+[Humanoid/Beast/Critter targeting restriction](https://www.wowhead.com/classic/spell=118/polymorph), not a verified immunity result. Exceptions
+and Forever changes remain possible. Burning effects such as
+[Ignite](https://warcraft.wiki.gg/wiki/Ignite_%28Classic%29) deal Fire damage.
 
 Each personal creature discovery awards 1 knowledge once the client exposes a readable effective level, including the zone of that observation. Unknown level ranges display a skull. Flying and flight paths require active targeting or the mouseover-open keybinding; passive mouseovers cannot record observations from the air. Explicit selections with readable identity and attackability work beyond the visibility range. New personal entries appear in the Event log even before their level is known, including previously shared entries. Skull/unknown-level observations earn no discovery or location Knowledge. Kill counts still advance, but their milestone Knowledge waits for a personally observed readable level. Existing credited history is retained.
 Discovering a new location for an existing creature awards 1 knowledge. New levels
@@ -637,7 +743,7 @@ Selecting more rumours immediately updates the total and resulting balance;
 insufficient available knowledge disable sending.
 
 Individual pending or confirmed ability names (including manual abilities),
-offensive schools, school resistances/immunities and behaviours are selectable.
+offensive schools, school resistances, school/effect immunities and behaviours are selectable.
 An ability selection says only that the creature casts that named ability;
 its private note and effect tags are excluded. Names containing sentence
 separators are not selectable. ID Logs, personal Notes, damage, kills, stars,
@@ -715,7 +821,7 @@ Click its **green tick** when you have verified the claim: it becomes a confirme
 ability or the corresponding offense, resistance, immunity or behaviour in your
 personal journal. Existing ability notes, effects and tooltip preferences are
 preserved. Unlock a locked entry before verifying. Confirmed abilities use the
-normal entry-lock and tooltip rules; accepting a report alone establishes no traits.
+normal ability-confirmation and tooltip-checkbox rules; accepting a report alone establishes no traits.
 
 Recording matching data manually or confirming an observed ability removes all
 matching rumours, across senders. Ability matching uses the name (ignoring case
@@ -858,12 +964,25 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.13.37 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
+Version 0.15.37 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,
 Event log and backups. Backup archives live alongside `bestiary` in the active
 database, so account and character backups remain separate.
+
+Merchant’s Ledger adds schema 1 in per-character `AzerothFieldbookLedgerDB`.
+Account-wide tracking selects the shared Ledger store; the character store
+remains intact. Ledger resets and reports remain independent of other journals. Contact knowledge, private notes, favourites and browsing
+preferences survive reloads. A newer unknown Ledger schema stays untouched
+and opens read-only. No existing character database is repurposed or cleared.
+
+Treasure adds schema 1 in `AzerothFieldbookTreasureDB`, independently of account
+tracking, resets, backups and the other journals. Kinds, encounters, provenance,
+notes, bookmarks and browsing state persist. Active loot correlation is session
+only. Malformed records are preserved but excluded from the view with a notice;
+an unknown future schema uses a detached read-only view. Capacity limits refuse
+new records without discarding detailed history or notes.
 
 The previous binding action IDs remain registered behind the newly branded
 binding labels, preserving assigned keys across the rename.

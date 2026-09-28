@@ -117,7 +117,7 @@ local function mergeEntry(target, source)
     end
     -- Automatic evidence remains historical even while its checkbox is off.
     mergeMissing(target.behaviourSources,source.behaviourSources)
-    for _, field in ipairs({"locations", "offenses", "resistances", "immunities", "ignoredAbilities"}) do
+    for _, field in ipairs({"locations", "subzones", "offenses", "resistances", "immunities", "ignoredTypeImmunities", "ignoredAbilities"}) do
         target[field] = target[field] or {}
         mergeMissing(target[field], source[field])
     end

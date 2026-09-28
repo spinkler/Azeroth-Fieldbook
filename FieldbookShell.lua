@@ -29,6 +29,22 @@ local function button(parent, text, x, y, width, action)
     b:SetScript("OnClick", action)
     return b
 end
+local function menuButton(parent,text,x,y,width,action)
+    local control=button(parent,text,x,y,width,action)
+    control.arrowShadow=control:CreateTexture(nil,"OVERLAY",nil,-1)
+    control.arrowShadow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
+    control.arrowShadow:SetPoint("RIGHT",-11,-1);control.arrowShadow:SetSize(10,12)
+    control.arrowShadow:SetVertexColor(0,0,0,0.85)
+    control.arrow=control:CreateTexture(nil,"OVERLAY")
+    control.arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
+    control.arrow:SetPoint("RIGHT",-12,0);control.arrow:SetSize(10,12)
+    local label=control:GetFontString()
+    if label then
+        label:ClearAllPoints();label:SetPoint("LEFT",10,0);label:SetPoint("RIGHT",-28,0)
+        label:SetJustifyH("CENTER");label:SetWordWrap(false)
+    end
+    return control
+end
 local function cornerClose(parent)
     local close=CreateFrame("Button",nil,parent,"UIPanelCloseButton")
     close:SetPoint("TOPRIGHT",-3,-3)
@@ -47,7 +63,7 @@ local function edit(parent, x, y, width, limit)
     return e
 end
 
-ns.FieldbookUI = {Label=label, Button=button, Close=cornerClose, Edit=edit}
+ns.FieldbookUI = {Label=label, Button=button, MenuButton=menuButton, Close=cornerClose, Edit=edit}
 
 function ns.CreateFieldbookShell(settings)
     settings=settings or {}

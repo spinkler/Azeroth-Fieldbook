@@ -3,7 +3,83 @@ import unittest
 from kill_test_harness import new_client, ROOT
 
 
+def loot_client():
+    lua = new_client()
+    lua.execute((ROOT/'BestiaryLoot.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
+    lua.execute('''
+        local create=ns.CreateBestiaryJournal
+        ns.CreateBestiaryJournal=function(...) activeJournal=create(...);return activeJournal end
+        fire('ADDON_LOADED','AzerothFieldbook')
+        lootItem,lootQuantity=100,1
+        function GetNumLootItems() return 1 end
+        function GetLootSourceInfo() return units.target.guid,lootQuantity end
+        function GetLootSlotLink() return 'item:'..lootItem end
+        function killAndLoot(suffix)
+            beginKill(suffix);finishKill();fire('LOOT_READY');tick()
+        end
+    ''')
+    return lua
+
+
 class AutoLockTests(unittest.TestCase):
+    def test_identical_loot_allows_auto_lock_and_new_items_restart_progress(self):
+        lua = loot_client()
+        lua.execute('''
+            for i=1,10 do killAndLoot('same'..i) end
+            local e=activeJournal.entries[42]
+            assert(not e.confirmed and e.unchangedKills==9,
+                'Only the first newly learned drop restarts the streak')
+            for i=11,30 do killAndLoot('same'..i) end
+            assert(e.confirmed and e.unchangedKills==10 and e.kills==30)
+            assert(e.loot.samples==30 and e.loot.items[100].quantity==30)
+            activeJournal:SetEntryConfirmed(42,false)
+            for i=31,33 do killAndLoot('same'..i) end
+            assert(e.unchangedKills==3)
+            lootItem=101;fire('LOOT_READY')
+            assert(e.unchangedKills==0,'A new drop resets progress immediately')
+            for i=34,35 do killAndLoot('new'..i) end
+            assert(e.unchangedKills==2)
+            lootQuantity=4;fire('LOOT_READY');fire('LOOT_OPENED');tick()
+            assert(e.unchangedKills==2,'Quantity and duplicate snapshots are bookkeeping')
+            fire('ADDON_LOADED','AzerothFieldbook')
+            assert(activeJournal.entries[42].unchangedKills==2,'Reload preserves the streak')
+        ''')
+
+    def test_signature_upgrade_preserves_existing_progress(self):
+        lua = new_client()
+        lua.execute('''
+            for i=1,8 do beginKill('legacy'..i);finishKill() end
+            local e=AzerothFieldbookDB.bestiary.entries[42]
+            e.autoLockSignature='{legacy full-loot signature}'
+            fire('ADDON_LOADED','AzerothFieldbook')
+            assert(e.unchangedKills==8,'Changing the signature format is not new knowledge')
+            for i=9,10 do beginKill('legacy'..i);finishKill() end
+            assert(e.confirmed and e.unchangedKills==10)
+        ''')
+
+    def test_idle_observation_does_not_serialize_loot_history(self):
+        lua = loot_client()
+        lua.execute('''
+            activeJournal:SetAutoLockEnabled(false)
+            for i=1,128 do killAndLoot('history'..i) end
+            units.target.dead=false;tick()
+            local e=activeJournal.entries[42]
+            local signature=e.autoLockSignature
+            local sort=table.sort;local sorts=0
+            table.sort=function(...) sorts=sorts+1;return sort(...) end
+            collectgarbage('collect');collectgarbage('stop')
+            local before=collectgarbage('count')
+            for i=1,300 do tick() end
+            local allocated=collectgarbage('count')-before
+            collectgarbage('restart');table.sort=sort
+            assert(sorts==0,'Unchanged polling must not rebuild sorted content signatures')
+            assert(allocated<2048,'One minute of idle polling allocated '..allocated..' KiB')
+            assert(e.autoLockSignature==signature and #e.loot.recent==128)
+            units.target.level=6;tick()
+            assert(e.levelMax==6 and e.autoLockSignature~=signature,
+                'The cache must still notice new creature knowledge')
+        ''')
+
     def test_default_threshold_and_reload(self):
         lua = new_client()
         lua.execute('''
@@ -14,6 +90,20 @@ class AutoLockTests(unittest.TestCase):
             beginKill('stable10');finishKill()
             assert(entry.confirmed and entry.unchangedKills==10)
             assert(AzerothFieldbookDB.eventLog.entries[#AzerothFieldbookDB.eventLog.entries-1].details.kind=='autoLock')
+        ''')
+
+    def test_content_cache_releases_deleted_entries_and_handles_replacement(self):
+        lua = loot_client()
+        lua.execute('''
+            killAndLoot('deleted')
+            local refs=setmetatable({activeJournal.entries[42]},{__mode='v'})
+            assert(activeJournal:DeleteEntry(42))
+            collectgarbage('collect');collectgarbage('collect')
+            assert(refs[1]==nil,'The content cache must not retain deleted entries')
+            killAndLoot('replacement')
+            local e=activeJournal.entries[42]
+            assert(not e.confirmed and e.unchangedKills==0 and e.loot.samples==1)
+            killAndLoot('replacementAgain');assert(e.unchangedKills==1)
         ''')
 
     def test_changes_noops_unlock_disable_and_validation(self):

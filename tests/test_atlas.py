@@ -656,5 +656,15 @@ class AtlasUITests(unittest.TestCase):
         """)
 
 
+class InitialZoneTests(unittest.TestCase):
+    def test_first_open_uses_current_zone_and_later_choices_survive(self):
+        lua=new_atlas()
+        lua.execute("""
+            j.state.mapID=102;j.state.zone='Old zone'
+            shell:ShowSection('atlas');assert(j.state.mapID==mapID)
+            c:SetZone(102,'Chosen zone');shell:ShowSection('test');shell:ShowSection('atlas')
+            assert(j.state.mapID==102)
+        """)
+
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    unittest.main()

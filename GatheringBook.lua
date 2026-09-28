@@ -200,7 +200,8 @@ function ns.CreateGatheringBook(journal,shell)
         book.indexCount:SetText(#rows==0 and "No matching entries." or (#rows.." shown"))
         book.previous:SetEnabled(#rows>0);book.next:SetEnabled(#rows>0)
         book.noMatches:SetShown(#rows==0)
-        book.noMatches:SetText(next(journal.entries) and "No matching entries.\nTry clearing your filters."
+        book.noMatches:SetText(journal.readOnly and "Saved by a newer addon version.\nUpdate Azeroth Fieldbook to view this journal.\nYour data has been left untouched."
+            or next(journal.entries) and "No matching entries.\nTry clearing your filters."
             or "No herbs or minerals recorded yet.")
         local entry=selected and journal.entries[selected]
         book.title:SetText(entry and (entry.name.." • "..ns.GatheringKinds[entry.kind].title) or "Gatherer's Compendium")
@@ -231,6 +232,49 @@ function ns.CreateGatheringBook(journal,shell)
         book.stats:SetText("Interactions: "..entry.interactions.."\nCompleted gathers: "..entry.completed)
         book.history:SetText("First encountered: "..dateText(entry.firstSeen).."\nLast interaction: "..
             (entry.interactions>0 and dateText(entry.lastSeen) or "Not yet interacted"))
+        local loot={}
+        for itemID,item in pairs(entry.loot or {}) do
+            local name,quality,icon
+            local info=C_Item and C_Item.GetItemInfo or GetItemInfo
+            if type(info)=="function" then
+                local ok,n,_,q,_,_,_,_,_,_,texture=pcall(info,itemID)
+                if ok then
+                    name=ns.GatheringName(n)
+                    if not (issecretvalue and issecretvalue(q)) and type(q)=="number" then quality=q end
+                    if not (issecretvalue and issecretvalue(texture)) and (type(texture)=="number" or type(texture)=="string") then icon=texture end
+                end
+            end
+            loot[#loot+1]={id=itemID,name=name or item.name or ("Item "..itemID),quality=quality,icon=icon,data=item}
+            if not name and C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID,itemID) end
+        end
+        table.sort(loot,function(a,b) if a.name~=b.name then return a.name<b.name end;return a.id<b.id end)
+        for i,item in ipairs(loot) do
+            local row=book.lootRows[i]
+            if not row then
+                row=CreateFrame("Button",nil,book.lootChild);row:SetSize(230,62);row:SetPoint("TOPLEFT",0,-(i-1)*62)
+                row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",0,-3);row.icon:SetSize(28,28)
+                row.name=label(row,"",34,-2,190,"GameFontNormal");row.name:SetHeight(32);row.name:SetWordWrap(true)
+                row.quantity=label(row,"",34,-38,190,"GameFontHighlightSmall")
+                row:SetScript("OnEnter",function(self)
+                    if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetHyperlink("item:"..self.itemID);GameTooltip:Show() end
+                end)
+                row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+                row:SetScript("OnHide",function(self) if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
+                book.lootRows[i]=row
+            end
+            row.itemID=item.id;row.icon:SetTexture(item.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+            row.name:SetText(item.name)
+            local colour=ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[item.quality]
+            row.name:SetTextColor(colour and colour.r or 1,colour and colour.g or 1,colour and colour.b or 1)
+            local data=item.data
+            row.quantity:SetText("Observed stack: "..data.minQuantity..(data.maxQuantity~=data.minQuantity and ("–"..data.maxQuantity) or ""))
+            row:Show()
+        end
+        for i=#loot+1,#book.lootRows do book.lootRows[i]:Hide() end
+        book.noLoot:SetShown(#loot==0)
+        book.lootChild:SetHeight(math.max(169,#loot*62))
+        if book.lootID~=selected then book.lootID=selected;book.lootScroll:SetVerticalScroll(0) end
+        book.lootScroll:UpdateScrollChildRect();book.lootScroll:RefreshScrollBar()
         local zones=journal:GetLocationZones(selected)
         for i,zone in ipairs(zones) do
             local row=book.zoneRows[i]
@@ -450,17 +494,17 @@ function ns.CreateGatheringBook(journal,shell)
         local divider=detail:CreateTexture(nil,"ARTWORK")
         divider:SetColorTexture(0.35,0.20,0.08,0.42)
         divider:SetPoint("TOPLEFT",362,-367);divider:SetSize(554,3)
-        label(detail,"Field notes",362,-391,562,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        label(detail,"Field notes",362,-391,270,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         local noteBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
-        noteBorder:SetPoint("TOPLEFT",362,-421);noteBorder:SetSize(554,185)
+        noteBorder:SetPoint("TOPLEFT",362,-421);noteBorder:SetSize(270,185)
         noteBorder:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12})
         noteBorder:SetBackdropColor(0.05,0.04,0.025,0.6);noteBorder:SetBackdropBorderColor(0.45,0.30,0.13,1)
         book.noteScroll=CreateFrame("ScrollFrame",nil,noteBorder,"UIPanelScrollFrameTemplate")
-        book.noteScroll:SetPoint("TOPLEFT",8,-8);book.noteScroll:SetSize(514,169)
+        book.noteScroll:SetPoint("TOPLEFT",8,-8);book.noteScroll:SetSize(230,169)
         book.note=CreateFrame("EditBox",nil,book.noteScroll)
         book.note:SetMultiLine(true);book.note:SetAutoFocus(false);book.note:SetMaxLetters(1000)
         book.note:EnableMouse(true);book.note:EnableKeyboard(true)
-        book.note:SetFontObject("GameFontHighlight");book.note:SetSize(506,169)
+        book.note:SetFontObject("GameFontHighlight");book.note:SetSize(222,169)
         book.noteScroll:SetScrollChild(book.note);ns.AutoHideScrollBar(book.noteScroll)
         local function focusNotes(_,mouseButton)
             if mouseButton=="LeftButton" and selected and book.noteID==selected then book.note:SetFocus() end
@@ -485,7 +529,18 @@ function ns.CreateGatheringBook(journal,shell)
                 drafts[id]=nil;book.message:SetText("Notes saved.");book.note:ClearFocus();refresh()
             end
         end)
-        book.message=label(detail,"",482,-624,424,"GameFontHighlightSmall")
+        book.message=label(detail,"",482,-624,150,"GameFontHighlightSmall")
+        label(detail,"Observed loot",646,-391,270,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        local lootBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
+        lootBorder:SetPoint("TOPLEFT",646,-421);lootBorder:SetSize(270,185)
+        lootBorder:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12})
+        lootBorder:SetBackdropColor(0.05,0.04,0.025,0.6);lootBorder:SetBackdropBorderColor(0.45,0.30,0.13,1)
+        book.lootScroll=CreateFrame("ScrollFrame",nil,lootBorder,"UIPanelScrollFrameTemplate")
+        book.lootScroll:SetPoint("TOPLEFT",8,-8);book.lootScroll:SetSize(230,169)
+        book.lootChild=CreateFrame("Frame",nil,book.lootScroll);book.lootChild:SetSize(230,169)
+        book.lootScroll:SetScrollChild(book.lootChild);ns.AutoHideScrollBar(book.lootScroll)
+        book.lootRows={}
+        book.noLoot=label(book.lootChild,"No loot recorded yet.\nGather this node to record its drops.",4,-6,218,"GameFontHighlightSmall")
         book.mapOptions={}
         for i,spec in ipairs({{"worldMap","Show nodes on world map"},{"minimap","Show nodes on minimap"}}) do
             local key=spec[1]
@@ -575,16 +630,31 @@ function ns.CreateGatheringBook(journal,shell)
             "|cffffd1002. Record positions|r\nStarting a Herbalism or Mining cast records an interaction and approximate position, even if interrupted. A successful cast also counts as a completed gather, not a quantity of loot. Without the required profession or rank, right-clicking the node can still record its position when the matching skill-requirement error is received. Unrelated loot, targeting and minimap tracking do not record nodes.\n\n"..
             "|cffffd1003. Browse|r\nUse Herbs, Minerals, search, the sort menu and Locations filters to narrow the index. Index opens the A-Z filters; Previous and Next browse the matching entries. Drag the node preview to rotate it.\n\n"..
             "|cffffd1004. Review locations|r\nClick a zone under Locations to open its recorded positions. Green dots are herbs; gold dots are minerals. Hover a dot for coordinates. These are your approximate positions while interacting, not proof that a node is currently available. Zone-only discoveries have no dots.\n\n"..
-            "|cffffd1005. Map display|r\nThe checkboxes at the bottom independently show recorded nodes on the world map and minimap. Both start off and are saved for this character. World-map dots show up to 512 recent positions in the displayed zone; minimap dots show up to 128 nearest positions and follow movement, zoom and rotation. All recorded positions remain in each resource's Locations view. Dots hide when the client cannot provide the required location information.\n\n"..
-            "|cffffd1006. Field notes|r\nSelect an entry, write your notes and click Save notes. Gathering records belong to this character and are separate from Bestiary account tracking, resets, backups and sharing. Use the Options cog for shared Fieldbook settings.",
+            "|cffffd1005. Map display|r\nThe checkboxes at the bottom independently show recorded nodes on the world map and minimap. Both start off and are saved with the active journal. World-map dots show up to 512 recent positions in the displayed zone; minimap dots show up to 128 nearest positions and follow movement, zoom and rotation. All recorded positions remain in each resource's Locations view. Dots hide when the client cannot provide the required location information.\n\n"..
+            "|cffffd1006. Field notes|r\nSelect an entry, write your notes and click Save notes. The adjacent Observed loot list records readable items from completed gathers, with item icons, quality colours and hover tooltips. Stack ranges describe observed loot, not guaranteed yields. Older gathers cannot be reconstructed. Gathering records follow the global Account-wide tracking option and remain separate from Bestiary resets, backups and sharing. Use the Options cog for shared Fieldbook settings.",
         frameName="AzerothFieldbookGatheringSection",build=build,onOpen=function() refresh(true) end})
+    function controller:OpenAtMouseover()
+        local id=self.tracking and self.tracking:DiscoverAtMouseover()
+        if not id or not journal.entries[id] then return false end
+        selected=id;category=nil;initial=nil;offset=0
+        for zone in pairs(locationFilters) do locationFilters[zone]=nil end
+        shell:ShowSection("gathering")
+        book.search:SetText("");book.search:ClearFocus();book.note:ClearFocus()
+        book.locationFrame:Hide()
+        for i,entry in ipairs(currentRows()) do
+            if entry.id==id then offset=math.max(0,i-PAGE_SIZE);break end
+        end
+        choose(id)
+        return true
+    end
     function controller:Refresh() refresh() end
     return controller
 end
 
 function ns.InitializeGathering(shell,getBrightness)
     if type(AzerothFieldbookGatheringDB)~="table" then AzerothFieldbookGatheringDB={} end
-    local journal=ns.CreateGatheringJournal(AzerothFieldbookGatheringDB,getBrightness)
+    local storage=ns.SelectSectionStorage and ns.SelectSectionStorage("gathering",AzerothFieldbookGatheringDB) or AzerothFieldbookGatheringDB
+    local journal=ns.CreateGatheringJournal(storage,getBrightness)
     local controller=ns.CreateGatheringBook(journal,shell)
     controller.tracking=ns.CreateGatheringTracking(journal)
     controller.mapPins=ns.CreateGatheringMapPins(journal)

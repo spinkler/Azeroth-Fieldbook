@@ -1,5 +1,12 @@
 # Angler’s Almanac — v0.13.0 implementation and validation
 
+Current storage scope: the global Account-wide tracking option selects this
+section's account or character journal. The original per-character SavedVariable
+is preserved. Earlier per-character implementation notes below describe the
+original section boundary; see [account tracking](ACCOUNT_TRACKING.md) for the
+current migration and storage contract.
+
+
 This is a personal, discovery-led fishing journal. There is no bundled catch,
 spawn, requirement or fishing-location database. No in-game testing has been
 performed for this change. Synthetic Lua/widget checks do not establish native
@@ -254,6 +261,13 @@ aggregates. It archives the original spot's position, notes and provenance, and
 keeps those notes visible on the surviving spot. Local notes and preferences are
 never overwritten by a report. Personal identity observation can coexist with
 reported identity/catch claims; it does not verify the rest of a report.
+
+Hover lookups follow the surviving spot through chained merges, reloads and
+account imports. Initialization repairs older lookups using archived merge
+references, without replacing a deliberately recorded position with hover
+coordinates. Catch indexes are rebuilt after corrections and initialization;
+historical aggregates retain their IDs, while subsequent catches reuse an
+existing matching aggregate and unrelated contexts keep their current indexes.
 
 ## Report foundation and integration boundary
 

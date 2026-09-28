@@ -117,6 +117,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         local m=self.main
         local rows=journal:List(state.query,state.mapID,state.all)
         state.offset=math.max(0,math.min(state.offset,math.floor(math.max(0,#rows-1)/12)*12))
+        if m.automaticMapping then m.automaticMapping:SetChecked(state.automaticMapping~=false) end
         m.scope:SetText(state.all and "Scope: All recorded zones" or "Scope: Current map")
         m.zone:SetText(state.zone and state.zone~="" and state.zone or "Choose zone")
         for i,row in ipairs(m.rows) do
@@ -230,6 +231,12 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             end)
         end)
         U.Tip(m.layerMenu,"Choose which discovery markers appear on the map. Check several layers or use Show all / Hide all. The discovery index and sub-zone controls are unchanged.")
+        m.automaticMapping=U.Check(m,"Toggle Automatic Mapping",480,-146,142,function(on)
+            if not journal.readOnly then state.automaticMapping=on;journal.subzones:Reset() end
+        end)
+        m.automaticMapping:SetChecked(state.automaticMapping~=false)
+        m.automaticMapping:SetEnabled(not journal.readOnly)
+        U.Tip(m.automaticMapping,"Automatically record sub-zone crossings and interior survey points. Manual survey-point keybindings remain available when this is off.")
         m.cleanPoints=U.Button(m,"Clean Redundant Points",480,-174,168,function()
             local started=ns.AtlasSubzones.CleanInterior(journal,state.mapID,function(count,message)
                 m.cleanPoints:SetEnabled(not journal.readOnly)
@@ -312,7 +319,10 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             m.search:ClearFocus()
             if c.ClearFocus then c:ClearFocus() end
         end)
-        if not state.mapID then local p=A.CurrentLocation();state.mapID,state.zone=p.mapID,p.zone end
+        local initial=A.CurrentLocation()
+        if initial.mapID then
+            state.mapID,state.zone,state.continent=initial.mapID,initial.zone,nil;state.offset=0
+        end
         c:Show();c:Refresh()
         if journal.readOnly then c:Message("Newer Atlas schema: this journal is read-only; saved data is untouched.") end
     end
@@ -323,8 +333,8 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             "|cffffd1004. Routes and passages|r\nChoose Route / Passage, then Save & route stops. Add existing places or named waypoints and use Up, Down and Remove to arrange them. Stops may span zones. Lines connect consecutive visible stops within the same map; they are recorded connections, not guaranteed safe paths.\n\n"..
             "|cffffd1005. Expeditions and connections|r\nExpeditions stores longer journals, dates and zone associations. Linked notes attaches a discovery to an expedition. Connections links Atlas discoveries or existing Bestiary and Gatherer's Compendium records. Removing a link leaves its source intact. Deleted sources leave unresolved links you can keep or remove.\n\n"..
             "|cffffd1006. Field reports|r\nPrepare Field Report creates a saved draft for a zone or selected discoveries. Choose records, optional private notes and expedition excerpts, then review the preview. Sending and importing reports are not available from this page yet.\n\n"..
-            "|cffffd1007. Self-discovered sub-zones|r\nThe Sub-zones group contains independent Shading, Points and Labels toggles. Hide zone-name areas hides shading and labels matching the displayed zone name without changing points or recorded evidence. Checked Points shows every crossing and interior sample. Unchecked retains automatic isolated dots with shading and hides incorporated samples. Recording and saved evidence are unchanged. Label size adjusts text from 2–24, defaulting to 4, with a thin non-monochrome outline. Names try two lines before hiding for lack of space. Brightness dims only the map artwork from 20–100%. These display settings are saved for this character. While playing, the Atlas records readable same-map name changes, their position, previous position, from/to names and time. Loading screens, missing coordinates and large jumps cannot invent a crossing. With readable map dimensions, the Atlas also records your current sub-zone position and further interior samples more than 50 yards from all other samples. Revisiting sampled ground adds no duplicate interior points. Interior observations record only their own area, position and time. Both types collect with the Atlas closed or layers hidden. Dots stay small when zooming. Checked Points keeps all samples visible over shading; unchecked uses automatic isolated dots. Three non-collinear observations can produce estimated shading. Convex perimeters may bridge bays or holes; more observations improve the evidence but never guarantee exact borders. Every observed area on the map receives a unique colour; new colours maximise contrast with existing assignments, which stay steady during live updates. Hover the map for names and nearby observation details.\n\n"..
-            "|cffffd1008. Your journal|r\nAtlas records and browsing settings are saved for this character, independently of Bestiary account tracking, resets, backups and sharing. Sub-zone observations do not create discovery entries or enter field reports. The Options cog opens shared Fieldbook settings.",
+            "|cffffd1007. Self-discovered sub-zones|r\nThe Sub-zones group contains independent Shading, Points and Labels toggles. Hide zone-name areas hides shading and labels matching the displayed zone name without changing points or recorded evidence. Checked Points shows every crossing and interior sample. Unchecked retains automatic isolated dots with shading and hides incorporated samples. Recording and saved evidence are unchanged. Label size adjusts text from 2–24, defaulting to 4, with a thin non-monochrome outline. Names try two lines before hiding for lack of space. Brightness dims only the map artwork from 20–100%. These display settings are saved with the active journal. Toggle Automatic Mapping above Clean Redundant Points pauses automatic recording; it starts enabled and does not affect the manual survey keybind. While automatic mapping is enabled, the Atlas records readable same-map name changes, their position, previous position, from/to names and time. Loading screens, missing coordinates and large jumps cannot invent a crossing. With readable map dimensions, the Atlas also records your current sub-zone position and further interior samples more than 50 yards from all other samples. Revisiting sampled ground adds no duplicate interior points. Bind Record Atlas survey point in the game keybinding settings to manually add a point at your current position, at least 15 yards from existing samples. Use Clean Redundant Points when you want to simplify your survey. Interior observations record only their own area, position and time. Both types collect with the Atlas closed or layers hidden. Dots stay small when zooming. Checked Points keeps all samples visible over shading; unchecked uses automatic isolated dots. Three non-collinear observations can produce estimated shading. Convex perimeters may bridge bays or holes; more observations improve the evidence but never guarantee exact borders. Every observed area on the map receives a unique colour; new colours maximise contrast with existing assignments, which are saved between sessions. Hover the map for names and nearby observation details.\n\n"..
+            "|cffffd1008. Your journal|r\nAtlas records and browsing settings follow the global Account-wide tracking option, independently of Bestiary resets, backups and sharing. Sub-zone observations do not create discovery entries or enter field reports. The Options cog opens shared Fieldbook settings.",
         frameName="AzerothFieldbookAtlasSection",build=build,onOpen=function()
             if c.main then c.main.map:Invalidate() end;c:Refresh()
         end})
@@ -332,7 +342,13 @@ function ns.CreateAtlasBook(journal,shell,adapters)
 end
 function ns.InitializeAtlas(shell,bestiary)
     if type(AzerothFieldbookAtlasDB)~="table" then AzerothFieldbookAtlasDB={} end
-    local journal=ns.CreateAtlasJournal(AzerothFieldbookAtlasDB)
-    local adapters=ns.CreateAtlasReferences(bestiary,function() return AzerothFieldbookGatheringDB end,shell)
+    local storage=ns.SelectSectionStorage and ns.SelectSectionStorage("atlas",AzerothFieldbookAtlasDB) or AzerothFieldbookAtlasDB
+    local journal=ns.CreateAtlasJournal(storage)
+    function AzerothFieldbookRecordAtlasPoint()
+        local added,message=journal.subzones:RecordPoint()
+        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..message) end
+        return added
+    end
+    local adapters=ns.CreateAtlasReferences(bestiary,function() return ns.ActiveSectionStores and ns.ActiveSectionStores.gathering or AzerothFieldbookGatheringDB end,shell)
     return ns.CreateAtlasBook(journal,shell,adapters)
 end

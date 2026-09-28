@@ -1,0 +1,310 @@
+local _, ns = ...
+local T,U=ns.Treasure,ns.AtlasUI
+local PAGE=7
+local HISTORY_PAGE=8
+local categories={world="World finds",portable="Portable",salvage="Salvage"}
+local knowledge={personal="Personal",reported="Reported only",missing="No contents",contents="Has contents"}
+local function icon(item)
+    local value=item and item.itemID and T.Read(C_Item and C_Item.GetItemIconByID or GetItemIcon,item.itemID)
+    return T.Integer(value,1,2147483647) and value or T.ICON
+end
+local function itemTooltip(owner,item,journal)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(owner,"ANCHOR_LEFT")
+    local native=false
+    if item.itemID and type(GameTooltip.SetHyperlink)=="function" then native=pcall(GameTooltip.SetHyperlink,GameTooltip,"item:"..item.itemID) end
+    if not native then GameTooltip:SetText(T.Safe(journal:ItemName(item))) end
+    GameTooltip:Show()
+end
+function ns.CreateTreasureBook(journal,tracking,shell)
+    local state=journal.state
+    state.query=T.Text(state.query,200,true) and state.query or ""
+    state.offset=T.Integer(state.offset,0,T.MAX_KINDS) and state.offset or 0
+    state.detail=({summary=true,contents=true,history=true,notes=true})[state.detail] and state.detail or "summary"
+    state.detailScroll=T.Number(state.detailScroll,0,1000000) and state.detailScroll or 0
+    state.historyOffset=T.Integer(state.historyOffset,0,T.MAX_ENCOUNTERS) and state.historyOffset or 0
+    state.bookmarks=state.bookmarks==true;state.allZone=state.allZone==true
+    state.mapID=T.Integer(state.mapID,1,2147483647) and state.mapID or nil
+    if not categories[state.category] then state.category=nil end
+    if not knowledge[state.knowledge] then state.knowledge=nil end
+    if not T.Text(state.zone,160) then state.zone=nil end
+    local c={journal=journal,tracking=tracking,shell=shell,state=state,panels={}}
+    function c:Message(message) if self.main then self.main.message:SetText(T.Safe(message or "")) end end
+    function c:Menu(button,build)
+        if MenuUtil and type(MenuUtil.CreateContextMenu)=="function" then MenuUtil.CreateContextMenu(button,build) end
+    end
+    function c:Filter() state.offset=0;self:Refresh() end
+    function c:ResetFilters()
+        state.category=nil;state.zone=nil;state.knowledge=nil;state.bookmarks=false;state.query="";state.sort=nil
+        self.main.search:SetText("");self:Filter()
+    end
+    function c:Select(id)
+        local e=journal:Get(id);if not e then return end
+        if state.selected~=id then
+            state.selected=id;state.encounter=nil;state.detailScroll=0;state.historyOffset=0;self.main.details:SetVerticalScroll(0)
+            local history=journal:History(id);local chosen=history[1]
+            for _,v in ipairs(history) do if (v.context=="world" or v.context=="acquired") and v.location.mapID then chosen=v;break end end
+            state.encounter=chosen and chosen.id;state.mapID=chosen and chosen.location.mapID
+        end
+        self:Refresh()
+    end
+    function c:Encounter(id)
+        local v=journal.encounters[id];if not v then return end
+        -- All-zone pins may focus another kind's encounter without changing the catalogue selection.
+        state.encounter=id;state.detail="history";state.detailScroll=0;state.historyOffset=0
+        if v.location.mapID then state.mapID=v.location.mapID end
+        self.main.details:SetVerticalScroll(0);self:Refresh()
+    end
+    function c:DetailRows()
+        local e=journal:Get(state.selected);local rows={}
+        local function add(text,item,encounter) rows[#rows+1]={text=text,item=item,encounter=encounter} end
+        if not e then
+            add("Your journal begins with finds you record or openable items observed in your bags. Use Record a find for world containers and salvage. No undiscovered finds are included.")
+            return rows
+        end
+        local all=journal:History(e.id);local history={};local summary=journal:Summary(e)
+        state.historyOffset=math.min(state.historyOffset,math.max(0,math.floor((#all-1)/HISTORY_PAGE)*HISTORY_PAGE))
+        for i=state.historyOffset+1,math.min(#all,state.historyOffset+HISTORY_PAGE) do history[#history+1]=all[i] end
+        if #all>HISTORY_PAGE then add("Showing encounters "..(state.historyOffset+1).."–"..math.min(#all,state.historyOffset+HISTORY_PAGE).." of "..#all..". Use Newer / Older above the map.") end
+        if state.detail=="summary" then
+            add((e.form=="world" and "World find" or "Portable container").." • "..e.category.."\n"..
+                (e.itemID and "Item identity: "..e.itemID or "Provisional kind: "..e.id..". Matching names do not prove matching kinds."))
+            add(summary.knowledge.." • "..summary.personal.." personal recorded encounters • "..summary.reported.." reported encounters\n"..
+                summary.inspections.." personal inspections • "..summary.recoveries.." items explicitly recorded as recovered")
+            add(summary.contents==0 and "Contents not recorded. This does not mean the container was empty." or "Contents observations retain their own encounter, location and source. Missing items in partial captures are not confirmed absences.")
+            for _,v in ipairs(history) do if v.access~="" then
+                add("Access ("..(v.reported and "reported / " or "")..v.accessMethod.."): "..v.access.."\n"..T.Date(v.origin.at).." • "..T.LocationText(v.location),nil,v.id)
+            end end
+            add("Automatic capture records readable openable bag items and strictly matched portable inspections. It never confirms receipt. World identity, acquisition context, access requirements and recovery claims can be recorded manually.")
+        elseif state.detail=="notes" then
+            add("General notes (private):\n"..(e.note~="" and e.note or "No notes yet. Use Kind notes."))
+            add("Look for again: "..(e.bookmark and "Bookmarked" or "Not bookmarked").."\n"..(e.bookmarkNote~="" and e.bookmarkNote or "No reason recorded."))
+            add("Bookmarks describe your intention to look again. They make no claim that a particular container remains available.")
+            for _,v in ipairs(history) do if v.reportNote and v.reportNote~="" then add("Reported kind note — "..v.origin.source..": "..v.reportNote,nil,v.id) end end
+        elseif state.detail=="contents" then
+            local any=false
+            for _,v in ipairs(history) do if v.facts.inspected or #v.items>0 then
+                any=true;add(T.Date(v.origin.at).." • "..(v.reported and "Reported by " or "Personal / "..v.origin.method..": ")..v.origin.source..
+                    "\n"..T.LocationText(v.location).."\n"..T.captures[v.capture],nil,v.id)
+                for _,item in ipairs(v.items) do
+                    local receipt=item.recovered and (v.reported and "Source reports recovering " or "Personally recovered (manual): ")..item.recovered or "Receipt unconfirmed"
+                    add(journal:ItemName(item).." × "..item.quantity.." observed\n"..receipt,item,v.id)
+                end
+                if #v.items==0 then add(v.capture=="full" and "No items listed in this full manual capture." or "No item rows captured; contents are unknown.",nil,v.id) end
+            end end
+            if not any then add("Contents not recorded. Record an inspection and its observed items; a sighting alone says nothing about contents.") end
+        else
+            local focus=journal.encounters[state.encounter]
+            local list={};if focus and state.historyOffset==0 then list[#list+1]=focus end
+            for _,v in ipairs(history) do if v~=focus or state.historyOffset>0 then list[#list+1]=v end end
+            if #list==0 then add("No encounters remain for this kind. Its personal notes and bookmark are retained.") end
+            for _,v in ipairs(list) do
+                local text=(v.id==state.encounter and "Selected • " or "")..journal:Title(journal:Get(v.kindID)).." • "..T.Date(v.origin.at)..
+                    "\n"..(v.reported and "Reported by " or "Personal / "..v.origin.method..": ")..v.origin.source.." • "..T.Outcome(v)..
+                    "\n"..T.LocationText(v.location).."\n"..T.captures[v.capture]
+                if v.reported then text=text.." • received "..T.Date(v.received) end
+                if v.access~="" then text=text.."\nAccess ("..v.accessMethod.."): "..v.access end
+                if v.note~="" then text=text.."\nEncounter note: "..v.note end
+                add(text,nil,v.id)
+            end
+        end
+        return rows
+    end
+    function c:RenderDetails(scroll,body,pool,width)
+        local y=0;local rows=self:DetailRows()
+        for i,data in ipairs(rows) do
+            local row=pool[i]
+            if not row then
+                row=CreateFrame("Button",nil,body);row:SetWidth(width);row:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+                row.text=U.Label(row,"",0,0,width,"GameFontHighlightSmall");row.text:SetWordWrap(true);row.text:SetSpacing(3)
+                row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",0,-1);row.icon:SetSize(24,24)
+                row:SetScript("OnEnter",function(self) if self.data and self.data.item then itemTooltip(self,self.data.item,journal) end end)
+                row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+                row:SetScript("OnClick",function(self)
+                    if not self.data then return end
+                    local item=self.data.item
+                    if item and item.itemID and IsModifiedClick and IsModifiedClick("CHATLINK") and ChatEdit_InsertLink then
+                        local name=journal:ItemName(item);ChatEdit_InsertLink("|Hitem:"..item.itemID.."|h["..T.Safe(name).."]|h")
+                    elseif self.data.encounter then c:Encounter(self.data.encounter) end
+                end)
+                pool[i]=row
+            end
+            row.data=data;row.text:ClearAllPoints();row.text:SetPoint("TOPLEFT",data.item and 31 or 0,0)
+            row.text:SetWidth(width-(data.item and 31 or 0));row.text:SetText(T.Safe(data.text));row.text:SetTextColor(0.75,0.8,0.8)
+            if data.item and data.item.itemID then
+                local quality=T.Read(C_Item and C_Item.GetItemQualityByID,data.item.itemID)
+                local color=T.Integer(quality,0,8) and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+                if type(color)=="table" and T.Number(color.r,0,1) and T.Number(color.g,0,1) and T.Number(color.b,0,1) then row.text:SetTextColor(color.r,color.g,color.b) end
+            end
+            local height=math.max(data.item and 28 or 18,row.text:GetStringHeight()+8)
+            row:SetHeight(height);row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-y);row.icon:SetShown(data.item~=nil)
+            if data.item then row.icon:SetTexture(icon(data.item)) end
+            row:Show();y=y+height+6
+        end
+        for i=#rows+1,#pool do pool[i]:Hide();pool[i].data=nil end
+        body:SetHeight(math.max(scroll:GetHeight(),y));scroll:UpdateScrollChildRect();scroll:RefreshScrollBar()
+    end
+    function c:Expand()
+        local p=self:Panel("details","Selected entry details")
+        if not p.rows then p.rows={} end
+        self:RenderDetails(p.scroll,p.body,p.rows,224)
+    end
+    function c:Refresh(preserveTop)
+        if not self.main then return end
+        local m=self.main;local top=preserveTop and self.rows and self.rows[state.offset+1]
+        local rows,total=journal:List(state);self.rows=rows
+        if top then for i,row in ipairs(rows) do if row.entry.id==top.entry.id then state.offset=i-1;break end end end
+        state.offset=math.min(state.offset,math.max(0,#rows-1))
+        m.count:SetText(#rows.." / "..total.." container kinds")
+        m.empty:SetShown(#rows==0);m.empty:SetText(total==0 and "Your Treasure & Salvage journal begins empty.\n\nRecord a find, or carry an openable container. All locations describe past encounters." or "No entries match these filters.\nReset filters to browse all known finds.")
+        for i,row in ipairs(m.rows) do
+            local found=rows[state.offset+i];row:SetShown(found~=nil);row.id=found and found.entry.id
+            if found then
+                local e,s=found.entry,found.summary;row.name:SetText((e.bookmark and U.SavedIcon(true) or "")..T.Safe(found.title));row.icon:SetTexture(icon(e))
+                row.kind:SetText(T.Safe((e.form=="world" and "World" or "Portable").." / "..e.category.." • "..found.zone))
+                row.knowledge:SetText((s.personal==0 and s.reported>0 and "[R] " or "")..(s.contents>0 and "Contents recorded" or "Contents not recorded"))
+                row.selected:SetShown(e.id==state.selected)
+            end
+        end
+        m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+PAGE<#rows)
+        m.category:SetText(categories[state.category] or "All categories");m.zone:SetText(state.zone=="@current" and "Current zone" or state.zone or "All locations")
+        m.knowledge:SetText(knowledge[state.knowledge] or "All sources");m.sort:SetText("Sort: "..(state.sort or "name"));m.bookmarks:SetChecked(state.bookmarks==true)
+        local e=journal:Get(state.selected);local s=e and journal:Summary(e)
+        m.name:SetText(e and T.Safe(journal:Title(e)) or "Treasure & Salvage")
+        m.summary:SetText(e and ((e.form=="world" and "World find" or "Portable container").." • "..e.category.." • "..s.knowledge) or "A personal guide to temporary discoveries")
+        m.counts:SetText(e and (s.personal.." personal encounters • "..s.reported.." reported • latest observation: "..(s.last>0 and T.Date(s.last) or "Unknown")) or "Choose a known kind or record a new find.")
+        local v=journal.encounters[state.encounter]
+        m.focus:SetText(v and T.Safe(T.Outcome(v).." • "..T.Date(v.origin.at)) or "No encounter selected")
+        local historyCount=e and #journal:History(e.id) or 0
+        m.newer:SetEnabled(state.historyOffset>0);m.older:SetEnabled(state.historyOffset+HISTORY_PAGE<historyCount)
+        m.bookmark:SetEnabled(e~=nil);m.bookmark:SetSaved(e and e.bookmark,e~=nil);m.bookmark:SetText("Look for again")
+        m.edit:SetEnabled(v~=nil and not v.reported);m.remove:SetEnabled(v~=nil);m.notes:SetEnabled(e~=nil)
+        local zoneName;for _,p in ipairs(journal:Zones()) do if p.mapID==state.mapID then zoneName=p.zone;break end end
+        m.mapZone:SetText(zoneName or "Known maps");m.scope:SetText(state.allZone and "All finds in zone" or "Selected kind")
+        m.map:Render();self:RenderDetails(m.details,m.detailBody,m.detailRows,550)
+        if self.panel and self.panel==self.panels.details then self:RenderDetails(self.panel.scroll,self.panel.body,self.panel.rows,224) end
+        if journal.readOnly then self:Message("Saved schema is read-only; original data is preserved.")
+        elseif journal.invalid>0 then self:Message(journal.invalid.." malformed saved records preserved but omitted from this view.") end
+    end
+    T.InstallEditors(c)
+    local function build(content)
+        c.frame=content;local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
+        local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
+        U.Label(m,"Treasure & Salvage",42,-60,260,"GameFontNormalLarge")
+        m.directory=CreateFrame("Frame",nil,m);m.directory:SetAllPoints();local d=m.directory
+        m.search=U.Edit(d,48,-92,240,200);m.search:SetText(state.query)
+        m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
+        m.category=U.MenuButton(d,"All categories",42,-121,121,function(self)
+            c:Menu(self,function(_,root)
+                root:CreateButton("All categories",function() state.category=nil;c:Filter() end)
+                for _,id in ipairs({"world","portable","salvage"}) do root:CreateButton(categories[id],function() state.category=id;c:Filter() end) end
+            end)
+        end)
+        m.zone=U.MenuButton(d,"All locations",170,-121,122,function(self)
+            c:Menu(self,function(_,root)
+                root:SetScrollMode(400);root:CreateButton("All locations",function() state.zone=nil;c:Filter() end)
+                root:CreateButton("Current zone",function() state.zone="@current";c:Filter() end)
+                local seen={};for _,p in ipairs(journal:Zones()) do local name=p.zone;if name~="" and not seen[name] then
+                    seen[name]=true;root:CreateButton(T.Safe(name),function() state.zone=name;c:Filter() end)
+                end end
+            end)
+        end)
+        m.knowledge=U.MenuButton(d,"All sources",42,-150,121,function(self)
+            c:Menu(self,function(_,root)
+                root:CreateButton("All sources / knowledge",function() state.knowledge=nil;c:Filter() end)
+                for _,id in ipairs({"personal","reported","missing","contents"}) do root:CreateButton(knowledge[id],function() state.knowledge=id;c:Filter() end) end
+            end)
+        end)
+        m.sort=U.MenuButton(d,"Sort: name",170,-150,122,function(self)
+            c:Menu(self,function(_,root) for _,id in ipairs({"name","location","recent"}) do root:CreateButton(id,function() state.sort=id;c:Filter() end) end end)
+        end)
+        m.bookmarks=U.Check(d,"Look for again",42,-179,195,function(on) state.bookmarks=on;c:Filter() end)
+        m.reset=U.Button(d,"Reset filters",42,-208,121,function() c:ResetFilters() end)
+        m.notes=U.Button(d,"Kind notes",170,-208,122,function() c:Notes() end)
+        m.count=U.Label(d,"",42,-241,250,"GameFontHighlightSmall");m.rows={}
+        for i=1,PAGE do
+            local row=CreateFrame("Button",nil,d);row:SetPoint("TOPLEFT",42,-263-(i-1)*54);row:SetSize(250,53)
+            row:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+            row.selected=row:CreateTexture(nil,"BACKGROUND");row.selected:SetAllPoints();row.selected:SetColorTexture(0.95,0.7,0.15,0.18)
+            row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",2,-2);row.icon:SetSize(19,19)
+            row.name=U.Label(row,"",25,-2,223,"GameFontHighlightSmall")
+            row.kind=U.Label(row,"",3,-22,244,"GameFontDisableSmall");row.knowledge=U.Label(row,"",3,-37,244,"GameFontHighlightSmall")
+            row.name:SetWordWrap(false);row.kind:SetWordWrap(false);row.knowledge:SetWordWrap(false)
+            row:SetScript("OnClick",function(self) c:Select(self.id) end)
+            row:SetScript("OnEnter",function(self)
+                local e=journal:Get(self.id);if not e or not GameTooltip then return end
+                GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText(T.Safe(journal:Title(e)))
+                GameTooltip:AddLine(T.Safe(e.name.." • "..e.id),1,1,1,true)
+                GameTooltip:AddLine(journal:Summary(e).knowledge,1,1,1,true)
+                GameTooltip:AddLine(e.itemID and "Portable item identity: "..e.itemID or "Provisional identity; matching names remain separate.",1,1,1,true)
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end);m.rows[i]=row
+        end
+        m.empty=U.Label(d,"",49,-289,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
+        m.previous=U.Button(d,"Previous",42,-657,121,function() state.offset=math.max(0,state.offset-PAGE);c:Refresh() end)
+        m.next=U.Button(d,"Next",170,-657,122,function() state.offset=state.offset+PAGE;c:Refresh() end)
+        m.manual=U.Button(d,"Record a find",42,-687,250,function() c:Manual() end)
+        m.name=U.Label(m,"",342,-59,426,"GameFontNormalLarge");m.name:SetWordWrap(false)
+        m.bookmark=U.SavedButton(m,"Look for again",782,-55,140,function() journal:Bookmark(state.selected) end)
+        m.summary=U.Label(m,"",342,-89,580,"GameFontHighlightSmall");m.summary:SetWordWrap(false)
+        m.counts=U.Label(m,"",342,-112,580,"GameFontDisableSmall");m.counts:SetWordWrap(false)
+        m.focus=U.Label(m,"",342,-135,420,"GameFontHighlightSmall");m.focus:SetWordWrap(false)
+        m.newer=U.Button(m,"Newer",770,-129,73,function() state.historyOffset=math.max(0,state.historyOffset-HISTORY_PAGE);m.details:SetVerticalScroll(0);c:Refresh() end)
+        m.older=U.Button(m,"Older",850,-129,72,function() state.historyOffset=state.historyOffset+HISTORY_PAGE;m.details:SetVerticalScroll(0);c:Refresh() end)
+        U.Label(m,"Past finds — current availability unknown.",342,-158,580,"GameFontNormalSmall")
+        m.mapZone=U.MenuButton(m,"Known maps",342,-174,172,function(self)
+            c:Menu(self,function(_,root)
+                root:SetScrollMode(420)
+                local selected;if not state.allZone then selected=state.selected end
+                for _,p in ipairs(journal:Zones(selected)) do if p.mapID then
+                    local id=p.mapID;root:CreateButton(T.Safe(p.zone).." • map "..id,function() state.mapID=id;c:Refresh() end)
+                end end
+            end)
+        end)
+        m.scope=U.Button(m,"Selected kind",520,-174,146,function() state.allZone=not state.allZone;c:Refresh() end)
+        m.edit=U.Button(m,"Correct",672,-174,78,function() c:Manual(state.encounter) end)
+        m.remove=U.Button(m,"Remove",756,-174,78,function() c:RemoveEncounter() end)
+        m.expand=U.Button(m,"Expand",840,-174,82,function() c:Expand() end)
+        m.map=ns.CreateTreasureMap(m,journal,state,function(id) c:Encounter(id) end)
+        m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
+        m.detailButtons={}
+        for i,v in ipairs({{"summary","Summary / access"},{"contents","Observed contents"},{"history","Encounter history"},{"notes","Personal notes"}}) do
+            local key=v[1];m.detailButtons[key]=U.Button(m,v[2],342+(i-1)*146,-588,140,function()
+                state.detail=key;state.detailScroll=0;m.details:SetVerticalScroll(0);c:Refresh()
+            end)
+        end
+        m.details,m.detailBody=U.Scroll(m,342,-621,555,80);m.detailRows={}
+        m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall");m.message:SetWordWrap(false)
+        content:SetScript("OnHide",function()
+            state.detailScroll=m.details:GetVerticalScroll();m.map:SuspendPlayer();m.search:ClearFocus()
+            for _,p in pairs(c.panels) do for _,input in ipairs(p.inputs or {}) do input:ClearFocus() end end
+            if GameTooltip then GameTooltip:Hide() end
+        end)
+        c:Message(tracking.status);c:Refresh();m.details:SetVerticalScroll(state.detailScroll)
+    end
+    shell:RegisterSection("treasure",{title="Treasure & Salvage",icon=T.ICON,frameName="AzerothFieldbookTreasureSection",build=build,
+        help=T.VISION.."\n\n|cffffd100Historical knowledge|r\nEntries represent kinds; each sighting, access attempt, acquisition or inspection is a historical encounter. Nothing promises current availability. The journal starts empty. Matching names are never automatically merged. World identities remain provisional; portable item IDs describe item kinds.\n\n"..
+            "|cffffd100Record and correct|r\nRecord a find opens a scrollable form in the left column. Choose an existing kind or a new provisional kind, context and independent outcomes. Locations start unknown; Use player position offers approximate coordinates for review. Manually entered coordinates are labelled. Contents accept an item ID, pasted item link or name per line, optionally followed by ; observed quantity ; recovered quantity. Choose partial/full capture only after inspection. Full capture and recovery are explicit manual assertions.\n\n"..
+            "Choose an encounter in History or on the map, then Correct or Remove. Removal requires confirmation. Automatic encounters permit location/access/note corrections while preserving automatic contents evidence. To correct a mistaken form/identity, remove the mistaken encounter and record it under the right kind. Kind notes, category and labels are editable through Kind notes. Look for again is never created or cleared automatically.\n\n"..
+            "|cffffd100Maps and browsing|r\nMap markers mean a past find, not an available container. Only world finds and explicitly recorded acquisitions can create pins. Opening or observing a portable item in your bags never creates an acquisition marker. Approximate player coordinates stay labelled. Use Known maps, Selected kind / All finds in zone, and repeat clicks to cycle overlapping encounters. Expand gives the active details a taller left reading area. Search matches known names, locations, items and private notes. Recent sorts by original observation time, never report receipt.\n\n"..
+            "|cffffd100Automatic capture|r\nThe background observer reads openable bag items using the client's hasLoot flag; first observed carriage is not acquisition or current ownership. Portable contents require the loot's exact GUID to match a recently observed openable item and the client to say the loot is from an item. Unsupported, unreadable or ambiguous sources are omitted. Captures may be partial; loot visibility never proves personal recovery. Creature loot, fishing, gathering and unrelated bag changes are not treasure contents. World finds, acquisition context, access methods and recovered quantities require manual recording in this iteration.\n\n"..
+            "|cffffd100Reports|r\nThe existing sharing transport and prices are Bestiary-specific, with no generic section adapter. Treasure provides validated, versioned builder/preview/merge hooks for later integration. Delivery and player-facing import/export are deferred; there is no alternate cost-free export. Reported evidence keeps original sources and observation times, separate receipt dates and no personal credit. Private notes require explicit inclusion. Origin claims are not authenticated.\n\n"..
+            "Treasure uses its own per-character saved journal, independently of other pages' account tracking. Limits: 2,000 kinds, 20,000 encounters, 80 contents rows each; 4,000-byte notes. At capacity, new records are refused with existing history retained. Map rendering shows up to 192 marker groups; all encounters remain in History. No stale active container survives a reload.",
+        onOpen=function() if c.main then c:Refresh();c.main.details:SetVerticalScroll(state.detailScroll) end end})
+    journal.onChange=function()
+        if not c.main or shell.active~="treasure" or not shell:GetFrame():IsShown() or c.refreshQueued then return end
+        c.refreshQueued=true
+        local function refresh() c.refreshQueued=false;if shell.active=="treasure" and shell:GetFrame():IsShown() then c:Refresh(true) end end
+        if C_Timer and type(C_Timer.After)=="function" then C_Timer.After(0.1,refresh) else refresh() end
+    end
+    tracking.onStatus=function(message)
+        if c.main and shell.active=="treasure" and shell:GetFrame():IsShown() then c:Message(message) end
+    end
+    return c
+end
+function ns.InitializeTreasure(shell)
+    if type(AzerothFieldbookTreasureDB)~="table" then AzerothFieldbookTreasureDB={} end
+    local journal=ns.CreateTreasureJournal(AzerothFieldbookTreasureDB)
+    return ns.CreateTreasureBook(journal,ns.CreateTreasureTracking(journal),shell)
+end

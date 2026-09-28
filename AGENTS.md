@@ -8,13 +8,22 @@ Current functionality includes the Bestiary, a personal monster journal, and
 Herbs & Minerals, with mouseover zone discovery and interaction-only coordinate
 markers, plus Traveller’s Atlas for deliberate geographical records, routes and
 expedition notes, and Angler’s Almanac for personal fishing observations.
-The shared shell also presents three future-section wishlist
-pages, which do not collect or save data.
-Gathering uses its own per-character `AzerothFieldbookGatheringDB`, outside
-Bestiary resets, account tracking, backups and sharing.
-Atlas uses its own per-character `AzerothFieldbookAtlasDB`, with the same isolation.
-Angling uses per-character `AzerothFieldbookAnglingDB`; see `tests/ANGLING.md`
-for observation, provenance, report and layout boundaries.
+Merchant’s Ledger adds a personal contact and offering directory with a separate character store in
+`AzerothFieldbookLedgerDB`; see `tests/LEDGER.md` for identity, capture, report,
+storage and validation boundaries.
+Treasure & Salvage adds a per-character historical container journal in
+`AzerothFieldbookTreasureDB`; see `tests/TREASURE.md` for attribution, report
+adapter and manual-recording boundaries. Lore & Landmarks is the one remaining
+wishlist page and collects no data.
+Account-wide tracking applies to the five journals preceding Treasure. Bestiary uses
+`AzerothFieldbookAccountDB.bestiary`; `AccountSections.lua` selects shared stores
+under `.sections` for gathering, Atlas, angling and Ledger. Each character's
+existing section journals import once, with collision-safe IDs and preserved
+links. Original per-character SavedVariables remain intact for opt-out. Section
+resets, Bestiary backups and report protocols retain their independent scope.
+See `tests/ACCOUNT_TRACKING.md`, `tests/ANGLING.md` and `tests/LEDGER.md` for
+migration, provenance and validation boundaries. Display-only expected immunity
+guidance is optional, off by default, and never grants observed knowledge.
 
 Canonical public repository:
 
@@ -200,7 +209,8 @@ Routine changes increment the **last numeric component**:
 `0.9.0` → `0.9.1` → `0.9.2`. The operator explicitly designated the sharing
 feature milestone as **0.9.0**, the section-navigation milestone as **0.10.0**,
 the Herbs & Minerals milestone as **0.11.0**, Traveller’s Atlas as **0.12.0**,
-and Angler’s Almanac as **0.13.0**.
+Angler’s Almanac as **0.13.0**, and Merchant’s Ledger as **0.14.0**.
+The operator designated Treasure & Salvage as **0.15.0**.
 Larger version jumps follow explicit operator instructions; otherwise keep the
 first two components unchanged.
 
@@ -265,12 +275,13 @@ sections. Preserve existing window-position keys and Bestiary data compatibility
 The operator reserves stable 1.0 for successful live Beast Lore testing after
 the Forever beta level cap permits it, regardless of other sections' progress.
 The operator designated section navigation as 0.10.0 and Herbs & Minerals as
-0.11.0, Traveller’s Atlas as 0.12.0, and Angler’s Almanac as 0.13.0.
+0.11.0, Traveller’s Atlas as 0.12.0, Angler’s Almanac as 0.13.0, Merchant’s Ledger as 0.14.0,
+and Treasure & Salvage as 0.15.0.
 Subsequent routine changes increment the
 last component; further milestone jumps follow the operator's requested scope/version.
 
 Azeroth Fieldbook may later add further gathering or collection journals,
-such as skinning, beyond its four implemented sections.
+such as skinning, beyond its six implemented sections.
 
 Do not implement speculative future sections unless explicitly requested.
 

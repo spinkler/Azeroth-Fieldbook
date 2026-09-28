@@ -1,7 +1,8 @@
+BINDING_NAME_AZEROTHFIELDBOOK_ATLAS_POINT = "Record Atlas survey point"
 local addonName, ns = ...
 BINDING_HEADER_AZEROTHFIELDBOOK = "Azeroth Fieldbook"
 BINDING_NAME_CLASSICBESTIARY_BOOK = "Toggle Azeroth Fieldbook"
-BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK = "Open bestiary at mouseover"
+BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK = "Open Azeroth Fieldbook at mouseover"
 BINDING_NAME_CLASSICBESTIARY_NEXT_ENTRY = "Next Bestiary entry"
 BINDING_NAME_CLASSICBESTIARY_PREVIOUS_ENTRY = "Previous Bestiary entry"
 local effectGroups = {
@@ -561,9 +562,12 @@ local ink = { 0.75, 0.8, 0.8 }
         local locations = {}
         for location in pairs(basic.locations or {}) do locations[#locations + 1] = location end
         table.sort(locations)
+        book.locationNames={}
         for i,location in ipairs(locations) do
+            book.locationNames[i]=location
             local territory=journal.GetLocationTerritory and journal:GetLocationTerritory(location)
             if territory then locations[i]=colorText(location,territoryColors[territory] or NORMAL_FONT_COLOR) end
+            locations[i]="|Hafbzone:"..i.."|h"..locations[i].."|h"
         end
         if #locations > 0 then status[#status + 1] = "Locations: " .. table.concat(locations, ", ") end
         local function schoolSummary(field)
@@ -579,9 +583,15 @@ local ink = { 0.75, 0.8, 0.8 }
         local offenses = schoolSummary("offenses")
         local resistances = schoolSummary("resistances")
         local immunities = schoolSummary("immunities")
+        for _,name in ipairs(ns.BestiaryImmunityEffects) do
+            if e.immunities and e.immunities[name] then immunities[#immunities+1]=name end
+        end
         if #offenses > 0 then combat[#combat + 1] = "Casts: " .. table.concat(offenses, ", ") end
         if #resistances > 0 then combat[#combat + 1] = "Resists: " .. table.concat(resistances, ", ") end
         if #immunities > 0 then combat[#combat + 1] = "Immune: " .. table.concat(immunities, ", ") end
+        local expected,expectedNames=journal:GetExpectedImmunities(selected),{}
+        for _,name in ipairs(ns.BestiaryImmunityEffects) do if expected[name] then expectedNames[#expectedNames+1]=name end end
+        if #expectedNames>0 then combat[#combat+1]="Expected Immunities: "..table.concat(expectedNames,", ") end
         local behaviours = {}
         book.tameableBadge:SetShown(e.tameable==true and e.tameabilitySource=="gameTooltip")
         for _,name in ipairs(behaviourOrder) do
@@ -622,7 +632,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.accept:SetEnabled(editable and ability.state ~= "confirmed")
                 row.accept.cover:SetColorTexture(unpack((editable and ability.state ~= "confirmed") and {0.13,0.025,0.015,1} or {0.22,0.22,0.22,1}))
                 row.resolve:SetShown(editable and (linkMissing or ability.state ~= "confirmed"))
-                for _,control in ipairs({row.tooltipCheck,row.link,row.reject,row.accept}) do control:SetShown(editable) end
+                for _,control in ipairs({row.link,row.reject,row.accept}) do control:SetShown(editable) end
                 row.divider:SetShown(i>1)
                 row.tooltipArea:ClearAllPoints()
                 row.tooltipArea:SetPoint("TOPLEFT",row,"TOPLEFT",20,0)
@@ -634,8 +644,9 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.resolve:SetEnabled(editable)
                 row.link:SetEnabled(editable)
                 row.reject:SetEnabled(editable)
-                row.tooltipCheck:SetEnabled(editable)
-                for _, control in ipairs({row.resolve,row.link,row.reject,row.tooltipCheck}) do control:SetAlpha(editable and 1 or 0.45) end
+                row.tooltipCheck:Show()
+                row.tooltipCheck:SetEnabled(true)
+                for _, control in ipairs({row.resolve,row.link,row.reject}) do control:SetAlpha(editable and 1 or 0.45) end
                 local removing=ability.state=="rejected"
                 row.reject.cover:SetShown(removing)
                 row.reject.dash:SetShown(removing)
@@ -1045,6 +1056,21 @@ local ink = { 0.75, 0.8, 0.8 }
         book.titleHover:SetMouseMotionEnabled(true)
         book.summaryArea=CreateFrame("Frame",nil,book)
         book.summaryArea:SetPoint("TOPLEFT",362,-84); book.summaryArea:SetSize(574,45)
+        book.summaryArea:SetHyperlinksEnabled(true)
+        book.summaryArea:SetScript("OnHyperlinkEnter",function(self,link)
+            local index=type(link)=="string" and tonumber(link:match("^afbzone:(%d+)$"))
+            local zone=index and book.locationNames and book.locationNames[index]
+            if not zone or not selected or not GameTooltip then return end
+            GameTooltip:SetOwner(self,"ANCHOR_CURSOR")
+            GameTooltip:SetText(zone)
+            GameTooltip:AddLine("Observed from subzones:",0.6,0.6,0.6)
+            local names=journal:GetSubzones(selected,zone)
+            if #names==0 then GameTooltip:AddLine("No subzones recorded.",1,1,1,true) end
+            for _,name in ipairs(names) do GameTooltip:AddLine(name,1,1,1,true) end
+            GameTooltip:Show()
+        end)
+        book.summaryArea:SetScript("OnHyperlinkLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        book.summaryArea:SetScript("OnHide",function() if GameTooltip then GameTooltip:Hide() end end)
         book.summaryMeasure=book:CreateFontString(nil,"OVERLAY","GameFontHighlight")
         book.summaryMeasure:SetWordWrap(false); book.summaryMeasure:Hide()
         book.summaryBasicRows,book.summaryCombatRows={},{}
@@ -1177,7 +1203,7 @@ local ink = { 0.75, 0.8, 0.8 }
             if selected then
                 local entry=journal.entries[selected]
                 journal:SetEntryConfirmed(selected,not entry.confirmed)
-                message(entry.confirmed and "Entry locked in. Confirmed abilities now appear in tooltips." or "Entry unlocked. Its abilities are hidden from tooltips.")
+                message(entry.confirmed and "Entry locked in." or "Entry unlocked.")
                 refresh()
             end
         end)
@@ -1623,7 +1649,7 @@ local ink = { 0.75, 0.8, 0.8 }
         offensePicker:HookScript("OnShow",refreshOffensePicker)
         offensePicker:Hide(); book.offensePicker=offensePicker; book.refreshOffensePicker=refreshOffensePicker
 
-        local defensePicker=createObservationPicker("AzerothFieldbookBestiaryDefenses","Observed defenses","Mark each magic school as resistant, immune, or both\nwhen personally observed.",360,335)
+        local defensePicker=createObservationPicker("AzerothFieldbookBestiaryDefenses","Observed defenses","Record observed defenses. [Type] means expected, not verified.\nUncheck expectations to override; unmarked means unknown.",390,385)
         label(defensePicker,"Magic school",35,-88,120,"GameFontHighlightSmall")
         label(defensePicker,"Resistant",170,-88,80,"GameFontHighlightSmall"):SetJustifyH("CENTER")
         label(defensePicker,"Immune",265,-88,70,"GameFontHighlightSmall"):SetJustifyH("CENTER")
@@ -1641,12 +1667,58 @@ local ink = { 0.75, 0.8, 0.8 }
             immune:SetScript("OnClick",function(self) journal:SetImmunity(selected,schoolName,self:GetChecked()==true); refresh(); refreshDefensePicker() end)
             defensePicker.rows[#defensePicker.rows+1]={ schoolName=schoolName, label=schoolLabel, resistant=resistant, immune=immune }
         end
+        local effectMenu=CreateFrame("Frame",nil,defensePicker,"BackdropTemplate")
+        effectMenu:SetSize(330,302);effectMenu:SetClampedToScreen(true)
+        effectMenu:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12})
+        effectMenu:SetBackdropColor(0.08,0.06,0.04,1)
+        effectMenu:SetFrameLevel(defensePicker:GetFrameLevel()+10)
+        defensePicker.effectMenu=effectMenu
+        local effectDropdown=ui.MenuButton(defensePicker,"Effect Immunities",30,-325,330,function()
+            effectMenu:SetShown(not effectMenu:IsShown())
+        end)
+        effectMenu:SetPoint("TOPLEFT",effectDropdown,"BOTTOMLEFT",0,-2)
+        effectMenu:Hide();defensePicker.effectDropdown=effectDropdown
+        defensePicker:HookScript("OnHide",function() effectMenu:Hide() end)
+        defensePicker.effectRows={}
+        for i,name in ipairs(ns.BestiaryImmunityEffects) do
+            local effect=name
+            local x=12+((i-1)%2)*158
+            local y=-12-math.floor((i-1)/2)*28
+            local control=CreateFrame("CheckButton",nil,effectMenu,"UICheckButtonTemplate")
+            control:SetPoint("TOPLEFT",x,y);control:SetSize(24,24)
+            local text=label(effectMenu,effect,x+28,y-5,126,"GameFontHighlightSmall")
+            control:SetScript("OnClick",function(self)
+                journal:SetImmunity(selected,effect,self:GetChecked()==true);refresh();refreshDefensePicker()
+            end)
+            control:SetMotionScriptsWhileDisabled(true)
+            control:SetScript("OnEnter",function(self)
+                if not GameTooltip then return end
+                GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(effect.." immunity")
+                local expected=journal:GetExpectedImmunities(selected)
+                GameTooltip:AddLine(expected[effect] and "Expected from creature type; not verified for this creature in Forever. Uncheck to override."
+                    or "Your recorded immunity. Unmarked means unknown, not susceptible.",1,1,1,true)
+                GameTooltip:Show()
+            end)
+            control:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+            defensePicker.effectRows[#defensePicker.effectRows+1]={name=effect,control=control,text=text}
+        end
         refreshDefensePicker=function()
             local entry=selected and journal.entries[selected]
             for _,row in ipairs(defensePicker.rows) do
                 row.resistant:SetChecked(entry and type(entry.resistances)=="table" and entry.resistances[row.schoolName] == true)
                 row.immune:SetChecked(entry and type(entry.immunities)=="table" and entry.immunities[row.schoolName] == true)
                 row.resistant:SetEnabled(entry ~= nil and not entry.confirmed); row.immune:SetEnabled(entry ~= nil and not entry.confirmed)
+            end
+        end
+        local refreshSchools=refreshDefensePicker
+        refreshDefensePicker=function()
+            refreshSchools()
+            local entry=selected and journal.entries[selected]
+            local expected=journal:GetExpectedImmunities(selected)
+            for _,row in ipairs(defensePicker.effectRows) do
+                row.text:SetText(row.name..(expected[row.name] and " [Type]" or ""))
+                row.control:SetChecked(expected[row.name] or (entry and entry.immunities and entry.immunities[row.name]==true))
+                row.control:SetEnabled(entry~=nil and not entry.confirmed)
             end
         end
         defensePicker:HookScript("OnShow",refreshDefensePicker)

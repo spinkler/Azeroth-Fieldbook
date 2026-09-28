@@ -62,7 +62,10 @@ local function validClaim(claim)
     end
     if claim.spellID~=nil then return false end
     if claim.kind=="behaviour" then return behaviours[claim.value]==true end
-    return (claim.kind=="offense" or claim.kind=="resistance" or claim.kind=="immunity") and schools[claim.value]==true
+    if claim.kind=="immunity" then
+        return schools[claim.value]==true or (ns.BestiaryImmunityEffectNames and ns.BestiaryImmunityEffectNames[claim.value]==true) or false
+    end
+    return (claim.kind=="offense" or claim.kind=="resistance") and schools[claim.value]==true
 end
 function report.ValidLore(value)
     if not keys(value,{level=true,observed=true,rows=true}) or not integer(value.level,1,255)

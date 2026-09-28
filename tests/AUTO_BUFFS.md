@@ -22,8 +22,10 @@ New automatic records and matching pending/rejected observations are confirmed w
 spell ID and the persisted `Automatic buff observation` origin. Existing
 confirmed records keep their origin. A light-blue [A] marks automatic records;
 [?] continues to indicate a missing spell link. Manual Edit/save removes [A].
-Normal entry-lock and per-ability tooltip visibility rules still apply. With the
-option on, fresh verified evidence restores removed or rejected abilities. Turn it
+Confirmed abilities appear in creature tooltips whether the entry is locked or
+unlocked. The checkbox beside each ability controls its tooltip visibility, defaults
+to ON, and remains usable while locked. Existing OFF preferences are preserved;
+pending and rejected abilities remain hidden. With the recording option on, fresh verified evidence restores removed or rejected abilities. Turn it
 off to keep them absent. New/restored records announce the creature, ability and
 spell ID in both chat and the Event log, once per actual change. Repeated scans
 and reloads are silent. `/fieldbook debug` includes the recorder's latest status.

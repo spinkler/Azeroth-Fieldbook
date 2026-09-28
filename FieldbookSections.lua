@@ -1,16 +1,8 @@
 local _, ns = ...
 
 -- Presentation only. These sections deliberately have no tracking or saved data.
--- Registration order is the order of the tabs after the four implemented journals.
+-- Registration order is the order of the tabs after the six implemented journals.
 ns.FieldbookWishlistSections = {
-    {
-        id="merchants", title="Merchant’s Ledger", icon="Interface\\Icons\\INV_Misc_Coin_01",
-        wishlist="Remember merchants, trainers and useful services encountered during exploration. Record observed goods, recipe sources, locations and access notes.",
-    },
-    {
-        id="treasure", title="Treasure & Salvage", icon="Interface\\Icons\\INV_Misc_TreasureChest01a",
-        wishlist="Record discovered chests, locked containers and salvage opportunities. Distinguish sightings from opened finds, with locations, observed contents and personal notes.",
-    },
     {
         id="lore", title="Lore & Landmarks", icon="Interface\\Icons\\INV_Misc_Book_09",
         wishlist="Collect references to books, inscriptions, landmarks and noteworthy characters. Keep source-labelled notes, connect related discoveries and record mysteries worth revisiting.",

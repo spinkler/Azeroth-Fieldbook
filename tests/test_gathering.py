@@ -109,6 +109,68 @@ class GatheringTrackingTests(unittest.TestCase):
     def setUp(self):
         self.lua = client()
 
+    def test_mouseover_opens_live_herbs_and_minerals_without_gathering(self):
+        lua=client(ui=True)
+        lua.execute(r'''
+            hover('Silverleaf');assert(gathering:OpenAtMouseover())
+            local book=gathering.frame
+            assert(shell.active=='gathering' and book.noteID=='herb:silverleaf')
+            assert(journal.entries['herb:silverleaf'].interactions==0 and positionReads==0)
+            book.note:SetText('Unsaved field note');book.note.scripts.OnTextChanged(book.note)
+            book.search:SetText('no matches');book.search.scripts.OnTextChanged(book.search)
+            for i=1,25 do journal:Discover('herb',string.format('Herb %02d',i),100) end
+            hover('Zinc Deposit','Requires Mining');assert(gathering:OpenAtMouseover())
+            assert(book.noteID=='mineral:zinc deposit' and book.search:GetText()=='')
+            local visible=false
+            for _,row in ipairs(book.rows) do if row.id=='mineral:zinc deposit' and row:IsShown() then visible=true end end
+            assert(visible,'Reveal entries past the first page')
+            hover('Silverleaf');assert(gathering:OpenAtMouseover())
+            assert(book.note:GetText()=='Unsaved field note','Navigation preserves drafts')
+            mouseFocus=book.search;assert(not gathering:OpenAtMouseover())
+            mouseFocus=WorldFrame;cursorInfo={getterName='GetItemByID'};assert(not gathering:OpenAtMouseover())
+            cursorInfo=nil;cursorData=nil;assert(not gathering:OpenAtMouseover(),'Ignore fading tooltip cache')
+            assert(positionReads==0 and journal.entries['mineral:zinc deposit'].completed==0)
+        ''')
+
+    def test_loot_requires_completed_gather_and_readable_object_source(self):
+        self.lua.execute(r'''
+            local quantity=2
+            function GetNumLootItems() return 1 end
+            local source='GameObject-0-1-2-3-1618-abc'
+            function GetLootSourceInfo() return source,quantity end
+            function GetLootSlotLink() return '|Hitem:765|h[Silverleaf]|h' end
+            fire('LOOT_OPENED');assert(not next(journal.entries),'Unrelated loot cannot discover nodes')
+            sent('Silverleaf');fire('UNIT_SPELLCAST_START','player','cast',2366)
+            fire('LOOT_OPENED');assert(not next(journal.entries['herb:silverleaf'].loot or {}))
+            fire('UNIT_SPELLCAST_SUCCEEDED','player','cast',2366)
+            local e=journal.entries['herb:silverleaf']
+            assert(e.loot[765].minQuantity==2 and e.loot[765].name=='Silverleaf')
+            fire('LOOT_READY');fire('LOOT_OPENED');assert(e.loot[765].maxQuantity==2)
+            quantity=3;fire('LOOT_SLOT_CHANGED');assert(e.loot[765].maxQuantity==3)
+            source='Creature-0-1-2-3-123-abc';quantity=9
+            fire('LOOT_OPENED');assert(e.loot[765].maxQuantity==3,'Corpse loot is excluded')
+            source='GameObject-0-1-2-3-1618-abc';fire('LOOT_CLOSED')
+            fire('LOOT_OPENED');assert(e.loot[765].maxQuantity==3,'Closed context cannot attach later loot')
+            local reloaded=ns.CreateGatheringJournal(saved)
+            assert(reloaded.entries[e.id].loot[765].maxQuantity==3)
+        ''')
+
+    def test_observed_loot_panel_and_note_layout(self):
+        lua=client(ui=True)
+        lua.execute(r'''
+            local id=journal:Discover('herb','Silverleaf',100,'Elwynn')
+            journal:ObserveLoot(id,{[765]={name='Silverleaf',quantity=2}},100)
+            ITEM_QUALITY_COLORS={[2]={r=.1,g=1,b=.1}}
+            function GetItemInfo() return 'Silverleaf',nil,2,nil,nil,nil,nil,nil,nil,123 end
+            shell:ShowSection('gathering');local book=gathering.frame
+            assert(book.note:GetWidth()==222 and book.lootScroll:GetWidth()==230)
+            assert(book.lootRows[1].itemID==765 and book.lootRows[1].name:GetText()=='Silverleaf')
+            assert(book.lootRows[1].name.textColor[1]==.1)
+            book.lootRows[1].scripts.OnEnter(book.lootRows[1])
+            assert(GameTooltip:IsOwned(book.lootRows[1]))
+            assert(not book.noLoot:IsShown())
+        ''')
+
     def test_ten_yard_node_cleanup_and_capture(self):
         self.lua.execute('''
             local reads=0
@@ -146,7 +208,7 @@ class GatheringTrackingTests(unittest.TestCase):
     def test_passive_events_and_sent_only_never_record_or_sample(self):
         self.lua.execute('''
             for _,event in ipairs({'UPDATE_MOUSEOVER_UNIT','PLAYER_TARGET_CHANGED','CURSOR_CHANGED',
-                'CHAT_MSG_LOOT','LOOT_OPENED','BAG_UPDATE','MINIMAP_UPDATE_TRACKING'}) do
+                'CHAT_MSG_LOOT','BAG_UPDATE','MINIMAP_UPDATE_TRACKING'}) do
                 fire(event,'player','Silverleaf',2366)
                 assert(not tracker.frame.events[event],'no passive collection hook')
             end

@@ -5,6 +5,8 @@ from kill_test_harness import new_client, ROOT
 from ui_test_harness import new_ui_client
 from atlas_test_harness import ATLAS_MODULES
 from angling_test_harness import ANGLING_MODULES
+from ledger_test_harness import LEDGER_MODULES
+from treasure_test_harness import TREASURE_MODULES
 
 
 class FieldbookTabsTests(unittest.TestCase):
@@ -87,12 +89,15 @@ class FieldbookTabsTests(unittest.TestCase):
             fire('ADDON_LOADED','AzerothFieldbook')
         ''')
         nodes=list(ET.parse(ROOT/'Bindings.xml').getroot())
-        self.assertEqual(len(nodes),4)
+        self.assertEqual(len(nodes),5)
         for node in nodes:
             self.assertEqual(node.attrib.get('category'),'BINDING_HEADER_AZEROTHFIELDBOOK')
             self.assertNotIn('header',node.attrib,'legacy headers create synthetic binding rows')
             self.assertFalse(node.attrib['name'].startswith('HEADER'))
         bindings={node.attrib['name']:node.text for node in nodes}
+        lua.execute('atlasPoints=0;function AzerothFieldbookRecordAtlasPoint() atlasPoints=atlasPoints+1 end')
+        lua.execute(bindings['AZEROTHFIELDBOOK_ATLAS_POINT'])
+        lua.execute('assert(atlasPoints==1)')
         lua.execute(bindings['CLASSICBESTIARY_NEXT_ENTRY'])
         lua.execute(bindings['CLASSICBESTIARY_PREVIOUS_ENTRY'])
         lua.execute(bindings['CLASSICBESTIARY_BOOK'])
@@ -102,7 +107,26 @@ class FieldbookTabsTests(unittest.TestCase):
         self.lua.execute('''
             assert(BINDING_HEADER_AZEROTHFIELDBOOK=='Azeroth Fieldbook')
             assert(BINDING_NAME_CLASSICBESTIARY_BOOK=='Toggle Azeroth Fieldbook')
-            assert(BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK=='Open bestiary at mouseover')
+            assert(BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK=='Open Azeroth Fieldbook at mouseover')
+        ''')
+
+    def test_mouseover_binding_prefers_ledger_then_falls_back_to_bestiary(self):
+        lua=new_client()
+        lua.execute('''
+            bestiaryOpens=0;ledgerOpens=0;gatheringOpens=0;knownContact=true;node=false
+            ns.CreateFieldbookShell=function() return {} end
+            ns.InitializeGathering=function() return {OpenAtMouseover=function()
+                gatheringOpens=gatheringOpens+1;return node end} end
+            ns.InitializeLedger=function() return {OpenAtUnit=function(_,unit)
+                assert(unit=='mouseover');ledgerOpens=ledgerOpens+1;return knownContact end} end
+            ns.CreateBestiaryBook=function() return {OpenAtUnit=function(_,unit)
+                assert(unit=='mouseover');bestiaryOpens=bestiaryOpens+1;return true end} end
+            fire('ADDON_LOADED','AzerothFieldbook')
+            assert(AzerothFieldbookOpenMouseover() and ledgerOpens==1 and bestiaryOpens==0)
+            knownContact=false;assert(AzerothFieldbookOpenMouseoverBestiary())
+            assert(ledgerOpens==2 and bestiaryOpens==1)
+            node=true;assert(AzerothFieldbookOpenMouseover())
+            assert(gatheringOpens==3 and ledgerOpens==2 and bestiaryOpens==1)
         ''')
 
     def test_entry_keys_reuse_filtered_order_scroll_wrap_and_visibility_gates(self):
@@ -144,7 +168,7 @@ class FieldbookTabsTests(unittest.TestCase):
             'CreatureNotes.lua', 'RumoursWindow.lua', 'FieldbookShell.lua',
             'CreatureLocations.lua', 'GatheringJournal.lua', 'GatheringModels.lua', 'GatheringTracking.lua',
             'GatheringLocationsWindow.lua', 'GatheringMapPins.lua', 'GatheringBook.lua',
-            *ATLAS_MODULES, *ANGLING_MODULES,
+            *ATLAS_MODULES, *ANGLING_MODULES, *LEDGER_MODULES, *TREASURE_MODULES,
             'FieldbookSections.lua', 'BestiaryPages.lua', 'BestiaryBook.lua',
         ])
         self.lua.execute('''
@@ -159,6 +183,8 @@ class FieldbookTabsTests(unittest.TestCase):
             gathering=ns.InitializeGathering(shell)
             atlas=ns.InitializeAtlas(shell,journal)
             angling=ns.InitializeAngling(shell)
+            ledger=ns.InitializeLedger(shell)
+            treasure=ns.InitializeTreasure(shell)
             ns.RegisterFieldbookWishlistSections(shell)
             function click(index,button,inside)
                 local tab=shell:GetFrame().sectionTabs[index]
@@ -216,8 +242,6 @@ class FieldbookTabsTests(unittest.TestCase):
 
     def test_exact_copy_and_wrapping_bounds(self):
         paragraphs = [
-            'Remember merchants, trainers and useful services encountered during exploration. Record observed goods, recipe sources, locations and access notes.',
-            'Record discovered chests, locked containers and salvage opportunities. Distinguish sightings from opened finds, with locations, observed contents and personal notes.',
             'Collect references to books, inscriptions, landmarks and noteworthy characters. Keep source-labelled notes, connect related discoveries and record mysteries worth revisiting.',
         ]
         self.lua.globals().paragraphs = self.lua.table_from(paragraphs)
@@ -225,7 +249,7 @@ class FieldbookTabsTests(unittest.TestCase):
             shell:Toggle()
             local entry=journal.entries[42]
             for index,text in ipairs(paragraphs) do
-                click(index+4)
+                click(index+6)
                 local content=shell.sections[shell.active].frame
                 assert(content.title:GetText()==shell.sections[shell.active].definition.title)
                 assert(content.heading:GetText()=='Wishlist for future releases')

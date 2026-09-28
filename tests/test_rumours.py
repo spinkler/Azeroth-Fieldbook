@@ -42,7 +42,7 @@ assert(not j:ConfirmRumour(42,fire),'must review a stored claim, not an arbitrar
 assert(not j:ConfirmRumour(42,nil))
 assert(j:ConfirmRumour(42,j:GetRumours(42)[1]))
 eq(entry.abilities.Fireball.state,'confirmed'); eq(entry.abilities.Fireball.spellID,133)
-eq(#j:GetRumours(42),4); eq(#j:ConfirmedNames(42),0,'verification does not lock the entry')
+eq(#j:GetRumours(42),4); eq(#j:ConfirmedNames(42),1,'verified ability appears without locking the entry')
 eq(#S.Candidates(entry),1,'only the verified claim is eligible to be shared')
 while #j:GetRumours(42)>0 do assert(j:ConfirmRumour(42,j:GetRumours(42)[1])) end
 assert(entry.offenses.Fire and entry.resistances.Frost and entry.immunities.Shadow and entry.behaviours.Ranged)

@@ -1,7 +1,7 @@
 local _, ns = ...
 
--- This journal has its own per-character SavedVariable. Bestiary account scope,
--- resets, backups and sharing deliberately never own these records.
+-- AccountSections selects the account or character store. Bestiary resets,
+-- backups and sharing deliberately never own these records.
 local kinds={herb={title="Herb",profession="Herbalism",icon="Interface\\Icons\\INV_Misc_Flower_02"},
     mineral={title="Mineral",profession="Mining",icon="Interface\\Icons\\INV_Ore_Copper_01"}}
 ns.GatheringKinds=kinds
@@ -24,9 +24,13 @@ end
 local sortFields={name=true,kind=true,interactions=true,completed=true,firstSeen=true,lastSeen=true}
 
 function ns.CreateGatheringJournal(saved,getBrightness)
+    local readOnly=type(saved.schema)=="number" and saved.schema>1
+    -- Never normalize a schema this version cannot interpret. The empty view
+    -- is detached, and both editing and background capture remain disabled.
+    if readOnly then saved={} end
     saved.schema=1
     saved.entries=type(saved.entries)=="table" and saved.entries or {}
-    local journal={entries=saved.entries,revision=0}
+    local journal={entries=saved.entries,revision=0,readOnly=readOnly}
     local dimensions={}
     local function mapSize(id)
         if dimensions[id] then return dimensions[id][1],dimensions[id][2] end
@@ -75,6 +79,15 @@ function ns.CreateGatheringJournal(saved,getBrightness)
             for _,field in ipairs({"interactions","completed","firstSeen","lastSeen"}) do
                 if not number(entry[field],0,9999999999) then entry[field]=0 end
             end
+            entry.loot=type(entry.loot)=="table" and entry.loot or {}
+            local lootCount=0
+            for itemID,item in pairs(entry.loot) do
+                if not number(itemID,1,2147483647) or type(item)~="table" or lootCount>=128
+                    or not number(item.minQuantity,1,1000000) or not number(item.maxQuantity,item.minQuantity,1000000)
+                    or not number(item.firstSeen,0,9999999999) or not number(item.lastSeen,item.firstSeen,9999999999) then
+                    entry.loot[itemID]=nil
+                else item.name=cleanName(item.name);lootCount=lootCount+1 end
+            end
             entry.completed=math.min(entry.completed,entry.interactions)
             if type(entry.note)~="string" or #entry.note>4000 then entry.note="" end
             entry.zones=type(entry.zones)=="table" and entry.zones or {}
@@ -105,10 +118,12 @@ function ns.CreateGatheringJournal(saved,getBrightness)
         return (map=="worldMap" or map=="minimap") and saved[map]==true
     end
     function journal:SetShowNodesOn(map,enabled)
+        if self.readOnly then return end
         if map~="worldMap" and map~="minimap" then return end
         saved[map]=enabled==true;self:Changed()
     end
     function journal:Discover(kind,name,stamp,zone,map,modelFileID)
+        if self.readOnly then return end
         name=cleanName(name)
         if not kinds[kind] or not name then return end
         stamp=number(stamp,0,9999999999) and stamp or 0
@@ -163,9 +178,30 @@ function ns.CreateGatheringJournal(saved,getBrightness)
         return id
     end
     function journal:Complete(id)
+        if self.readOnly then return end
         local entry=self.entries[id]
         if not entry or entry.completed>=entry.interactions then return end
         entry.completed=entry.completed+1;self:Changed()
+    end
+    function journal:ObserveLoot(id,items,stamp)
+        if self.readOnly then return end
+        local entry=self.entries[id]
+        if not entry or not number(stamp,0,9999999999) then return end
+        entry.loot=type(entry.loot)=="table" and entry.loot or {}
+        local changed=false
+        for itemID,item in pairs(items) do
+            if number(itemID,1,2147483647) and type(item)=="table" and number(item.quantity,1,1000000) then
+                local old=entry.loot[itemID]
+                if old or count(entry.loot)<128 then
+                    old=old or {firstSeen=stamp,minQuantity=item.quantity,maxQuantity=item.quantity}
+                    old.name=cleanName(item.name) or old.name
+                    old.minQuantity=math.min(old.minQuantity,item.quantity)
+                    old.maxQuantity=math.max(old.maxQuantity,item.quantity)
+                    old.lastSeen=stamp;entry.loot[itemID]=old;changed=true
+                end
+            end
+        end
+        if changed then self:Changed() end
     end
     function journal:GetName(id) return self.entries[id] and self.entries[id].name end
     function journal:GetLocationZones(id)
@@ -187,6 +223,7 @@ function ns.CreateGatheringJournal(saved,getBrightness)
         return sortFields[saved.sortField] and saved.sortField or "name",saved.sortDescending==true
     end
     function journal:SetListSort(field,descending)
+        if self.readOnly then return end
         saved.sortField=sortFields[field] and field or "name";saved.sortDescending=descending==true
         self:Changed()
     end
@@ -217,6 +254,7 @@ function ns.CreateGatheringJournal(saved,getBrightness)
         return result
     end
     function journal:SetNote(id,text)
+        if self.readOnly then return false end
         local entry=self.entries[id]
         if not entry or not public(text) or type(text)~="string" or #text>4000 then return false end
         entry.note=text;self:Changed();return true
@@ -227,6 +265,7 @@ function ns.CreateGatheringJournal(saved,getBrightness)
         return type(v)=="number" and v>=0.2 and v<=1 and v or 0.65
     end
     function journal:SetLocationMapBrightness(value)
+        if self.readOnly then return end
         if public(value) and type(value)=="number" and value>=0.2 and value<=1 then saved.mapBrightness=value end
     end
     return journal

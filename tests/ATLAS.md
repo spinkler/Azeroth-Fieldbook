@@ -1,5 +1,12 @@
 # Traveller’s Atlas — v0.12.1 (unreleased)
 
+Current storage scope: the global Account-wide tracking option selects this
+section's account or character journal. The original per-character SavedVariable
+is preserved. Earlier per-character implementation notes below describe the
+original section boundary; see [account tracking](ACCOUNT_TRACKING.md) for the
+current migration and storage contract.
+
+
 ## Scope and review baseline
 
 Implementation began on `main` at

@@ -626,13 +626,88 @@ class SubzoneTests(unittest.TestCase):
             assert(#s:Samples(101)==7 and #s:Crossings(101)==4,'Display changes preserve evidence')
         ''')
 
+    def test_automatic_mapping_toggle_preserves_manual_points(self):
+        self.lua.execute(r'''
+            assert(m.automaticMapping:GetChecked(),'Automatic mapping defaults on')
+            C_Map.GetMapWorldSize=function() return 1000,2000 end
+            s.index={};s.store[101]={}
+            m.automaticMapping:SetChecked(false);click(m.automaticMapping)
+            assert(j.state.automaticMapping==false)
+            assert(not sample('Meadow',.2,.2) and #s:Samples(101)==0)
+            assert(s:RecordPoint() and #s:Samples(101)==1,'Manual recording remains enabled')
+            local fresh=S.Attach(j)
+            assert(not fresh:Observe() and j.state.automaticMapping==false,'Preference survives attachment')
+            j.subzones=s
+            m.automaticMapping:SetChecked(true);click(m.automaticMapping)
+            sample('Forest',.7,.7)
+            assert(#s:Crossings(101)==0,'Resume cannot bridge movement while disabled')
+            assert(#s:Samples(101)==2)
+        ''')
+
+    def test_manual_points_enforce_fifteen_yards_and_survive_reload(self):
+        self.lua.execute(r'''
+            C_Map.GetMapWorldSize=function() return 1000,2000 end
+            s.index={};s.store[101]={};name='Meadow';px=.4;py=.4
+            assert(s:RecordPoint())
+            px=.414;assert(not s:RecordPoint(),'Reject points within 15 yards')
+            px=.416;assert(s:RecordPoint(),'Manual points may be closer than automatic 50-yard samples')
+            py=.408;assert(s:RecordPoint(),'Use map height for north-south distances')
+            assert(#s.store[101]==3)
+            local fresh=S.Attach(j);fresh:Index(101)
+            assert(#fresh.store[101]==3,'Reload cannot compact deliberate dense samples')
+            name='Other area';assert(not fresh:RecordPoint(),'Spacing applies across sub-zone names')
+            fresh.store[102]={crossing('A','B',5000,5000)};mapID=102;px=.51;py=.5
+            assert(not fresh:RecordPoint(),'Crossing samples also reserve space')
+            mapID=103;C_Map.GetMapWorldSize=nil
+            assert(not fresh:RecordPoint(),'Never guess a yard distance')
+        ''')
+
+    def test_label_placement_searches_free_space_before_culling(self):
+        self.lua.execute(r'''
+            local placed={}
+            for i=1,12 do
+                local p=S.PlaceLabel(placed,120,100,25,12,60,50)
+                assert(p,'Clustered names must move into available space')
+                assert(p.x>=12.5 and p.x<=107.5 and p.y>=6 and p.y<=94)
+                for _,other in ipairs(placed) do
+                    assert(math.abs(p.x-other.x)>=30-0.000001 or math.abs(p.y-other.y)>=14-0.000001)
+                end
+                placed[#placed+1]=p
+            end
+            local p,d=S.PlaceLabel({},120,100,25,12,60,50)
+            assert(p.x==60 and p.y==50 and d==0)
+            assert(not S.PlaceLabel({{x=60,y=50,width=120,height=100}},120,100,25,12,60,50))
+        ''')
+
+    def test_colours_survive_reload_and_new_discoveries(self):
+        self.lua.execute(r'''
+            s.store[101]=ring();s:Changed(101);j.state.showSubzones=true;c:Refresh()
+            local original=m.map.subzoneModel
+            assert(j.saved.subzoneColours.maps[101])
+            local fresh=S.Attach(j)
+            local rows=ring();rows[#rows+1]=crossing('Meadow','A new area',5000,5000)
+            local restored=S.Build(rows,nil,nil,fresh:RecallColours(101))
+            local used={}
+            for name,a in pairs(restored.areas) do
+                assert(not used[a.colourID]);used[a.colourID]=true
+                if original.areas[name] then assert(a.colourID==original.areas[name].colourID) end
+            end
+            fresh:RememberColours(101,restored)
+            local nextSession=S.Attach(j)
+            local again=S.Build(rows,nil,nil,nextSession:RecallColours(101))
+            for name,a in pairs(restored.areas) do assert(again.areas[name].colourID==a.colourID) end
+            local readonly={readOnly=true,saved=j.saved,state={}}
+            S.Attach(readonly):RememberColours(102,restored)
+            assert(not j.saved.subzoneColours.maps[102])
+        ''')
+
     def test_labels_measure_text_and_wrap_before_hiding(self):
         self.lua.execute(r'''
             local function observation(name,x,y)
                 return {kind='interior',mapID=101,name=name,x=x,y=y,at=100}
             end
             s.store[101]={observation('A',4000,5000),observation('Silver Stream Mine',5100,5000),
-                observation('Silver Stream Mining Outpost',8000,8000),observation(string.rep('W',40),1000,1000)}
+                observation('Silver Stream Mining Outpost',8000,8000),observation(string.rep('W',100),1000,1000)}
             s:Changed(101);j.state.showSubzoneLabels=true;j.state.subzoneLabelSize=12;c:Refresh()
             local visible={};local count=0
             for _,label in ipairs(m.map.subzoneLabels) do
@@ -645,7 +720,7 @@ class SubzoneTests(unittest.TestCase):
             assert(visible.A and visible['Silver\nStream Mine'],'Try two lines when a one-line label would collide')
             local wrapped
             for text,label in pairs(visible) do if text:gsub('\n',' ')=='Silver Stream Mining Outpost' then wrapped=label end end
-            assert(wrapped and wrapped:GetText():find('\n',1,true) and wrapped:GetHeight()==28,'Long labels must fit on two lines without ellipses')
+            assert(wrapped and wrapped:GetWidth()<=m.map:GetWidth(),'Long names may use the full map width')
             assert(visible.A:GetWidth()<20,'Short names should not reserve a full fixed-width collision box')
             local objectsBefore=#objects
             for i=1,4 do c:Refresh() end

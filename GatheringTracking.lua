@@ -109,7 +109,7 @@ end
 
 function ns.CreateGatheringTracking(journal)
     local controller={}
-    local pending,lastFinished,clicked,hovered,lastRejected,blockedUntil
+    local pending,lastFinished,clicked,hovered,lastRejected,blockedUntil,lootContext
     local function clock()
         local now=read(GetTime)
         if type(now)=="number" and now>=0 and now<math.huge then return now end
@@ -127,12 +127,19 @@ function ns.CreateGatheringTracking(journal)
             and read(C_TooltipInfo and C_TooltipInfo.GetWorldCursor)==nil)
     end
     function controller:ObserveWorldCursor()
+        if journal.readOnly then return end
         local resource=worldResource()
         if resource then
             resource.observedAt=clock();hovered=resource
-            journal:Discover(resource.kind,resource.name,read(time),read(GetRealZoneText),
+            return journal:Discover(resource.kind,resource.name,read(time),read(GetRealZoneText),
                 ns.CreatureLocations.CurrentMap(),resource.modelFileID)
         end
+    end
+    function controller:DiscoverAtMouseover()
+        -- Only a live world-object tooltip can select a resource. Do not use
+        -- the brief interaction cache after the pointer moves onto another UI.
+        if not worldHasMouseFocus() then return end
+        return self:ObserveWorldCursor()
     end
     local function record(context)
         if context.id then return end
@@ -143,12 +150,41 @@ function ns.CreateGatheringTracking(journal)
             read(GetRealZoneText),read(time),context.modelFileID)
         if clicked and clicked.name==context.name and clicked.kind==context.kind then clicked.id=context.id end
     end
+    local function snapshotLoot()
+        if not recent(lootContext,"at",clock(),8) or read(IsFishingLoot)==true then return end
+        local count=read(GetNumLootItems)
+        if type(count)~="number" or count<1 or count>64 or count~=math.floor(count) then return end
+        local items,source={},nil
+        for slot=1,count do
+            if type(GetLootSourceInfo)~="function" then return end
+            local values={pcall(GetLootSourceInfo,slot)}
+            -- A single readable game-object source excludes corpses, bags and
+            -- mixed area loot. A fresh completed gather establishes the node.
+            if not values[1] or #values~=3 or not public(values[2]) or type(values[2])~="string"
+                or not values[2]:match("^GameObject%-") or not public(values[3]) then return end
+            if source and source~=values[2] then return end
+            source=values[2]
+            local link=read(GetLootSlotLink,slot)
+            local itemID=type(link)=="string" and tonumber(link:match("item:(%d+)"))
+            local quantity=values[3]
+            if itemID and type(quantity)=="number" and quantity>0 and quantity<=1000000 and quantity==math.floor(quantity) then
+                local item=items[itemID] or {quantity=0}
+                item.quantity=item.quantity+quantity
+                item.name=ns.GatheringName(link:match("%[(.-)%]"));items[itemID]=item
+            end
+        end
+        journal:ObserveLoot(lootContext.id,items,read(time))
+    end
     function controller:OnEvent(event,unit,a,b,c)
+        if journal.readOnly then return end
+        if event=="LOOT_READY" or event=="LOOT_OPENED" or event=="LOOT_SLOT_CHANGED" then snapshotLoot();return end
+        if event=="LOOT_CLOSED" then lootContext=nil;return end
+        if event=="GET_ITEM_INFO_RECEIVED" then journal:Changed();return end
         if event=="PLAYER_ENTERING_WORLD" or event=="ZONE_CHANGED_NEW_AREA" then
-            clear();clicked=nil;hovered=nil;lastRejected=nil;blockedUntil=clock();return
+            clear();lootContext=nil;clicked=nil;hovered=nil;lastRejected=nil;blockedUntil=clock();return
         end
         if event=="GLOBAL_MOUSE_DOWN" then
-            clicked=nil
+            lootContext=nil;clicked=nil
             local now=clock()
             blockedUntil=now and now+2 or nil
             if not public(unit) or unit~="RightButton" or not worldHasMouseFocus() then hovered=nil;return end
@@ -191,7 +227,7 @@ function ns.CreateGatheringTracking(journal)
         if event=="UNIT_SPELLCAST_SENT" then
             if castKey(b) and (b==lastFinished or (pending and b==pending.guid)) then return end
             -- Any new player cast invalidates an older pending gathering attempt.
-            clear()
+            clear();lootContext=nil
             local name,kind=ns.GatheringName(a),gatheringKind(c)
             if clicked and (clicked.name~=name or clicked.kind~=kind) then clicked=nil end
             local now=clock()
@@ -212,7 +248,7 @@ function ns.CreateGatheringTracking(journal)
             record(pending)
         elseif event=="UNIT_SPELLCAST_SUCCEEDED" then
             record(pending) -- also supports an instant gather with no START event
-            if pending.id then journal:Complete(pending.id) end
+            if pending.id then journal:Complete(pending.id);lootContext={id=pending.id,at=now};snapshotLoot() end
             lastFinished=pending.guid
             clear()
         elseif event=="UNIT_SPELLCAST_FAILED" or event=="UNIT_SPELLCAST_FAILED_QUIET"
@@ -226,6 +262,9 @@ function ns.CreateGatheringTracking(journal)
     end
     frame:RegisterEvent("PLAYER_ENTERING_WORLD");frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     frame:RegisterEvent("UI_ERROR_MESSAGE")
+    for _,event in ipairs({"LOOT_READY","LOOT_OPENED","LOOT_SLOT_CHANGED","LOOT_CLOSED","GET_ITEM_INFO_RECEIVED"}) do
+        frame:RegisterEvent(event)
+    end
     -- Older clients may lack global input events; gathering casts still work.
     pcall(frame.RegisterEvent,frame,"GLOBAL_MOUSE_DOWN")
     frame:SetScript("OnEvent",function(_,event,...) controller:OnEvent(event,...) end)

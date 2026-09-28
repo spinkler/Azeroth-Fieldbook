@@ -65,6 +65,9 @@ local function poolIdentity(pool)
     local name=A.Name(pool.name);if name then return "name:"..A.Key(pool.locale or A.Read(GetLocale) or "unknown",name) end
 end
 A.ItemIdentity=itemIdentity;A.PoolIdentity=poolIdentity
+local function aggregateKey(context)
+    return A.Key(context.waterID,context.spotID,context.poolID,context.source,context.association,context.method)
+end
 
 function ns.CreateAnglingJournal(saved)
     local readOnly=type(saved.schema)=="number" and saved.schema>A.SCHEMA
@@ -77,6 +80,28 @@ function ns.CreateAnglingJournal(saved)
     end
     db.schema=A.SCHEMA;db.serial=A.Integer(db.serial,0,999999999) and db.serial or 0
     if not A.Text(db.origin,100) then db.origin=tostring(A.Now()).."-"..math.random(1,999999999) end
+    local function reindexAggregates()
+        local keys={}
+        -- Keep the destination's current aggregate when a merge creates matching
+        -- contexts. Historical source aggregates retain their independent IDs.
+        for key,id in pairs(db.aggregateKeys) do
+            local fact=db.aggregates[id]
+            if fact and key==aggregateKey(fact) then keys[key]=id end
+        end
+        for id,fact in pairs(db.aggregates) do
+            local key=aggregateKey(fact)
+            if not keys[key] then keys[key]=id end
+        end
+        db.aggregateKeys=keys
+    end
+    reindexAggregates()
+    -- Repair lookups saved before merges redirected hover sightings. Follow
+    -- archived chains without modifying the archived notes or catch history.
+    for key,id in pairs(db.hoverKeys) do
+        local seen={}
+        while db.merged[id] and not seen[id] do seen[id]=true;id=db.merged[id].mergedInto end
+        if db.spots[id] then db.hoverKeys[key]=id end
+    end
     while #db.history>A.HISTORY_LIMIT do table.remove(db.history,1) end
     while #db.sessions>A.SESSION_LIMIT do table.remove(db.sessions,1) end
     while #db.recentOrder>A.RECENT_LIMIT do db.recent[table.remove(db.recentOrder,1)]=nil end
@@ -237,7 +262,8 @@ function ns.CreateAnglingJournal(saved)
         if from.personalFirst then into.personalFirst=math.min(into.personalFirst or from.personalFirst,from.personalFirst) end
         if from.personalLast then into.personalLast=math.max(into.personalLast or 0,from.personalLast) end
         into.favourite=into.favourite or from.favourite
-        db.spots[fromID]=nil;db.aggregateKeys={}
+        for key,id in pairs(db.hoverKeys) do if id==fromID then db.hoverKeys[key]=intoID end end
+        db.spots[fromID]=nil;reindexAggregates()
         self:Log("Correction","Merged spot: "..from.name.." into "..into.name..". Original notes and history retained.")
         self:Changed();return into
     end
@@ -291,7 +317,7 @@ function ns.CreateAnglingJournal(saved)
                 if aggregate[key]~=context[key] then return nil,"Conflicting duplicate observation." end
             end
         else
-            local key=A.Key(context.waterID,context.spotID,context.poolID,context.source,context.association,context.method)
+            local key=aggregateKey(context)
             aggregate=db.aggregates[db.aggregateKeys[key]]
             if not aggregate then
                 aggregate={id=self:ID("catch"),waterID=context.waterID,spotID=context.spotID,poolID=context.poolID,

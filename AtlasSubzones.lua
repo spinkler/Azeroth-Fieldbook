@@ -7,6 +7,58 @@ ns.AtlasSubzones=S
 S.WORK_MS=1
 local jobs={}
 local function noWork() end
+-- Search the free rectangles around existing names. Obstacle edges include every
+-- place where a free horizontal span can begin, so there is no search-radius cap.
+function S.PlaceLabel(placed,width,height,w,h,anchorX,anchorY,checkpoint)
+    checkpoint=checkpoint or noWork
+    if w>width or h>height then return end
+    local minX,maxX=w/2,width-w/2
+    local minY,maxY=h/2,height-h/2
+    local x=math.max(minX,math.min(maxX,anchorX))
+    local y=math.max(minY,math.min(maxY,anchorY))
+    local rows={y,minY,maxY}
+    for _,p in ipairs(placed) do
+        checkpoint()
+        local gap=(p.height+h)/2+2
+        rows[#rows+1]=p.y-gap;rows[#rows+1]=p.y+gap
+    end
+    table.sort(rows,function(a,b) return math.abs(a-y)<math.abs(b-y) end)
+    local best,bestDistance
+    for _,cy in ipairs(rows) do
+        checkpoint()
+        local dy=(cy-y)^2
+        if bestDistance and dy>bestDistance then break end
+        if cy>=minY and cy<=maxY then
+            local intervals={}
+            for _,p in ipairs(placed) do
+                checkpoint()
+                if math.abs(p.y-cy)<(p.height+h)/2+2-0.000001 then
+                    local gap=(p.width+w)/2+5
+                    intervals[#intervals+1]={p.x-gap,p.x+gap}
+                end
+            end
+            table.sort(intervals,function(a,b) return a[1]<b[1] end)
+            local function consider(left,right)
+                if left>right then return end
+                local cx=math.max(left,math.min(right,x))
+                local distance=(cx-x)^2+dy
+                if not bestDistance or distance<bestDistance then
+                    best={x=cx,y=cy,width=w,height=h};bestDistance=distance
+                end
+            end
+            local left=minX
+            for _,span in ipairs(intervals) do
+                checkpoint()
+                if span[1]>=left then consider(left,math.min(maxX,span[1])) end
+                left=math.max(left,span[2])
+                if left>maxX then break end
+            end
+            consider(left,maxX)
+            if bestDistance==0 then break end
+        end
+    end
+    return best,bestDistance
+end
 -- One shared budget for indexing, geometry and native texture updates. Lua
 -- coroutines yield only at our checkpoints, never inside native callbacks.
 function S.Queue(run,done,owner)
@@ -78,6 +130,30 @@ function S.Attach(j)
     local store=not j.readOnly and j.saved.subzones or {}
     local s={store=store,revision=0,revisions={},index={}}
     j.subzones=s
+    -- Palette IDs are presentation metadata, separate from observed geography.
+    -- Version the palette mapping so future palette changes cannot reinterpret IDs.
+    function s:RecallColours(id)
+        local saved=j.saved.subzoneColours
+        local rows=type(saved)=="table" and saved.version==1 and type(saved.maps)=="table" and saved.maps[id]
+        if type(rows)~="table" then return end
+        local model={areas={}}
+        for name,colourID in pairs(rows) do
+            if A.Text(name,160) and A.Integer(colourID,1,#S.Palette()) then
+                model.areas[name]={colourID=colourID}
+            end
+        end
+        return model
+    end
+    function s:RememberColours(id,model)
+        if j.readOnly or not A.Integer(id,1,999999) then return end
+        local saved=j.saved.subzoneColours
+        if type(saved)~="table" or saved.version~=1 or type(saved.maps)~="table" then
+            saved={version=1,maps={}};j.saved.subzoneColours=saved
+        end
+        local rows={}
+        for _,name in ipairs(model.names) do rows[name]=model.areas[name].colourID end
+        saved.maps[id]=rows
+    end
     function s:Changed(id)
         self.revision=self.revision+1;self.revisions[id]=(self.revisions[id] or 0)+1
     end
@@ -105,7 +181,7 @@ function S.Attach(j)
     end
     function s:Crossings(id,checkpoint) return self:Samples(id,checkpoint,true) end
     function s:Reset() self.previous=nil end
-    local function spatial(index,row,add,allSamples)
+    local function spatial(index,row,add,allSamples,radius)
         if not index.width then return index.keys[key(row)] end
         local isInterior=row.kind=="interior"
         local grid,spacing
@@ -132,7 +208,8 @@ function S.Attach(j)
             local bucket=grid[(cx+dx)..":"..(cy+dy)]
             if bucket then for _,p in ipairs(bucket) do
                 local d=(x-p.x)^2+(y-p.y)^2
-                if d<spacing^2 or ((allSamples or not isInterior) and d==spacing^2) then return true end
+                local limit=radius or spacing
+                if d<limit^2 or ((allSamples or not isInterior) and d==limit^2) then return true end
             end end
         end end
     end
@@ -153,9 +230,9 @@ function S.Attach(j)
         local rows=store[row.mapID]
         local extra=extraNames(index.names,row)
         if row.kind=="interior" and index.interiors>=S.MAX_INTERIORS then return end
-        if #rows>=S.MAX_CROSSINGS or index.count+extra>S.MAX_AREAS or spatial(index,row) then return end
+        if #rows>=S.MAX_CROSSINGS or index.count+extra>S.MAX_AREAS or (row.manual~=true and spatial(index,row)) then return end
         -- Interior spacing is map-wide; crossings retain their own border-pair rule.
-        if row.kind=="interior" and spatial(index,row,false,true) then return end
+        if row.kind=="interior" and spatial(index,row,false,true,row.manual==true and 15 or nil) then return end
         rows[#rows+1]=row;remember(index,row);s:Changed(row.mapID);return true
     end
     function s:Index(id,deferred)
@@ -181,7 +258,7 @@ function S.Attach(j)
                 local row=rows[i]
                 if row==nil then sparse=true end
                 if (valid(row) or interior(row)) and row.mapID==id then
-                    if compact and spatial(index,row) then removed=removed+1
+                    if compact and row.manual~=true and spatial(index,row) then removed=removed+1
                     else remember(index,row);kept[#kept+1]=row end
                 else kept[#kept+1]=row end
             end
@@ -231,8 +308,26 @@ function S.Attach(j)
         if not index.width then return end
         return record({kind="interior",mapID=id,name=name,x=x,y=y,at=A.Now()},index)
     end
+    function s:RecordPoint()
+        if j.readOnly then return false,"Atlas recording is unavailable." end
+        local name=A.Read(GetSubZoneText)
+        if name=="" then name=A.Read(GetRealZoneText) end
+        local id=A.Read(C_Map and C_Map.GetBestMapForUnit,"player")
+        local p=A.Integer(id,1,2147483647) and A.Read(C_Map and C_Map.GetPlayerMapPosition,id,"player")
+        if not A.Text(name,160) or type(p)~="table" or not A.Number(p.x,0,1) or not A.Number(p.y,0,1)
+            or (p.x==0 and p.y==0) then return false,"Current Atlas position is unavailable." end
+        local index=self:Index(id,true)
+        if not index.ready then return false,"Atlas points are still loading; try again shortly." end
+        if not index.width then return false,"Map dimensions are unavailable; cannot verify 15-yard spacing." end
+        local row={kind="interior",manual=true,mapID=id,name=name,
+            x=math.floor(p.x*10000+0.5),y=math.floor(p.y*10000+0.5),at=A.Now()}
+        if spatial(index,row,false,true,15) then return false,"An Atlas point is already within 15 yards." end
+        if not record(row,index) then return false,"Atlas point could not be recorded; the map may be full." end
+        if self.onChange then self.onChange(id) end
+        return true,"Atlas point recorded: "..A.Safe(name).."."
+    end
     function s:Observe(deferred)
-        if j.readOnly then return end
+        if j.readOnly or j.state.automaticMapping==false then self:Reset();return end
         -- Read the raw labels: unavailable/secret values must not become an
         -- invented sub-zone called "Unavailable". Blank sub-zones are the zone.
         local name=A.Read(GetSubZoneText)
@@ -808,53 +903,48 @@ function S.InstallMap(map,journal,cursorPoint)
             end
         end
         hide(labels,checkpoint)
-        -- Measure actual text instead of reserving the same large collision box
-        -- for every name. Try a balanced two-line name before giving up on space.
+        -- Measure each layout and move it the shortest distance into free space.
         local placed={}
-        local maxWidth=math.min(width,130*size/12)
         for _,name in ipairs(names and model.names or {}) do
             checkpoint(8)
             if name~=hidden then
-            local a=model.areas[name]
-            local i=#placed+1
-            local label=labels[i] or target.frame:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");labels[i]=label
-            local font=label:GetFont();label:SetFont(font,size,"OUTLINE")
-            label:SetWordWrap(false);label:SetWidth(0);label:SetHeight(0)
-            local text=A.Safe(name)
-            local function measure(value)
-                checkpoint(8);label:SetText(value)
-                local measured=A.Read(label.GetStringWidth,label)
-                return A.Number(measured,0,100000) and measured or #value*size*0.6
-            end
-            local function place(value,textWidth,lines)
-                local w,h=textWidth+4,size*lines+4
-                if w>maxWidth or h>height then return false end
-                local x=math.max(w/2,math.min(width-w/2,(a.labelX or a.x)/10000*width))
-                local y=math.max(h/2,math.min(height-h/2,(a.labelY or a.y)/10000*height))
-                for _,p in ipairs(placed) do
-                    checkpoint()
-                    if math.abs(p.x-x)<(p.width+w)/2+5 and math.abs(p.y-y)<(p.height+h)/2+2 then return false end
+                local a=model.areas[name]
+                local i=#placed+1
+                local label=labels[i] or target.frame:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");labels[i]=label
+                local font=label:GetFont();label:SetFont(font,size,"OUTLINE")
+                label:SetWordWrap(false);label:SetWidth(0);label:SetHeight(0)
+                local text=A.Safe(name)
+                local function measure(value)
+                    checkpoint(8);label:SetText(value)
+                    local measured=A.Read(label.GetStringWidth,label)
+                    return A.Number(measured,0,100000) and measured or #value*size*0.6
                 end
-                placed[#placed+1]={x=x,y=y,width=w,height=h}
-                label:ClearAllPoints();label:SetPoint("CENTER",self.canvas,"TOPLEFT",x,-y)
-                label:SetWidth(w);label:SetHeight(h);label:SetWordWrap(true);label:SetNonSpaceWrap(false)
-                label:SetText(value);label:SetTextColor(a.colour[1],a.colour[2],a.colour[3])
-                label:SetShadowColor(0,0,0,1);label:SetShadowOffset(1,-1);label:Show()
-                return true
-            end
-            if not place(text,measure(text),1) then
-                local wrapped,wrapWidth
-                -- Byte slicing only at ASCII whitespace preserves UTF-8 names.
-                for left,space,right in text:gmatch("()( +)()") do
-                    local first,second=text:sub(1,left-1),text:sub(right)
-                    if first~="" and second~="" then
-                        local w=math.max(measure(first),measure(second))
-                        if not wrapWidth or w<wrapWidth then wrapped,wrapWidth=first.."\n"..second,w end
+                local best,bestDistance,bestText
+                local function try(value,textWidth,lines)
+                    local p,d=S.PlaceLabel(placed,width,height,textWidth+4,size*lines+4,
+                        (a.labelX or a.x)/10000*width,(a.labelY or a.y)/10000*height,checkpoint)
+                    if p and (not bestDistance or d<bestDistance) then best,bestDistance,bestText=p,d,value end
+                end
+                try(text,measure(text),1)
+                if bestDistance~=0 then
+                    -- Every word boundary is a possible two-line layout. Byte
+                    -- slicing at ASCII whitespace preserves UTF-8 names.
+                    for left,space,right in text:gmatch("()( +)()") do
+                        local first,second=text:sub(1,left-1),text:sub(right)
+                        if first~="" and second~="" then
+                            try(first.."\n"..second,math.max(measure(first),measure(second)),2)
+                            if bestDistance==0 then break end
+                        end
                     end
                 end
-                if not wrapped or not place(wrapped,wrapWidth,2) then label:Hide() end
+                if best then
+                    placed[#placed+1]=best
+                    label:ClearAllPoints();label:SetPoint("CENTER",self.canvas,"TOPLEFT",best.x,-best.y)
+                    label:SetWidth(best.width);label:SetHeight(best.height);label:SetWordWrap(true);label:SetNonSpaceWrap(false)
+                    label:SetText(bestText);label:SetTextColor(a.colour[1],a.colour[2],a.colour[3])
+                    label:SetShadowColor(0,0,0,1);label:SetShadowOffset(1,-1);label:Show()
+                else label:Hide() end
             end
-        end
         end
         target.hidden=hidden
         target.model,target.width,target.height,target.regions=model,width,height,regions
@@ -905,7 +995,7 @@ function S.InstallMap(map,journal,cursorPoint)
             if cacheID~=id or cacheRevision~=revisionAtStart then
                 local rows=journal.subzones:Samples(id,checkpoint)
                 local resolution=cacheID==id and model and #rows>=#model.rows*0.75 and model.grid or nil
-                nextModel=S.Build(rows,checkpoint,resolution,cacheID==id and model or nil)
+                nextModel=S.Build(rows,checkpoint,resolution,cacheID==id and model or journal.subzones:RecallColours(id))
             end
             paint(self,back,nextModel,w,h,regions,names,points,size,hidden,checkpoint)
             return nextModel
@@ -919,6 +1009,7 @@ function S.InstallMap(map,journal,cursorPoint)
             end
             if self.subzoneMapID~=id or A.Read(self.IsVisible,self)==false then return end
             front.frame:Hide();front,back=back,front;front.frame:Show();expose()
+            journal.subzones:RememberColours(id,result)
             model=result;self.subzoneModel=model;self.subzoneError=nil;failed=nil
             cacheID,cacheRevision,width,height=id,revisionAtStart,w,h
             lastRegions,lastLabels,lastPoints,lastSize,lastHidden=regions,names,points,size,hidden

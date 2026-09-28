@@ -1,5 +1,13 @@
 local _, ns = ...
 
+ns.BestiaryImmunityEffects = {
+    "Bleed", "Poison", "Disease", "Curse", "Stun", "Fear", "Horror", "Polymorph",
+    "Charm", "Sleep", "Disorient", "Incapacitate", "Root", "Snare", "Daze",
+    "Silence", "Interrupt", "Disarm", "Banish", "Knockback",
+}
+ns.BestiaryImmunityEffectNames = {}
+for _,name in ipairs(ns.BestiaryImmunityEffects) do ns.BestiaryImmunityEffectNames[name]=true end
+
 -- Only client-observed legacy marks can become verified basic information.
 -- Old manual dispositions are removed and will be filled by a readable reaction.
 function ns.MigrateDisposition(entry)
@@ -130,6 +138,97 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         value = value:gsub("|", ""):gsub("[%c]", " "):match("^%s*(.-)%s*$")
         if value == "" or #value > limit then return end
         return value
+    end
+    -- Zone names come from the zone map, not a town/area label in GetZoneText.
+    local function currentZone()
+        local sub=clean(read(GetSubZoneText),200)
+        local raw=clean(read(GetRealZoneText),200) or clean(read(GetZoneText),200)
+        local mapID=read(C_Map and C_Map.GetBestMapForUnit,"player")
+        local visited={}
+        for _=1,16 do
+            if not number(mapID) or visited[mapID] then break end
+            visited[mapID]=true
+            local info=read(C_Map and C_Map.GetMapInfo,mapID)
+            if type(info)~="table" then break end
+            local kind=read(function() return info.mapType end)
+            local zoneType=Enum and Enum.UIMapType and Enum.UIMapType.Zone or 3
+            if kind==zoneType then
+                local zone=clean(read(function() return info.name end),200)
+                if zone then return zone,sub,raw end
+            end
+            mapID=read(function() return info.parentMapID end)
+        end
+        -- Never turn an explicitly identified subzone into a new top-level zone.
+        if raw and raw~=sub then return raw,sub,raw end
+    end
+    local locationAliases={}
+    local function rememberAlias(sub,zone)
+        if not sub or not zone or sub==zone or locationAliases[sub]==false then return false end
+        if locationAliases[sub] and locationAliases[sub]~=zone then locationAliases[sub]=false;return false end
+        if locationAliases[sub]==zone then return false end
+        locationAliases[sub]=zone;return true
+    end
+    local function addSubzone(entry,zone,sub)
+        if not zone or not sub or zone==sub then return false end
+        entry.subzones=entry.subzones or {};entry.subzones[zone]=entry.subzones[zone] or {}
+        if entry.subzones[zone][sub] then return false end
+        entry.subzones[zone][sub]=true;return true
+    end
+    function journal:MigrateLocations()
+        -- The reported Sentinel Tower case is identifiable when Westfall was
+        -- also recorded. Other names require an observed, unambiguous association.
+        local changed=false
+        for id,entry in pairs(self.entries) do
+            local function hasZone(zone)
+                if (entry.locations or {})[zone] then return true end
+                for _,maps in ipairs({entry.observationLocations or {},entry.killLocations or {}}) do
+                    for _,map in pairs(maps) do if map.name==zone then return true end end
+                end
+                return false
+            end
+            local aliases={}
+            for sub,zone in pairs(locationAliases) do
+                if zone and hasZone(zone) then aliases[sub]=zone end
+            end
+            if hasZone("Westfall") then aliases["Sentinel Tower"]="Westfall" end
+            for sub,zone in pairs(aliases) do
+                local personal=(entry.locations or {})[sub]
+                if personal then
+                    entry.locations[sub]=nil;entry.locations[zone]=true
+                    addSubzone(entry,zone,sub);changed=true
+                end
+                local locked=entry.lockedBasic and entry.lockedBasic.locations
+                if locked and locked[sub] then locked[sub]=nil;locked[zone]=true;changed=true end
+                for _,progress in ipairs({entry.discoveryProgress or {},
+                    trackingDB.bestiary.points and trackingDB.bestiary.points.credits[id] or {}}) do
+                    if progress.zones and progress.zones[sub] then
+                        progress.zones[sub]=nil;progress.zones[zone]=true
+                    end
+                end
+                for _,report in ipairs(entry.sharedReports or {}) do
+                    local names,seen={},{}
+                    for _,name in ipairs(report.locations or {}) do
+                        name=name==sub and zone or name
+                        if not seen[name] then names[#names+1]=name;seen[name]=true end
+                    end
+                    report.locations=names
+                end
+            end
+        end
+        if changed then self:Touch() end
+        return changed
+    end
+    function journal:GetSubzones(id,zone)
+        local entry=self.entries[id];local names={}
+        for name in pairs(entry and entry.subzones and entry.subzones[zone] or {}) do names[#names+1]=name end
+        table.sort(names);return names
+    end
+    local function observeSubzone(self,entry,zone,sub,raw)
+        local learned=rememberAlias(sub,zone)
+        if rememberAlias(raw,zone) then learned=true end
+        if learned then self:MigrateLocations() end
+        if addSubzone(entry,zone,sub) then self:Touch() end
+        if raw~=sub and addSubzone(entry,zone,raw) then self:Touch() end
     end
     local function creatureName(value)
         if not str(value) or #value > 100 or value:find("[%c|]") then return end
@@ -407,18 +506,32 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         table.sort(parts)
         return "{"..table.concat(parts).."}"
     end
-    function journal:TrackStableContent(id)
+    local stableFields={"name","category","rank","levelMin","levelMax","locations","subzones","abilities","ignoredAbilities",
+        "offenses","resistances","immunities","ignoredTypeImmunities","behaviours","behaviourSources","ignoredBehaviours","disposition","damage","idNotes","tameable","discoveryProgress"}
+    -- Entries replaced by deletion, reset or backup restore must not be retained.
+    local stableRevisions=setmetatable({},{__mode="k"})
+    function journal:TrackStableContent(id,skipUnchanged)
         local entry=self.entries[id]
         if not entry then return end
+        if skipUnchanged and stableRevisions[entry]==self.revision then return end
         local content={}
-        for _,key in ipairs({"name","category","rank","levelMin","levelMax","locations","abilities","ignoredAbilities",
-            "offenses","resistances","immunities","behaviours","behaviourSources","ignoredBehaviours","disposition","damage","loot","idNotes","tameable","discoveryProgress"}) do
-            content[key]=entry[key]
+        for _,key in ipairs(stableFields) do content[key]=entry[key] end
+        -- Item identities are knowledge; quantities, samples and corpse replay
+        -- protection change on routine looting without teaching anything new.
+        if entry.loot then
+            for itemID in pairs(entry.loot.items or {}) do
+                content.loot=content.loot or {};content.loot[itemID]=true
+            end
         end
-        local signature=contentSignature(content)
+        local signature="knowledge2:"..contentSignature(content)
         if entry.autoLockSignature~=signature then
-            entry.autoLockSignature=signature;entry.unchangedKills=0
+            -- The previous format starts with a table brace. Upgrading its
+            -- representation must not discard an existing saved kill streak.
+            local upgrading=type(entry.autoLockSignature)=="string" and entry.autoLockSignature:sub(1,1)=="{"
+            entry.autoLockSignature=signature
+            if not upgrading then entry.unchangedKills=0 end
         end
+        stableRevisions[entry]=self.revision
     end
     function journal:GetAlwaysAnchorToMain()
         return db.alwaysAnchorToMain ~= false
@@ -649,7 +762,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         -- to the raw level when the effective value is hidden or unknown.
         local levelAPI = type(UnitEffectiveLevel)=="function" and UnitEffectiveLevel or UnitLevel
         local category, level = read(UnitCreatureType, unit), read(levelAPI, unit)
-        local location = read(GetRealZoneText) or read(GetZoneText)
+        local location, subzone, rawLocation = currentZone()
         local observation = {
             category = clean(category, 100),
             level = number(level) and level > 0 and level or nil,
@@ -668,6 +781,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if self.entries[id] and self.entries[id].confirmed and self:GetCreatureName(id) then
             local entry=self.entries[id]
             local wasPersonal=entry.personalEncountered
+            observeSubzone(self,entry,location,subzone,rawLocation)
             -- A locked skull placeholder can acquire its first readable level;
             -- an already observed, locked range remains frozen.
             if not number(entry.levelMin) and number(level) then
@@ -694,6 +808,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local unclassified = not self.entries[id] or self.entries[id].category == "Unclassified"
         local entry, discovered = self:Ensure(id, false, name, observation)
         if not entry then return end
+        observeSubzone(self,entry,location,subzone,rawLocation)
         if ns.CreatureLocations then
             local _, mapChanged=ns.CreatureLocations.RememberMap(entry,locationMap)
             if mapChanged then self:Touch() end
@@ -741,9 +856,32 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if changed then self:Touch() end
         return id
     end
+    local function typeImmunity(entry,name)
+        if not entry or not entry.personalEncountered then return false end
+        local category=entry.category
+        if name=="Polymorph" then
+            return str(category) and category~="Unclassified" and category~="Not specified"
+                and category~="Other" and category~="Humanoid" and category~="Beast" and category~="Critter"
+        end
+        return category=="Mechanical" and (name=="Bleed" or name=="Fear")
+    end
+    function journal:GetShowExpectedImmunities() return db.showExpectedImmunities==true end
+    function journal:SetShowExpectedImmunities(enabled)
+        db.showExpectedImmunities=enabled==true;self:Touch()
+    end
+    function journal:GetExpectedImmunities(id)
+        local entry=self.entries[id];local result={}
+        if not self:GetShowExpectedImmunities() then return result end
+        for _,name in ipairs({"Bleed","Fear","Polymorph"}) do
+            if typeImmunity(entry,name) and not (entry.immunities and entry.immunities[name])
+                and not (entry.ignoredTypeImmunities and entry.ignoredTypeImmunities[name]) then result[name]=true end
+        end
+        return result
+    end
     local function setSchoolObservation(self, id, field, school, enabled)
         local entry = self.entries[id]
-        if not entry or entry.confirmed or not magicSchools[school] then return false end
+        local allowed=magicSchools[school] or (field=="immunities" and ns.BestiaryImmunityEffectNames[school])
+        if not entry or entry.confirmed or not allowed then return false end
         entry[field] = type(entry[field]) == "table" and entry[field] or {}
         local value = enabled == true and true or nil
         if value and self.ResolveRumours then
@@ -759,7 +897,18 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         return setSchoolObservation(self, id, "resistances", school, enabled)
     end
     function journal:SetImmunity(id, school, enabled)
-        return setSchoolObservation(self, id, "immunities", school, enabled)
+        local entry=self.entries[id]
+        if not entry or entry.confirmed then return false end
+        local expected=typeImmunity(entry,school)
+        if not setSchoolObservation(self,id,"immunities",school,enabled) then return false end
+        if expected then
+            entry.ignoredTypeImmunities=entry.ignoredTypeImmunities or {}
+            local ignored=enabled~=true and true or nil
+            if entry.ignoredTypeImmunities[school]~=ignored then
+                entry.ignoredTypeImmunities[school]=ignored;self:Touch()
+            end
+        end
+        return true
     end
     function journal:SetOffense(id, school, enabled)
         return setSchoolObservation(self, id, "offenses", school, enabled)
@@ -817,7 +966,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if faction=="Alliance" or faction=="Horde" or faction=="Neutral" then return faction end
     end
     function journal:ObserveZoneTerritory()
-        local zone=clean(read(GetRealZoneText) or read(GetZoneText),200)
+        local zone=currentZone()
         local faction=playerFaction()
         local api=C_PvP and C_PvP.GetZonePVPInfo or GetZonePVPInfo
         if not zone or not faction or type(api)~="function" then return false end
@@ -826,7 +975,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if kind=="" then kind="none" end
         if not str(kind) or not territoryTypes[kind] then return false end
         -- Do not give a whole zone the colour of a temporary subzone override.
-        if zone~=clean(read(GetRealZoneText) or read(GetZoneText),200) then return false end
+        if zone~=currentZone() then return false end
         local zones=trackingDB.bestiary.zoneTerritories or {}
         if not zones[zone] then
             local count=0;for _ in pairs(zones) do count=count+1 end
@@ -1080,7 +1229,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:SetAbilityTooltip(id, name, enabled)
         local entry = self.entries[id]
-        if not entry or entry.confirmed or not entry.abilities[name] then return false end
+        if not entry or not entry.abilities[name] then return false end
         entry.abilities[name].showInTooltip = enabled == true
         self:Touch()
         return true
@@ -1229,7 +1378,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if self.ResolveRumours then self:ResolveRumours(id,{kind="ability",value=name,spellID=spellID}) end
         self:Touch()
         if self.AcknowledgeDetectedAbility then self:AcknowledgeDetectedAbility(id,spellID) end
-        return true, "Ability confirmed. Lock in the entry to show it in tooltips."
+        return true, "Ability confirmed. Use its checkbox to toggle tooltip display."
     end
     function journal:AddDamage(id, level, low, high, playerLevel)
         local entry = self.entries[id]
@@ -1294,7 +1443,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:ConfirmedNames(id)
         local entry, names = self.entries[id], {}
-        if entry and entry.confirmed and self:GetCreatureName(id) then
+        if entry and self:GetCreatureName(id) then
             for name, ability in pairs(entry.abilities) do
             if ability.state == "confirmed" and ability.showInTooltip ~= false then names[#names + 1] = name end
             end
@@ -1409,6 +1558,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             for _,guid in ipairs(recentKills) do restored.recentKills[#restored.recentKills+1]=guid end
             trackingDB.bestiary=restored
             journal.entries=restored.entries
+            journal:MigrateLocations()
             initializePoints()
             initializeRecentKills()
             clearSightings();killInstances={}
@@ -1442,7 +1592,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local original=journal[name]
         journal[name]=function(self,id,...)
             local a,b,c=original(self,id,...)
-            self:TrackStableContent(id)
+            self:TrackStableContent(id,true)
             return a,b,c
         end
     end
@@ -1456,10 +1606,16 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             local sample=ns.CreatureLocations.Observation()
             if read(UnitGUID,unit)==guid and ns.CreatureLocations.Record(self.entries[id],sample,"observations") then self:Touch() end
         end
-        if id then self:TrackStableContent(id) end
+        if id then self:TrackStableContent(id,true) end
         return id
     end
     for id in pairs(journal.entries) do journal:TrackStableContent(id) end
     for id in pairs(trackingDB.bestiary.creatures) do restoreObservations(journal, id) end
+    for _,entry in pairs(journal.entries) do
+        for zone,subs in pairs(entry.subzones or {}) do
+            for sub in pairs(subs) do rememberAlias(sub,zone) end
+        end
+    end
+    journal:MigrateLocations()
     return journal
 end

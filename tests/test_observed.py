@@ -328,7 +328,6 @@ assert 'db.lua' not in toc
 assert '## Title: Azeroth Fieldbook' in toc
 assert '## SavedVariablesPerCharacter: AzerothFieldbookDB' in toc
 assert 'ClassicBestiaryObservedDB' not in toc
-assert 'GetSpellDescription' not in source
 assert 'COMBAT_LOG_EVENT_UNFILTERED' not in source
 assert 'Disabled: Forever marks combat aura payloads as secret' in source
 book_namespace = lua.table()
@@ -364,6 +363,54 @@ AzerothFieldbookDB.showKillCountTooltips=false
 GameTooltip.lines={};tooltipHook(GameTooltip)
 check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Observed trap','kill toggle leaves confirmed abilities visible')
 AzerothFieldbookDB.showKillCountTooltips=true
+
+-- Resolved abilities render icons and optional public spell descriptions.
+entry.confirmed=false
+local ability=entry.abilities['Observed trap']
+ability.spellID=601
+local ctrl, shown=false,true
+local iconValue, descriptionValue=12345,'Slows movement by 50% for 6 seconds.'
+local metadataCalls=0
+C_Spell.GetSpellTexture=function(id) check(id==601,'only saved spell ID queried');metadataCalls=metadataCalls+1;return iconValue end
+C_Spell.GetSpellDescription=function(id) check(id==601,'only saved spell ID described');return descriptionValue end
+function IsControlKeyDown() return ctrl end
+function GameTooltip:IsShown() return shown end
+function GameTooltip:SetUnit(unit)
+    check(unit=='mouseover','refresh retains hovered unit')
+    self.lines={};self.colours={};tooltipHook(self)
+end
+function GameTooltip:AddLine(text,r,g,b,wrap)
+    self.lines[#self.lines+1]=text
+    self.colours=self.colours or {};self.colours[#self.lines]={r,g,b,wrap}
+end
+GameTooltip:SetUnit('mouseover')
+check(GameTooltip.lines[2]=='|T12345:16:16:0:0|t Observed trap','icon precedes resolved name')
+check(GameTooltip.lines[3]=='(Ctrl for details)' and GameTooltip.colours[3][1]==0.6,'available details have grey hint')
+ctrl=true;frames[5].handler(frames[5],'MODIFIER_STATE_CHANGED','LCTRL',1)
+check(GameTooltip.lines[3]==descriptionValue and #GameTooltip.lines==4,'Ctrl expands in place without duplicate lines')
+ctrl=false;frames[5].handler(frames[5],'MODIFIER_STATE_CHANGED','LCTRL',0)
+check(GameTooltip.lines[3]=='(Ctrl for details)' and #GameTooltip.lines==4,'Ctrl release collapses in place')
+shown=false;ctrl=true;frames[5].handler(frames[5],'MODIFIER_STATE_CHANGED','LCTRL',1)
+check(GameTooltip.lines[3]=='(Ctrl for details)','hidden tooltip is not rebuilt')
+shown=true;ctrl=false
+for _,value in ipairs({secret,''}) do
+    descriptionValue=value;GameTooltip:SetUnit('mouseover')
+    check(#GameTooltip.lines==3,'secret or empty description has no hint')
+end
+iconValue=secret;descriptionValue=secret;GameTooltip:SetUnit('mouseover')
+check(GameTooltip.lines[2]=='Observed trap','secret metadata falls back to saved name')
+C_Spell.GetSpellDescription=function() error('unavailable') end
+GameTooltip:SetUnit('mouseover');check(#GameTooltip.lines==3,'description API errors are safe')
+local callsBefore=metadataCalls
+ability.showInTooltip=false;GameTooltip:SetUnit('mouseover')
+check(#GameTooltip.lines==2 and metadataCalls==callsBefore,'unchecked ability has no metadata lookup or hint')
+ability.showInTooltip=true;ability.state='pending';GameTooltip:SetUnit('mouseover')
+check(#GameTooltip.lines==2 and metadataCalls==callsBefore,'pending ability has no metadata lookup')
+ability.state='confirmed';ability.spellID=nil;GameTooltip:SetUnit('mouseover')
+check(GameTooltip.lines[2]=='Observed trap' and #GameTooltip.lines==3 and metadataCalls==callsBefore,'unresolved ability remains name only')
+ability.showInTooltip=nil;C_Spell.GetSpellTexture=nil;C_Spell.GetSpellDescription=nil
+ctrl=false;entry.confirmed=true
+
 guid='Creature-0-1-2-3-42-locked'
 castName,castID='Locked new ability',888
 frames[5].handler(frames[5], 'UNIT_SPELLCAST_SUCCEEDED', 'target', nil, 888)

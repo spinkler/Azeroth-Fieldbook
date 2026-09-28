@@ -3,12 +3,15 @@
         AzerothFieldbookToggleBestiary();
     </Binding>
     <Binding name="CLASSICBESTIARY_MOUSEOVER_BOOK" category="BINDING_HEADER_AZEROTHFIELDBOOK">
-        AzerothFieldbookOpenMouseoverBestiary();
+        AzerothFieldbookOpenMouseover();
     </Binding>
     <Binding name="CLASSICBESTIARY_NEXT_ENTRY" category="BINDING_HEADER_AZEROTHFIELDBOOK">
         AzerothFieldbookNextEntry();
     </Binding>
     <Binding name="CLASSICBESTIARY_PREVIOUS_ENTRY" category="BINDING_HEADER_AZEROTHFIELDBOOK">
         AzerothFieldbookPreviousEntry();
+    </Binding>
+    <Binding name="AZEROTHFIELDBOOK_ATLAS_POINT" category="BINDING_HEADER_AZEROTHFIELDBOOK">
+        if AzerothFieldbookRecordAtlasPoint then AzerothFieldbookRecordAtlasPoint(); end
     </Binding>
 </Bindings>

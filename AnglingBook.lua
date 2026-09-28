@@ -170,7 +170,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         for i,row in ipairs(m.rows) do
             local e=rows[s.offset+i];row.id=e and e.id;row:SetShown(e~=nil)
             if e then
-                row.name:SetText(A.Safe((e.favourite and "★ " or "")..e.name));row.selected:SetShown(e.id==s.selected)
+                row.name:SetText((e.favourite and U.SavedIcon(true) or "")..A.Safe(e.name));row.selected:SetShown(e.id==s.selected)
                 row.zone:SetText((e.personal and "Personal" or "Reported").." • "..(e.kind=="spot" and (e.hover and "Pool zone sighting" or e.poolID and "Pool sighting" or "Remembered spot") or e.kind))
                 row.icon:SetTexture(e.kind=="item" and itemIcon(e) or "Interface\\Icons\\Trade_Fishing")
             end
@@ -446,9 +446,9 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             "|cffffd100Pool discovery and removal|r\nRecognizable world-object pool tooltips add a zone sighting without coordinates or catch attribution. Select a pool type and Remove pool to hide it and suppress automatic re-addition. Show: removed and Restore pool undo this; notes and catch history are preserved. Unrecognized tooltips can still be recorded with Pool sighting.\n\n"..
             "|cffffd100Remembering and correcting|r\nRemember spot and Pool sighting capture your player position, labelled approximate. They never reveal unknown pool contents. Notes / edit saves your notes. Merge spot explicitly combines duplicate spots in the same waters/pool, preserving their notes, original positions and history.\n\n"..
             "|cffffd100Fallback and skill|r\nRecord catch adds one explicitly player-recorded event when automatic capture was unavailable. Do not re-enter catches already recorded. Quantities and event counts differ. Skill successes are measured evidence, never a minimum requirement; equipment and lure contributions stay unknown when unreadable.\n\n"..
-            "|cffffd100Event log|r\nThe title-bar Event log button opens this character's ongoing Almanac history: catches, failed fishing attempts, discoveries, corrections and source changes. Events remain until you clear the log. Catch quantities update one row as slots are collected. Clear log requires a second click and does not delete fishing knowledge.\n\n"..
+            "|cffffd100Event log|r\nThe title-bar Event log button opens the active journal’s ongoing Almanac history: catches, failed fishing attempts, discoveries, corrections and source changes. Events remain until you clear the log. Catch quantities update one row as slots are collected. Clear log requires a second click and does not delete fishing knowledge.\n\n"..
             "|cffffd100Reports|r\nReports prepares selected knowledge, with notes excluded unless selected. Choose Reported knowledge to forward original claims. Paste data, Preview, then Accept to store visibly reported claims. Source names are not authenticated. Personal counts, notes and skill records are unchanged. No addon-message transport, report price or reward is implemented.\n\n"..
-            "Almanac data and browsing state belong to this character, outside other sections’ resets and sharing. Detailed history is bounded to 200 events and 32 sessions; totals persist.",
+            "Almanac data and browsing state follow the global Account-wide tracking option, outside other sections’ resets and sharing. Detailed history is bounded to 200 events and 32 sessions; totals persist.",
         onOpen=function() if c.main then c.main.map:Invalidate();c:Refresh();c.main.details:SetVerticalScroll(c:State().detailScroll or 0) end end})
     local function refresh() if c.main and shell.active=="angling" and shell:GetFrame():IsShown() then c:Refresh() end end
     journal.onChange=refresh;tracking.onChange=function() c.message=nil;refresh() end
@@ -456,7 +456,8 @@ function ns.CreateAnglingBook(journal,tracking,shell)
 end
 function ns.InitializeAngling(shell)
     if type(AzerothFieldbookAnglingDB)~="table" then AzerothFieldbookAnglingDB={} end
-    local journal=ns.CreateAnglingJournal(AzerothFieldbookAnglingDB)
+    local storage=ns.SelectSectionStorage and ns.SelectSectionStorage("angling",AzerothFieldbookAnglingDB) or AzerothFieldbookAnglingDB
+    local journal=ns.CreateAnglingJournal(storage)
     local tracking=ns.CreateAnglingTracking(journal)
     return ns.CreateAnglingBook(journal,tracking,shell)
 end

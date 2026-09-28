@@ -164,6 +164,51 @@ class AnglingDataTests(unittest.TestCase):
             px=0/0;py=5;assert(not A.Location(A.CurrentLocation()).x)
         ''')
 
+    def test_hover_merge_chains_survive_reload_and_repair_legacy_lookup(self):
+        self.lua.execute('''
+            local p=A.CurrentLocation();p.subzone=''
+            local input={name='Synthetic school'}
+            local hover=assert(j:ObservePool(input,p))
+            local first=assert(j:Remember({name='First correction',location=p,pool=input}))
+            local final=assert(j:Remember({name='Final correction',location=p,pool=input}))
+            assert(j:MergeSpots(hover.id,first.id));assert(j:MergeSpots(first.id,final.id))
+            local function check()
+                local events=#saved.eventLog
+                assert(j:ObservePool(input,p).id==final.id)
+                assert(A.Count(saved.spots)==1 and #saved.eventLog==events)
+            end
+            now=now+1;check()
+            j=ns.CreateAnglingJournal(saved);now=now+1;check()
+            -- Older versions persisted the deleted hover ID, even through chained merges.
+            saved.hoverKeys[A.Key(hover.poolID,hover.waterID)]=hover.id
+            j=ns.CreateAnglingJournal(saved);now=now+1;check()
+            assert(j:SetSightingRemoved(final.id,true))
+            assert(not j:ObservePool(input,p) and A.Count(saved.spots)==1)
+            assert(j:SetSightingRemoved(final.id,false));check()
+            assert(final.x==p.x and final.y==p.y and not final.hover,
+                'Hovering must not replace the deliberately recorded position or its provenance')
+        ''')
+
+    def test_merge_reindexes_aggregates_without_fragmenting_future_catches(self):
+        self.lua.execute('''
+            local a=spot('First','School');local b=spot('Second','School')
+            local f1=observe('one','pool',a.poolID,a.id)
+            local f2=observe('two','pool',b.poolID,b.id)
+            local elsewhere=observe('elsewhere','open')
+            assert(j:MergeSpots(a.id,b.id))
+            assert(A.Count(saved.aggregates)==3 and f1.id~=f2.id)
+            assert(observe('three','pool',b.poolID,b.id).id==f2.id)
+            assert(observe('elsewhere-again','open').id==elsewhere.id)
+            assert(A.Count(saved.aggregates)==3 and total()==5)
+            j=ns.CreateAnglingJournal(saved)
+            assert(observe('four','pool',b.poolID,b.id).id==f2.id)
+            saved.aggregateKeys={};j=ns.CreateAnglingJournal(saved)
+            observe('legacy-index','pool',b.poolID,b.id)
+            assert(A.Count(saved.aggregates)==3 and total()==7)
+            assert(saved.aggregates[f1.id] and saved.aggregates[f2.id],
+                'Correction must retain separate historical source aggregates')
+        ''')
+
     def test_duplicate_token_cannot_move_quantity_between_pool_contexts(self):
         self.lua.execute('''
             local a=spot('First pool','School A');local b=spot('Second pool','School B')

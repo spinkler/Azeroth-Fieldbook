@@ -1,5 +1,326 @@
 # Changelog
 
+## v0.15.37-beta - 2026-09-28
+
+This release includes all changes since v0.13.37-beta and the previous push at
+`8bb3102199e710b52eebfc34165e54f961bf8fcb` (local versions 0.14.0–0.15.37).
+
+- Add Merchant’s Ledger: remember encountered merchants, trainers and services;
+  search contacts, items, recipes and lessons; combine role, location, source,
+  favourite and recipe filters. Capture readable offerings without purchasing,
+  preserving per-contact prices, stock, requirements, observation dates and
+  provenance through incomplete inspections. Buyback is excluded. Stable local
+  references, explicit identity linking and historical map sightings keep
+  similarly named NPCs and moving contacts distinct.
+- Refine the Ledger with a scrolling contact list, gentle background and hover
+  fills, yellow names, bracketed NPC titles and collapsed missing-title space.
+  Recover Innkeeper titles and roles alongside Merchant, retry NPC capture when
+  the interaction opens before identity is readable, and announce new merchants
+  once. Add circular 2D portraits with copper rings, aligned Favourite/Saved
+  indicators, compact buttons and confirmed contact removal that allows later
+  rediscovery. Prefer a positioned sighting in the same area over a newer
+  coordinate-free observation while respecting explicit selections.
+- Put Known Goods and Observed Training in tall, toggleable left-pane lists with
+  yellow selection borders. Show available item icons, tooltips, quality colours
+  and larger, fixed-size names that scroll on hover. Format prices as cost /
+  quantity (individual cost each), omit zero denominations and colour currency
+  suffixes. Hide unrestricted stock and redundant usability/per-item lines;
+  retain historical and unknown-state distinctions. Keep notes below the map
+  with an Edit Notes toggle and remove redundant Access Notes controls.
+- Add bounded Ledger report preparation, copy/paste preview and acceptance with
+  provenance-aware deduplication, preserved observation dates and opt-in private
+  notes. Ledger addon-message transport, Knowledge prices and rewards remain
+  deferred; imported facts are labelled Reported and grant no personal credit.
+- Add Treasure & Salvage: a searchable journal of world finds, portable
+  containers and salvage with separate historical encounters, contents, access
+  details, notes, filters, bookmarks, corrections and confirmed removal. Record
+  finds manually; observe readable openable bag items and portable contents only
+  when loot matches a recently observed exact item GUID. Partial captures do not
+  claim receipt or invent acquisition locations. Reuse the shared map layout,
+  show recorded find/acquisition positions and a darkened current-zone map when
+  no historical markers exist. Provide validated report-building and import
+  hooks; Treasure report delivery/import-export UI remains deferred.
+- Extend Account-wide tracking to Gathering, Atlas, Almanac and Ledger alongside
+  the Bestiary. Import each character’s existing journal once, remap conflicting
+  IDs and preserve relationships, observations, notes and original character
+  stores for opt-out. Treasure remains per character. Preserve deleted Atlas
+  references as unresolved instead of accidentally attaching them to imported
+  records. Keep section resets, backups and sharing boundaries independent.
+- Show confirmed Bestiary abilities in creature tooltips without requiring a
+  locked entry. Preserve each ability’s tooltip checkbox, allow changes while
+  locked, add available spell icons and Ctrl-expanded descriptions, and omit
+  unreadable or restricted metadata. Add 20 recorded effect immunities plus
+  optional expected-type guidance and persistent overrides. Expected immunities
+  default OFF, remain visibly unverified and are excluded from shared evidence.
+- Record Bestiary parent zones and their observed sub-zones separately, with
+  sub-zone hover lists and conservative repairs for identifiable legacy entries
+  such as Sentinel Tower/Westfall. Preserve Knowledge, backups, account merges
+  and ambiguous history. Fix auto-lock streaks restarting for routine loot
+  quantities or corpse history; newly learned loot item identities still restart
+  progress. Cache unchanged content checks during routine observation without
+  retaining deleted/replaced entries, and preserve streaks across migration.
+- Improve Atlas label placement by measuring text, trying line breaks and moving
+  names into free space before hiding them. Save per-map sub-zone colours across
+  sessions while retaining unique assignments and perceptual contrast for new
+  areas. Initially open the current zone and retain later deliberate map choices.
+  Add the Record Atlas survey point keybinding with more-than-15-yard spacing
+  from existing survey samples, preserving manual samples through reloads.
+  Toggle Automatic Mapping starts ON, persists across sessions and pauses only
+  automatic recording; manual mapping and Clean Redundant Points remain available.
+- Split Gatherer’s Field Notes into notes and Observed Loot columns. Record
+  readable drops from completed gathers, with item icons, quality colours,
+  tooltips and observed stack ranges; exclude unrelated or ambiguous sources and
+  preserve observations through account merges. Existing past gathers cannot be
+  reconstructed. Protect unsupported future Gathering saves with a detached,
+  read-only view and update notice.
+- Extend the existing mouseover keybind to open the most relevant journal:
+  hovered herbs/mining nodes in the Compendium, remembered service NPCs in the
+  Ledger, or creatures in the Bestiary. Select and reveal the matching entry,
+  preserve note drafts and existing key assignments, and retain the old macro
+  function. Hovering a resource does not count a gather or record coordinates.
+- Align Ledger and Treasure map dimensions, borders and toolbar spacing with the
+  Almanac. Repair fishing hover lookups through spot merges, chained corrections,
+  reloads and account imports; rebuild catch indexes while preserving historical
+  aggregates. Expand Lua 5.1 model, capture, migration, report and widget tests,
+  architecture documentation and in-game verification checklists. Automated
+  verification remains separate from live-client visual checks.
+
+## v0.15.37 - Included in v0.15.37-beta
+
+- Fix Bestiary auto-lock progress restarting on routine loot counters and corpse
+  history. New loot item identities still restart progress immediately; existing
+  kill streaks survive the signature-format update and reloads.
+- Reuse unchanged Bestiary content checks during target/mouseover polling,
+  avoiding repeated signature serialization and temporary memory allocation.
+  The cache does not retain deleted or replaced journal entries.
+- Keep deleted Atlas destinations and related links unresolved during account
+  imports, and avoid assigning incoming records to existing missing-reference IDs.
+- Preserve unsupported future Gathering saves without normalization or capture;
+  show an update notice in the detached read-only journal view.
+- Preserve merged fishing hover lookups through further sightings, chained
+  corrections, reloads and account imports; repair older stale merge lookups.
+  Rebuild catch indexes without combining historical aggregates or unnecessarily
+  splitting future catches into new aggregates.
+- Add regression coverage for these audit findings, saved-state compatibility,
+  repeated idle observation and the corresponding section storage boundaries.
+
+## v0.15.1 - v0.15.37 - Included in v0.15.37-beta
+
+- Extend Open Azeroth Fieldbook at mouseover to herb and mining nodes, selecting
+  and revealing the matching Gatherer’s Compendium entry without recording a gather.
+
+- Announce newly discovered merchants in chat once per recorded merchant;
+  repeat visits and reloads do not repeat the notice.
+
+- Split Gatherer’s Field notes into side-by-side notes and Observed loot panels.
+  Record readable drops from completed gathers, with icons, quality colours,
+  tooltips and observed stack ranges; retain loot through account-store merges.
+- Add Toggle Automatic Mapping above Atlas cleanup, enabled by default and
+  saved between sessions. Manual survey points remain available while paused.
+
+- Add the Record Atlas survey point keybinding, with map-wide 15-yard spacing
+  from existing survey samples. Preserve manual points across reloads; use
+  Clean Redundant Points to simplify them deliberately.
+
+- Shift Atlas labels to nearby free space and try alternate line breaks before
+  hiding them; remove the fixed label-width limit.
+- Remember each map’s sub-zone colour assignments between sessions, preserving
+  unique colours and the existing perceptual-contrast selection for new areas.
+
+- Hide missing NPC sub-labels in Merchant’s Ledger and show contact names in
+  yellow with sub-labels in white in the directory and contact details.
+- Add a gentle dark background behind the Merchant’s Ledger contacts list.
+
+- Collapse missing sub-label lines in contact rows and details, including shorter
+  list rows so subsequent contacts move up.
+
+- Retry merchant/trainer capture when the interaction NPC is initially unreadable;
+  recover on updates and cancel pending opening retries on close.
+
+- Show available item icons and item hover tooltips in Known goods and its
+  expanded details view, retaining readable names when metadata is unavailable.
+
+- Display NPC sub-labels in angle brackets and recover titles from matching
+  target/mouseover tooltips, including bracketed titles without a typed level line.
+
+- Replace unsupported favourite/bookmark star glyphs with native checkbox/check
+  textures in buttons and saved contact, fishing and treasure list entries.
+
+- Anchor favourite/bookmark checkboxes and checkmarks in the same fixed left
+  slot, with stable label alignment when switching between Favourite and Saved.
+
+- Add confirmed Ledger contact removal, clearing saved observations and identity
+  indexes while allowing ordinary future interactions to record the NPC again.
+
+- Correct escaped texture paths for the fixed favourite/bookmark indicators;
+  verify both texture paths as well as stable toggle positioning.
+
+- Enlarge Known Goods item headings and use cached item-quality colours, with
+  white text when quality metadata is unavailable.
+
+- Move Known Goods and Observed Training into toggleable tall left-pane overlays
+  with Bestiary-style yellow selected borders; reserve the lower panel for notes.
+
+- Replace Ledger contact pagination with a scrollable, bounded row pool. Preserve
+  scroll position on updates and reset it when filters change.
+- Accept NPC titles on name-typed or legacy untyped tooltip lines and add the
+  Innkeeper role alongside Merchant when the observed title identifies it.
+
+- Add a portrait beside the selected Ledger contact’s name, using the matching
+  live NPC or its recorded creature template, with a placeholder for manual entries.
+- Increase the fixed favourite/bookmark checkbox inset and accompanying text padding.
+
+- Replace the stretched contact-row hover image with a light translucent fill.
+
+- Render Ledger NPC portraits as masked circular 2D textures with native portrait
+  trim, using live unit portraits or resolved creature display portraits.
+
+- Hide unrestricted stock lines in Known Goods, grey the First/Last observation
+  details, and omit purchase warnings for items that were unusable when inspected.
+
+- Replace the decorative Ledger portrait border with a simple masked copper ring.
+- Narrow Favourite/Saved to 110 pixels while retaining its checkbox padding and
+  right-edge alignment.
+
+- Make Edit Notes a yellow-outlined toggle. Increase Known Goods headings by
+  two points and gently scroll overflowing names on hover.
+- Shorten the Known Goods price label to Price.
+
+- Compact Known Goods prices to cost / quantity (individual cost each), omitting
+  zero currency denominations and retaining Free and Unknown price states.
+
+- Colour the g/s/c suffixes gold, silver and copper on the combined Price line;
+  the redundant separate per-item line is omitted.
+
+- Remove the redundant Not usable when inspected line from Known Goods.
+
+- Keep Known Goods heading sizes fixed at the base font plus two points across
+  mouseover refreshes and overlay reuse; reset body fonts from their base as well.
+
+- Rename the mouseover binding to Open Azeroth Fieldbook at mouseover and route
+  remembered service NPCs to their Ledger contact before trying the Bestiary.
+  Preserve existing key assignments and the old macro function.
+
+- Remove redundant Access Notes controls/helper text. Align Ledger and Treasure
+  map toolbars to Almanac’s six-pixel button gaps and map clearance.
+- Show a darkened current-zone map when Treasure has no historical markers, using
+  the shared aspect-fit map renderer without adding observations.
+- Start Traveller’s Atlas on the current zone at its first opening each session;
+  preserve subsequent deliberate map choices.
+
+- Prefer a recorded Ledger position in the latest sighting’s area over a newer
+  zone-only sighting, keeping explicit selections and provenance intact. Clarify
+  that missing coordinates apply to the selected sighting, not the whole contact.
+
+## v0.15.0 - Included in v0.15.37-beta
+
+- Implement Treasure & Salvage in its existing tab: a searchable catalogue of
+  world finds, portable containers and salvage, independent historical encounters,
+  personal/manual/reported provenance, combined filters and name/location/recent
+  sorting. Preserve selection, list position, detail state and editor drafts.
+- Add a scrollable Record a find form, explicit contents/recovery assertions,
+  approximate or manually corrected locations, access observations, kind and
+  encounter notes, Look for again bookmarks and confirmed encounter removal.
+- Reuse an independent Atlas map instance with its exact viewport and anchor.
+  Show historical world finds and recorded portable acquisitions, overlapping
+  encounter selection and an all-finds-in-zone scope. Portable openings and
+  observed carriage never create acquisition/world-treasure markers.
+- Observe readable openable bag items in the background. Capture portable
+  contents only when item-origin loot matches an exact recently observed item
+  GUID; coalesce repeated events and expire transient context. Captures remain
+  partial and do not claim receipt. Ambiguous world identities, access outcomes
+  and acquisition sources remain manual; unrelated loot is omitted.
+- Add bounded versioned report builders, validation, detached preview/acceptance
+  and provenance-aware deduplication/forwarding hooks. Private notes are opt-in;
+  reported evidence grants no personal counts or points. Existing transport is
+  Bestiary-specific, so delivery and import/export UI are explicitly deferred;
+  no parallel protocol or alternate cost-free export is introduced.
+- Add isolated per-character SavedVariables and additive loading/registration.
+  Document data/API boundaries and pending in-game checks; add focused Lua 5.1
+  model, capture, report, map, UI and regression tests. Other page implementations
+  and existing working-tree changes are preserved. No publication is performed.
+
+## v0.14.7 - v0.14.8 - Included in v0.15.37-beta
+
+- Use the same shared arrow artwork, shadow and label spacing for Effect
+  Immunities, zone and map-layer dropdowns. Expected immunities remain optional
+  and OFF by default in Options.
+- Remove the Effect Immunities dropdown header and its unused vertical space.
+
+## v0.14.6 - Included in v0.15.37-beta
+
+- Extend Account-wide tracking to Herbs & Minerals, Atlas, Almanac and Ledger.
+  Import each character section once, preserve original character stores, and
+  remap colliding record IDs while retaining routes, catches and contact references.
+- Put effect immunities in a compact checkbox dropdown. Rename the summary to
+  Expected Immunities and add optional Polymorph guidance excluding Humanoids, Beasts and Critters.
+- Add Show expected immunities in Options, OFF by default. Toggling it preserves
+  recorded marks and overrides; suggestions remain unverified and unshared.
+- Keep burning Fire damage under the existing Fire immunity control; update
+  documentation, help, migration tests and defense regressions.
+
+## v0.14.5 - Included in v0.15.37-beta
+
+- Add 20 effect immunities to Bestiary Defenses, including Fear, Polymorph, Bleed,
+  crowd-control effects and debuff types. Show recorded effects in the creature
+  summary and support normal backup, account merge and rumour-review sharing.
+- Automatically show Bleed and Fear expectations for personally encountered
+  Mechanical creatures, clearly labelled as unverified Classic type guidance.
+  Allow persistent overrides; keep expectations out of verified marks and sharing.
+- Document the guidance sources and limitations and add regression coverage.
+
+## v0.14.4 - Included in v0.15.37-beta
+
+- Record Bestiary locations using the parent zone map, keeping observed subzones
+  separately. Hover a zone name in the creature summary to see its sorted subzones,
+  including fresh observations on locked entries.
+- Repair identifiable legacy subzone locations, including Sentinel Tower when
+  Westfall is also recorded, in live locations, locked snapshots and discovery
+  credit keys without changing earned Knowledge. Preserve ambiguous history.
+- Preserve subzones in backups and account merges; document migration limits
+  and add zone, hover, migration, persistence and restricted-data regression checks.
+
+## v0.14.1 - v0.14.3 - Included in v0.15.37-beta
+
+- Add spell icons beside resolved Bestiary tooltip abilities. Hold Ctrl to expand
+  readable spell descriptions, with a grey (Ctrl for details) hint when available
+  and live refresh when Ctrl is pressed or released. Preserve checkbox filtering
+  and safely omit unavailable or restricted metadata.
+
+- Show confirmed Bestiary abilities in creature tooltips without requiring a locked
+  entry. Each ability checkbox defaults to on and remains usable while locked;
+  existing tooltip choices are preserved. Update help and regression coverage.
+- Clarify tooltip defaults, preserved OFF choices and pending/rejected exclusions
+  in the README and automatic-recording notes; add a native UI verification checklist.
+
+## v0.14.0 - Included in v0.15.37-beta
+
+- Implement Merchant’s Ledger in its existing tab: a per-character directory
+  of encountered merchants, trainers and useful services, with actual NPC
+  sublabels, overlapping roles, favourites and prominent private access notes.
+- Capture readable merchant and trainer offerings in the background without
+  purchases. Freeze each visit's contact, retain per-vendor quotes and stock,
+  distinguish finite/sold-out/unrestricted/unknown states, exclude buyback and
+  preserve positive history through partial or filtered inspections. Deferred
+  metadata cannot move stock between contacts or refresh observation dates.
+- Use stable local contact references and bounded GUID aliases; preserve
+  same-template ambiguity and provide explicit same-individual identity linking.
+  Add case-insensitive reverse item/recipe/lesson search, matching reasons,
+  multi-role, recorded-zone/subzone, personal/reported, favourite and recipe
+  filters, name/recent sorting, scoped reset and persistent browsing state.
+- Reuse the exposed Atlas map factory with its exact viewport and anchor in an
+  independent Ledger instance. Show selectable historical sightings and provenance,
+  approximate interaction coordinates, and honest unknown-location fallbacks.
+- Add bounded literal Ledger reports with preparation, copy/paste, validation,
+  frozen preview/acceptance and per-fact provenance/receipt dates. Private notes
+  are opt-in; imports preserve personal evidence and forwarding preserves age.
+  Bestiary-specific transport, point prices and rewards are unchanged; Ledger
+  delivery/rewards are explicitly deferred rather than simulated.
+- Add isolated Ledger SavedVariables, additive module/section initialization,
+  focused Lua/widget regressions and a Forever in-game acceptance checklist.
+  Other section implementation files are unchanged. Native visual/runtime
+  verification remains a client smoke test.
+
 ## v0.13.37-beta - 2026-09-28
 
 This release includes all changes since v0.13.30-beta and the previous push at
