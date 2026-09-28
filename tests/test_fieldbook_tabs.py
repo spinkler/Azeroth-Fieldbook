@@ -10,6 +10,27 @@ from treasure_test_harness import TREASURE_MODULES
 
 
 class FieldbookTabsTests(unittest.TestCase):
+    def test_first_open_title_then_reopen_last_selected_entry(self):
+        self.lua.execute('''
+            npcID=42;journal:Observe('target')
+            shell:Toggle()
+            local content=AzerothFieldbookBestiarySection
+            assert(content.title:GetText()=='A field guide of your own')
+            content.rows[1].scripts.OnClick(content.rows[1])
+            local title=content.title:GetText()
+            assert(title~='A field guide of your own')
+            content.manualName:SetText('Keep this draft')
+            shell:GetFrame().closeButton.scripts.OnClick()
+            npcID=99;shell:Toggle()
+            assert(content.title:GetText()==title and not journal.entries[99])
+            assert(content.manualName:GetText()=='Keep this draft')
+            controller:Toggle();npcID=nil;controller:Toggle()
+            assert(content.title:GetText()==title)
+            click(2);click(1);assert(content.title:GetText()==title)
+            npcID=33;controller:OpenAtUnit('mouseover')
+            assert(content.title:GetText()~=title,'Explicit mouseover still selects its creature')
+        ''')
+
     def test_repeated_navigation_reuses_all_section_and_page_widgets(self):
         self.lua.execute('''
             local function visit()
@@ -293,7 +314,7 @@ class FieldbookTabsTests(unittest.TestCase):
 
     def test_section_windows_close_and_pinned_notes_keep_their_existing_lifetime(self):
         self.lua.execute('''
-            shell:Toggle()
+            controller:OpenAtUnit('target')
             local root=shell:GetFrame()
             local content=AzerothFieldbookBestiarySection
             root.helpButton.scripts.OnClick()

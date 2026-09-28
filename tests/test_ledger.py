@@ -8,6 +8,51 @@ class LedgerTests(unittest.TestCase):
     def setUp(self):
         self.lua = new_ledger()
 
+    def test_class_trainers_discovered_without_training_window(self):
+        self.lua.execute('''
+            for i,class in ipairs({'Druid','Hunter','Mage','Paladin','Priest','Rogue','Shaman','Warlock','Warrior'}) do
+                targetNPC=100+i;vendorNPC=targetNPC;sublabel='<'..class..' Trainer>'
+                fire('UPDATE_MOUSEOVER_UNIT');fire('PLAYER_TARGET_CHANGED')
+                local e=j:Get(saved.aliases[UnitGUID('target')])
+                assert(e and e.personal and e.roles.trainer and not e.roles.merchant)
+                assert(e.sublabel==sublabel and next(e.lessons)==nil and not e.trainerInspection)
+                assert(e.sightings[1].x==nil,'Distant sightings cannot use player coordinates')
+                assert(#j:List({query=class,roles={trainer=true}})==1)
+            end
+            assert(L.Count(saved.contacts)==9 and shell:GetFrame()==nil)
+        ''')
+
+    def test_class_trainer_dialogue_and_later_lessons_share_contact(self):
+        self.lua.execute('''
+            sublabel='Mage Trainer';targetNPC=99
+            C_TooltipInfo.GetUnit=function()
+                return {lines={{type=2,leftText=name},{type=2,leftText=sublabel}}}
+            end
+            fire('GOSSIP_SHOW')
+            local e=one(saved.contacts)
+            assert(e and e.npcID==42 and e.roles.trainer and e.sightings[1].precision=='player')
+            assert(not e.trainerInspection and next(e.lessons)==nil)
+            fire('GOSSIP_OPTIONS_REFRESHED')
+            trainer={{name='Fireball',status='available',rank='Rank 2',category='Fire',price=100}}
+            fire('TRAINER_SHOW')
+            assert(L.Count(saved.contacts)==1 and t.visits.trainer.contact==e.id)
+            assert(one(e.lessons).name=='Fireball' and not e.trainerInspection.complete)
+        ''')
+
+    def test_class_trainer_discovery_requires_readable_exact_title_and_identity(self):
+        self.lua.execute('''
+            for _,title in ipairs({'Trainer','Mage','Not a Mage Trainer','Mage Trainer assistant','Bowyer'}) do
+                sublabel=title;name='Mage Trainer'
+                fire('PLAYER_TARGET_CHANGED');fire('UPDATE_MOUSEOVER_UNIT');fire('GOSSIP_SHOW')
+                assert(next(saved.contacts)==nil)
+            end
+            sublabel=secret;fire('GOSSIP_SHOW');assert(next(saved.contacts)==nil)
+            sublabel='Mage Trainer';vendorNPC=nil
+            fire('GOSSIP_SHOW');assert(next(saved.contacts)==nil,'No target fallback for dialogue')
+            vendorNPC=42;C_TooltipInfo.GetUnit=function() error('unavailable') end
+            fire('UPDATE_MOUSEOVER_UNIT');assert(next(saved.contacts)==nil)
+        ''')
+
     def test_merchant_discovery_message_once_per_contact(self):
         self.lua.execute(r'''
             local messages={}

@@ -86,9 +86,9 @@ leave full curriculum completeness unestablished. Buyback is never scanned.
 | --- | --- |
 | Name / template / GUID correlation | Readable `UnitName("npc")` / creature GUID at interaction; no target fallback |
 | Actual sublabel | Readable native tooltip title, including name-typed, bracketed and legacy level-line layouts; matching-GUID target/mouseover fallback. Ambiguous/missing layouts stay unknown. An observed Innkeeper title also grants the Innkeeper role alongside Merchant; names alone do not. |
-| Merchant / repair / trainer | Native merchant/trainer interaction and `CanMerchantRepair`; overlapping roles on one contact |
+| Merchant / repair / trainer | Native merchant/trainer interaction and `CanMerchantRepair`; exact English class-trainer titles also identify trainers on target, mouseover and gossip; overlapping roles on one contact |
 | Banker / auctioneer / stable / transport / innkeeper | Readable `npc` identity at the corresponding service event, including innkeeper bind confirmation. Missing event/identity stays unsupported; manual role annotation is available |
-| Target / mouseover | Revisits already identified service GUIDs only; ordinary NPCs are excluded. New general sighting classification is intentionally unavailable without reliable service evidence |
+| Target / mouseover | Discovers the nine Classic classes with exact English class-trainer titles (plain or bracketed); otherwise revisits already identified service GUIDs only. Ordinary NPCs and trainer-like names are excluded. Other locales still use native training interactions |
 | Zone / subzone / map | Existing stateless map/location sampler; unknown maps remain usable directory entries |
 | Coordinates | Prefer the existing guarded `CreatureLocations.Sample` NPC position when readable and natively converted to the same recorded map, source `npc`. Otherwise use player position only during a nearby service interaction, source `player`, labelled **Encountered near**, approximate. No distant player-position substitution, 0,0 placeholder, guessed conversion or inferred route |
 | Goods | Readable merchant item/currency/spell ID, name/icon, price, purchase bundle, additional costs, stock, purchasable/usable flags and typed displayed requirements |
@@ -288,7 +288,11 @@ loads Ledger and still checks all seven tabs and auxiliary/window behaviour.
    exercise uncached items. Stock/price must stay with the original contact.
    Buyback must add no offerings. Filtered/empty/unloaded scans must retain
    history. A later complete scan may say Not seen, never No longer sold.
-5. **Trainers and other services:** Inspect ordinary and pet/profession trainers
+5. **Trainers and other services:** Target/mouse over each class trainer, including
+   another class, and open dialogue without opening training. Confirm a Trainer
+   contact with its actual title and no invented lessons or inspection date.
+   Distant sightings must not use player coordinates. Then open training and
+   confirm the same contact gains observed lessons. Inspect ordinary and pet/profession trainers
    where available; verify native rank, required level, category, costs and
    requirements. Change trainer filters without curriculum completeness claims.
    Check banker, stable, auctioneer, taxi and inn bind-confirmation events.

@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.15.39-beta - 2026-09-28
+
+This release includes all changes since v0.15.37-beta and the previous push at
+`fdc108596ff7efae3f1029961389b9b7c39d008b` (local versions 0.15.38–0.15.39).
+
+- Include class trainers in Merchant’s Ledger on target, mouseover and dialogue
+  discovery using exact English class-trainer titles, even without opening training.
+  Keep lesson and price capture tied to actual training inspections.
+- Open the Bestiary on its title page initially, then retain the last selected
+  creature and unfinished inputs when reopening or returning from another section.
+  The mouseover binding still opens the explicitly chosen creature.
+- Add regression coverage for class-trainer discovery and Bestiary reopening,
+  and update the capture documentation and in-game verification checklist.
+
 ## v0.15.37-beta - 2026-09-28
 
 This release includes all changes since v0.13.37-beta and the previous push at

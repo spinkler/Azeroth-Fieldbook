@@ -18,6 +18,23 @@ local function innkeeperTitle(text)
     text=text:match("^%s*<(.-)>%s*$") or text
     return text=="Innkeeper" or (type(INNKEEPER)=="string" and text==INNKEEPER)
 end
+local classTrainerTitles={
+    ["Druid Trainer"]=true,["Hunter Trainer"]=true,["Mage Trainer"]=true,
+    ["Paladin Trainer"]=true,["Priest Trainer"]=true,["Rogue Trainer"]=true,
+    ["Shaman Trainer"]=true,["Warlock Trainer"]=true,["Warrior Trainer"]=true,
+}
+local function classTrainerTitle(text)
+    text=plain(text)
+    if not text then return false end
+    text=text:match("^%s*<(.-)>%s*$") or text
+    return classTrainerTitles[text]==true
+end
+local function titleRoles(text)
+    local roles={}
+    if innkeeperTitle(text) then roles.innkeeper=true end
+    if classTrainerTitle(text) then roles.trainer=true end
+    return roles
+end
 function L.Unit(unit)
     if L.Read(UnitIsPlayer,unit) then return end
     local guid=L.Read(UnitGUID,unit);local name=L.Name(L.Read(UnitName,unit))
@@ -44,7 +61,7 @@ function L.Unit(unit)
                 local text=plain(line.leftText)
                 local levelPrefix=L.Name(LEVEL) or "Level"
                 local levelLine=text and text:sub(1,#levelPrefix)==levelPrefix and text:sub(#levelPrefix+1):match("^%s+%d")
-                if afterName and i==2 and innkeeperTitle(text) then return text end
+                if afterName and i==2 and (innkeeperTitle(text) or classTrainerTitle(text)) then return text end
                 if i==1 and (line.type==types.UnitName or text==name) then afterName=true
                 elseif afterName and levelLine then if not ambiguous then return candidate end;break
                 elseif afterName and line.type==types.UnitLevel then if not ambiguous then return candidate end;break
@@ -179,8 +196,8 @@ function ns.CreateLedgerTracking(journal)
         if self.visits[kind] then self.visits[kind].closed=true end
         self.visits[kind]=nil
         local unit=L.Unit("npc");if not unit then return end -- never fall back to a changed target
-        local roles={[kind=="merchant" and "merchant" or "trainer"]=true}
-        if innkeeperTitle(unit.sublabel) then roles.innkeeper=true end
+        local roles=titleRoles(unit.sublabel)
+        roles[kind=="merchant" and "merchant" or "trainer"]=true
         if kind=="merchant" and L.Read(CanMerchantRepair)==true then roles.repair=true end
         local e=journal:Encounter(unit,roles,true);if not e then return end
         local visit=journal:Begin(e.id,kind);if not visit then return end
@@ -197,7 +214,7 @@ function ns.CreateLedgerTracking(journal)
         local contact=journal:Get(visit.contact)
         if contact and contact.sublabel=="" then
             local unit=L.Unit("npc")
-            if unit and unit.guid==visit.guid and unit.sublabel then journal:Encounter(unit,innkeeperTitle(unit.sublabel) and {innkeeper=true} or {},false) end
+            if unit and unit.guid==visit.guid and unit.sublabel then journal:Encounter(unit,titleRoles(unit.sublabel),false) end
         end
         local merchant=visit.kind=="merchant"
         if merchant and MerchantFrame and MerchantFrame.selectedTab==2 then return end
@@ -274,16 +291,23 @@ function ns.CreateLedgerTracking(journal)
             end end
         elseif services[event] then
             local v=L.Unit("npc");if v then journal:Encounter(v,{[services[event]]=true},true) end
+        elseif event=="GOSSIP_SHOW" or event=="GOSSIP_OPTIONS_REFRESHED" then
+            -- Some class trainers offer only dialogue to this character. A title
+            -- discovers the contact, but cannot establish any lessons or prices.
+            local v=L.Unit("npc")
+            if v and classTrainerTitle(v.sublabel) then journal:Encounter(v,titleRoles(v.sublabel),true) end
         elseif event=="PLAYER_TARGET_CHANGED" or event=="UPDATE_MOUSEOVER_UNIT" then
             local v=L.Unit(event=="PLAYER_TARGET_CHANGED" and "target" or "mouseover")
-            -- A title is not evidence of service capability. Only revisit already identified contacts here.
+            -- Exact class-trainer titles identify contacts without a service window.
+            -- Other titles only enrich already identified contacts.
             local e=v and journal:Get(journal.db.aliases[v.guid])
-            if e and e.personal then journal:Encounter(v,innkeeperTitle(v.sublabel) and {innkeeper=true} or {},false) end
+            if v and (classTrainerTitle(v.sublabel) or (e and e.personal)) then journal:Encounter(v,titleRoles(v.sublabel),false) end
         end
     end
     t.frame=CreateFrame("Frame");t.frame:SetScript("OnEvent",function(_,event,...) t:OnEvent(event,...) end)
     local events={"MERCHANT_SHOW","MERCHANT_CLOSED","MERCHANT_UPDATE","MERCHANT_FILTER_ITEM_UPDATE","TRAINER_SHOW","TRAINER_CLOSED",
-        "TRAINER_UPDATE","TRAINER_SERVICE_INFO_NAME_UPDATE","GET_ITEM_INFO_RECEIVED","PLAYER_TARGET_CHANGED","UPDATE_MOUSEOVER_UNIT"}
+        "TRAINER_UPDATE","TRAINER_SERVICE_INFO_NAME_UPDATE","GET_ITEM_INFO_RECEIVED","PLAYER_TARGET_CHANGED","UPDATE_MOUSEOVER_UNIT",
+        "GOSSIP_SHOW","GOSSIP_OPTIONS_REFRESHED"}
     for event in pairs(services) do events[#events+1]=event end
     for _,event in ipairs(events) do pcall(t.frame.RegisterEvent,t.frame,event) end
     return t

@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.15.37 (Beta)
+# Azeroth Fieldbook 0.15.39 (Beta)
 
 **Treasure & Salvage** now records container kinds and historical encounters in
 its existing tab. Use **Record a find** for world finds, portable acquisitions,
@@ -17,7 +17,9 @@ awaits an extension to the existing transport and points policy. See
 [Treasure model, capture limits and pending in-game checks](tests/TREASURE.md).
 
 **Merchant’s Ledger** is now a personal directory of encountered merchants,
-trainers and services. Open an NPC's service interface to remember readable
+trainers and services. Class trainers with recognized English trainer titles
+are also discovered on target, mouseover or dialogue. Open an NPC's service
+interface to remember readable
 offerings, quoted bundle prices, stock and training without buying anything.
 Search goods, recipes, lessons, NPC sublabels, places and access notes; use
 role, zone, provenance, favourite and recipe filters. Its independent map uses
@@ -61,7 +63,7 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.15.37 includes sharing, addon-version compatibility
+spell databases. Version 0.15.39 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
@@ -311,6 +313,8 @@ Install the addon as `Interface/AddOns/AzerothFieldbook` and enable
 - `/fieldbook` or `/fieldbook book` toggles the journal, reopening its last section.
 - The minimap button opens or closes the journal; its visibility is optional.
 - `/bestiary` remains available as a compatibility alias.
+- The Bestiary starts on its title page each session. After selecting a creature,
+  reopening the book or returning to its tab keeps that entry and unfinished inputs.
 - Under the **Azeroth Fieldbook** keybinding heading, **Toggle Azeroth Fieldbook**
   opens/closes the journal at its last selected tab. **Open Azeroth Fieldbook at mouseover**
   opens the Gatherer’s Compendium for a hovered herb/mining node, a matching
@@ -964,7 +968,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.15.37 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
+Version 0.15.39 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,

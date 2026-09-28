@@ -2138,15 +2138,10 @@ local ink = { 0.75, 0.8, 0.8 }
         title="Bestiary",icon="Interface\\Icons\\Ability_Tracking",frameName="AzerothFieldbookBestiarySection",build=build,
         onOpen=function(context)
             if context and context.creatureID then choose(context.creatureID);return end
-            -- Returning through the tabs must not choose a new target or reset
-            -- ability browsing, filters, scroll positions or unfinished inputs.
-            if context and context.navigation and selected and journal.entries[selected] then
-                safeModel(selected);refresh();return
-            end
-            local target=journal:Observe("target")
-            if target then choose(target)
-            elseif selected and journal.entries[selected] then safeModel(selected);refresh()
-            else refresh() end
+            -- Start on the title page; normal reopening preserves the last entry
+            -- and its browsing state regardless of the current target.
+            if selected and journal.entries[selected] then safeModel(selected) end
+            refresh()
         end,
         onLeave=function()
             if creatureNotes then creatureNotes:Hide() end
