@@ -1,4 +1,4 @@
-# Lore & Landmarks — 0.16.0
+# Lorekeeper's Chronicle — 0.16.0
 
 Lore remembers what you found out and what you still do not understand. Atlas
 continues to own its existing geography. No lore database, canonical answers,
@@ -7,7 +7,7 @@ quest walkthrough, automatic relationship inference or rewards are added.
 ## Implemented interaction
 
 Open a supported readable, wait for its text, leave the source, then select the
-writing in Lore & Landmarks. The Entry reader displays saved pages, gaps,
+writing in Lorekeeper's Chronicle. The Entry reader displays saved pages, gaps,
 capture labels, passages, personal notes and received reports. It works without
 the source and saves each work's reading position. The Location switch uses a
 separate `CreateAtlasMap` instance at the exact Atlas anchor `(632, -205)`.

@@ -87,18 +87,18 @@ eq(decoded.recipient,'Bob Stonewell','full recipient name survives wire encoding
 local legacyDB={bestiary={entries={[42]={id=42,name='Defias Pillager',category='Humanoid',levelMin=9,levelMax=11,
     locations={Elwynn=true},abilities={},kills=25}},creatures={}}}
 local legacy=ns.CreateBestiaryJournal(legacyDB,identify)
-eq(legacy:GetSharingBalance(),5,'legacy entry + endpoint + gold')
+eq(legacy:GetSharingBalance(),6,'legacy entry + endpoint + gold')
 assert(legacy:ReserveShare('migration',2))
-assert(not legacy:ReserveShare('overlap',4))
+assert(not legacy:ReserveShare('overlap',5))
 assert(legacy:CommitShare('migration')); assert(not legacy:CommitShare('migration'))
 local reload=ns.CreateBestiaryJournal(legacyDB,identify)
-eq(reload:GetSharingBalance(),3,'migration does not repeat or erase spending')
-reload:DeleteEntry(42); eq(reload:GetSharingBalance(),3,'delete keeps credit and spending')
+eq(reload:GetSharingBalance(),4,'migration does not repeat or erase spending')
+reload:DeleteEntry(42); eq(reload:GetSharingBalance(),4,'delete keeps credit and spending')
 assert(reload:ImportReport(report(), 'Alice Sunstrider',now))
-eq(reload:GetSharingBalance(),3,'reimport no points')
-reload:Observe('target'); eq(reload:GetSharingBalance(),3,'already credited level no points')
-level=10; reload:Observe('target'); eq(reload:GetSharingBalance(),3,'new intermediate level is recorded without a reward')
-reload:DeleteEntry(42); reload:Observe('target'); eq(reload:GetSharingBalance(),3,'rediscover same milestones no points')
+eq(reload:GetSharingBalance(),4,'reimport no points')
+reload:Observe('target'); eq(reload:GetSharingBalance(),4,'already credited level no points')
+level=10; reload:Observe('target'); eq(reload:GetSharingBalance(),4,'new intermediate level is recorded without a reward')
+reload:DeleteEntry(42); reload:Observe('target'); eq(reload:GetSharingBalance(),4,'rediscover same milestones no points')
 
 local importedDB={}
 local j=ns.CreateBestiaryJournal(importedDB,identify)
@@ -128,14 +128,14 @@ assert(j:ImportReport(report('1000000-4-1',{fire}),'Alice Sunstrider',now))
 eq(#j:GetRumours(42),3,'a new report can repeat a rejected claim for review')
 assert(j:GetRumours(42)[1].previouslyRejected,'repeated claim remembers rejection')
 local zero=j:GetSharingBalance()
-level=9; j:Observe('target'); eq(j:GetSharingBalance(),zero+1,'first genuine discovery is still earned')
-level=11; j:Observe('target'); eq(j:GetSharingBalance(),zero+1,'personally observing a shared level awards no knowledge')
-zone='Westfall'; j:Observe('target'); eq(j:GetSharingBalance(),zero+2,'new real location')
+level=9; j:Observe('target'); eq(j:GetSharingBalance(),zero,'personal discovery awards no points')
+level=11; j:Observe('target'); eq(j:GetSharingBalance(),zero,'personally observing a shared level awards no knowledge')
+zone='Westfall'; j:Observe('target'); eq(j:GetSharingBalance(),zero,'new real location')
 local r=report('1000000-5-1'); r.locations={'Westfall','Duskwood'}
-assert(j:ImportReport(r,'Alice Sunstrider',now)); eq(j:GetSharingBalance(),zero+2)
-zone='Duskwood'; j:Observe('target'); eq(j:GetSharingBalance(),zero+3,'imported location still earns real credit')
+assert(j:ImportReport(r,'Alice Sunstrider',now)); eq(j:GetSharingBalance(),zero)
+zone='Duskwood'; j:Observe('target'); eq(j:GetSharingBalance(),zero,'personal locations award no points')
 j:DeleteEntry(42); j:ImportReport(r,'Alice Sunstrider',now); j:Observe('target')
-eq(j:GetSharingBalance(),zero+3,'delete/reimport/rediscover cannot mint points')
+eq(j:GetSharingBalance(),zero,'delete/reimport/rediscover cannot mint points')
 local oldGUID,oldExists,oldControlled,oldTap,oldTime=UnitGUID,UnitExists,UnitPlayerControlled,UnitIsTapDenied,GetTime
 UnitGUID=function(unit) if unit=='player' then return 'Player-1-1' elseif unit=='target' then return guid end end
 UnitExists=function() return true end
@@ -148,15 +148,15 @@ local function creditedDeath(suffix)
     j:RecordPartyKill('Player-1-1',guid)
     dead=true; j:RecordUnitDeath(guid)
 end
-creditedDeath('death1'); eq(j:GetSharingBalance(),zero+3)
+creditedDeath('death1'); eq(j:GetSharingBalance(),zero+1)
 j=ns.CreateBestiaryJournal(importedDB,identify); assert(not j:RecordKill('target'),'same death survives reload')
-creditedDeath('death2'); eq(j:GetSharingBalance(),zero+3)
+creditedDeath('death2'); eq(j:GetSharingBalance(),zero+1)
 for i=3,24 do creditedDeath('death'..i) end
-eq(j:GetSharingBalance(),zero+4,'silver remains the only kill reward until 25')
-creditedDeath('death25'); eq(j:GetSharingBalance(),zero+6)
+eq(j:GetSharingBalance(),zero+2,'silver remains the only kill reward until 25')
+creditedDeath('death25'); eq(j:GetSharingBalance(),zero+4)
 j:DeleteEntry(42); j:Observe('target')
 for i=1,25 do creditedDeath('repeated'..i) end
-eq(j:GetSharingBalance(),zero+6,'already credited kill stars cannot pay twice')
+eq(j:GetSharingBalance(),zero+4,'already credited kill stars cannot pay twice')
 dead=false
 UnitGUID,UnitExists,UnitPlayerControlled,UnitIsTapDenied,GetTime=oldGUID,oldExists,oldControlled,oldTap,oldTime
 
@@ -223,7 +223,7 @@ function setup()
     now=1000000; clients={};wire={};delivered={};drop=nil
     a=endpoint('Alice Sunstrider'); b=endpoint('Bob Stonewell')
     local e=a.j:Ensure(42,false,'Defias Pillager',{level=9}); e.category='Humanoid'; e.levelMin=9; e.levelMax=11; e.locations.Elwynn=true
-    for i=1,9 do a.j:Ensure(100+i,false,'Funding creature',{level=9}) end
+    a.db.bestiary.points.earned=10 -- Existing earned balance funds transport tests.
     capture=assert(S.Capture(a.j,42))
 end
 function start(claims)
@@ -455,7 +455,7 @@ setup();assert(not a.engine:Start(capture,'Bob Stonewell',many),'larger selectio
 eq(a.j:GetSharingBalance(),10);eq(select(4,a.j:GetSharingBalance()),0)
 assert(not a.engine:Start(capture,'Bob Stonewell',oversized),'oversized report rejected before reservation')
 eq(select(4,a.j:GetSharingBalance()),0)
-for i=201,230 do a.j:Ensure(i,false,'Funding creature',{level=9}) end
+a.db.bestiary.points.earned=40
 tx,item=start(many);eq(#item.report.rumours,32);eq(tx.cost,33)
 assert(b.engine:Accept(item));pump(12)
 eq(tx.stage,'complete');eq(#b.j:GetRumours(42),32);eq(a.j:GetSharingBalance(),7);eq(select(3,a.j:GetSharingBalance()),33)
@@ -670,12 +670,14 @@ revision=capacity.revision
 assert(not capacity:ImportReport(report('1000000-99-1',{{kind='ability',value='Overflow'}}),'Alice Sunstrider',now))
 eq(capacity.revision,revision)
 -- In-flight reservations cannot overlap into a negative available balance.
-local budget=ns.CreateBestiaryJournal({},identify)
+local budgetDB={}
+local budget=ns.CreateBestiaryJournal(budgetDB,identify)
+budgetDB.bestiary.points.earned=3
 budget:Ensure(1,false,'First creature',{level=9}); budget:Ensure(2,false,'Second creature',{level=9}); budget:Ensure(3,false,'Third creature',{level=9})
 assert(budget:ReserveShare('first',2)); assert(not budget:ReserveShare('second',2))
 assert(budget:ReserveShare('second',1)); eq(budget:GetSharingBalance(),0)
 assert(budget:CommitShare('second')); assert(budget:CommitShare('first')); eq(budget:GetSharingBalance(),0)
-for i=4,8 do budget:Ensure(i,false,'Funding creature',{level=9}) end
+budgetDB.bestiary.points.earned=8
 for _,cost in ipairs({-1,1.5,math.huge,0/0,'4',secret}) do
     assert(not budget:ReserveShare('invalid',cost),'reservations require readable nonnegative finite integers')
 end
@@ -762,3 +764,29 @@ pump(70);item=assert(b.engine:GetIncoming()[1]);assert(b.engine:Accept(item));pu
 eq(tx.stage,'complete');eq(#b.j.entries[42].beastLore.rows,30);eq(tx.cost,0)
 ''')
 print('PASS: free Beast Lore offers, full surnames, consent, zero balances, retries, reload and large snapshots')
+
+
+lua.execute(r'''
+for _,case in ipairs({{'Elite',1.5},{'Rare',2},{'Rare Elite',2}}) do
+    for _,known in ipairs({false,true}) do
+        for count=0,3 do
+            setup();a.db.bestiary.points.earned=30
+            a.j.entries[42].rank=case[1]
+            if known then assert(b.j:ImportReport(report(),'Carol Riverwind',now)) end
+            local claims={}
+            for i=1,count do claims[i]={kind='ability',value='Rank test '..i} end
+            local tx,item=start(claims)
+            eq(tx.cost,math.floor((1+count)*case[2]),'rank reservation rounds total down')
+            -- A later local rank edit cannot reprice an in-flight offer.
+            a.j.entries[42].rank=nil
+            assert(b.engine:Accept(item));pump(12)
+            local expected=math.floor((count+(known and 0 or 1))*case[2])
+            eq(tx.stage,'complete');eq(tx.cost,expected,'known basics excluded before multiplying')
+            eq(select(3,a.j:GetSharingBalance()),expected)
+            eq(a.j:GetSharingBalance(),30-expected)
+            eq(select(4,a.j:GetSharingBalance()),0)
+        end
+    end
+end
+''')
+print('PASS: rank-based sharing reservations, integer rounding, waivers and captured pricing')

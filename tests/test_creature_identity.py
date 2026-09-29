@@ -64,7 +64,7 @@ class CreatureIdentityTests(unittest.TestCase):
             assert(output():find('[Entry observed]|r Bestiary: Tunnel Rat Forager',1,true))
             assert(not output():find('Creature #',1,true))
             local _, announcements=output():gsub(' Bestiary: ', '')
-            assert(announcements==1, 'discovery and reward share one announcement alongside scan diagnostics')
+            assert(announcements==1, 'discovery announces once without points alongside scan diagnostics')
             scan()
             assert(select(2,journal:GetTotals())==0, 'meter names without levels earn no discovery points')
             assert(not entry.levelMin and not next(entry.locations), 'meter cannot invent level or location')
@@ -75,9 +75,9 @@ class CreatureIdentityTests(unittest.TestCase):
         lua.execute(r'''
             units.target=spawn('first',false)
             fire('PLAYER_TARGET_CHANGED')
-            assert(output():find('[+1 knowledge: New discovery!]|r Bestiary: Test creature',1,true), 'identity must be saved before awarding')
+            assert(output():find('[New discovery!]|r Bestiary: Test creature',1,true), 'identity must be saved before announcing')
             assert(not output():find('Creature #',1,true))
-            assert(#messages==1, 'discovery and reward share one announcement')
+            assert(#messages==1, 'discovery announces once without points')
         ''')
 
     def test_instant_cast_requires_named_entry_before_saving_either_store(self):
@@ -155,7 +155,7 @@ class CreatureIdentityTests(unittest.TestCase):
             fire('PLAYER_TARGET_CHANGED')
             assert(journal.entries[42].name=='Test creature')
             assert(journal.entries[42].abilities['Bottle of Poison'].state=='pending', 'deferred evidence restores after naming')
-            assert(select(2,journal:GetTotals())==1)
+            assert(select(2,journal:GetTotals())==0)
             assert(journal:DeleteEntry(42))
             fire('ADDON_LOADED','AzerothFieldbook')
             assert(not journal.entries[42] and not AzerothFieldbookDB.bestiary.creatures[42])

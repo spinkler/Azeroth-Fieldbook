@@ -20,7 +20,7 @@ class DispositionTests(unittest.TestCase):
                     assert(e.disposition==(reaction==4 and 'Neutral' or 'Hostile'))
                     assert(not e.behaviours.Hostile and not e.behaviours.Neutral)
                     assert(not e.behaviourSources or not next(e.behaviourSources))
-                    assert(#log==events and #messages==notices and points()==1)
+                    assert(#log==events and #messages==notices and points()==0)
                     tick();tick();assert(#messages==notices and #log==events)
                 ''')
 

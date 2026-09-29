@@ -1,6 +1,11 @@
-# Azeroth Fieldbook 0.17.0 (Release)
+# Azeroth Fieldbook 0.18.0 (Release)
 
-Version 0.17.0 protects saved data at initialization, Lore consolidation and
+Version 0.18.0 adds optional Atlas sub-zone overlays on Blizzard's world map,
+revises Knowledge rewards and sharing costs by creature rank, and improves
+journal navigation, reading and merchant lists. Container and lore sections
+are now Treasure Journal and Lorekeeper's Chronicle.
+
+Saved-data protections cover initialization, Lore consolidation and
 report validation boundaries. An unsupported or malformed main save disables
 initialization with a chat notice and leaves the original data untouched; it
 does not allocate a new account import key or initialize other journals.
@@ -14,7 +19,7 @@ characters' notes and receipt evidence. Historical fishing observers that were
 never saved remain unknown; ambiguous old Atlas links remain unavailable rather
 than selecting another discovery. See [identity and migration repair](tests/IDENTITY_MIGRATION.md).
 
-**Lore & Landmarks** is a personal archive of writings, landmarks, noteworthy
+**Lorekeeper's Chronicle** is a personal archive of writings, landmarks, noteworthy
 people and mysteries. Open a supported readable source to preserve its displayed
 pages, then read them later in the Fieldbook. Both capture options start on:
 **Automatically archive readable lore** and **Only archive pages I open**. Turn
@@ -47,7 +52,7 @@ private annotations are excluded by default. There is no Lore addon-message
 delivery, Knowledge charge or reward. Captured statements and received reports
 never establish their truth. See [Lore capture, limits and live checklist](tests/LORE.md).
 
-**Treasure & Salvage** now records container kinds and historical encounters in
+**Treasure Journal** now records container kinds and historical encounters in
 its existing tab. Use **Record a find** for world finds, portable acquisitions,
 salvage, access attempts and observed contents. Browse known names, zones, items
 and notes with combinable filters; save **Look for again** bookmarks and correct
@@ -111,24 +116,24 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.17.0 includes sharing, addon-version compatibility
+spell databases. Version 0.18.0 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
 **Bestiary**, **Gatherer's Compendium**, **Traveller’s Atlas**, **Angler’s Almanac**,
-**Merchant’s Ledger**, **Treasure & Salvage**, and **Lore & Landmarks**.
+**Merchant’s Ledger**, **Treasure Journal**, and **Lorekeeper's Chronicle**.
 Bestiary is selected on first opening. **Gatherer's Compendium** is a personal gathering
 journal; **Traveller’s Atlas** is a personal geographical journal, and **Angler’s
 Almanac** records personal fishing knowledge. **Merchant’s Ledger** remembers
-encountered contacts, goods, training and useful services. **Treasure & Salvage**
-records historical container knowledge. **Lore & Landmarks** preserves encountered
+encountered contacts, goods, training and useful services. **Treasure Journal**
+records historical container knowledge. **Lorekeeper's Chronicle** preserves encountered
 writings, significant places, noteworthy people and personal investigations.
 Hover a tab for its name; the selected tab has a gold border. Switching
 tabs retains the Bestiary's creature selection, filters, list/ability browsing
 positions and unfinished fields. Creature-entry actions select the Bestiary.
 
 Each newly recorded Lore entry is announced in chat and the persistent Event log,
-available from Lore & Landmarks. Rereads and extra pages do not repeat the announcement.
+available from Lorekeeper's Chronicle. Rereads and extra pages do not repeat the announcement.
 
 ## Angler’s Almanac
 
@@ -225,6 +230,9 @@ sub-zone crossings and encountered weather are observed automatically.
   estimates regions from your crossings and interior observations, with a unique colour for each area
   on the map. New colours maximise their minimum perceptual distance from those
   already assigned, retaining existing colours as the visible map updates.
+  **Display selected sub-zones on main map**, above **Toggle Automatic Mapping**,
+  mirrors Shading, Labels and Points on Blizzard's main map. It defaults off and
+  reuses the cached, time-budgeted renderer without a new idle polling loop.
   **Clean redundant points**, beside Map Layers, removes interior samples strictly
   inside an area's perimeter on the displayed map. Cross-over points, edge samples
   and interior evidence needed to separate overlapping regions are retained.
@@ -251,9 +259,9 @@ sub-zone crossings and encountered weather are observed automatically.
   these are personal approximations, not exact game borders. Crossings collect
   with the Atlas closed or the layer hidden, persist per character, and stay out
   of discovery entries and field reports. Automatic mapping pauses in The Great Sea, on flight
-  paths, while flying and in Stormwind, Ironforge, Darnassus, Orgrimmar,
-  Thunder Bluff and Undercity. Existing evidence and manual survey points remain
-  available; ordinary inns and settlements are not excluded. Sampling resumes
+  paths and while flying. Cities, including all six Classic capitals, are mapped
+  normally while grounded. Existing evidence and manual survey points remain
+  available. Sampling resumes
   without drawing a crossing across the pause. Loading screens, unavailable positions
   and large jumps break continuity. Samples of the same border within about
   10 yards coalesce, including reverse crossings. Redundant saved samples are
@@ -502,7 +510,7 @@ the Bestiary also closes its Locations window.
 
 **Account-wide tracking** is enabled by default in Options and applies to all seven
 journals: Bestiary, Herbs & Minerals, Traveller’s Atlas, Angler’s Almanac,
-Merchant’s Ledger, Treasure & Salvage and Lore & Landmarks. Turning it off uses
+Merchant’s Ledger, Treasure Journal and Lorekeeper's Chronicle. Turning it off uses
 this character’s separate journals.
 Changes apply after `/reload`. Shell appearance and Bestiary display options
 remain character preferences; each other section keeps its browsing state with
@@ -747,20 +755,26 @@ Mechanical guidance follows the general Classic rules described by
 and Forever changes remain possible. Burning effects such as
 [Ignite](https://warcraft.wiki.gg/wiki/Ignite_%28Classic%29) deal Fire damage.
 
-Each personal creature discovery awards 1 knowledge once the client exposes a readable effective level, including the zone of that observation. Unknown level ranges display a skull. Flying and flight paths require active targeting or the mouseover-open keybinding; passive mouseovers cannot record observations from the air. Explicit selections with readable identity and attackability work beyond the visibility range. New personal entries appear in the Event log even before their level is known, including previously shared entries. Skull/unknown-level observations earn no discovery or location Knowledge. Kill counts still advance, but their milestone Knowledge waits for a personally observed readable level. Existing credited history is retained.
-Discovering a new location for an existing creature awards 1 knowledge. New levels
-are still recorded but award no knowledge. Previously earned balances are kept.
-Repeat sightings award nothing. Ten kills award a silver star and 1 additional
-knowledge; 25 kills award a gold star and 2 more knowledge; 50 kills award a gold crown
-and 3 more knowledge, for 6 knowledge from kills in total. The crown replaces the star beside
-the kill count. Existing personal entries with 50 or more kills receive any
-uncredited crown knowledge on load. Already-earned kill knowledge remain credited when
-thresholds change and cannot be earned twice, including earlier silver credit. Existing
-entries retain their previous legitimate total through a one-time migration,
-including saved discovery progress and legacy recorded level endpoints. The
-book shows lifetime **knowledge earned**. Sharing shows **available** knowledge:
-earned minus spending and active reservations. Spending never removes kills,
-stars, crowns or discovery progress.
+Creature and location discoveries still appear in chat and the Event log, but
+award no knowledge. New levels award no knowledge either. Unknown levels display
+a skull; qualifying kills can earn points regardless of readable level.
+Flying and flight paths require active targeting or the mouseover-open keybinding;
+passive hovering does not record observations from the air.
+
+Each creature awards +1 for the first kill, +1 for silver (10 kills), +2 for gold
+(25 kills), and +3 for a crown (50 kills). Multiply each award by 1.5 for Elite
+or 2 for Rare, then round down to a whole point. Rare Elites use 2x, without
+stacking. Normal creatures earn 7 total, Elites 9, and Rares 14.
+Previously earned balances and spending are preserved; existing personal kills
+receive any uncredited milestone rewards once on load. Deleting an entry does
+not reset milestone credit. The book shows lifetime **knowledge earned**;
+sharing shows **available** knowledge after spending and active reservations.
+
+Sharing costs 1 base point for new basic information plus 1 per selected rumour.
+Multiply the report total by 1.5 for Elite or 2 for Rare (including Rare Elite),
+then round down. Already-known basics are excluded before multiplying. Send
+reserves the maximum cost; acceptance commits the adjusted cost. Beast Lore
+remains free.
 
 ## Sharing and Rumours
 
@@ -797,14 +811,15 @@ current blocker. Character identity and messaging registration are retried at
 login and when returning to the world or leaving combat. Recipient spelling,
 self-sharing and receiver compatibility are checked when sending.
 
-| Report | Sender cost |
+| Report | Base sender cost (before rank multiplier) |
 | --- | ---: |
 | Name, NPC ID, creature type, recorded levels and locations | 1 knowledge if new; otherwise free |
 | Those basics plus one unverified rumour | 2 knowledge |
 | Those basics plus two unverified rumours | 3 knowledge |
 | Those basics plus three unverified rumours | 4 knowledge |
 
-Total cost is **1 knowledge for basic information + 1 knowledge per selected rumour**.
+Base cost is **1 knowledge for basic information + 1 per selected rumour**.
+Apply Elite **1.5x** or Rare/Rare Elite **2x** to the total and round down.
 Selecting more rumours immediately updates the total and resulting balance;
 insufficient available knowledge disable sending.
 
@@ -818,14 +833,15 @@ claim, its personal journal record is eligible for sharing like your other recor
 A spell ID identifies a spell; it is not proof that this creature casts it.
 
 Opening, previewing and cancelling the composer are free. **Send offer** reserves
-the maximum cost (1 basic-information cost plus the selected rumours). An unavailable or incompatible receiver, decline, cancellation, or
+the maximum cost, including the rank multiplier and rounding. An unavailable or incompatible receiver, decline, cancellation, or
 timeout **before commit** releases that reservation. After the recipient accepts,
 their current journal determines whether the report adds any new basic information.
-If those basics are already known, the sender commits 1 less knowledge, releases
+If those basics are already known, remove their base point before applying the
+multiplier and rounding. The sender commits the adjusted total, releases
 the unused reservation, and receives a chat notice and a Share status explanation.
 This also applies when the recipient has broader levels or more locations; new
-or conflicting basic information retains its cost of one knowledge. Each selected rumour
-still costs one knowledge. A matching basics-only report settles at zero knowledge.
+or conflicting basic information retains its base cost of one knowledge. Each
+selected rumour adds one base point before the multiplier. A matching basics-only report settles at zero knowledge.
 The sender commits the final cost before authorizing import. A receipt acknowledgement
 completes the report; an API success alone does not. A missing acknowledgement
 leaves delivery **unknown**, with the knowledge still spent. Reopen Share and use
@@ -1034,7 +1050,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.17.0 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
+Version 0.18.0 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,
@@ -1075,7 +1091,7 @@ reloads/logins. Earlier research notes describing those checks as blocked or
 unverified are historical. In-session sharing delivery and attribution were
 also verified during Beta development.
 
-**Lore & Landmarks has not been verified in the actual Forever client.** Its
+**Lorekeeper's Chronicle has not been verified in the actual Forever client.** Its
 capture state machine, journal, reports and widgets have automated coverage and
 static review. The Classic ItemText reference is compatibility research, not a
 Forever live pass. Whole-book traversal, source attribution, reader restoration,

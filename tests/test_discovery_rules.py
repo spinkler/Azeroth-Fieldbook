@@ -38,7 +38,7 @@ class DiscoveryRules(unittest.TestCase):
                     assert(not journal.entries[42] and points()==0)
                     units.target=units.mouseover
                     fire('PLAYER_TARGET_CHANGED')
-                    assert(journal.entries[42].levelMin==5 and points()==1)
+                    assert(journal.entries[42].levelMin==5 and points()==0)
                 ''')
 
     def test_landing_resumes_mouseover_without_retargeting(self):
@@ -47,7 +47,7 @@ class DiscoveryRules(unittest.TestCase):
             taxi=true;units.mouseover=mob(5);tick()
             assert(not journal.entries[42])
             taxi=false;tick()
-            assert(journal.entries[42].levelMax==5 and points()==1)
+            assert(journal.entries[42].levelMax==5 and points()==0)
         ''')
 
     def test_unknown_levels_defer_points_and_never_use_raw_level(self):
@@ -62,13 +62,13 @@ class DiscoveryRules(unittest.TestCase):
                     zone='Westfall';tick();assert(points()==0)
                     fire('ADDON_LOADED','AzerothFieldbook');assert(points()==0)
                     units.target.effective=12;tick()
-                    assert(points()==1 and journal.entries[42].levelMin==12)
-                    tick();assert(points()==1)
-                    zone='Redridge';tick();assert(points()==2)
+                    assert(points()==0 and journal.entries[42].levelMin==12)
+                    tick();assert(points()==0)
+                    zone='Redridge';tick();assert(points()==0)
                     units.target.effective=-1;zone='Duskwood';tick()
-                    assert(points()==2 and journal.entries[42].levelMax==12)
+                    assert(points()==0 and journal.entries[42].levelMax==12)
                     units.target.effective=13;tick()
-                    assert(points()==3 and journal.entries[42].levelMax==13)
+                    assert(points()==0 and journal.entries[42].levelMax==13)
                 ''')
 
     def test_effective_level_failure_does_not_fall_back(self):
@@ -86,10 +86,10 @@ class DiscoveryRules(unittest.TestCase):
             journal:SetEntryConfirmed(42,true)
             journal.entries[42].lockedBasic={name='Test creature'}
             units.target.effective=12;tick()
-            assert(journal.entries[42].levelMin==12 and points()==1)
+            assert(journal.entries[42].levelMin==12 and points()==0)
             assert(journal.entries[42].lockedBasic.levelMin==12)
             units.target.effective=13;tick()
-            assert(journal.entries[42].levelMax==12 and points()==1)
+            assert(journal.entries[42].levelMax==12 and points()==0)
         ''')
 
     def test_skull_ui_and_help(self):
@@ -116,14 +116,14 @@ class DiscoveryRules(unittest.TestCase):
             j.entries[42].kills=50;j:Touch();book:Refresh()
             assert(row.skullMark:IsShown() and not row.killReward:IsShown(),'skull occupies the reward slot')
             assert(hasText('While flying, including flight paths'))
-            assert(hasText('Skull/unknown-level observations earn no'))
+            assert(hasText('Qualifying kills earn knowledge even at an unknown/skull level'))
             function UnitEffectiveLevel() return 12 end
             book:OpenAtUnit('target')
             assert(hasText('Level Range: 12'))
             assert(not row.skullMark:IsShown() and row.killReward:IsShown(),'readable level restores the earned crown')
         ''')
 
-    def test_kills_wait_for_level_then_pay_once(self):
+    def test_kills_pay_without_level_and_do_not_repeat(self):
         lua = client()
         lua.execute('''
             for i=1,10 do
@@ -131,10 +131,10 @@ class DiscoveryRules(unittest.TestCase):
                 units.target.effective=-1
                 finishKill()
             end
-            assert(kills()==10 and points()==0)
-            fire('ADDON_LOADED','AzerothFieldbook');assert(points()==0)
+            assert(kills()==10 and points()==2)
+            fire('ADDON_LOADED','AzerothFieldbook');assert(points()==2)
             units.target=mob(20);fire('PLAYER_TARGET_CHANGED')
-            assert(points()==2,'discovery and deferred bronze milestone')
+            assert(points()==2,'first kill and silver milestone')
             tick();fire('ADDON_LOADED','AzerothFieldbook');tick()
             assert(points()==2,'reload and polls cannot duplicate rewards')
         ''')

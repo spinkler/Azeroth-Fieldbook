@@ -251,19 +251,29 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             end
         end
     end
-    -- Each tier stores cumulative points: silver 1, gold adds 2, crown adds 3.
+    -- Round each milestone award down before adding it to the lifetime total.
     local killMilestones = {
-        { kills = 50, points = 6, star = "crown" },
-        { kills = 25, points = 3, star = "gold" },
+        { kills = 50, points = 3, star = "crown" },
+        { kills = 25, points = 2, star = "gold" },
         { kills = 10, points = 1, star = "silver" },
+        { kills = 1, points = 1 },
     }
+    function journal:GetKnowledgeMultiplier(id)
+        local rank = self.entries[id] and self.entries[id].rank
+        return (rank == "Rare" or rank == "Rare Elite") and 2 or (rank == "Elite" and 1.5 or 1)
+    end
     function journal:GetKillReward(id)
         local entry = self.entries[id]
         local kills = entry and math.max(0, math.floor(tonumber(entry.kills) or 0)) or 0
+        local multiplier = self:GetKnowledgeMultiplier(id)
+        local points, star = 0, nil
         for _, milestone in ipairs(killMilestones) do
-            if kills >= milestone.kills then return milestone.points, milestone.star, kills end
+            if kills >= milestone.kills then
+                points = points + math.floor(milestone.points * multiplier)
+                star = star or milestone.star
+            end
         end
-        return 0, nil, kills
+        return points, star, kills
     end
     function journal:GetPointAnnouncements()
         return db.pointAnnouncements ~= false
@@ -275,6 +285,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         onPointsAwarded = type(callback) == "function" and callback or nil
     end
     function journal:SetPointsRecordedCallback(callback) onPointsRecorded=callback end
+    function journal:SetDiscoveryRecordedCallback(callback) self.onDiscoveryRecorded=callback end
     function journal:GetEventLog()
         if type(db.eventLog)~="table" then db.eventLog={startedAt=read(time),entries={}} end
         return db.eventLog
@@ -336,7 +347,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             for id, entry in pairs(journal.entries) do
                 local progress = discoveryProgress(entry)
                 local credit = { discovered = true, levels = {}, zones = {}, points = progress.points,
-                    initial = progress.initial, killPoints = journal:GetKillReward(id), killGUIDs = {} }
+                    initial = progress.initial, killPoints = 0, killGUIDs = {} }
+                local _, star = journal:GetKillReward(id)
+                credit.killPoints = star == "crown" and 6 or (star == "gold" and 3 or (star == "silver" and 1 or 0))
                 for level in pairs(progress.levels) do credit.levels[level] = true end
                 for zone in pairs(progress.zones) do credit.zones[zone] = true end
                 ledger.credits[id] = credit
@@ -351,7 +364,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         -- earlier credit when a threshold rises; never repeat a paid milestone.
         for id,entry in pairs(journal.entries) do
             local credit = ledger.credits[id]
-            if credit and credit.discovered then
+            if credit and (credit.discovered or entry.personalEncountered) then
                 local reward = journal:GetKillReward(id)
                 local previous = credit.killPoints or 0
                 ledger.earned = ledger.earned + math.max(0, reward - previous)
@@ -388,7 +401,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         return credit
     end
     local function recordDiscovery(self, entry, level, zone, observation)
-        -- Unknown/skull levels cannot earn discovery or new-zone Knowledge.
+        -- Retain observation history without awarding discovery Knowledge.
         if not number(level) then return end
         local progress = creditFor(entry.id)
         local newLevel=number(level) and not progress.levels[level]
@@ -398,11 +411,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if progress.initial then
             -- Discovery includes its first location; levels carry no reward.
             progress.initial=nil
-        elseif newZone then
-            progress.points=progress.points+1
-            observation=observation or {}
-            observation.kind="location"
-            award(self,entry,1,"new zone: " .. zone,observation)
+        elseif newZone and self.onDiscoveryRecorded then
+            self.onDiscoveryRecorded(entry, observation)
         end
         if newLevel or newZone then self:Touch() end
     end
@@ -428,12 +438,12 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         ledger.reservations[transaction] = nil
         self:Touch()
     end
-    function journal:CommitShare(transaction, waiveBasic)
+    function journal:CommitShare(transaction, waiveBasic, basicDiscount)
         local cost = ledger.reservations[transaction]
         if not cost then return false end
-        -- Settle the recipient's one-point basic-information waiver atomically
+        -- Settle the recipient's rounded basic-information discount atomically
         -- with the existing reservation; never refund or reprice a paid report.
-        if waiveBasic == true then cost = math.max(0, cost - 1) end
+        if waiveBasic == true then cost = math.max(0, cost - (basicDiscount or 1)) end
         ledger.spent = ledger.spent + cost
         ledger.reservations[transaction] = nil
         self:Touch()
@@ -706,13 +716,6 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             if not credit.discovered and observation and number(observation.level) then
                 credit.discovered, credit.initial = true, true
                 discovered = true
-                award(self, entry, 1, "new creature entry", observation)
-                -- Kills still count while the level is unknown, but their
-                -- milestones cannot pay out before personal level discovery.
-                local reward, star = self:GetKillReward(id)
-                local deferred = math.max(0, reward - credit.killPoints)
-                credit.killPoints = math.max(credit.killPoints, reward)
-                award(self, entry, deferred, star == "crown" and "gold crown" or (star or "kill") .. " star")
                 self:Touch()
             end
         end
@@ -1118,9 +1121,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         end
         self:Touch()
         local points, star = self:GetKillReward(id)
-        local newlyEarned = credit.discovered and math.max(0, points - credit.killPoints) or 0
-        if credit.discovered then credit.killPoints = math.max(credit.killPoints, points) end
-        award(self, entry, newlyEarned, star == "crown" and "gold crown" or (star or "kill") .. " star")
+        local newlyEarned = math.max(0, points - credit.killPoints)
+        credit.killPoints = math.max(credit.killPoints, points)
+        award(self, entry, newlyEarned, star == "crown" and "gold crown" or (star and star .. " star" or "first kill"))
         return decision(guid, "accepted", newlyEarned)
     end
     function journal:ClearKillEvidence()

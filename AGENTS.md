@@ -11,9 +11,9 @@ expedition notes, and Angler’s Almanac for personal fishing observations.
 Merchant’s Ledger adds a personal contact and offering directory with a separate character store in
 `AzerothFieldbookLedgerDB`; see `tests/LEDGER.md` for identity, capture, report,
 storage and validation boundaries.
-Treasure & Salvage adds a historical container journal with a retained character store in
+Treasure Journal adds a historical container journal with a retained character store in
 `AzerothFieldbookTreasureDB`; see `tests/TREASURE.md` for attribution, report
-adapter and manual-recording boundaries. Lore & Landmarks adds a personal archive
+adapter and manual-recording boundaries. Lorekeeper's Chronicle adds a personal archive
 of writings, landmarks, people and mysteries in per-character
 `AzerothFieldbookLoreDB`; see `tests/LORE.md` for capture, provenance, report and
 live-verification boundaries. All seven section slots are implemented.
@@ -58,12 +58,13 @@ Do not change the Git author identity to Codex or another AI identity.
 
 Normal development is local and may accumulate several changes before a push:
 
-1. Make the requested change and increment the addon version as described below.
-2. Test it and update the changelog and current-version references.
+1. Make the requested change and recommend a version as described below; change
+   the version only when the current task or explicit operator instruction authorizes it.
+2. Test it and update the changelog; sync current-version references when versioning is authorized.
 3. Leave it ready for review. Do not automatically commit or push each change.
 4. When the operator explicitly requests a batch push, commit the accumulated
    changes to `main`, push `main`, and publish the current version using the
-   matching annotated Beta tag and the release workflow below.
+   matching annotated tag for the selected release channel and the workflow below.
 
 A bare push to `main` does not trigger publication: the matching `v*` tag push
 is required. By the operator's workflow, a request to push the accumulated batch
@@ -97,6 +98,8 @@ Current release naming convention:
 
 - `v0.7.2-alpha` = Alpha/prerelease
 - `v0.7.2-beta` = Beta/prerelease
+- `v0.18.0-beta.1` = numbered Beta/prerelease
+- `v0.17.0` or `v0.18.0` = stable Release, including pre-1.0
 - `v1.0.0` = stable Release
 
 The BigWigsMods packager determines release type from the tag name.
@@ -110,8 +113,10 @@ The normal release sequence is:
 3. Commit the accumulated changes to `main`.
 4. Push `main`.
 5. Verify the working tree is clean and `main` matches `origin/main`.
-6. Create an annotated `v<TOC version>-beta` tag under the operator's release or
-   batch-push authorization, unless another release channel was requested.
+6. Create an annotated tag matching the intended version and selected channel
+   under the operator's release or batch-push authorization: for example,
+   `v0.18.0-beta.1` for Beta or `v0.18.0` for Release. Do not append a second
+   prerelease suffix when the TOC version already includes one.
 7. Push only that tag.
 
 The tag push automatically:
@@ -149,8 +154,8 @@ Keep all changes represented in the combined bullet list. Related adjustments
 may be combined when the final result remains clear. Extend an existing range
 when another qualifying patch follows it; keep larger change sets under their
 own headings. Do not combine released and unreleased entries. Grouping changes
-only the changelog presentation: each completed request still advances the
-addon version, and the range must include every version it represents.
+only the changelog presentation: version changes require authorization under
+Version consistency, and the range must include every version it represents.
 
 Every push must include changelog coverage for **all changes since the previous
 push**, not just the latest local version or the most recent user request. Local
@@ -203,31 +208,55 @@ secrets.
 
 ## Version consistency
 
-Every completed user-requested change set must visibly advance the addon version,
-even while changes remain uncommitted and unpublished. This applies to code, UI,
-fixes, tests, documentation and workflow changes. Read-only work needs no bump.
+Azeroth Fieldbook uses semantic-style versioning while pre-1.0. Choose the
+version number and release channel separately; `0.` does not imply Beta.
 
-Routine changes increment the **last numeric component**:
-`0.9.0` → `0.9.1` → `0.9.2`. The operator explicitly designated the sharing
-feature milestone as **0.9.0**, the section-navigation milestone as **0.10.0**,
-the Herbs & Minerals milestone as **0.11.0**, Traveller’s Atlas as **0.12.0**,
-Angler’s Almanac as **0.13.0**, and Merchant’s Ledger as **0.14.0**.
-The operator designated Treasure & Salvage as **0.15.0** and Lore & Landmarks as
-**0.16.0**.
-Larger version jumps follow explicit operator instructions; otherwise keep the
-first two components unchanged.
+- Recommend a patch increment (`0.x.Y`, e.g. `0.17.0` → `0.17.1`) for bugs,
+  regressions, small corrections, documentation/help or packaging fixes, and
+  narrow behavioral corrections that do not materially expand the addon.
+- Recommend a minor increment (`0.X.0`, e.g. `0.17.0` → `0.18.0`) for new
+  user-facing features or substantial system expansion, including journal
+  capabilities, scoring/rewards, storage/sharing behavior or meaningful UI
+  functionality. Classify accumulated product behavior and scope, not commit
+  count or diff size; a small feature diff does not make it a patch.
+- Recommend **Beta** for intentional public testing or significant new behavior
+  below the project's normal release-confidence threshold; recommend **Release**
+  for the normal supported build. A typical sequence is `0.18.0-beta.1` →
+  `0.18.0-beta.2` → `0.18.0` (Release). Sufficiently validated changes intended
+  as the supported build may go directly to Release; development alone does
+  not require a beta, and pre-1.0 versions can be normal stable Releases.
+- Treat `1.0.0` as an explicit operator-decided project milestone, not an
+  automatic consequence of stability. Pre-1.0 minor lines may continue to
+  expand substantially. If 1.0 seems appropriate, recommend it with reasons;
+  preserve the Beast Lore milestone in Scope and never transition automatically.
 
-- Increment `## Version:` in `AzerothFieldbook.toc` once per completed change set.
-  Internal edits and test-fix iterations for that same request share one bump;
-  a subsequent request that changes the project requires another increment.
+Track accumulated release scope as the operator dictates changes. When
+versioning becomes relevant, proactively state the recommended next version,
+present channel (Beta or Release), and a concise explanation of both choices
+so the operator can learn from the decision. Revise the recommendation if scope
+changes, such as a corrective `0.17.1` cycle gaining a feature warranting
+`0.18.0`. Base the final recommendation on the entire accumulated release scope.
+
+A recommendation is not publication authority. Without authorization from the
+current task or explicit operator instruction, do not change the version, create
+a release-preparation commit, create or push a tag, publish a GitHub or
+CurseForge release, or change a CurseForge release channel. When no release
+action is requested, maintain or report the recommendation as useful development
+context. The explicit batch-push authorization in Git workflow remains valid;
+recommendations do not replace existing testing, Git or publication safeguards.
+
+When a version change is authorized:
+
+- Update `## Version:` in `AzerothFieldbook.toc` to the agreed release version.
+  Internal edits and test-fix iterations do not independently require bumps.
 - Keep the README's current version and a versioned `CHANGELOG.md` entry in sync.
   Mark local versions unreleased until publication; preserve historical entries.
 - Runtime version displays and sharing checks must read the TOC metadata. Do not
   add stale hardcoded version fallbacks or change SavedVariables schema numbers
   merely to reflect an addon-version increment.
-- Do not wait for a commit or release to bump the number, and do not reuse an
-  earlier completed version for later changes. Publish the latest accumulated
-  version; intermediate local versions do not require individual release tags.
+- An authorized version change may precede commit or publication. Do not reuse
+  an earlier completed version for later changes. Publish the final accumulated version;
+  intermediate local versions do not require individual release tags.
 - Changes to sharing compatibility must keep the explicit protocol/schema checks
   and installed-addon version check aligned. Both players must use the same addon
   version to offer/import reports; a new offer rejected for mismatch spends no points.
@@ -250,8 +279,9 @@ approval.
 
 CurseForge releases are automated through GitHub Actions.
 
-During early development, CurseForge builds use Beta release tags so they can
-be distributed through the CurseForge app to users who accept Beta versions.
+Choose Beta or Release using Version consistency, independently of the `0.`
+prefix. Beta builds serve users who accept testing versions; Release identifies
+the normal supported build, including during pre-1.0 development.
 
 CurseForge moderation occurs after upload and is outside the release workflow.
 An automated upload succeeding does not imply CurseForge moderation approval.
@@ -261,7 +291,17 @@ changelog. Do not create trivial releases solely to increase project visibility.
 
 ## Automated checks and section architecture
 
-Run `python -B -X utf8 tests/run_tests.py` from the repository root. Install the
+During local iteration, use checks proportionate to the change: review the diff,
+and run focused syntax or relevant tests only when useful. Do not rerun the full
+suite or slow navigation, preservation, and lifecycle stress tests for every
+small change. Documentation-only edits need only a diff review.
+
+Reserve the full suite and slow stress tests for pre-commit validation of the
+accumulated batch and pre-push/release checks, or an explicit operator request.
+Reuse a passing full-suite result when the tested code has not changed; rerun
+affected checks when subsequent changes warrant it.
+
+For full validation, run `python -B -X utf8 tests/run_tests.py` from the repository root. Install the
 pinned test dependency with `python -m pip install -r tests/requirements.txt`.
 The suite contains both unittest modules and scripts with top-level Lua
 assertions; unittest discovery alone is not a substitute for the full runner.
@@ -275,13 +315,15 @@ sections. Preserve existing window-position keys and Bestiary data compatibility
 
 ## Scope
 
-The operator reserves stable 1.0 for successful live Beast Lore testing after
-the Forever beta level cap permits it, regardless of other sections' progress.
-The operator designated section navigation as 0.10.0 and Herbs & Minerals as
+The operator reserves the 1.0 milestone for successful live Beast Lore testing
+after the Forever beta level cap permits it, regardless of other sections'
+progress. Meeting that condition does not authorize an automatic 1.0 transition;
+the operator must explicitly decide. Earlier versions may be stable Releases.
+The operator designated sharing as 0.9.0, section navigation as 0.10.0 and Herbs & Minerals as
 0.11.0, Traveller’s Atlas as 0.12.0, Angler’s Almanac as 0.13.0, Merchant’s Ledger as 0.14.0,
-Treasure & Salvage as 0.15.0, and Lore & Landmarks as 0.16.0.
-Subsequent routine changes increment the
-last component; further milestone jumps follow the operator's requested scope/version.
+Treasure Journal as 0.15.0, and Lorekeeper's Chronicle as 0.16.0.
+Recommend subsequent patch or minor versions by accumulated scope under Version
+consistency; apply version changes only when authorized.
 
 Azeroth Fieldbook may later add further gathering or collection journals,
 such as skinning, beyond its seven implemented sections.

@@ -3,8 +3,10 @@ local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or b
 local A,U=ns.Atlas,ns.AtlasUI
 function ns.CreateAtlasBook(journal,shell,adapters)
     local c={journal=journal,shell=shell,adapters=adapters,pages={}}
+    c.worldSubzones=ns.AtlasSubzones.CreateWorldOverlay(journal)
     c.subzoneObserver=ns.AtlasSubzones.Track(journal,function()
         if c.main and c.main.map:IsVisible() then c.main.map:RenderSubzones() end
+        c.worldSubzones:Refresh()
     end)
     -- Weather is a per-zone collection of encountered types, independent of
     -- which map is open. Keep only first observations, not a running history.
@@ -138,6 +140,8 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.subzones:SetChecked(state.showSubzones==true)
         m.subzoneLabels:SetChecked(state.showSubzoneLabels==true)
         m.subzonePoints:SetChecked(state.showSubzonePoints==true)
+        m.worldSubzones:SetChecked(state.showSubzonesOnWorldMap==true)
+        c.worldSubzones:Refresh()
         m.hideZoneAreas:SetChecked(state.hideZoneNameSubzones==true)
         m.labelSize:Display(A.Integer(state.subzoneLabelSize,2,24) and state.subzoneLabelSize or ns.AtlasSubzones.DEFAULT_LABEL_SIZE)
         m.brightness:Display(A.Number(state.mapBrightness,0.2,1) and math.floor(state.mapBrightness*100+0.5) or 100)
@@ -231,12 +235,19 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             end)
         end)
         U.Tip(m.layerMenu,"Choose which discovery markers appear on the map. Check several layers or use Show all / Hide all. The discovery index and sub-zone controls are unchanged.")
-        m.automaticMapping=U.Check(m,"Toggle Automatic Mapping",480,-146,142,function(on)
+        m.worldSubzones=U.Check(m,"Display selected sub-zones on main map",342,-120,280,function(on)
+            if not journal.readOnly then state.showSubzonesOnWorldMap=on end
+            c.worldSubzones:Refresh()
+        end)
+        m.worldSubzones:SetChecked(state.showSubzonesOnWorldMap==true)
+        m.worldSubzones:SetEnabled(not journal.readOnly)
+        U.Tip(m.worldSubzones,"Show the selected Shading, Labels and Points layers on Blizzard's main map. Off by default. Uses cached, time-budgeted drawing only while that map is open; does not change automatic mapping.")
+        m.automaticMapping=U.Check(m,"Toggle Automatic Mapping",342,-146,280,function(on)
             if not journal.readOnly then state.automaticMapping=on;journal.subzones:Reset() end
         end)
         m.automaticMapping:SetChecked(state.automaticMapping~=false)
         m.automaticMapping:SetEnabled(not journal.readOnly)
-        U.Tip(m.automaticMapping,"Automatically record sub-zone crossings and interior survey points. Pauses in The Great Sea, on flight paths, while flying and inside Classic capitals. Manual survey-point keybindings remain available when this is off.")
+        U.Tip(m.automaticMapping,"Automatically record sub-zone crossings and interior survey points. Pauses in The Great Sea, on flight paths and while flying. City mapping is enabled. Manual survey-point keybindings remain available when this is off.")
         m.cleanPoints=U.Button(m,"Clean Redundant Points",480,-174,168,function()
             local allMaps=A.Read(IsControlKeyDown)==true
             local function done(count,message)
@@ -331,15 +342,15 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         c:Show();c:Refresh()
         if journal.readOnly then c:Message("Newer Atlas schema: this journal is read-only; saved data is untouched.") end
     end
-    shell:RegisterSection("atlas",{title="Traveller’s Atlas",icon="Interface\\Icons\\INV_Misc_Map_01",
-        help="|cffffd1001. Record a discovery|r\nThe discovery index starts empty and records only what you deliberately add. Click Add Discovery, enter a name and category, and save. Current-map context and readable coordinates can be captured; you may also leave coordinates blank. Use Choose on displayed map to place a point yourself. For caves, record the entrance as the navigational position.\n\n"..
-            "|cffffd1002. Browse maps|r\nUse the zone selector or Current Zone. Hover a base map in the selector to reveal its zones; battlegrounds have a separate menu and Zephras Isle is under Other. Search the current map or all recorded zones. Select a discovery in the index or click its map pin; repeated clicks cycle overlapping pins. The Map Layers dropdown has checkboxes for each marker category and Show all / Hide all actions. The menu stays open while selecting several layers, without removing entries from the index or changing sub-zone controls. Reveal layer shows the selected entry's hidden category.\n\n"..
-            "|cffffd1003. Edit and explore|r\nUse Edit for names, notes, access details and explored status. Map position lets you choose a location. Explored is your own assertion; recording a point does not automatically mark it explored. Recorded and Reported describe where the information came from.\n\n"..
-            "|cffffd1004. Routes and passages|r\nChoose Route / Passage, then Save & route stops. Add existing places or named waypoints and use Up, Down and Remove to arrange them. Stops may span zones. Lines connect consecutive visible stops within the same map; they are recorded connections, not guaranteed safe paths.\n\n"..
-            "|cffffd1005. Expeditions and connections|r\nExpeditions stores longer journals, dates and zone associations. Linked notes attaches a discovery to an expedition. Connections links Atlas discoveries or existing Bestiary and Gatherer's Compendium records. Removing a link leaves its source intact. Deleted sources leave unresolved links you can keep or remove.\n\n"..
-            "|cffffd1006. Field reports|r\nPrepare Field Report creates a saved draft for a zone or selected discoveries. Choose records, optional private notes and expedition excerpts, then review the preview. Sending and importing reports are not available from this page yet.\n\n"..
-            "|cffffd1007. Self-discovered sub-zones|r\nThe Sub-zones group contains independent Shading, Points and Labels toggles. Hide zone-name areas hides shading and labels matching the displayed zone name without changing points or recorded evidence. Checked Points shows every crossing and interior sample. Unchecked retains automatic isolated dots with shading and hides incorporated samples. Recording and saved evidence are unchanged. Label size adjusts text from 2–24, defaulting to 4, with a thin non-monochrome outline. Names try two lines before hiding for lack of space. Brightness dims only the map artwork from 20–100%. These display settings are saved with the active journal. Toggle Automatic Mapping above Clean Redundant Points pauses automatic recording; it starts enabled and does not affect the manual survey keybind. Automatic mapping pauses in The Great Sea, on flight paths, while flying and inside the six Classic capital cities; existing points and manual survey recording remain available. While automatic mapping is enabled, the Atlas records readable same-map name changes, their position, previous position, from/to names and time. Loading screens, missing coordinates and large jumps cannot invent a crossing. With readable map dimensions, the Atlas also records your current sub-zone position and further interior samples more than 50 yards from all other samples. Revisiting sampled ground adds no duplicate interior points. Bind Record Atlas survey point in the game keybinding settings to manually add a point at your current position, at least 15 yards from existing samples. Use Clean Redundant Points to simplify the displayed map, or Ctrl+Click it to clean all saved Atlas maps. Interior observations record only their own area, position and time. Both types collect with the Atlas closed or layers hidden. Dots stay small when zooming. Checked Points keeps all samples visible over shading; unchecked uses automatic isolated dots. Three non-collinear observations can produce estimated shading. Convex perimeters may bridge bays or holes; more observations improve the evidence but never guarantee exact borders. Every observed area on the map receives a unique colour; new colours maximise contrast with existing assignments, which are saved between sessions. Hover the map for names and nearby observation details.\n\n"..
-            "|cffffd1008. Your journal|r\nAtlas records and browsing settings follow the global Account-wide tracking option, independently of Bestiary resets, backups and sharing. Sub-zone observations do not create discovery entries or enter field reports. The Options cog opens shared Fieldbook settings.",
+    shell:RegisterSection("atlas",{title="Traveller’s Atlas",icon="Interface\\Icons\\INV_Misc_Map03",
+        help="|cffffd1001. Record a discovery|r\nKeep a journal of places you want to find again. Click Add Discovery, enter a name and category, then Save. Use my current position captures your location; Choose on displayed map lets you place a point yourself. Coordinates may be left blank. For a cave, record its entrance.\n\n"..
+            "|cffffd1002. Browse maps|r\nChoose a map or click Current Zone. Search the current map or all recorded zones, then select an index entry or map pin. Repeated clicks cycle overlapping pins. Map Layers shows or hides discovery categories; Reveal layer shows a selected entry's hidden category.\n\n"..
+            "|cffffd1003. Edit and explore|r\nEdit changes names, notes, access details and explored status. Map position lets you place the selected discovery. Explored is your own assertion: saving a location does not mark it explored. Recorded and Reported identify the source of the information.\n\n"..
+            "|cffffd1004. Routes and passages|r\nChoose the Route / Passage category, then Save & route stops. Add recorded places or named waypoints; use Up, Down and Remove to arrange them. Stops can span zones. Map lines connect recorded stops, not guaranteed safe paths.\n\n"..
+            "|cffffd1005. Expeditions and connections|r\nUse Expeditions for longer journals and Linked notes to attach them to a discovery. Connections links known Atlas discoveries or records in other supported Fieldbook sections. Removing a link leaves the source record intact.\n\n"..
+            "|cffffd1006. Field reports|r\nPrepare Field Report saves a draft for a zone or selected discoveries. Choose what to include, add private notes or expedition excerpts only if wanted, then use Preview report. This page provides drafts and previews only; it cannot send or import reports.\n\n"..
+            "|cffffd1007. Self-discovered sub-zones|r\nAutomatic mapping starts on and records area crossings and survey points as you travel, even with the Atlas closed. Toggle Automatic Mapping pauses it. Automatic recording pauses in The Great Sea, on flight paths and while flying.\n\nBind Record Atlas survey point in the game's keybinding settings to add a point where you stand, including with automatic mapping off. You need a readable position and enough distance from existing samples. Clean Redundant Points removes redundant interior samples.\n\nShading, Points and Labels control the display. Display selected sub-zones on main map also shows those layers on Blizzard's map. Shading estimates an area from your samples; it is not an exact border survey. Hover the map to inspect the evidence. Sub-zone samples do not add discovery entries or enter field reports.\n\n"..
+            "|cffffd1008. Your journal|r\nAtlas records and browsing settings follow Account-wide tracking in Options. It starts on; turn it off to use this character's separate journal after /reload. Bestiary resets, backups and sharing do not include Atlas records.",
         frameName="AzerothFieldbookAtlasSection",build=build,onOpen=function()
             if c.main then c.main.map:Invalidate() end;c:Refresh()
         end})

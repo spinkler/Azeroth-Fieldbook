@@ -102,12 +102,12 @@ function report.SameClaim(a,b)
     return a.kind==b.kind and (claimName(a.value)==claimName(b.value)
         or (a.kind=="ability" and a.spellID~=nil and a.spellID==b.spellID))
 end
-function report.Cost(claims)
+function report.Cost(claims, multiplier, basicCost)
     -- No selection quota. Every encoded claim needs multiple bytes, so the
     -- payload byte limit also provides a loose bound for validating arrays.
     local count=array(claims,report.MAX_BYTES)
     if not count then return nil end
-    return 1+count
+    return math.floor(((basicCost == 0 and 0 or 1)+count)*(multiplier or 1))
 end
 function report.Validate(value)
     if not keys(value,{version=true,transaction=true,created=true,recipient=true,creatureID=true,

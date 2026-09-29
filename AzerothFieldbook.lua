@@ -483,16 +483,19 @@ local function initialize()
     if journal then
         if journal.SetAutomaticRecordCallback then journal:SetAutomaticRecordCallback(say) end
         journal:SetPointsRecordedCallback(function(entry, amount, reason, observation)
-            local killTitles = { ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
+            local killTitles = { ["first kill"] = "First kill!", ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
             local discoveryTitles = { location = "New observed location" }
             local title = killTitles[reason] or (reason == "new creature entry" and "New discovery!")
                 or (observation and discoveryTitles[observation.kind])
             if title then announceBestiary(entry, title, amount, observation, killTitles[reason] ~= nil,journal:GetPointAnnouncements()) end
         end)
         journal:SetEntryAddedCallback(function(entry, discovered, observation, previouslyCredited)
-            local chatEnabled=journal:GetCreatureAnnouncement() and not (discovered and journal:GetPointAnnouncements())
+            local chatEnabled=journal:GetCreatureAnnouncement()
             local title=discovered and "New discovery!" or (previouslyCredited and "Entry restored" or "Entry observed")
-            announceBestiary(entry,title,nil,observation,false,chatEnabled,discovered)
+            announceBestiary(entry,title,nil,observation,false,chatEnabled)
+        end)
+        journal:SetDiscoveryRecordedCallback(function(entry, observation)
+            announceBestiary(entry,"New observed location",nil,observation,false,journal:GetCreatureAnnouncement())
         end)
     end
     if journal and ns.InitializeSharing then ns.InitializeSharing(journal) end
@@ -517,7 +520,7 @@ local function initialize()
     if journal and journal.sharing then
         journal.sharing:SetImportedCallback(function() if book then book:Refresh() end end)
         journal.sharing:SetCostAdjustedCallback(function(tx)
-            say("|cffffd100[1 knowledge saved]|r " .. tx.recipient ..
+            say("|cffffd100[" .. (tx.basicDiscount or 1) .. " knowledge saved]|r " .. tx.recipient ..
                 " already has this creature's basic information; its cost was waived. Charged " ..
                 tx.cost .. " knowledge.")
         end)

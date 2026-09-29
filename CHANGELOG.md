@@ -1,11 +1,67 @@
 # Changelog
 
-## Unreleased
+## v0.18.0 - 2026-09-30
 
-- Use Lore & Landmarks' parchment hover across all seven journal menus, with
+This release includes the full batch since v0.17.0 and previous-push commit
+`4a947ab966af9ca75404c312d4380999ef02caa2`.
+
+- Rewrite journal help around current controls and player workflows, clarifying
+  observation limits, report handling and account-wide tracking.
+
+- Name the container journal Treasure Journal and the lore archive Lorekeeper's
+  Chronicle throughout the interface, help, cross-references and documentation.
+
+- Use `Trade_Herbalism` for the Gatherer’s Compendium section icon.
+
+- Use `INV_Misc_Map03` for the Traveller’s Atlas section icon.
+
+- Use the Classic `INV_Box_03` icon for Treasure Journal.
+
+- Increase Merchant’s Ledger Known Goods item names and detail text, including
+  prices and dates, by one point. Show an ellipsis on overflowing item names
+  until mouseover reveals the full name with horizontal scrolling.
+  Use a stationary hover area for scrolling and item tooltips, with full-width
+  text measurement before applying the resting ellipsis. Keep item icons fixed
+  while only the names scroll.
+
+- Remove internal contact index numbers from the Merchant’s Ledger directory rows.
+
+- Reserve the full automated suite and slow stress tests for batch pre-commit
+  and pre-push/release validation; use proportionate focused checks during local iteration.
+
+- Make Bestiary Offenses, Defenses and Behaviour native alternate views over the
+  Recorded Abilities area. Keep them within the main book, switch between them
+  one at a time, and restore abilities when toggled off. Remove their redundant
+  close buttons now that the main-window buttons toggle these views. Remove the
+  obsolete multiple-window option while preserving saved settings and positions.
+- Rename the Bestiary awaiting-review status to Unlocked and shorten its green
+  legend to rumours. Colour the Rumours button text green while the selected
+  creature has unresolved rumours, returning to its normal colour once resolved.
+  Shorten the knowledge counter to "# knowledge".
+
+- Use the Lore reader's parchment hover across all seven journal menus, with
   Bestiary's gold border and dark fill for every selected entry.
 - Remove repeated page labels from the Lore reader, separate source details in
   grey, and display preserved lore in white at two points above the normal text size.
+
+- Keep the Atlas overlay on Blizzard's main map click-through after renderer
+  initialization, preserving native map clicks, dragging and mouse-wheel zoom.
+  Left-align both mapping checkboxes beneath the zone selector and let their
+  labels use the full column width.
+
+- Restore automatic Atlas mapping in capital cities, including their sub-maps.
+  Keep flight-path and flying exclusions and update the help and regression tests.
+
+- Add an opt-in Atlas checkbox above Automatic Mapping to display the selected
+  sub-zone shading, labels and points on Blizzard's main map. Reuse cached,
+  time-budgeted drawing, update on map/selection changes and cancel hidden work;
+  no additional idle polling.
+
+- Move Knowledge rewards from discovery to the first kill (+1), silver (+1),
+  gold (+2), and crown (+3). Apply Elite 1.5x and Rare 2x multipliers to each
+  reward and sharing totals, rounding down to integers; Rare Elites use 2x.
+  Keep discovery chat and Event log celebrations, existing balances and spending,
+  and free Beast Lore sharing. Update help and scoring/sharing regressions.
 
 ## v0.17.0 - 2026-09-29
 
@@ -100,7 +156,7 @@ This release includes all changes since v0.16.6-beta and the previous push at
 This release includes all changes since v0.15.39-beta and the previous push at
 `ede3c2cf73cd65d2be3f13da75545da3442bb4a1` (local versions 0.15.40–0.16.6).
 
-- Add Lore & Landmarks as the seventh functional journal: a separate character
+- Add Lorekeeper's Chronicle as the seventh functional journal: a separate character
   archive for writings, landmarks, people and mysteries, with searchable filters,
   private annotations, related-record links, revisit flags and investigation status.
   Keep source evidence, personal interpretation and received reports distinct.
@@ -166,7 +222,7 @@ This release includes all changes since v0.15.39-beta and the previous push at
 
 ## v0.16.1 - v0.16.2 - Development notes (included in v0.16.6-beta)
 
-- Show a darkened copy of the player's current map when Lore & Landmarks has
+- Show a darkened copy of the player's current map when Lorekeeper's Chronicle has
   no recorded or selected map, using the shared Atlas size, position and border.
   Keep the fallback display-only and preserve deliberate map selection.
 - Pause automatic Atlas sub-zone sampling on flight paths, while flying and
@@ -175,7 +231,7 @@ This release includes all changes since v0.15.39-beta and the previous push at
 
 ## v0.16.0 - Development notes (included in v0.16.6-beta)
 
-- Implement Lore & Landmarks as a separate character archive for writings,
+- Implement Lorekeeper's Chronicle as a separate character archive for writings,
   landmarks, people and mysteries in the existing seventh section tab.
 - Preserve supported readable text through the item-text lifecycle. Default
   capture stores only displayed pages; disabling Only archive pages I open
@@ -198,7 +254,7 @@ This release includes all changes since v0.15.39-beta and the previous push at
 ## v0.15.40 - Development notes (included in v0.16.6-beta)
 
 - Show a darkened current local map in Merchant’s Ledger when no contact map
-  is recorded, keeping the empty-state message visible, matching Treasure & Salvage.
+  is recorded, keeping the empty-state message visible, matching Treasure Journal.
 
 ## v0.15.39-beta - 2026-09-28
 
@@ -245,7 +301,7 @@ This release includes all changes since v0.13.37-beta and the previous push at
   provenance-aware deduplication, preserved observation dates and opt-in private
   notes. Ledger addon-message transport, Knowledge prices and rewards remain
   deferred; imported facts are labelled Reported and grant no personal credit.
-- Add Treasure & Salvage: a searchable journal of world finds, portable
+- Add Treasure Journal: a searchable journal of world finds, portable
   containers and salvage with separate historical encounters, contents, access
   details, notes, filters, bookmarks, corrections and confirmed removal. Record
   finds manually; observe readable openable bag items and portable contents only
@@ -428,7 +484,7 @@ This release includes all changes since v0.13.37-beta and the previous push at
 
 ## v0.15.0 - Included in v0.15.37-beta
 
-- Implement Treasure & Salvage in its existing tab: a searchable catalogue of
+- Implement Treasure Journal in its existing tab: a searchable catalogue of
   world finds, portable containers and salvage, independent historical encounters,
   personal/manual/reported provenance, combined filters and name/location/recent
   sorting. Preserve selection, list position, detail state and editor drafts.
@@ -1198,7 +1254,7 @@ Both players must use the same installed addon version to share records.
 
 - Expand Azeroth Fieldbook with seven native icon tabs on the outside right edge:
   Bestiary, Herbs & Minerals, Traveller's Atlas, Angler's Almanac, Merchant's
-  Ledger, Treasure & Salvage, and Lore & Landmarks. Bestiary remains the default
+  Ledger, Treasure Journal, and Lorekeeper's Chronicle. Bestiary remains the default
   and fully functional section; the other six show their future-release wishlists.
   Use native borders, hover feedback, gold selection and section-name tooltips.
 - Preserve Bestiary selection, filters, browsing positions and drafts when changing
@@ -1300,7 +1356,7 @@ Both players must use the same installed addon version to share records.
 
 ## v0.10.0 - Local development (included in v0.10.8-beta)
 
-- Expand the shared Fieldbook window with native framed icon tabs on its outside right edge, in order: Bestiary, Herbs & Minerals, Traveller’s Atlas, Angler’s Almanac, Merchant’s Ledger, Treasure & Salvage, and Lore & Landmarks. Add gold selection, native hover feedback and section-name tooltips; default to the Bestiary on first opening.
+- Expand the shared Fieldbook window with native framed icon tabs on its outside right edge, in order: Bestiary, Herbs & Minerals, Traveller’s Atlas, Angler’s Almanac, Merchant’s Ledger, Treasure Journal, and Lorekeeper's Chronicle. Add gold selection, native hover feedback and section-name tooltips; default to the Bestiary on first opening.
 - Add six parchment wishlist pages with their supplied titles and future-release text. Keep presentation definitions easy to revise; introduce no new tracking, SavedVariables or sharing schema.
 - Preserve Bestiary selection, filters, browsing positions and draft fields across tab changes. Explicit creature-entry actions select the Bestiary; its toolbar and transient panels stay with its section, while pinned Notes retain their independent lifetime and tracking continues in the background.
 - Include the full tab column in saved-position clamping, screen-fit scaling and auxiliary-window placement. Reflow attached windows when the main window's footprint or UI scale changes; keep tabs accessible when the screen is crowded.

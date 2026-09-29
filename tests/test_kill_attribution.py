@@ -14,20 +14,20 @@ class KillAttribution(unittest.TestCase):
                 lua = new_client()
                 lua.execute(f"units.{unit} = spawn('corpse', true); units.{unit}.denied = true; fire('{event}')")
                 self.assertEqual(lua.eval('kills()'), 0)
-                self.assertEqual(lua.eval('points()'), 1, 'permitted discovery point')
+                self.assertEqual(lua.eval('points()'), 0, 'discovery awards no points')
                 lua.execute("tick(); tick(); fire('UNIT_HEALTH', '" + unit + "')")
                 self.assertEqual(lua.eval('kills()'), 0, 'corpse observation must not manufacture a kill')
-                self.assertEqual(lua.eval('points()'), 1, 'no silver/gold points')
+                self.assertEqual(lua.eval('points()'), 0, 'no silver/gold points')
                 self.assertNotIn('10 kills!', lua.eval('output()'))
                 self.assertNotIn('25 kills!!', lua.eval('output()'))
 
     def test_observed_alive_then_killed_by_someone_else(self):
         lua = new_client()
         lua.execute("units.target = spawn('watched', false); fire('PLAYER_TARGET_CHANGED')")
-        self.assertEqual(lua.eval('points()'), 1)
+        self.assertEqual(lua.eval('points()'), 0)
         lua.execute("units.target.dead = true; units.target.attackable = false; units.target.denied = true; tick()")
         self.assertEqual(lua.eval('kills()'), 0, 'previously alive is identity evidence only')
-        self.assertEqual(lua.eval('points()'), 1)
+        self.assertEqual(lua.eval('points()'), 0)
 
     def test_unclaimed_living_target_is_not_credit_or_cached_eligibility(self):
         lua = new_client()
@@ -38,7 +38,7 @@ class KillAttribution(unittest.TestCase):
         lua.execute('UnitIsTapDenied=function() return nil end')
         lua.execute("units.target.dead = true; fire('UNIT_HEALTH', 'target'); tick()")
         self.assertEqual(lua.eval('kills()'), 0, 'unknown eligibility at death must not use an old living sample')
-        self.assertEqual(lua.eval('points()'), 1)
+        self.assertEqual(lua.eval('points()'), 0)
 
     def test_solo_kill_and_duplicate_notifications_follow_live_capture(self):
         lua = new_client()
@@ -67,7 +67,7 @@ class KillAttribution(unittest.TestCase):
                 # tests identical no-XP policy, not an unperformed live cap test.
                 lua.execute(f"beginKill('{scenario}'); units.target.level=1; finishKill()")
                 self.assertEqual(lua.eval('kills()'), 1)
-                self.assertEqual(lua.eval('points()'), 1, 'only initial discovery; new levels award nothing')
+                self.assertEqual(lua.eval('points()'), 1, 'first kill earns a point; levels award nothing')
                 self.assertNotIn('10 kills!', lua.eval('output()'))
 
     def test_pet_and_party_policy_with_no_personal_final_blow(self):
@@ -172,7 +172,7 @@ class KillAttribution(unittest.TestCase):
             beginKill('afterCrown'); finishKill()
         ''')
         self.assertEqual(lua.eval('kills()'), 51)
-        self.assertEqual(lua.eval('points()'), 7, 'discovery + silver 1 + gold 2 + crown 3')
+        self.assertEqual(lua.eval('points()'), 7, 'first kill 1 + silver 1 + gold 2 + crown 3')
         self.assertEqual(lua.eval('entry.name'), 'Test creature')
         self.assertEqual(lua.eval('output()').count('10 kills!'), 1)
         self.assertEqual(lua.eval('output()').count('25 kills!!'), 1)
@@ -185,15 +185,15 @@ class KillAttribution(unittest.TestCase):
             local ledger=AzerothFieldbookDB.bestiary.points
             ledger.credits[42].killPoints=3; ledger.earned=4; ledger.spent=2
             for i=1,3 do fire('ADDON_LOADED','AzerothFieldbook') end
-            assert(kills()==50 and points()==7 and ledger.credits[42].killPoints==6)
+            assert(kills()==50 and points()==8 and ledger.credits[42].killPoints==7)
             assert(ledger.spent==2, 'existing spending is preserved')
             -- Deleting and earning the same tiers again cannot pay again.
             AzerothFieldbookDB.bestiary.entries[42]=nil
             for i=1,50 do beginKill('new'..i); finishKill() end
-            assert(points()==7 and kills()==50)
+            assert(points()==8 and kills()==50)
         ''')
 
-    def test_old_silver_credit_is_preserved_without_paying_again_at_ten(self):
+    def test_old_credit_is_preserved_while_new_cumulative_tiers_pay(self):
         lua = new_client()
         lua.execute(r'''
             for i=1,2 do beginKill('old'..i); finishKill() end
@@ -203,7 +203,7 @@ class KillAttribution(unittest.TestCase):
             assert(kills()==2 and points()==2)
             messages={}
             for i=3,10 do beginKill('new'..i); finishKill() end
-            assert(points()==2 and not output():find('10 kills!',1,true))
+            assert(points()==3 and output():find('10 kills!',1,true))
         ''')
 
     def test_eligibility_absent_error_nil_secret_invalid_remains_unknown(self):

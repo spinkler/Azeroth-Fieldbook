@@ -378,34 +378,23 @@ check(click('Behaviour') and AzerothFieldbookBestiaryBehaviour:IsShown(),'behavi
 local offense=AzerothFieldbookBestiaryOffenses
 local defense=AzerothFieldbookBestiaryDefenses
 local behaviour=AzerothFieldbookBestiaryBehaviour
-check(journal:GetSingleObservationWindow(),'single observation window defaults on')
-UIParent.GetEffectiveScale=function() return 1 end
-offense.GetLeft=function() return 100 end; offense.GetTop=function() return 600 end
-offense.GetEffectiveScale=function() return 0.8 end
-defense.GetEffectiveScale=function() return 0.8 end
-defense.SetPoint=function(self,point,relative,relativePoint,x,y) self.anchorX=x; self.anchorY=y end
+local abilities=AzerothFieldbookBestiarySection.abilityPanel
+for _,panel in ipairs({offense,defense,behaviour}) do
+    check(panel.parent==AzerothFieldbookBestiarySection.detail,'observation view belongs to the main page')
+    check(not panel.scripts.OnDragStart and not panel.scripts.OnDragStop,'native view cannot detach')
+end
 offense:Show(); offense.scripts.OnShow(offense)
 check(offense:IsShown() and not defense:IsShown() and not behaviour:IsShown(),'offenses closes its siblings')
+check(not abilities:IsShown(),'observations replace the complete abilities area')
 defense:Show(); defense.scripts.OnShow(defense)
-check(defense:IsShown() and not offense:IsShown(),'defenses replaces offenses')
-check(defense.anchorX==100 and defense.anchorY==600,'swapped window shares top-left at custom scale')
-defense.GetLeft=function() return 150 end; defense.GetTop=function() return 500 end
-defense.scripts.OnDragStop(defense)
+check(defense:IsShown() and not offense:IsShown() and not abilities:IsShown(),'defenses replaces offenses')
 defense:Hide()
-behaviour.GetEffectiveScale=function() return 0.8 end
-behaviour.SetPoint=function(self,point,relative,relativePoint,x,y) self.anchorX=x; self.anchorY=y end
-behaviour:Show(); behaviour.scripts.OnShow(behaviour)
-check(behaviour.anchorX==150 and behaviour.anchorY==500,'dragged shared position survives closing before swap')
-defense:Show()
-
+check(abilities:IsShown(),'closing a native view restores recorded abilities')
 journal:SetSingleObservationWindow(false)
 behaviour:Show(); behaviour.scripts.OnShow(behaviour)
-check(defense:IsShown() and behaviour:IsShown(),'disabled option allows simultaneous windows')
-check(not ns.CreateBestiaryJournal(db,identify):GetSingleObservationWindow(),'window preference persists')
-local singleOption=AzerothFieldbookOptions.singleObservationWindow
-singleOption.GetChecked=function() return true end
-singleOption.scripts.OnClick(singleOption)
-check(behaviour:IsShown() and not defense:IsShown(),'enabling option retains latest open window')
+defense:Show(); defense.scripts.OnShow(defense)
+check(defense:IsShown() and not behaviour:IsShown(),'legacy multiple-window setting cannot stack native views')
+check(not AzerothFieldbookOptions.singleObservationWindow,'obsolete window option is removed')
 -- The buttons toggle closed as well as open. Native OnShow drives sibling exclusion.
 for _,item in ipairs({{'Locations',AzerothFieldbookBestiaryLocations},
     {'Ranks',AzerothFieldbookBestiaryRanks},{'Offenses',offense},
@@ -420,12 +409,7 @@ click('Offenses'); offense.scripts.OnShow(offense)
 click('Defenses'); defense.scripts.OnShow(defense)
 check(not offense:IsShown() and defense:IsShown(),'toggle buttons preserve single-window swapping')
 click('Defenses'); check(not defense:IsShown(),'active single window can be toggled off')
-journal:SetSingleObservationWindow(false)
-click('Offenses'); offense.scripts.OnShow(offense)
-click('Defenses'); defense.scripts.OnShow(defense)
-click('Offenses')
-check(not offense:IsShown() and defense:IsShown(),'multi-window mode closes only clicked window')
-journal:SetSingleObservationWindow(true)
+check(abilities:IsShown(),'toggling the active panel off restores the default view')
 check(click('Lock this entry'),'entry can be locked again')
 local options=AzerothFieldbookOptions
 options.scripts.OnShow(options)
@@ -593,7 +577,7 @@ check(#ranksJournal:List(nil,'Rank 4',false,nil,nil,{['World Boss']=true})==1,'r
 check(#ranksJournal:List(nil,'Rank 1',false,nil,nil,{Rare=true})==0,'rank and text both required')
 local rewards=ns.CreateBestiaryJournal({},function() return nil end)
 local first=rewards:Ensure(1,false,'First creature')
-for _,sample in ipairs({{0,0},{2,0},{9,0},{10,1,'silver'},{24,1,'silver'},{25,3,'gold'},{49,3,'gold'},{50,6,'crown'},{51,6,'crown'}}) do
+for _,sample in ipairs({{0,0},{1,1},{2,1},{9,1},{10,2,'silver'},{24,2,'silver'},{25,4,'gold'},{49,4,'gold'},{50,7,'crown'},{51,7,'crown'}}) do
     first.kills=sample[1]
     local points,star=rewards:GetKillReward(1)
     check(points==sample[2] and star==sample[3],'kill reward threshold')
@@ -605,31 +589,31 @@ rewards:Ensure(2,false,'Second creature').kills=10
 local rewardsDB={bestiary={entries=rewards.entries,creatures={}}}
 rewards=ns.CreateBestiaryJournal(rewardsDB,function() return nil end)
 local count,points=rewards:GetTotals()
-check(count==2 and points==6,'entry points combine with cumulative kill rewards')
+check(count==2 and points==8,'entry points combine with cumulative kill rewards')
 -- A ledger credited under the old thresholds keeps its earned points even
 -- though the star now reflects the higher threshold.
 rewards.entries[1].kills=2
 rewards=ns.CreateBestiaryJournal(rewardsDB,function() return nil end)
 check(select(2,rewards:GetKillReward(1))==nil,'saved kill count uses the current star threshold')
-check(select(2,rewards:GetTotals())==6,'threshold changes preserve previously credited points')
+check(select(2,rewards:GetTotals())==8,'threshold changes preserve previously credited points')
 rewards:DeleteEntry(1)
 count,points=rewards:GetTotals()
-check(count==1 and points==6,'deletion removes display records but retains earned credit')
+check(count==1 and points==8,'deletion removes display records but retains earned credit')
 local discoveryDB={}
 local discovery=ns.CreateBestiaryJournal(discoveryDB,function() return 900 end)
 level=5; zone='First zone'; discovery:Observe('target')
 local _,discoveryPoints=discovery:GetTotals()
-check(discoveryPoints==1,'first creature level and zone award only one point')
+check(discoveryPoints==0,'first creature level and zone award no points')
 discovery:Observe('target')
-local _,repeatPoints=discovery:GetTotals(); check(repeatPoints==1,'repeat observation awards nothing')
+local _,repeatPoints=discovery:GetTotals(); check(repeatPoints==0,'repeat observation awards nothing')
 level=7; discovery:Observe('target')
 level=6; discovery:Observe('target')
 zone='Second zone'; discovery:Observe('target')
-local _,newPoints=discovery:GetTotals(); check(newPoints==2,'new levels award nothing; a new zone awards one')
+local _,newPoints=discovery:GetTotals(); check(newPoints==0,'new levels and zones award no points')
 discovery:SetEntryConfirmed(900,true); level=8; discovery:Observe('target')
 level=9; zone='Third zone'; discovery:Observe('target')
 local reloadedDiscovery=ns.CreateBestiaryJournal(discoveryDB,function() return 900 end)
-local _,savedPoints=reloadedDiscovery:GetTotals(); check(savedPoints==3,'only new zones award points; progress persists while locked')
+local _,savedPoints=reloadedDiscovery:GetTotals(); check(savedPoints==0,'locked observations and reload award no discovery points')
 local legacy=ns.CreateBestiaryJournal({bestiary={entries={[1]={id=1,levelMin=3,levelMax=6,locations={Old=true},abilities={}}},creatures={}}},function() end)
 local _,legacyPoints=legacy:GetTotals(); check(legacyPoints==2,'legacy credit uses only observed endpoints and zones')
 local awardsDB={}
@@ -637,10 +621,10 @@ local awards=ns.CreateBestiaryJournal(awardsDB,function() return 901 end)
 local notifications={}
 awards:SetPointsAwardedCallback(function(_,amount,reason) notifications[#notifications+1]={amount,reason} end)
 check(awards:GetPointAnnouncements(),'point messages default on')
-level=3; zone='Award zone'; awards:Observe('target')
-check(#notifications==1,'entry level and zone announce one point')
+classification='normal'; level=3; zone='Award zone'; awards:Observe('target')
+check(#notifications==0,'discovery awards no points')
 awards:Observe('target'); awards:GetTotals()
-check(#notifications==1,'repeat observations and totals do not announce again')
+check(#notifications==0,'repeat observations and totals do not announce again')
 local oldDead,oldGUID,oldExists,oldControlled,oldTap,oldTime=UnitIsDead,UnitGUID,UnitExists,UnitPlayerControlled,UnitIsTapDenied,GetTime
 local awardDead=false
 UnitIsDead=function() return awardDead end
@@ -656,7 +640,7 @@ local function awardDeath(suffix)
     awardDead=true; awards:RecordUnitDeath(guid); awards:RecordKill('target')
 end
 awardDeath('first')
-check(#notifications==1,'first kill awards no star points')
+check(#notifications==1 and notifications[1][1]==1 and notifications[1][2]=='first kill','first kill awards one point')
 for i=2,9 do awardDeath('kill'..i) end
 check(#notifications==1,'no silver reward before 10 kills')
 awardDeath('silver')
@@ -675,7 +659,7 @@ awardDeath('afterCrown')
 check(#notifications==4,'kills above 50 do not repeat crown points')
 awards:SetPointAnnouncements(false); zone='Silent zone'; awards:Observe('target')
 check(#notifications==4,'option disables new award messages')
-local _,silentTotal=awards:GetTotals(); check(silentTotal==8,'muting messages still awards points')
+local _,silentTotal=awards:GetTotals(); check(silentTotal==7,'muting messages still awards points')
 local savedAwards=ns.CreateBestiaryJournal(awardsDB,function() return 901 end)
 check(not savedAwards:GetPointAnnouncements(),'notification option persists')
 savedAwards:SetPointsAwardedCallback(function() error('existing credit must not be reannounced') end)

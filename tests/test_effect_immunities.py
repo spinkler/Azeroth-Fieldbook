@@ -65,7 +65,7 @@ class EffectImmunityTests(unittest.TestCase):
             end
             e.category='Undead';book:Refresh();section.refreshDefensePicker()
             local picker=section.defensePicker
-            assert(not picker.effectMenu:IsShown() and picker:GetWidth()==390)
+            assert(not picker.effectMenu:IsShown() and picker:GetWidth()==583)
             picker.effectDropdown.scripts.OnClick(picker.effectDropdown)
             assert(picker.effectMenu:IsShown())
             assert(j:SetImmunity(42,'Polymorph',false) and not j:GetExpectedImmunities(42).Polymorph)

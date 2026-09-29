@@ -156,7 +156,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         if top then for i,row in ipairs(rows) do if row.entry.id==top.entry.id then state.offset=i-1;break end end end
         state.offset=math.min(state.offset,math.max(0,#rows-1))
         m.count:SetText(#rows.." / "..total.." container kinds")
-        m.empty:SetShown(#rows==0);m.empty:SetText(total==0 and "Your Treasure & Salvage journal begins empty.\n\nRecord a find, or carry an openable container. All locations describe past encounters." or "No entries match these filters.\nReset filters to browse all known finds.")
+        m.empty:SetShown(#rows==0);m.empty:SetText(total==0 and "Your Treasure Journal begins empty.\n\nRecord a find, or carry an openable container. All locations describe past encounters." or "No entries match these filters.\nReset filters to browse all known finds.")
         for i,row in ipairs(m.rows) do
             local found=rows[state.offset+i];row:SetShown(found~=nil);row.id=found and found.entry.id
             if found then
@@ -170,7 +170,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         m.category:SetText(categories[state.category] or "All categories");m.zone:SetText(state.zone=="@current" and "Current zone" or state.zone or "All locations")
         m.knowledge:SetText(knowledge[state.knowledge] or "All sources");m.sort:SetText("Sort: "..(state.sort or "name"));m.bookmarks:SetChecked(state.bookmarks==true)
         local e=journal:Get(state.selected);local s=e and journal:Summary(e)
-        m.name:SetText(e and T.Safe(journal:Title(e)) or "Treasure & Salvage")
+        m.name:SetText(e and T.Safe(journal:Title(e)) or "Treasure Journal")
         m.summary:SetText(e and ((e.form=="world" and "World find" or "Portable container").." • "..e.category.." • "..s.knowledge) or "A personal guide to temporary discoveries")
         m.counts:SetText(e and (s.personal.." personal encounters • "..s.reported.." reported • latest observation: "..(s.last>0 and T.Date(s.last) or "Unknown")) or "Choose a known kind or record a new find.")
         local v=journal.encounters[state.encounter]
@@ -190,7 +190,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     local function build(content)
         c.frame=content;local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
-        U.Label(m,"Treasure & Salvage",42,-60,260,"GameFontNormalLarge")
+        U.Label(m,"Treasure Journal",42,-60,260,"GameFontNormalLarge")
         m.directory=CreateFrame("Frame",nil,m);m.directory:SetAllPoints();local d=m.directory
         m.search=U.Edit(d,48,-92,240,200);m.search:SetText(state.query)
         m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
@@ -282,14 +282,13 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         end)
         c:Message(tracking.status);c:Refresh();m.details:SetVerticalScroll(state.detailScroll)
     end
-    shell:RegisterSection("treasure",{title="Treasure & Salvage",icon=T.ICON,frameName="AzerothFieldbookTreasureSection",build=build,
-        help=T.VISION.."\n\n|cffffd100Historical knowledge|r\nEntries represent kinds; each sighting, access attempt, acquisition or inspection is a historical encounter. Nothing promises current availability. The journal starts empty. Matching names are never automatically merged. World identities remain provisional; portable item IDs describe item kinds.\n\n"..
-            "|cffffd100Record and correct|r\nRecord a find opens a scrollable form in the left column. Choose an existing kind or a new provisional kind, context and independent outcomes. Locations start unknown; Use player position offers approximate coordinates for review. Manually entered coordinates are labelled. Contents accept an item ID, pasted item link or name per line, optionally followed by ; observed quantity ; recovered quantity. Choose partial/full capture only after inspection. Full capture and recovery are explicit manual assertions.\n\n"..
-            "Choose an encounter in History or on the map, then Correct or Remove. Removal requires confirmation. Automatic encounters permit location/access/note corrections while preserving automatic contents evidence. To correct a mistaken form/identity, remove the mistaken encounter and record it under the right kind. Kind notes, category and labels are editable through Kind notes. Look for again is never created or cleared automatically.\n\n"..
-            "|cffffd100Maps and browsing|r\nMap markers mean a past find, not an available container. Only world finds and explicitly recorded acquisitions can create pins. Opening or observing a portable item in your bags never creates an acquisition marker. Approximate player coordinates stay labelled. Use Known maps, Selected kind / All finds in zone, and repeat clicks to cycle overlapping encounters. Expand gives the active details a taller left reading area. Search matches known names, locations, items and private notes. Recent sorts by original observation time, never report receipt.\n\n"..
-            "|cffffd100Automatic capture|r\nThe background observer reads openable bag items using the client's hasLoot flag; first observed carriage is not acquisition or current ownership. Portable contents require the loot's exact GUID to match a recently observed openable item and the client to say the loot is from an item. Unsupported, unreadable or ambiguous sources are omitted. Captures may be partial; loot visibility never proves personal recovery. Creature loot, fishing, gathering and unrelated bag changes are not treasure contents. World finds, acquisition context, access methods and recovered quantities require manual recording in this iteration.\n\n"..
-            "|cffffd100Reports|r\nThe existing sharing transport and prices are Bestiary-specific, with no generic section adapter. Treasure provides validated, versioned builder/preview/merge hooks for later integration. Delivery and player-facing import/export are deferred; there is no alternate cost-free export. Reported evidence keeps original sources and observation times, separate receipt dates and no personal credit. Private notes require explicit inclusion. Origin claims are not authenticated.\n\n"..
-            "Treasure follows Account-wide tracking in Options. When enabled it uses the shared account journal; turn it off to return to this character's journal after /reload. Existing character history imports once; later changes in each scope stay separate. Limits: 2,000 kinds, 20,000 encounters, 80 contents rows each; 4,000-byte notes. At capacity, new records are refused with existing history retained. Map rendering shows up to 192 marker groups; all encounters remain in History. No stale active container survives a reload.",
+    shell:RegisterSection("treasure",{title="Treasure Journal",icon=T.ICON,frameName="AzerothFieldbookTreasureSection",build=build,
+        help=T.VISION.."\n\n|cffffd100Historical knowledge|r\nEach entry groups a kind of treasure or container; History lists its past sightings, access attempts and inspections. A recorded past find is not evidence that a container is currently present. Matching names do not automatically combine different kinds.\n\n"..
+            "|cffffd100Record and correct|r\nUse Record a find to choose an existing kind or create one, then record what happened. Leave the location unknown if unsure. Use player position supplies approximate coordinates for review. Enter contents only if inspected, and distinguish what you saw from what you personally recovered.\n\nSelect an encounter in History or on the map, then use Correct or Remove. Automatic encounters allow corrections to location, access details and notes while retaining their original contents evidence. Kind notes edits the kind's label, category and notes; Look for again bookmarks it.\n\n"..
+            "|cffffd100Maps and browsing|r\nSearch names, locations, items and notes. Known maps chooses a recorded map; Selected kind switches to All finds in zone. Click a marker to review a past encounter, or click again to cycle overlapping finds. Expand gives the details more reading space.\n\nMap pins come from positioned world finds and recorded acquisitions. Seeing or opening a container in your bags does not establish where you acquired it.\n\n"..
+            "|cffffd100Automatic capture|r\nRecognizable openable bag items can be recorded automatically. When opened, their contents are captured only if the addon can reliably identify the source. Captures are partial and do not confirm that you recovered the items. Uncertain sources are skipped.\n\nUse Record a find for world finds, acquisition details, access methods and recovered quantities. Seeing an item in the journal does not establish that you still own it.\n\n"..
+            "|cffffd100Reports|r\nTreasure currently has no player-facing report sending, import or export. Bestiary Share does not send Treasure records.\n\n"..
+            "|cffffd100Your journal|r\nTreasure follows Account-wide tracking in Options. It starts on; turn it off to use this character's separate journal after /reload. Existing character history imports once; later changes in the two scopes stay separate.",
         onOpen=function() if c.main then c:Refresh();c.main.details:SetVerticalScroll(state.detailScroll) end end})
     journal.onChange=function()
         if not c.main or shell.active~="treasure" or not shell:GetFrame():IsShown() or c.refreshQueued then return end

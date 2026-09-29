@@ -310,7 +310,7 @@ class FieldbookTabsTests(unittest.TestCase):
             assert(root.closeButton:GetFrameLevel()>root.titleIcon:GetFrameLevel())
             assert(not root.titleIcon:IsMouseEnabled(),'decorative trim does not block tab clicks')
             local names={'Bestiary',"Gatherer's Compendium",'Traveller’s Atlas','Angler’s Almanac',
-                'Merchant’s Ledger','Treasure & Salvage','Lore & Landmarks'}
+                'Merchant’s Ledger','Treasure Journal',"Lorekeeper's Chronicle"}
             assert(shell.active=='bestiary' and #root.sectionTabs==7)
             assert(root.navigation.point[2]==root and root.navigation.point[3]=='TOPRIGHT')
             assert(root.navigation.point[4]==-2,'native tab art overlaps the trim only enough to seal the seam')

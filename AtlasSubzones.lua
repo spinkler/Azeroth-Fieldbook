@@ -123,20 +123,6 @@ local function key(p)
     if p.kind=="interior" then return "interior\t"..p.name.."\t"..math.floor(p.x/25)..":"..math.floor(p.y/25) end
     return p.from.."\t"..p.to.."\t"..math.floor(p.x/25)..":"..math.floor(p.y/25)
 end
--- Classic UI map IDs, not localized zone names or the resting flag (inns rest too).
-local capitals={[1453]=true,[1454]=true,[1455]=true,[1456]=true,[1457]=true,[1458]=true}
-local function inCapital(id)
-    for _=1,12 do
-        if not A.Integer(id,1,2147483647) then return false end
-        if capitals[id] then return true end
-        local info=A.Read(C_Map and C_Map.GetMapInfo,id)
-        if type(info)~="table" then return false end
-        local parent=info.parentMapID
-        if not A.Integer(parent,1,2147483647) or parent==id then return false end
-        id=parent
-    end
-    return false
-end
 local function airborne(fn,...)
     if type(fn)~="function" then return false end
     local ok,value=pcall(fn,...)
@@ -362,10 +348,9 @@ function S.Attach(j)
         if name=="The Great Sea" or A.Read(GetRealZoneText)=="The Great Sea" or A.Read(GetZoneText)=="The Great Sea" then
             self:Reset();return
         end
-        -- Map ancestry excludes capitals; world dimensions are cached once per
-        -- map index and proximity queries use the cached spatial grids.
+        -- World dimensions are cached once per map index; proximity queries
+        -- use the cached spatial grids, including inside cities.
         local id=A.Read(C_Map and C_Map.GetBestMapForUnit,"player")
-        if inCapital(id) then self:Reset();return end
         local position=A.Integer(id,1,2147483647) and A.Read(C_Map and C_Map.GetPlayerMapPosition,id,"player")
         local clock=A.Read(GetTime) or A.Now()
         if type(position)~="table" or not A.Number(position.x,0,1) or not A.Number(position.y,0,1)
@@ -1133,4 +1118,81 @@ function S.InstallMap(map,journal,cursorPoint)
         self.subzoneHover=false
         if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
     end)
+end
+
+
+-- A display-only adapter for Blizzard's canvas. Reuse the survey renderer and
+-- its shared 1 ms work budget; never attach an idle OnUpdate or scan all maps.
+function S.CreateWorldOverlay(journal)
+    local controller={}
+    local world,overlay,pending
+    local function stop()
+        if overlay then overlay:CancelSubzones();overlay:Hide() end
+    end
+    local function draw()
+        pending=nil
+        if not world or journal.state.showSubzonesOnWorldMap~=true or not world:IsShown() then stop();return end
+        local canvas=A.Read(world.GetCanvas,world)
+        local id=A.Read(world.GetMapID,world)
+        if not canvas or not A.Integer(id,1,2147483647) then stop();return end
+        local scale=A.Read(world.GetCanvasScale,world) or A.Read(canvas.GetScale,canvas) or 1
+        local w,h=canvas:GetWidth(),canvas:GetHeight()
+        if not A.Number(scale,0.0001,1000) or not A.Number(w,1,100000) or not A.Number(h,1,100000) then stop();return end
+        if not overlay then
+            overlay=CreateFrame("Frame",nil,canvas);controller.overlay=overlay
+            overlay.canvas=overlay;overlay.zoom=1
+            S.InstallMap(overlay,journal,function() return nil end)
+            -- The shared Atlas renderer installs hover scripts, which enable
+            -- mouse input implicitly. This native-map layer is display-only:
+            -- remove those handlers, then disable input after installation.
+            overlay:SetScript("OnEnter",nil);overlay:SetScript("OnLeave",nil)
+            overlay:EnableMouse(false);overlay:EnableMouseWheel(false)
+            overlay:SetScript("OnHide",function(self) self:CancelSubzones() end)
+        end
+        overlay:SetParent(canvas)
+        local manager=A.Read(world.GetPinFrameLevelsManager,world)
+        local level=manager and A.Read(manager.GetValidFrameLevel,manager,"PIN_FRAME_LEVEL_AREA_POI")
+        overlay:SetFrameLevel(A.Integer(level,0,65535) and level or canvas:GetFrameLevel()+1)
+        for _,buffer in ipairs(overlay.subzoneBuffers) do buffer.frame:SetFrameLevel(overlay:GetFrameLevel()) end
+        -- Counter-scale so label sizes and dots remain legible on both the
+        -- windowed and full-screen native map. Anchors follow its pan/zoom.
+        overlay:SetScale(1/scale);overlay:ClearAllPoints();overlay:SetPoint("TOPLEFT",canvas,"TOPLEFT",0,0)
+        overlay:SetSize(w*scale,h*scale);overlay.subzoneMapID=id;overlay.available=true;overlay:Show()
+        overlay:RenderSubzones()
+    end
+    function controller:Refresh()
+        if journal.state.showSubzonesOnWorldMap~=true then stop();return end
+        if not world then self:Attach() end
+        if not world or not world:IsShown() then stop();return end
+        -- Collapse bursts of map/zoom/selection notifications into one request.
+        if pending then return end
+        if C_Timer and type(C_Timer.After)=="function" then pending=true;C_Timer.After(0,draw)
+        else draw() end
+    end
+    function controller:Attach()
+        if world or not WorldMapFrame or type(WorldMapFrame.GetCanvas)~="function" then return end
+        world=WorldMapFrame
+        world:HookScript("OnShow",function() self:Refresh() end)
+        world:HookScript("OnHide",stop)
+        world:HookScript("OnSizeChanged",function() self:Refresh() end)
+        if type(hooksecurefunc)=="function" then
+            for _,owner in ipairs({world,world.ScrollContainer}) do
+                if type(owner)=="table" or type(owner)=="userdata" then
+                    for _,method in ipairs({"SetMapID","SetCanvasScale","OnCanvasScaleChanged"}) do
+                        if type(owner[method])=="function" then hooksecurefunc(owner,method,function() self:Refresh() end) end
+                    end
+                end
+            end
+        end
+        local canvas=A.Read(world.GetCanvas,world)
+        if canvas and type(canvas.HookScript)=="function" then canvas:HookScript("OnSizeChanged",function() self:Refresh() end) end
+        if canvas and type(hooksecurefunc)=="function" and type(canvas.SetScale)=="function" then
+            hooksecurefunc(canvas,"SetScale",function() self:Refresh() end)
+        end
+    end
+    controller.loader=CreateFrame("Frame")
+    controller.loader:RegisterEvent("ADDON_LOADED")
+    controller.loader:SetScript("OnEvent",function() controller:Attach();if world then controller.loader:UnregisterEvent("ADDON_LOADED");controller:Refresh() end end)
+    controller:Attach();controller:Refresh()
+    return controller
 end

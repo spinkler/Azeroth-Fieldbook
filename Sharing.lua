@@ -144,7 +144,7 @@ function ns.CreateSharing(journal, env)
         local firstCommit=not tx.spent
         local adjusted=false
         if not tx.spent then
-            local ok,cost=journal:CommitShare(tx.id,basicCost==0)
+            local ok,cost=journal:CommitShare(tx.id,basicCost==0,tx.basicDiscount)
             if not ok then finish(tx,"failed","Reservation missing; nothing sent for import."); return end
             tx.cost,tx.basicCost=cost,basicCost
             tx.basicInfoWaived=basicCost==0 and not (schema.Decode(tx.payload) or {}).beastLore
@@ -225,9 +225,11 @@ function ns.CreateSharing(journal, env)
         value.rumours=claims or {}
         local payload,err=schema.Encode(value)
         if not payload then return nil,err end
-        local cost=value.beastLore and 0 or schema.Cost(value.rumours)
+        local multiplier=journal:GetKnowledgeMultiplier(value.creatureID)
+        local cost=value.beastLore and 0 or schema.Cost(value.rumours,multiplier)
         if not journal:ReserveShare(id,cost) then return nil,"Insufficient available knowledge." end
-        local tx={id=id,recipient=recipient,payload=payload,cost=cost,basicCost=value.beastLore and 0 or 1,created=env.now(),
+        local tx={id=id,recipient=recipient,payload=payload,cost=cost,basicCost=value.beastLore and 0 or 1,
+            basicDiscount=value.beastLore and 0 or cost-schema.Cost(value.rumours,multiplier,0),created=env.now(),
             stage="preflight",deadline=env.now()+PREFLIGHT_SECONDS,retries=0,
             message="Checking recipient compatibility (up to " .. PREFLIGHT_SECONDS .. " seconds); knowledge reserved."}
         store.outgoing=tx

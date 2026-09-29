@@ -181,17 +181,24 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             if view then return view end
             view=CreateFrame("ScrollFrame",nil,body);view:EnableMouse(true)
             local canvas=CreateFrame("Frame",nil,view);view:SetScrollChild(canvas)
-            canvas:SetHyperlinksEnabled(true)
-            canvas:SetScript("OnHyperlinkEnter",body:GetScript("OnHyperlinkEnter"))
-            canvas:SetScript("OnHyperlinkLeave",hide)
+            canvas:EnableMouse(false)
+            canvas:SetHyperlinksEnabled(false)
+            local hover=CreateFrame("Frame",nil,view)
+            hover:SetAllPoints(view);hover:EnableMouse(true)
+            view.hover=hover
+            view.icon=hover:CreateTexture(nil,"ARTWORK")
+            view.icon:SetSize(18,18)
+            view.icon:SetPoint("LEFT",hover,"LEFT",0,0)
             view.canvas=canvas;self.headingViews[index]=view
             local function stop(self)
                 self:SetScript("OnUpdate",nil);self:SetHorizontalScroll(0);hide()
+                label:SetWidth(self:GetWidth())
             end
             view:SetScript("OnLeave",stop);view:SetScript("OnHide",stop)
             view:SetScript("OnEnter",function(self)
-                local distance=math.max(0,(self.contentWidth or width)-width)
+                local distance=math.max(0,(self.contentWidth or self:GetWidth())-self:GetWidth())
                 if distance==0 then return end
+                label:SetWidth(self.contentWidth)
                 local elapsed=0;local travel=distance/24
                 self:SetScript("OnUpdate",function(_,dt)
                     elapsed=(elapsed+dt)%(2*travel+2)
@@ -203,10 +210,21 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                     self:SetHorizontalScroll(position)
                 end)
             end)
+            -- A stationary hit area owns hover; moving hyperlink text must not
+            -- steal mouse focus or restart the scroll's initial pause.
+            hover:SetScript("OnEnter",function(self)
+                view:GetScript("OnEnter")(view)
+                local link=label:GetText():match("|H(item:%d+)")
+                if link then body:GetScript("OnHyperlinkEnter")(self,link) end
+            end)
+            hover:SetScript("OnLeave",function() stop(view) end)
+            hover:SetScript("OnHide",function() stop(view) end)
             view:EnableMouseWheel(true)
             view:SetScript("OnMouseWheel",function(_,delta)
                 area:SetVerticalScroll(math.max(0,math.min(math.max(0,body:GetHeight()-height),area:GetVerticalScroll()-delta*32)))
             end)
+            hover:EnableMouseWheel(true)
+            hover:SetScript("OnMouseWheel",function(_,delta) view:GetScript("OnMouseWheel")(view,delta) end)
             return view
         end
         function area:SetContact(e,reset,detail)
@@ -226,7 +244,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 if base and type(base.GetFont)=="function" then
                     local path,size,flags=base:GetFont()
                     if type(path)=="string" and type(size)=="number" then
-                        label:SetFont(path,size+(block.heading and 2 or 0),flags)
+                        label:SetFont(path,size+(block.heading and 2 or 0)+(rich and 1 or 0),flags)
                     end
                 end
                 label:SetTextColor(1,1,1);label:SetWordWrap(not block.heading);label:SetSpacing(3)
@@ -235,14 +253,26 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                     y=y+8
                     local view=self:HeadingView(i,label)
                     view:SetScript("OnUpdate",nil);view:SetHorizontalScroll(0)
+                    local icon=block.text:match("|T(%d+):18:18:0:0|t ")
+                    local inset=icon and 24 or 0
+                    local visibleWidth=width-inset
+                    view.icon:SetTexture(icon and tonumber(icon) or nil)
+                    view.icon:SetShown(icon~=nil)
+                    label:SetText((block.text:gsub("|T%d+:18:18:0:0|t ","",1)))
                     label:SetParent(view.canvas);label:ClearAllPoints();label:SetPoint("TOPLEFT",0,0)
-                    label:SetWidth(width)
+                    label:SetWidth(0)
                     local measured=label:GetUnboundedStringWidth()
                     if type(measured)~="number" then measured=label:GetStringWidth() end
-                    local fullWidth=math.max(width,type(measured)=="number" and math.ceil(measured)+1 or width)
-                    label:SetWidth(fullWidth);view.contentWidth=fullWidth
+                    local fullWidth=math.max(visibleWidth,type(measured)=="number" and math.ceil(measured)+1 or visibleWidth)
+                    label:SetWidth(visibleWidth)
+                    -- Keep the resting label constrained so WoW adds an ellipsis.
+                    -- Expand to its full text width only during mouseover scrolling.
+                    view.contentWidth=fullWidth
                     local lineHeight=math.max(20,label:GetStringHeight())
-                    view:ClearAllPoints();view:SetPoint("TOPLEFT",0,-y);view:SetSize(width,lineHeight)
+                    view:ClearAllPoints();view:SetPoint("TOPLEFT",inset,-y);view:SetSize(visibleWidth,lineHeight)
+                    view.hover:ClearAllPoints()
+                    view.hover:SetPoint("TOPLEFT",view,"TOPLEFT",-inset,0)
+                    view.hover:SetPoint("BOTTOMRIGHT",view,"BOTTOMRIGHT",0,0)
                     view.canvas:SetSize(fullWidth,lineHeight);view:Show();view:UpdateScrollChildRect()
                     y=y+lineHeight+5
                 else
@@ -479,7 +509,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 for key,y in pairs({zone=-25,roles=-37,reason=-49}) do
                     row[key]:ClearAllPoints();row[key]:SetPoint("TOPLEFT",3,y+lineOffset)
                 end
-                row.zone:SetText(L.Safe((p and p.zone or "Unknown zone")..(p and p.subzone~="" and " / "..p.subzone or "").." • "..e.id:match('%d+$')))
+                row.zone:SetText(L.Safe((p and p.zone or "Unknown zone")..(p and p.subzone~="" and " / "..p.subzone or "")))
                 row.roles:SetText(L.Safe(journal:RoleText(e)))
                 row.reason:SetText(found.match and L.Safe((found.match.reported and "Report: " or "Offers: ")..found.match.name) or (e.personal and "Personally encountered" or e.recorded and "Manually recorded" or "Reported only"))
                 row:SetSelected(e.id==state.selected);row:Show()
@@ -651,12 +681,12 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         if journal.readOnly then c:Message("Newer Ledger schema: read-only; saved data is untouched.") end
     end
     shell:RegisterSection("merchants",{title="Merchant’s Ledger",icon="Interface\\Icons\\INV_Misc_Coin_01",frameName="AzerothFieldbookLedgerSection",build=build,
-        help=L.VISION.."\n\n|cffffd100Directory|r\nSearch names, actual sublabels, services, zones, notes, recipes, goods and training. Role choices match any selected role; other filters narrow together. Locations come only from recorded knowledge. Reset filters affects this Ledger alone.\n\n"..
-            "|cffffd100Observation|r\nOpen merchants and trainers to remember their readable offerings without buying. Updates are historical snapshots, never remote live stock. Partial/filtered scans retain prior knowledge. Not seen on the latest inspection never means no longer sold. Buyback is excluded. Other services use reliable interface events; unidentified roles can be annotated manually.\n\n"..
-            "|cffffd100Locations and identity|r\nPlayer positions at nearby interactions are labelled Encountered near. Distant targeting never records player coordinates for an NPC. A moving known GUID retains its contact. Different GUIDs, even with the same name/template, remain separate until you explicitly Link identity. A local stable reference owns stock; templates are not vendor stock identities.\n\n"..
-            "|cffffd100Access notes and details|r\nUse Edit Notes for entrances, floors and personal annotations. Known Goods and Observed Training toggle tall left-pane lists. A yellow outline marks the open list; click it again or Back to contacts to close it. The lower panel keeps your notes visible. Browsing state and saved notes persist per character.\n\n"..
-            "|cffffd100Reports|r\nReports prepares a bounded selected-contact report for copying, or previews pasted data before Accept. Current item/lesson search selects offerings. Notes are excluded unless explicitly checked. Imported facts stay Reported, with original source/time and separate receipt time. Forwarding preserves those dates. There is no Ledger addon-message transport or contact reward policy yet; no points are charged or granted.\n\n"..
-            "Limits: 2,000 contacts; 8,000 durable references; 500 goods and 500 lessons each; 24 recent distinct locations; eight GUID aliases; 16 original report sources each (512 per character), with 80 goods/lessons per report and a 128 KiB envelope. No repeated full inventory history is appended.",
+        help=L.VISION.."\n\n|cffffd100Directory|r\nFind remembered merchants, trainers and services by name, goods, training, zone or notes. Use role, location and recipe filters to narrow the directory; Reset filters shows the full directory again. Record contact adds a contact manually.\n\n"..
+            "|cffffd100Observation|r\nOpen a merchant or trainer to record readable offerings without buying. Supported service interactions also record contacts; recognizable class-trainer titles can reveal a trainer before you open its services.\n\nGoods, prices and stock describe past inspections, not live availability. A partial or filtered view may miss offerings. Something absent from the latest inspection is not proof it is no longer sold.\n\n"..
+            "|cffffd100Locations and identity|r\nLocations shows remembered encounters. Encountered near means your approximate position during an interaction, not the NPC's exact position. Distant targeting does not add your position as the contact's location.\n\nContacts with the same name may be different individuals. Use Link identity only when you recognize two entries as the same contact; their goods and history are combined after confirmation.\n\n"..
+            "|cffffd100Access notes and details|r\nUse Edit notes for entrances, floors, personal notes or a manual role annotation. Known Goods and Observed Training open offering lists; click the same button again or Back to contacts to return to the directory.\n\n"..
+            "|cffffd100Reports|r\nSelect a contact and open Reports. Choose what to include, then Prepare text for copying. When preparing your own observations, the current search limits included offerings. Notes start excluded. To import, use Preview pasted data, review it, then Accept reported facts. Received facts remain Reported with their original source and observation dates; receiving them is not a personal encounter. Reports use copy and paste and cost no Knowledge.\n\n"..
+            "|cffffd100Your journal|r\nContacts, notes and browsing settings follow the global Account-wide tracking option. It starts on in Options; turn it off to use this character's separate journal after /reload. Existing character records import once; later changes in the two scopes stay separate.",
         onOpen=function() if c.main then c:Refresh();c.main.details:SetVerticalScroll(state.detailScroll or 0) end end})
     journal.onMerchantDiscovered=function(entry)
         if DEFAULT_CHAT_FRAME then

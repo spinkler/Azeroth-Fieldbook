@@ -153,7 +153,7 @@ class AutoLockTests(unittest.TestCase):
             local e=activeJournal.entries[42]
             assert(activeJournal:GetLockNewCritters() and e.confirmed)
             assert(e.lockedBasic.category=='Critter' and e.lockedBasic.levelMin==5)
-            assert(e.lockedBasic.locations['Test zone'] and points()==1)
+            assert(e.lockedBasic.locations['Test zone'] and points()==0)
             assert(not activeJournal:Offer(42,'New ability','Automatic observation',123))
             activeJournal:SetEntryConfirmed(42,false)
             fire('UPDATE_MOUSEOVER_UNIT');tick()
@@ -167,7 +167,7 @@ class AutoLockTests(unittest.TestCase):
             activeJournal:SetLockNewCritters(true)
             tick()
             assert(not activeJournal.entries[42].confirmed,'enabling does not relock an existing critter')
-            assert(points()==1,'re-adding this critter never repeats discovery credit')
+            assert(points()==0,'re-adding this critter never repeats discovery credit')
             activeJournal:ResetDatabase()
             assert(activeJournal:GetLockNewCritters(),'full reset restores the enabled default')
         ''')
@@ -182,7 +182,7 @@ class AutoLockTests(unittest.TestCase):
             assert(not e.confirmed and e.category=='Unclassified')
             function UnitCreatureType() return 'Critter' end
             fire('UPDATE_MOUSEOVER_UNIT')
-            assert(e.confirmed and e.category=='Critter' and points()==1)
+            assert(e.confirmed and e.category=='Critter' and points()==0)
         ''')
         lua = new_client()
         lua.execute('''

@@ -117,7 +117,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         composer.basic:SetTextColor(1,0.82,0.14)
         composer.details=label(composer.basicBody,"",0,-28,376)
         composer.details:SetTextColor(0.75,0.8,0.8)
-        composer.rumourHeading=label(composer,"Optional unverified rumours — 1 knowledge each",24,-230,400,"GameFontNormal")
+        composer.rumourHeading=label(composer,"Optional rumours — 1 base knowledge each; rank multiplier applies",24,-230,400,"GameFontNormal")
         composer.rumourArea,composer.rumourBody=scroll(composer,24,-255,390,166)
         composer.rows={}
         composer.empty=label(composer.rumourBody,"No eligible ability or trait records. Basic information can still be shared.",0,0,360)
@@ -184,7 +184,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             composer.paper:SetVertexColor(0.504*brightness,0.504*brightness,0.48888*brightness)
             local n=countChosen()
             local isLore=captured and captured.beastLore~=nil
-            local cost=busy() and transaction.cost or (isLore and 0 or 1+n)
+            local cost=busy() and transaction.cost or (isLore and 0 or math.floor((1+n)*journal:GetKnowledgeMultiplier(captured and captured.creatureID)))
             local basicCost=busy() and (transaction.basicCost or 1) or (isLore and 0 or 1)
             local available,earned,spent,reserved=journal:GetSharingBalance()
             composer.cost:SetText("Rumours: " .. n .. "   •   Basic info: " .. basicCost .. "   •   Total cost: " .. cost .. " knowledge" ..
@@ -216,7 +216,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             end
             if transaction and transaction.basicInfoWaived then
                 status=status .. " Basic information already known by " .. transaction.recipient ..
-                    "; its cost of 1 knowledge was waived. This report cost " .. transaction.cost .. " knowledge."
+                    "; its basic-information cost was waived. This report cost " .. transaction.cost .. " knowledge."
             end
             composer.status:SetText(status)
             composer.inbox:SetShown(#engine:GetIncoming()>0)
@@ -258,7 +258,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
                     or "No new creature information or rumours; this records the offering source.") or err)
                 if preview and preview.conflict then lines[#lines+1]="Names/types differ. Your local information wins; the report stays separate." end
                 if preview and preview.locked then lines[#lines+1]="Locked page: local metadata and traits stay locked. See received basics and rumours in Rumours." end
-                if preview and not preview.newBasic then lines[#lines+1]="You already have the basic information; the sender's basic-information cost of 1 knowledge will be waived." end
+                if preview and not preview.newBasic then lines[#lines+1]="You already have the basic information; the sender's basic-information cost will be waived before applying the rank multiplier." end
                 lines[#lines+1]="\nThe character offering this report is identified by the addon-message sender. Its claims remain unverified. Receiving earns no knowledge."
             end
             receiver.preview:SetText(table.concat(lines,"\n"))
@@ -291,7 +291,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             captured,candidates,chosen=result,result and choices or {},{}
             if result then composer.notice=nil else composer.notice=choices end
         end
-        composer.rumourHeading:SetText(captured and captured.beastLore and "Known Beast Lore — Locked and verified • Free" or "Optional unverified rumours — 1 knowledge each")
+        composer.rumourHeading:SetText(captured and captured.beastLore and "Known Beast Lore — Locked and verified • Free" or "Optional rumours — 1 base knowledge each; rank multiplier applies")
         composer.basic:SetText(captured and (captured.name .. " |cff999999[#" .. captured.creatureID .. "]|r") or "Unable to share this entry.")
         composer.details:SetText(basicDetails(captured))
         composer.basicArea:SetVerticalScroll(0); composer.rumourArea:SetVerticalScroll(0)

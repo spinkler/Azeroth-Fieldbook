@@ -5,7 +5,7 @@ local L=ns.Lore
 function ns.CreateLoreReferences(journal,shell)
     local r={adapters={}}
     function r:Register(section,adapter) self.adapters[section]=adapter end
-    r:Register("lore",{title="Lore & Landmarks",list=function()
+    r:Register("lore",{title="Lorekeeper's Chronicle",list=function()
         local rows={}
         for id,e in pairs(journal.entries) do rows[#rows+1]={section="lore",key=id,name=journal:Title(e)} end
         return rows

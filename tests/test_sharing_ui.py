@@ -15,7 +15,9 @@ function native(registerResult,sendResult)
             if text:find('~H~',1,true) then assert(text:sub(-#buildVersion)==buildVersion,'native handshake advertises TOC version') end
             calls=calls+1; return sendResult
         end}
-    local j=ns.CreateBestiaryJournal({},function() return nil end)
+    local fundingDB={}
+    local j=ns.CreateBestiaryJournal(fundingDB,function() return nil end)
+    fundingDB.bestiary.points.earned=2
     local e=j:Ensure(42,false,'Defias Pillager',{level=9});e.category='Humanoid';e.levelMin=9;e.levelMax=11;e.locations.Elwynn=true
     j:Ensure(43,false,'Another creature',{level=9})
     local engine=ns.InitializeSharing(j)
@@ -106,9 +108,10 @@ do
         end}
     local function peer(first,surname,id,name)
         playerName,playerSurname=first,surname
-        local j=ns.CreateBestiaryJournal({},function() return nil end)
+        local fundingDB={}
+        local j=ns.CreateBestiaryJournal(fundingDB,function() return nil end)
         local entry=j:Ensure(id,false,name);entry.category='Humanoid';entry.levelMin=8;entry.levelMax=8;entry.locations['Elwynn Forest']=true
-        for i=1,4 do j:Ensure(id+100+i,false,'Funding creature',{level=9}) end
+        fundingDB.bestiary.points.earned=4
         local e=ns.InitializeSharing(j)
         local p={j=j,e=e,driver=objects[#objects]};peers[first..' '..surname]=p;return p
     end
@@ -166,7 +169,7 @@ do
     e:Receive('AFBShare','4~R~'..accepted.id..'~'..buildVersion,'WHISPER','Bob Stonewell')
     e:Receive('AFBShare','4~A~'..accepted.id..'~0','WHISPER','Bob Stonewell')
     assert(window.cost.text:find('Basic info: 0',1,true) and window.cost.text:find('Total cost: 0 knowledge',1,true))
-    assert(window.status.text:find('cost of 1 knowledge was waived',1,true),'accepted discount is visible to the sender')
+    assert(window.status.text:find('basic-information cost was waived',1,true),'accepted discount is visible to the sender')
     e:Receive('AFBShare','4~K~'..accepted.id,'WHISPER','Bob Stonewell')
     assert(window.status.text:find('This report cost 0 knowledge.',1,true),'completed report retains the actual discounted cost')
     eq(select(3,j:GetSharingBalance()),0)
@@ -181,7 +184,7 @@ local db={}
 ns.UIScale:Initialize(db)
 local j=ns.CreateBestiaryJournal(db,function() return npcID end)
 j:Observe('target')
-for i=1,5 do j:Ensure(100+i,false,'Funding '..i,{level=9}) end
+db.bestiary.points.earned=6
 j:AddManual(42,'Fireball','A long private ability note',nil,{Fear=true,Stun=true})
 j:AddManual(42,'Arcane Volley With A Long Ability Name That Wraps Across Several Lines','',nil,{})
 j:SetResistance(42,'Fire',true);j:SetBehaviour(42,'Flees at low health',true)
@@ -258,6 +261,11 @@ assert(composer.basic.text=='Creature 42 |cff999999[#42]|r')
 assert(composer.details.text:find('Humanoid • Level 9',1,true))
 eq(j:GetSharingBalance(),6,'opening composer free')
 assert(composer.cost.text:find('Total cost: 1',1,true))
+j.entries[42].rank='Rare';book:Refresh()
+assert(composer.cost.text:find('Total cost: 2 knowledge',1,true),'composer applies rare price')
+j.entries[42].rank='Elite';book:Refresh()
+assert(composer.cost.text:find('Total cost: 1 knowledge',1,true),'composer rounds elite base price down')
+j.entries[42].rank=nil;book:Refresh()
 assert(composer.send.enabled,'funded report ready outside combat')
 for _,selfName in ipairs({'Alice Sunstrider','alice sunstrider','  ALICE   SUNSTRIDER  '}) do
     composer.recipient:SetText(selfName)
@@ -332,7 +340,7 @@ main.rumoursButton.scripts.OnClick()
 local rumours=AzerothFieldbookRumours
 assert(rumours.shown and rumours.clamped and notes.shown)
 eq(rumours.point[2],window,'resizing Rumours preserves its shared-window default')
-eq(main.offensePicker.point[2],main,'observation defaults use the main window, not a moved damage dialog')
+eq(main.offensePicker.point[2],main.detail,'observations belong to the main detail page')
 eq(main.rankFrame.point[2],main,'rank default uses the main window, not a moved location dialog')
 local escapeRegistered=false
 for _,name in ipairs(UISpecialFrames) do if name=='AzerothFieldbookRumours' then escapeRegistered=true end end
@@ -418,7 +426,7 @@ b:Receive('AFBShare','4~H~'..offered.transaction..'~'..buildVersion,'WHISPER','A
 n=math.ceil(#encoded/180)
 for i=1,n do b:Receive('AFBShare','4~O~'..offered.transaction..'~'..i..'~'..n..'~'..encoded:sub((i-1)*180+1,i*180),'WHISPER','Alice Sunstrider') end
 assert(receiver.shown and receiver.preview.text:find('Previously rejected',1,true),'incoming preview warns before acceptance')
-assert(receiver.preview.text:find('basic-information cost of 1 knowledge will be waived',1,true),'receiver sees that matching basics are free')
+assert(receiver.preview.text:find('basic-information cost will be waived',1,true),'receiver sees that matching basics are free')
 receiver.accept.scripts.OnClick()
 b:Receive('AFBShare','4~C~'..offered.transaction,'WHISPER','Alice Sunstrider')
 assert(bob:GetRumours(42)[1].previouslyRejected)
@@ -513,7 +521,7 @@ do
     main.help.scripts.OnShow(main.help)
     local block=main.help.pointsBlock
     eq(block.title.text,'Knowledge')
-    assert(block.awards.text:find('+3 for 50 kills',1,true))
+    assert(block.awards.text:find('+3 for crown (50 kills)',1,true))
     assert(block.spending.text:find('1 knowledge per selected rumour',1,true))
     assert(block.spending.text:find('free if the recipient already knows it',1,true))
     local bottom=0
@@ -526,10 +534,10 @@ do
 end
 ns.ShowDebugReport('Position test')
 local windows={window,main.help,main.options,main.locationFrame,main.rankFrame,
-    main.offensePicker,main.defensePicker,main.behaviourPicker,AzerothFieldbookBestiaryDamageNotes,
+    AzerothFieldbookBestiaryDamageNotes,
     notes,rumours,composer,receiver,AzerothFieldbookDebugReport}
 for _,frame in ipairs({window,main.help,main.options,main.locationFrame,main.rankFrame,
-    main.offensePicker,main.defensePicker,main.behaviourPicker,main.notesForm,
+    main.notesForm,
     main.effectPicker,main.damageForm,main.deleteForm,notes,rumours,composer,receiver,AzerothFieldbookDebugReport}) do
     assert(frame.parent==UIParent and frame.strata=='MEDIUM' and frame.toplevel,
         'each independent window must be able to raise above every other addon window')
@@ -716,7 +724,9 @@ main.defensePicker:Hide()
 ''')
 lua.execute(r'''
 do
-    local j=ns.CreateBestiaryJournal({},function() return nil end)
+    local fundingDB={}
+    local j=ns.CreateBestiaryJournal(fundingDB,function() return nil end)
+    fundingDB.bestiary.points.earned=2
     for i=1,35 do local entry=j:Ensure(i,false,string.format('Creature %02d',i));entry.category='Beast' end
     local book=ns.CreateBestiaryBook(j);book:Toggle()
     local main=AzerothFieldbookBestiarySection
@@ -907,13 +917,19 @@ local window=book:GetShell():GetFrame()
         {kind='ability',value='Dismissed report',sender='Erna Lionguard',dismissed=true}}
     j:Touch();book:Refresh()
     assert(isGreen(rowFor(42)),'selected entries keep the outstanding-rumour colour')
+    eq(main.rumoursButton:GetText(),'|cff72d65bRumours|r','unresolved rumours colour the button text')
     j:Ensure(43,false,'Another creature',{level=9});book:Refresh()
     local other=rowFor(43);other.scripts.OnClick(other)
     assert(isGreen(rowFor(42)) and not isGreen(rowFor(43)))
+    eq(main.rumoursButton:GetText(),'Rumours','another creature does not inherit the green button')
     assert(j:DismissRumour(42,rejected));book:Refresh()
     assert(isGreen(rowFor(42)),'one remaining rumour keeps the name green')
+    local active=rowFor(42);active.scripts.OnClick(active)
+    eq(main.rumoursButton:GetText(),'|cff72d65bRumours|r','one unresolved rumour keeps the button green')
     assert(j:ConfirmRumour(42,verified));book:Refresh()
     assert(not isGreen(rowFor(42)) and #j:GetRumours(42)==0)
+    eq(main.rumoursButton:GetText(),'Rumours','resolving the last rumour restores normal text')
+    local other=rowFor(43);other.scripts.OnClick(other)
     eq(rowFor(42).text.textColor[1],0.75,'unselected name returns to normal ink')
     local row=rowFor(42);row.scripts.OnClick(row)
     eq(row.text.textColor[1],1,'selected name returns to gold')

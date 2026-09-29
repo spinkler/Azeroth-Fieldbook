@@ -1,7 +1,7 @@
 local _,ns=...
 local L=ns.Lore
 local titles={bestiary='Bestiary',gathering="Gatherer’s Compendium",atlas='Traveller’s Atlas',
-    angling='Angler’s Almanac',merchants='Merchant’s Ledger',treasure='Treasure & Salvage'}
+    angling='Angler’s Almanac',merchants='Merchant’s Ledger',treasure='Treasure Journal'}
 local function stamp(e)
     if type(e.reference)=='string' then return e.reference end
     local time=e.created or e.firstSeen or e.firstEncounter or e.first

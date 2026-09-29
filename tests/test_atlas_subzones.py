@@ -119,6 +119,59 @@ class SubzoneTests(unittest.TestCase):
             end
         ''')
 
+    def test_main_map_opt_in_cache_layers_map_changes_and_hide(self):
+        self.lua.execute('''
+            C_Timer=nil
+            function hooksecurefunc(owner,key,fn)
+                local original=owner[key]
+                owner[key]=function(self,...) local result=original(self,...);fn(self,...);return result end
+            end
+            WorldMapFrame=CreateFrame('Frame');WorldMapFrame:Show()
+            local canvas=CreateFrame('Frame',nil,WorldMapFrame);canvas:SetSize(1000,800)
+            function WorldMapFrame:GetCanvas() return canvas end
+            function WorldMapFrame:GetCanvasScale() return canvas:GetScale() end
+            local displayed=101
+            function WorldMapFrame:GetMapID() return displayed end
+            function WorldMapFrame:SetMapID(id) displayed=id end
+            s.store[101]=ring();s:Changed(101)
+            local control=c.worldSubzones
+            control:Refresh();assert(not control.overlay,'Disabled overlay allocates no drawing widgets')
+            j.state.showSubzones=true;j.state.showSubzoneLabels=true;j.state.showSubzonePoints=true
+            m.worldSubzones:SetChecked(true);click(m.worldSubzones);settle()
+            local overlay=assert(control.overlay)
+            local function clickThrough()
+                assert(not overlay:IsMouseClickEnabled() and not overlay:IsMouseMotionEnabled() and not overlay.mouseWheel,
+                    'Native map overlay must pass clicks, drags and wheel input through')
+                assert(not overlay.scripts.OnEnter and not overlay.scripts.OnLeave,'No interactive hover handlers on the native overlay')
+                for _,buffer in ipairs(overlay.subzoneBuffers) do
+                    assert(not buffer.frame:IsMouseClickEnabled() and not buffer.frame:IsMouseMotionEnabled(),
+                        'Both paint buffers must remain non-interactive')
+                end
+                assert(m.map.scripts.OnEnter and m.map.scripts.OnLeave,'Atlas map keeps its own hover interactions')
+            end
+            clickThrough()
+            assert(not overlay.subzoneError and overlay.subzoneModel and #overlay.subzoneModel.rows>0)
+            assert(not overlay.scripts.OnUpdate and not control.loader.scripts.OnUpdate,'No idle polling')
+            local model=overlay.subzoneModel;local count=#objects
+            for i=1,10 do control:Refresh();settle() end
+            assert(overlay.subzoneModel==model and #objects==count,'Unchanged refresh reuses geometry and widgets')
+            j.state.showSubzoneLabels=false;c:Refresh();settle()
+            assert(overlay.subzoneModel==model,'Layer changes reuse geometry')
+            for _,label in ipairs(overlay.subzoneLabels) do assert(not label:IsShown()) end
+            canvas:SetScale(2);settle();assert(overlay:GetWidth()==2000 and overlay:GetScale()==0.5)
+            assert(overlay.subzoneModel==model,'Zoom does not rebuild survey geometry')
+            WorldMapFrame:SetMapID(102);settle();assert(#overlay.subzoneModel.rows==0,'Uses the native map selection')
+            WorldMapFrame:SetMapID(101);S.Step()
+            WorldMapFrame:Hide();WorldMapFrame.scripts.OnHide(WorldMapFrame);settle()
+            assert(not overlay:IsShown() and not overlay.subzonePending)
+            WorldMapFrame:Show();WorldMapFrame.scripts.OnShow(WorldMapFrame);settle()
+            assert(overlay:IsShown() and #overlay.subzoneModel.rows>0)
+            clickThrough()
+            m.worldSubzones:SetChecked(false);click(m.worldSubzones);settle()
+            assert(not overlay:IsShown() and not overlay.subzonePending)
+            assert(j.state.automaticMapping~=false,'Display toggle does not change collection')
+        ''')
+
     def test_automatic_survey_pauses_in_flight_and_breaks_continuity(self):
         self.lua.execute('''
             C_Map.GetMapWorldSize=function() return 1000,1000 end
@@ -140,21 +193,30 @@ class SubzoneTests(unittest.TestCase):
             assert(not sample('Other',.405,.4),'Legacy taxi flag also blocks sampling')
         ''')
 
-    def test_capitals_pause_automatic_survey_but_not_manual_or_ordinary_inns(self):
+    def test_capitals_map_on_ground_and_pause_during_flight(self):
         self.lua.execute('''
             C_Map.GetMapWorldSize=function() return 1000,1000 end
             local info=C_Map.GetMapInfo
             C_Map.GetMapInfo=function(id) if id==900 then return {parentMapID=1453} end;return info(id) end
-            local before=snapshot(s.store)
+            IsResting=function() return true end
             for _,id in ipairs({1453,1454,1455,1456,1457,1458,900}) do
-                mapID=id;assert(not sample('City district',.4,.4) and s.previous==nil)
+                mapID=id;s:Reset()
+                assert(sample('City district',.4,.4),'Grounded capitals record interior samples')
+                assert(sample('Market',.402,.4) and #s:Crossings(id)==1,'City district crossings are recorded')
+                for _,signal in ipairs({'UnitOnTaxi','IsFlying'}) do
+                    local before=snapshot(s.store)
+                    _G[signal]=function() return true end
+                    assert(not sample('Flight district',.404,.4))
+                    assert(s.previous==nil and snapshot(s.store)==before,'Flight cannot map cities')
+                    _G[signal]=function() return false end
+                    sample('Market',.402,.4)
+                    assert(#s:Crossings(id)==1,'Landing must not bridge the flight')
+                end
+                px=.7;py=.7;assert(s:RecordPoint(),'Manual city survey remains available')
             end
-            assert(snapshot(s.store)==before,'Capital checks preserve existing points')
-            mapID=1453;assert(s:RecordPoint(),'Deliberate manual points remain available')
-            assert(#s:Samples(1453)==1)
-            mapID=101;IsResting=function() return true end
-            sample('Inn',.401,.4);assert(#s:Crossings(101)==0,'Do not bridge city visits')
-            sample('Road',.402,.4);assert(#s:Crossings(101)==1,'Ordinary resting areas are not capitals')
+            mapID=101
+            sample('Inn',.401,.4);assert(#s:Crossings(101)==0,'Map changes cannot invent crossings')
+            sample('Road',.402,.4);assert(#s:Crossings(101)==1,'Ordinary resting areas still map')
         ''')
 
     def test_cleanup_keeps_edges_crossings_and_other_maps(self):

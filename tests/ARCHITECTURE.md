@@ -47,7 +47,7 @@ first registration. Normal Bestiary bindings explicitly select the Bestiary;
 the minimap and general book command use the shared shell.
 
 The Bestiary registers first, followed by Herbs & Minerals (`GatheringBook.lua`),
-Traveller’s Atlas (`AtlasBook.lua`), Angler’s Almanac (`AnglingBook.lua`), Merchant’s Ledger (`LedgerBook.lua`), Treasure & Salvage (`TreasureBook.lua`), and Lore & Landmarks (`LoreBook.lua`).
+Traveller’s Atlas (`AtlasBook.lua`), Angler’s Almanac (`AnglingBook.lua`), Merchant’s Ledger (`LedgerBook.lua`), Treasure Journal (`TreasureBook.lua`), and Lorekeeper's Chronicle (`LoreBook.lua`).
 Each section owns its registration, title, icon and content.
 `FieldbookSections.lua` retains an empty wishlist extension point; it registers
 no additional section. The Bestiary's icon is in its registration
@@ -190,7 +190,7 @@ the identity model, completeness rules, storage limits and live checklist.
 tracking option as Bestiary. See [account migration](ACCOUNT_TRACKING.md) for
 one-time imports, identity remapping, original-store preservation and limits.
 
-## Treasure & Salvage
+## Treasure Journal
 
 Six Treasure-owned modules initialize immediately after Ledger and before Lore.
 `TreasureJournal.lua` owns schema 1 in the separate
@@ -204,7 +204,7 @@ hooks: the existing fixed Bestiary transport/cost policy cannot dispatch them.
 There is no alternate export protocol or inert sharing control. See
 [Treasure boundaries and validation](TREASURE.md).
 
-## Lore & Landmarks
+## Lorekeeper's Chronicle
 
 `LoreJournal.lua` owns schema 1 in the separate per-character
 `AzerothFieldbookLoreDB` or `.sections.lore` in the account root.

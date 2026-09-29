@@ -255,11 +255,20 @@ class LedgerTests(unittest.TestCase):
             GameFontNormal={GetFont=function() return 'font',14,'' end}
             label.SetFont=function(_,_,size) headingSize=size end
             label.GetUnboundedStringWidth=function() return 500 end
-            c:Refresh();assert(headingSize==16)
+            c:Refresh();assert(headingSize==17)
             local view=area.headingViews[2];assert(view.contentWidth==501)
+            assert(label:GetWidth()==view:GetWidth())
             view.scripts.OnEnter(view);assert(view.scripts.OnUpdate)
+            assert(label:GetWidth()==501)
             view.scripts.OnUpdate(view,2);assert(view:GetHorizontalScroll()>0)
             view.scripts.OnLeave(view);assert(view:GetHorizontalScroll()==0 and not view.scripts.OnUpdate)
+            assert(label:GetWidth()==view:GetWidth())
+            assert(not view.canvas:IsMouseEnabled() and view.hover:IsMouseEnabled())
+            view.hover.scripts.OnEnter(view.hover);assert(view.scripts.OnUpdate)
+            view.scripts.OnUpdate(view,2);assert(view:GetHorizontalScroll()>0)
+            view.hover.scripts.OnLeave(view.hover)
+            assert(view:GetHorizontalScroll()==0 and not view.scripts.OnUpdate)
+            assert(label:GetWidth()==view:GetWidth())
             label.GetUnboundedStringWidth=function() return 50 end
             c:Refresh();view.scripts.OnEnter(view);assert(not view.scripts.OnUpdate)
             assert(c:Details(e):find('Price:',1,true) and not c:Details(e):find('Last quoted price',1,true))
@@ -270,16 +279,16 @@ class LedgerTests(unittest.TestCase):
             GameFontNormal={GetFont=function() return 'font',14,'' end}
             GameFontHighlightSmall={GetFont=function() return 'font',12,'' end}
             local e=visit();shell:ShowSection('merchants');c:Select(e.id);c:Catalogue('goods')
-            local area=c.panels.catalogue.read;local label=area.blocks[2];local size=16
+            local area=c.panels.catalogue.read;local label=area.blocks[2];local size=17
             label.GetFont=function() return 'font',size,'' end
             label.SetFont=function(_,_,value) size=value end
             for i=1,20 do
                 now=now+1;fire('UPDATE_MOUSEOVER_UNIT');flush()
-                assert(size==16,'Mouseover changed the heading size')
+                assert(size==17,'Mouseover changed the heading size')
             end
-            c:ClosePanel();c:Catalogue('goods');assert(size==16)
-            c:Catalogue('training');assert(size==16)
-            c:Catalogue('goods');assert(size==16)
+            c:ClosePanel();c:Catalogue('goods');assert(size==17)
+            c:Catalogue('training');assert(size==17)
+            c:Catalogue('goods');assert(size==17)
         ''')
 
     def test_compact_bundle_price_and_exact_individual_cost(self):

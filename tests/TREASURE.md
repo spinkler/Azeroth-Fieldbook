@@ -1,4 +1,4 @@
-# Treasure & Salvage — 0.15.0 review and validation
+# Treasure Journal — 0.15.0 review and validation
 
 This is a functional first iteration in the existing Treasure tab. It records
 container kinds and historical encounters, never live availability. No bundled
@@ -7,7 +7,7 @@ uncommitted; no push, tag, release or publication is part of this request.
 
 ## Using the page
 
-1. Open **Treasure & Salvage**, then **Record a find**. Choose an existing kind
+1. Open **Treasure Journal**, then **Record a find**. Choose an existing kind
    explicitly, or **New provisional kind**. Choose world/portable form and
    container, recoverable-find or salvage category. A portable item ID is optional.
 2. Record independent sighting, access-attempt and inspection facts. Portable

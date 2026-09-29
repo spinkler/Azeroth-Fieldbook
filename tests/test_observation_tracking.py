@@ -47,7 +47,7 @@ class ObservationTrackingTests(unittest.TestCase):
             flying=true;units.mouseover=mob(5)
             fire('UPDATE_MOUSEOVER_UNIT');tick();assert(not journal.entries[42])
             assert(journal:Observe('mouseover',true)==42)
-            assert(points()==1 and not observations(),'opening a mouseover entry does not record a map point')
+            assert(points()==0 and not observations(),'opening a mouseover entry does not record a map point')
             assert(#journal:GetEventLog().entries==1)
             journal:Observe('mouseover',true);assert(not observations())
             units.mouseover.controlled=true;px=0.9
@@ -86,7 +86,7 @@ class ObservationTrackingTests(unittest.TestCase):
             end
             C_Map.GetPlayerMapPosition=function() error('unavailable') end
             fire('PLAYER_TARGET_CHANGED');assert(not observations())
-            assert(points()==1 and #journal:GetEventLog().entries==1)
+            assert(points()==0 and #journal:GetEventLog().entries==1)
             publicTree(AzerothFieldbookDB)
         ''')
 

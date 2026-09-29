@@ -77,6 +77,7 @@ class BackupTests(unittest.TestCase):
         lua = client()
         lua.execute('''
             local j,db,store,e=fresh()
+            store.bestiary.points.earned=3 -- Previously earned kill credit funds sharing.
             local snapshot=assert(j:CreateBackup())
             j:Ensure(43,false,'Second creature',{level=9});j:Ensure(44,false,'Third creature',{level=9})
             j:SetCreatureNotes(42,'After the backup')

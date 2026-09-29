@@ -279,7 +279,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
             s.traversing=true;s.phase=v.page>1 and "backward" or "forward";s.started=a.Now();s.steps=0
             status("Archiving… keep the source open; its pages may turn briefly.",s,"partial");advance(s,v)
         elseif summary and summary.complete then status("Complete archive.",s,"complete")
-        else status("Partial archive. Pages you open remain available in Lore & Landmarks.",s,"partial") end
+        else status("Partial archive. Pages you open remain available in Lorekeeper's Chronicle.",s,"partial") end
     end
     ready=function(s,explicit)
         if not alive(s) then return end

@@ -49,15 +49,14 @@ the addon repository and package; the addon uses Blizzard's installed assets.
 | Section | Blizzard icon | Visual |
 | --- | --- | --- |
 | Bestiary | `Ability_Tracking` | Track Beasts paw prints |
-| Herbs & Minerals | `INV_Misc_Flower_02` | Find Herbs flowers |
-| Traveller’s Atlas | `INV_Misc_Map_01` | Parchment map |
+| Gatherer’s Compendium | `Trade_Herbalism` | Herbalism profession icon |
+| Traveller’s Atlas | `INV_Misc_Map03` | Parchment map |
 | Angler’s Almanac | `Trade_Fishing` | Fishing hook |
 | Merchant’s Ledger | `INV_Misc_Coin_01` | Gold coins |
-| Treasure & Salvage | `INV_Misc_TreasureChest01a` | Wooden treasure chest |
-| Lore & Landmarks | `INV_Misc_Book_09` | Old bound book |
+| Treasure Journal | `INV_Box_03` | Classic chest |
+| Lorekeeper's Chronicle | `INV_Misc_Book_09` | Old bound book |
 
-The initial chest name without the final `a` did not resolve and was replaced
-before delivery. Each implemented section now owns its title/icon registration;
+Each implemented section owns its title/icon registration;
 `FieldbookSections.lua` retains an empty wishlist extension point. Adding Lore
 does not alter the shared native tabs, their order or positioning conventions.
 
