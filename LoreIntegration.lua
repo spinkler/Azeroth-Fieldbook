@@ -31,10 +31,26 @@ function ns.RegisterLoreReferences(controller,shell,sources)
         end
         local function ref(key,e)
             local scope=id=='angling' and journal.db and journal.db.origin or ''
-            return {key=tostring(key)..'@'..scope..':'..stamp(e),name=tostring(e.name or e.title or (journal.GetCreatureName and journal:GetCreatureName(key)) or key)}
+            local identity=(id=='atlas' or id=='merchants') and e.reference
+            return {key=identity or tostring(key)..'@'..scope..':'..stamp(e),name=tostring(e.name or e.title or (journal.GetCreatureName and journal:GetCreatureName(key)) or key)}
         end
         local function find(key)
-            if type(key)~='string' then return end
+            if ns.InitializationBlocked or type(key)~='string' then return end
+            if id=='atlas' and ns.ResolveAtlasLoreReference and journal.saved then
+                return ns.ResolveAtlasLoreReference(journal,key)
+            end
+            if id=='atlas' and journal.saved and journal.saved.loreAliases then
+                key=journal.saved.loreAliases[key] or key
+            elseif id=='merchants' and journal.Reference then
+                local reference=key:match('^.-@:(.+)$') or key
+                local e=journal:Reference(reference);if e then return e.id,e end
+                -- A known record can predate its lookup index. Require its full
+                -- durable reference; a matching local ID is never a fallback.
+                for recordID,known in pairs(records()) do
+                    if known.reference==reference then return recordID,known end
+                end
+                return
+            end
             for recordID,e in pairs(records()) do if ref(recordID,e).key==key then return recordID,e end end
         end
         controller.references:Register(id,{title=titles[id] or id,list=function()

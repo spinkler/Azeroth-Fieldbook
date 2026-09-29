@@ -35,7 +35,7 @@ function ns.CreateLoreReferences(journal,shell)
     end
     function r:Open(ref)
         local current,title=self:Resolve(ref)
-        if current.missing then return false,(ref.name or ref.label or "Reference").." is unavailable; its reference is retained." end
+        if current.missing then return false,(ref.name or ref.label or "Reference").." is unavailable in this scope; its reference is retained." end
         local adapter=self.adapters[ref.section]
         if adapter.open then return adapter.open(ref.key or ref.id) end
         return false,title..": "..current.name..". Direct entry navigation is unavailable for this section."

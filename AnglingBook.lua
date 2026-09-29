@@ -109,7 +109,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             local item=journal:Get(self:State().focusItem)
             if focus and focus.waterID==e.id then
                 lines[#lines+1]="Selected source: "..A.SourceLabels[focus.source]..(focus.poolID and " / "..journal:Get(focus.poolID).name or "")..
-                    (item and " — "..item.name or "")..(focus.origin and " (Reported)" or "")
+                    (item and " — "..item.name or "")..(journal.db.reported[focus.id] and " (Reported)" or "")
             end
         end
         if e.note~="" then lines[#lines+1]="Your notes: "..e.note end
@@ -133,7 +133,9 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         lines[#lines+1]="Requirements unknown. Success is evidence of success at that skill, not a minimum requirement."
         for _,row in ipairs(journal:Facts(e,nil,f)) do
             local fact=row.fact;local w=journal:Get(fact.waterID)
-            local provenance=row.reported and ("Reported by "..fact.origin.source.." (not authenticated)") or (fact.method=="recorded" and "Player-recorded catches" or "Personally observed catches")
+            local provenance=row.reported and ("Reported by "..fact.origin.source.." (not authenticated)")
+                or (fact.originUnknown and "Historical catches; original observer not recorded")
+                or ((fact.method=="recorded" and "Player-recorded catches by " or "Catches observed by ")..fact.origin.source)
             lines[#lines+1]="\n"..w.name.." • "..A.SourceLabels[fact.source]..(fact.poolID and ": "..journal:Get(fact.poolID).name or "")
             lines[#lines+1]=provenance.."; source association: "..fact.association..". "..fact.events.." catch events."
             if fact.lastPosition then lines[#lines+1]="Latest "..A.PositionLabel(fact.lastPosition) end

@@ -4,8 +4,9 @@ Account-wide tracking defaults on and applies after reload to every implemented
 journal. Bestiary retains its existing migration. AccountSections.lua selects
 `.sections.gathering`, `.atlas`, `.angling` and `.ledger` in AzerothFieldbookAccountDB.
 Each section imports once per accountTrackingKey, independently of the older
-Bestiary importedCharacters marker. Original character databases are not aliased,
-rewritten or erased. Opt-out restores these independent stores; later edits after
+Bestiary importedCharacters marker. Original character evidence remains in
+independent stores; identity repair adds metadata without erasing that evidence.
+Opt-out restores these stores; later edits after
 first import do not repeatedly merge. Offline character files are never read.
 
 Merges stage a detached copy before publishing the account store and import flag.
@@ -19,6 +20,13 @@ and their references, and keeps source observations distinct. Existing bounded
 history limits still apply after merging; durable totals survive. Ledger contacts
 retain durable references and distinct identities when local IDs collide.
 Original character stores retain conflicting or over-limit private notes.
+
+The 0.17.0 F1-F3 repair additionally retains those Ledger originals on the
+canonical account contact. Fishing captures keep original contributor identities;
+Atlas references use durable identities plus scoped aliases, including a bounded
+one-time repair of older migrations. New allocations in the account and local
+stores have separate namespaces. See [IDENTITY_MIGRATION.md](IDENTITY_MIGRATION.md)
+for repair rules, explicit historical ambiguities and regression coverage.
 
 Bestiary resets/backups do not include or clear other section stores. Reports
 keep section-specific provenance and confirmation rules. Bestiary display settings

@@ -189,10 +189,49 @@ end
 local pending=setmetatable({},{__mode="k"})
 function R.Prepare(data) local r,err=R.Decode(data);if not r then return nil,err end;local ticket={preview=R.Preview(r)};pending[ticket]=r;return ticket end
 function R.Cancel(ticket) if ticket then pending[ticket]=nil end end
+function R.MergeStored(existing,incoming)
+    -- Shared by report acceptance and account identity repair. Work on copies;
+    -- account repair additionally retains both complete original contacts.
+    local r=L.Copy(incoming);local merged=L.Copy(existing)
+    for _,kind in ipairs({"goods","lessons"}) do
+        local keys={};for i,o in ipairs(merged[kind]) do keys[o.key]=i end
+        for _,o in ipairs(r[kind]) do
+            local i=keys[o.key]
+            if i then if o.last>merged[kind][i].last then merged[kind][i]=o end
+            elseif #merged[kind]<R.MAX_OFFERINGS then merged[kind][#merged[kind]+1]=o;keys[o.key]=#merged[kind]
+            else return nil,"Reported offering limit reached; personal knowledge is unchanged." end
+        end
+    end
+    for _,kind in ipairs({"roles","specialities"}) do
+        for k,o in pairs(r[kind]) do if not merged[kind][k] or o.at>merged[kind][k].at then merged[kind][k]=o end end
+        if L.Count(merged[kind])>32 then return nil,"Reported speciality limit reached." end
+    end
+    if r.identity.origin.at>merged.identity.origin.at then merged.identity=r.identity end
+    if r.notes and (not merged.notesOrigin or r.notesOrigin.at>merged.notesOrigin.at) then merged.notes=r.notes;merged.notesOrigin=r.notesOrigin end
+    local locs={};for _,p in ipairs(merged.locations) do locs[L.Key(p.origin.source,p.origin.key)]=p end
+    for _,p in ipairs(r.locations) do local key=L.Key(p.origin.source,p.origin.key);if not locs[key] or p.last>locs[key].last then locs[key]=p end end
+    merged.locations={};for _,p in pairs(locs) do merged.locations[#merged.locations+1]=p end
+    table.sort(merged.locations,function(a,b) return a.last>b.last end);while #merged.locations>L.MAX_SIGHTINGS do table.remove(merged.locations) end
+    merged.created=math.max(merged.created,r.created);merged.sender=r.sender
+    if r.received then
+        merged.received=math.min(existing.received or r.received,r.received)
+        merged.lastReceived=math.max(existing.lastReceived or existing.received or 0,r.lastReceived or r.received)
+        if (existing.lastReceived or existing.received or 0)>(r.lastReceived or r.received) then merged.sender=existing.sender end
+        merged.factReceipts=merged.factReceipts or {}
+        for key,receipt in pairs(r.factReceipts or {}) do
+            local old=merged.factReceipts[key]
+            if not old or receipt.observed>old.observed or (receipt.observed==old.observed and receipt.received<old.received) then
+                merged.factReceipts[key]=L.Copy(receipt)
+            end
+        end
+    end
+    return merged
+end
 function R.Accept(journal,ticket,selected)
     local original=pending[ticket];if not original then return nil,"Preview this report first." end
     local r,err=R.Normalize(original);if not r then return nil,err end
-    if journal.readOnly then return nil,"Newer Ledger schema is read-only." end
+    if journal.readOnly or ns.InitializationBlocked then return nil,"Ledger is read-only." end
+    if selected then local contact=journal:Get(selected);selected=contact and contact.id or selected end
     local sourceKey=L.Key(r.identity.origin.source,r.identity.origin.key)
     local id=journal.db.reportKeys[sourceKey];local e=journal:Get(id or selected)
     if id and selected and id~=selected then return nil,"This original report already belongs to another contact." end
@@ -204,27 +243,7 @@ function R.Accept(journal,ticket,selected)
     if not e then e,err=journal:New(r.identity.name);if not e then return nil,err end end
     if existing then
         -- Same-source cumulative updates cannot delete earlier positive facts.
-        local merged=L.Copy(existing)
-        for _,kind in ipairs({"goods","lessons"}) do
-            local keys={};for i,o in ipairs(merged[kind]) do keys[o.key]=i end
-            for _,o in ipairs(r[kind]) do
-                local i=keys[o.key]
-                if i then if o.last>merged[kind][i].last then merged[kind][i]=o end
-                elseif #merged[kind]<R.MAX_OFFERINGS then merged[kind][#merged[kind]+1]=o
-                else return nil,"Reported offering limit reached; personal knowledge is unchanged." end
-            end
-        end
-        for _,kind in ipairs({"roles","specialities"}) do
-            for k,o in pairs(r[kind]) do if not merged[kind][k] or o.at>merged[kind][k].at then merged[kind][k]=o end end
-            if L.Count(merged[kind])>32 then return nil,"Reported speciality limit reached." end
-        end
-        if r.identity.origin.at>merged.identity.origin.at then merged.identity=r.identity end
-        if r.notes and (not merged.notesOrigin or r.notesOrigin.at>merged.notesOrigin.at) then merged.notes=r.notes;merged.notesOrigin=r.notesOrigin end
-        local locs={};for _,p in ipairs(merged.locations) do locs[L.Key(p.origin.source,p.origin.key)]=p end
-        for _,p in ipairs(r.locations) do local key=L.Key(p.origin.source,p.origin.key);if not locs[key] or p.last>locs[key].last then locs[key]=p end end
-        merged.locations={};for _,p in pairs(locs) do merged.locations[#merged.locations+1]=p end
-        table.sort(merged.locations,function(a,b) return a.last>b.last end);while #merged.locations>L.MAX_SIGHTINGS do table.remove(merged.locations) end
-        merged.created=math.max(merged.created,r.created);merged.sender=r.sender
+        local merged,mergeError=R.MergeStored(existing,r);if not merged then return nil,mergeError end
         -- Compare factual payload before receipt fields; forwards do not refresh old observations.
         r=merged;r.received=existing.received
     else r.received=L.Now() end

@@ -107,6 +107,7 @@ local function mergeAtlas(target,source,key)
     end
     target.weather=target.weather or {};missing(target.weather,source.weather)
     for field,value in pairs(source) do if target[field]==nil then target[field]=copy(value) end end
+    return ids
 end
 local referenceFields={id=true,waterID=true,poolID=true,spotID=true,recordID=true,aggregateID=true,sessionID=true,mergedInto=true}
 local function remap(value,ids,field)
@@ -177,7 +178,7 @@ local function mergeAngling(target,source,key)
     end
     target.aggregateKeys=target.aggregateKeys or {};target.hoverKeys=target.hoverKeys or {}
     for id,e in pairs(target.aggregates) do
-        local identity=ns.Angling.Key(e.waterID,e.spotID,e.poolID,e.source,e.association,e.method)
+        local identity=ns.Angling.AggregateKey(e)
         if not target.aggregateKeys[identity] then target.aggregateKeys[identity]=id end
     end
     for id,e in pairs(target.spots) do
@@ -206,7 +207,7 @@ local function mergeLedger(target,source,key)
     target.aliases=target.aliases or {};target.reportKeys=target.reportKeys or {}
     local ids={}
     for id,e in pairs(source.contacts or {}) do
-        ids[id]=target.references[e.reference] or ("char"..key..":"..id)
+        ids[id]=(#(e.reports or {})==0 and target.references[e.reference]) or ("char"..key..":"..id)
     end
     for id,e in pairs(source.contacts or {}) do
         local out=copy(e);out.id=ids[id]
@@ -220,13 +221,127 @@ local function mergeLedger(target,source,key)
     for identity,id in pairs(source.reportKeys or {}) do
         if not target.reportKeys[identity] then target.reportKeys[identity]=ids[id] or id end
     end
+    target.contactAliases=target.contactAliases or {}
+    for alias,id in pairs(source.contactAliases or {}) do target.contactAliases["char"..key..":"..alias]=ids[id] or id end
     for field,value in pairs(source) do if target[field]==nil then target[field]=copy(value) end end
 end
 local mergers={gathering=mergeGathering,atlas=mergeAtlas,angling=mergeAngling,ledger=mergeLedger}
 local settings
 ns.ActiveSectionStores={}
-function ns.InitializeSectionTracking(value) settings=value;ns.ActiveSectionStores={} end
+function ns.InitializeSectionTracking(value)
+    if ns.InitializationBlocked then return end
+    settings=value;ns.ActiveSectionStores={}
+end
+local function atlasMappings(account,personal,shared,key,ids)
+    account.atlasReferenceRepairs=account.atlasReferenceRepairs or {}
+    if account.atlasReferenceRepairs[key] then return end
+    account.atlasReferenceMaps=account.atlasReferenceMaps or {}
+    local map=account.atlasReferenceMaps[key] or {};account.atlasReferenceMaps[key]=map
+    account.atlasReferenceIssues=account.atlasReferenceIssues or {}
+    local issues=account.atlasReferenceIssues[key] or {};account.atlasReferenceIssues[key]=issues
+    local first=account.atlasFirstImport
+    if not first then
+        -- Old imports retained the owner in every remapped ID, but omitted the
+        -- first owner's key. Recover it only if the other owners are evidenced.
+        local qualified={}
+        for _,field in ipairs({"records","expeditions"}) do for id in pairs(shared[field] or {}) do
+            local owner=tostring(id):match("^char(%d+):");if owner then qualified[tonumber(owner)]=true end
+        end end
+        local candidates={}
+        for owner in pairs(account.sectionImports.atlas or {}) do if not qualified[owner] then candidates[#candidates+1]=owner end end
+        if #candidates==1 then first=candidates[1];account.atlasFirstImport=first end
+    end
+    for id,e in pairs(personal.records or {}) do
+        if map[e.reference]==nil then
+            local candidates,exact={},{}
+            for dest,record in pairs(shared.records or {}) do
+                local owner=tostring(dest):match("^char(%d+):")
+                local owned=owner and tonumber(owner)==key or not owner and first==key and dest==id
+                if ids then
+                    if dest==(ids[id] or id) then exact[#exact+1]=record end
+                elseif record.reference==e.reference then exact[#exact+1]=record
+                elseif e.referenceLegacy and record.referenceLegacy and owned and type(e.created)=="number" and record.created==e.created then
+                    candidates[#candidates+1]=record
+                end
+            end
+            if #exact>0 then candidates=exact end
+            -- Two local entries created in the same second cannot be inverted
+            -- from an old charN:serial namespace using the timestamp alone.
+            local localCount=0
+            for _,other in pairs(personal.records or {}) do if other.created==e.created then localCount=localCount+1 end end
+            local found=#candidates==1 and candidates[1]
+            if found and (ids or found.reference==e.reference or first==key or localCount==1) then
+                map[e.reference]=found.reference
+            else
+                map[e.reference]=false
+                issues[e.reference]=#candidates==0 and "No saved Atlas destination mapping survives in this scope."
+                    or "Multiple Atlas records share the surviving migration stamp; the original ID mapping was not saved."
+                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..e.name..": "..issues[e.reference].." Reference retained.") end
+            end
+        end
+    end
+    for alias,reference in pairs(personal.loreAliases or {}) do
+        if map[alias]==nil then
+            local mapped=map[reference] or false
+            if not ids and mapped and shared.loreAliases[alias] and shared.loreAliases[alias]~=mapped then
+                mapped=false;issues[alias]="This old Atlas key could refer to different local and account discoveries; its saved scope is unknown."
+                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..issues[alias].." Reference retained.") end
+            end
+            map[alias]=mapped
+        end
+    end
+    account.atlasReferenceRepairs[key]=true
+end
+function ns.ResolveAtlasLoreReference(journal,key)
+    if ns.InitializationBlocked then return end
+    local db=journal.saved;local account=AzerothFieldbookAccountDB
+    local map=account and account.atlasReferenceMaps and settings and account.atlasReferenceMaps[settings.accountTrackingKey] or {}
+    local issues=account and account.atlasReferenceIssues and settings and account.atlasReferenceIssues[settings.accountTrackingKey] or {}
+    -- A legacy key whose original scope was lost is ambiguous in both scopes.
+    -- Explicit durable local identities remain usable even if their account
+    -- mapping is unavailable; only the conflicted old alias is refused here.
+    if issues[key] and key:find("@:",1,true) then return end
+    local shared=account and account.sections and account.sections.atlas==db
+    local reference=key
+    if shared then
+        if map[key]~=nil then reference=map[key]
+        elseif db.loreAliases then reference=db.loreAliases[key] or key end
+    else
+        reference=db and db.loreAliases and db.loreAliases[key] or key
+        -- Account references can return to this character's original discovery.
+        -- A local ID alone is never used as an opt-out fallback.
+        for _,e in pairs(journal.records) do
+            if e.reference==reference or map[e.reference]==reference then return e.id,e end
+        end
+        local alias=account and account.sections and account.sections.atlas and account.sections.atlas.loreAliases
+        local target=map[key] or (alias and alias[key])
+        if target then for _,e in pairs(journal.records) do if map[e.reference]==target then return e.id,e end end end
+        return
+    end
+    if reference then for id,e in pairs(journal.records) do if e.reference==reference then return id,e end end end
+end
+local function fishingAliases(account,personal,shared,key)
+    account.anglingIdentityRepairs=account.anglingIdentityRepairs or {}
+    if account.anglingIdentityRepairs[key] then return end
+    -- Angling's old remap was deterministic. These are store/ID aliases, not
+    -- guesses based on matching fish, positions or totals.
+    for _,field in ipairs({"waters","spots","pools","items","merged","aggregates"}) do
+        for id,e in pairs(personal[field] or {}) do
+            local target=shared[field] and shared[field]["char"..key..":"..id]
+            if personal.origin==shared.origin then target=shared[field] and shared[field][id] end
+            if target and target.origin and e.origin and (target.originUnknown or target.origin.key==e.origin.key) then
+                ns.Angling.AddLegacyKey(target.origin,e.origin.key)
+                for _,alias in ipairs(e.origin.legacyKeys or {}) do ns.Angling.AddLegacyKey(target.origin,alias) end
+            end
+        end
+        for id,e in pairs(shared[field] or {}) do
+            if e.originUnknown then ns.Angling.AddLegacyKey(e.origin,shared.origin..":"..id) end
+        end
+    end
+    account.anglingIdentityRepairs[key]=true
+end
 function ns.SelectSectionStorage(section,personal)
+    if ns.InitializationBlocked then return nil end
     if ns.ActiveSectionStores[section] then return ns.ActiveSectionStores[section] end
     if not settings or settings.accountWideTracking==false then
         ns.ActiveSectionStores[section]=personal;return personal
@@ -241,13 +356,28 @@ function ns.SelectSectionStorage(section,personal)
         if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..section.." uses a newer data schema; account migration deferred.") end
         ns.ActiveSectionStores[section]=personal;return personal
     end
+    if section=="atlas" then ns.Atlas.EnsureReferences(personal)
+    elseif section=="angling" then ns.Angling.PrepareOrigins(personal) end
+    local ids
     if not imports[key] then
         local staged=copy(existing or {})
         if not existing then staged=copy(personal)
-        else mergers[section](staged,personal,key) end
+        else ids=mergers[section](staged,personal,key) end
         account.sections[section]=staged;imports[key]=true
+        if section=="atlas" and not existing then account.atlasFirstImport=key;ids={} end
     end
     local selected=account.sections[section]
+    -- A one-time import forks the store. New allocations in the account and in
+    -- the retained opt-out copy must never mint the same original identity.
+    local allocation=({atlas="referenceOrigin",angling="captureOrigin",ledger="contactOrigin"})[section]
+    if allocation and not selected[allocation] then
+        selected[allocation]="account-"..tostring(ns.Atlas.Now()).."-"..math.random(1,999999999)
+    end
+    if section=="atlas" then
+        ns.Atlas.EnsureReferences(selected);atlasMappings(account,personal,selected,key,ids)
+    elseif section=="angling" then
+        ns.Angling.PrepareOrigins(selected);fishingAliases(account,personal,selected,key)
+    elseif section=="ledger" then ns.Ledger.ReconcileReports(selected) end
     ns.ActiveSectionStores[section]=selected
     return selected
 end

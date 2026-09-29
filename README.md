@@ -7,6 +7,13 @@ does not allocate a new account import key or initialize other journals.
 Only a genuinely absent main save receives defaults. After a blocked load, restore
 a supported save and reload; capture stays disabled for the rest of that session.
 
+Fishing reports retain the original contributor when another character exports
+them. Account migration preserves Lore links to Atlas discoveries and reconciles
+duplicate merchant contacts with the same original report, retaining both
+characters' notes and receipt evidence. Historical fishing observers that were
+never saved remain unknown; ambiguous old Atlas links remain unavailable rather
+than selecting another discovery. See [identity and migration repair](tests/IDENTITY_MIGRATION.md).
+
 **Lore & Landmarks** is a personal archive of writings, landmarks, noteworthy
 people and mysteries. Open a supported readable source to preserve its displayed
 pages, then read them later in the Fieldbook. Both capture options start on:

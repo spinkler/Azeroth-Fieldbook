@@ -14,9 +14,17 @@ end
 local function num(v,lo,hi) need(A.Integer(v,lo,hi),"Invalid report number.");return v end
 local function array(v,max) need(A.Array(v,max),"Invalid or oversized report list.");return v end
 local function origin(v)
-    fields(v,{source=true,key=true,method=true})
+    fields(v,{source=true,key=true,method=true,legacyKeys=true})
     need(v.method=="observed" or v.method=="recorded","Invalid original provenance.")
-    return {source=text(v.source,160),key=text(v.key,180),method=v.method}
+    local out={source=text(v.source,160),key=text(v.key,180),method=v.method}
+    if v.legacyKeys then
+        out.legacyKeys={};local seen={}
+        for _,key in ipairs(array(v.legacyKeys,32)) do
+            key=text(key,180);need(not seen[key],"Duplicate legacy identity.");seen[key]=true
+            out.legacyKeys[#out.legacyKeys+1]=key
+        end
+    end
+    return out
 end
 local function skill(v)
     fields(v,{base=true,modifier=true,temporary=true,effective=true,equipment=true,lure=true})
@@ -108,6 +116,13 @@ local function normalize(value)
         else need(v.lowestSkillAt==nil,"Missing skill evidence.") end
         out.facts[#out.facts+1]=f
     end
+    for _,rows in ipairs({out.records,out.facts}) do
+        local aliases={}
+        for i,row in ipairs(rows) do for _,key in ipairs(row.origin.legacyKeys or {}) do
+            need(not aliases[key] or aliases[key]==i,"Overlapping original identity aliases.");aliases[key]=i
+        end end
+        for i,row in ipairs(rows) do need(not aliases[row.origin.key] or aliases[row.origin.key]==i,"Conflicting original identity alias.") end
+    end
     return out
 end
 -- Almanac-local use of the repository's bounded length-prefixed literal format.
@@ -197,7 +212,7 @@ function R.Build(journal,id,knowledge,includeNotes)
             r.origin=A.Copy(claim.origin);r.first,r.last=claim.first,claim.last
             if includeNotes and key==id then r.notes=claim.notes end
         else
-            r.origin=journal:Origin(key);r.origin.method=e.personal.observed and "observed" or "recorded"
+            r.origin=journal:Origin(key)
             if includeNotes and key==id then r.notes=e.note end
         end
         report.records[#report.records+1]=r
@@ -266,8 +281,16 @@ local function cumulative(old,new)
     if old.lowestSkill and (not new.lowestSkill or new.lowestSkill.effective>old.lowestSkill.effective) then return false end
     return true
 end
+-- Only a persisted exporter identity can assert the old store/ID aliases.
+-- Similar catches and arbitrary legacy source/key pairs are never matched.
+local function sameOrigin(incoming,stored)
+    if incoming.source==stored.source and incoming.key==stored.key then return true end
+    for _,key in ipairs(incoming.legacyKeys or {}) do if stored.key==key then return true end end
+    for _,key in ipairs(stored.legacyKeys or {}) do if incoming.key==key then return true end end
+    return false
+end
 function R.Accept(journal,ticket)
-    if journal.readOnly then return nil,"Newer Almanac schema: read-only." end
+    if journal.readOnly or ns.InitializationBlocked then return nil,"Almanac is read-only." end
     local report=pending[ticket];if not report then return nil,"Preview this report before accepting it." end
     -- Stage all writes. A bad reference, conflicting origin or capacity limit
     -- cannot leave half an imported report in the character's journal.
@@ -275,9 +298,14 @@ function R.Accept(journal,ticket)
     local refs={};local added,updated=0,0
     for _,kind in ipairs({"water","pool","item","spot"}) do for _,r in ipairs(report.records) do if r.kind==kind then
         local originKey=A.Key(r.origin.source,r.origin.key)
+        local aliases={};local prior
+        for key,claim in pairs(db.claims) do if sameOrigin(r.origin,claim.origin) then
+            aliases[#aliases+1]=key
+            if not prior or key==originKey then prior=claim end
+        end end
         local e
         if kind=="spot" then
-            local existing=db.claims[originKey];e=existing and staged:Get(existing.recordID)
+            e=prior and staged:Get(prior.recordID)
             if not e then
                 e={id=staged:ID("reportedSpot"),kind="spot",name=r.name,note="",favourite=false,claims={},waterID=refs[r.waterID],poolID=refs[r.poolID],first=r.first,last=r.last}
                 for _,k in ipairs({"mapID","zone","subzone","x","y","precision"}) do e[k]=r[k] end;db.spots[e.id]=e
@@ -285,14 +313,30 @@ function R.Accept(journal,ticket)
         else e=staged:Ensure(kind,r,nil,r.first) end
         if not e then return nil,"Unable to stage report identity." end
         refs[r.id]=e.id
-        local old=db.claims[originKey]
+        local old=prior
         if old and old.recordID~=e.id then return nil,"Conflicting original identity; nothing imported." end
         local record=recordData(r,refs)
         if old and old.record and not sameIdentity(old.record,record) then return nil,"Conflicting original position or identity; nothing imported." end
+        for _,key in ipairs(aliases) do
+            local claim=db.claims[key]
+            if claim.record and not sameIdentity(claim.record,record) then return nil,"Conflicting legacy record identity; nothing imported." end
+            if r.origin.legacyKeys and encode(claim.origin)~=encode(r.origin) then
+                claim.originals=claim.originals or {}
+                claim.originals[A.Key(claim.origin.source,claim.origin.key)]={origin=A.Copy(claim.origin),sender=claim.sender,received=claim.received,notes=claim.notes}
+                claim.origin=A.Copy(r.origin)
+            end
+            if claim.recordID~=e.id then
+                -- Keep the old annotated spot, but direct its reported facts to
+                -- the proven common identity. Personal evidence is not touched.
+                for _,fact in pairs(db.reported) do if fact.spotID==claim.recordID then fact.spotID=e.id end end
+                claim.recordID=e.id
+            end
+        end
         if not old then
             e.claims[#e.claims+1]=originKey
             db.claims[originKey]={recordID=e.id,origin=A.Copy(r.origin),first=r.first,last=r.last,notes=r.notes,sender=report.sender,received=A.Now(),record=record}
         else
+            db.claims[originKey]=old
             old.first=math.min(old.first,r.first);old.last=math.max(old.last,r.last)
             if r.last>=old.last then old.record=record;if r.notes~=nil then old.notes=r.notes end end
         end
@@ -304,12 +348,47 @@ function R.Accept(journal,ticket)
             lowestSkill=A.Copy(r.lowestSkill),lowestSkillAt=r.lowestSkillAt,items={}}
         for _,v in ipairs(r.items) do local item=A.Copy(v);item.itemID=nil;f.items[refs[v.itemID]]=item end
         local key=A.Key(r.origin.source,r.origin.key);local old=db.reportOrigins[key]
-        local previous=old and db.reported[old.id]
+        local matches={};local previous=old and db.reported[old.id]
+        for id,fact in pairs(db.reported) do if sameOrigin(r.origin,fact.origin) then
+            matches[#matches+1]=id
+        end end
         if previous then
-            if encode(factData(previous))~=encode(f) then
-                if not cumulative(previous,f) then return nil,"Conflicting source or non-cumulative results claim this origin; nothing imported." end
-                f.id=previous.id;f.sender=report.sender;f.received=A.Now();db.reported[f.id]=f;updated=updated+1
+            local found=false;for _,id in ipairs(matches) do if id==previous.id then found=true end end
+            if not found then matches[#matches+1]=previous.id end
+        end
+        table.sort(matches)
+        previous=previous or db.reported[matches[1]]
+        if previous then
+            -- An old export can arrive through a retained alias after a repair.
+            -- It must neither downgrade the canonical provenance nor replay an
+            -- earlier cumulative total over a newer one.
+            local canonical=A.Copy(r.origin.legacyKeys and r.origin or previous.origin)
+            for _,alias in ipairs(previous.origin.legacyKeys or {}) do A.AddLegacyKey(canonical,alias) end
+            f.origin=canonical
+            local best=f
+            for _,id in ipairs(matches) do
+                local prior=db.reported[id]
+                if not cumulative(prior,best) then
+                    if cumulative(best,prior) then best=prior
+                    else return nil,"Conflicting source or non-cumulative legacy results; nothing imported." end
+                end
             end
+            if #matches>1 or encode(factData(previous))~=encode(factData(best)) or encode(previous.origin)~=encode(canonical) then
+                local merged=A.Copy(best);merged.id=previous.id;merged.origin=canonical
+                merged.sender=report.sender;merged.received=previous.received or A.Now()
+                merged.receipts=A.Copy(previous.receipts or {})
+                for _,id in ipairs(matches) do
+                    local prior=db.reported[id]
+                    for receiptKey,receipt in pairs(prior.receipts or {}) do merged.receipts[receiptKey]=A.Copy(receipt) end
+                    local receiptKey=A.Key(prior.origin.source,prior.origin.key,prior.sender,prior.received)
+                    merged.receipts[receiptKey]={origin=A.Copy(prior.origin),sender=prior.sender,received=prior.received}
+                    for alias,index in pairs(db.reportOrigins) do if index.id==id then index.id=previous.id end end
+                    db.reportOrigins[A.Key(prior.origin.source,prior.origin.key)]={id=previous.id}
+                    db.reported[id]=nil
+                end
+                db.reported[merged.id]=merged;updated=updated+1
+            end
+            db.reportOrigins[key]={id=previous.id}
         else
             f.id=staged:ID("reportedCatch");f.sender=report.sender;f.received=A.Now()
             db.reported[f.id]=f;db.reportOrigins[key]={id=f.id};added=added+1

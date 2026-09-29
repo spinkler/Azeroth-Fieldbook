@@ -47,6 +47,30 @@ function A.Array(t,max)
     return true
 end
 function A.Now() local v=A.Read(time);return A.Integer(v,0,9999999999) and v or 0 end
+function A.LegacyLoreKey(id,e)
+    -- Match the old adapter's immutable creation stamp (not update time).
+    local stamp=e.reference or e.created or e.firstSeen or e.firstEncounter or e.first
+    if type(stamp)~="number" and type(e.reference)~="string" then
+        stamp=0;local name=tostring(e.name or e.title or "")
+        for i=1,#name do stamp=(stamp*31+name:byte(i))%2147483647 end
+    end
+    return tostring(id).."@:"..tostring(stamp)
+end
+function A.EnsureReferences(saved)
+    if ns.InitializationBlocked or (saved.schema or 0)>A.SCHEMA then return end
+    if not A.Text(saved.origin,100) then saved.origin=tostring(A.Now()).."-"..math.random(1,999999999) end
+    saved.loreAliases=saved.loreAliases or {}
+    for _,field in ipairs({"records","expeditions"}) do for id,e in pairs(saved[field] or {}) do
+        if type(e)=="table" and not e.reference then
+            local legacy=A.LegacyLoreKey(id,e)
+            saved.referenceSerial=(saved.referenceSerial or 0)+1
+            e.reference="atlas:"..(saved.referenceOrigin or saved.origin)..":"..saved.referenceSerial
+            e.referenceLegacy=true
+            if saved.loreAliases[legacy]==nil then saved.loreAliases[legacy]=e.reference
+            elseif saved.loreAliases[legacy]~=e.reference then saved.loreAliases[legacy]=false end
+        end
+    end end
+end
 function A.Position(p)
     return type(p)=="table" and A.Integer(p.mapID,1,2147483647)
         and A.Integer(p.x,0,10000) and A.Integer(p.y,0,10000)
@@ -151,7 +175,7 @@ end
 function ns.CreateAtlasJournal(saved)
     -- Additive schema-0 -> 1 migration. Preserve unknown fields and unsupported
     -- future schemas; never rewrite or reset another SavedVariable.
-    local writable=saved.schema==nil or saved.schema==0 or saved.schema==A.SCHEMA
+    local writable=not ns.InitializationBlocked and (saved.schema==nil or saved.schema==0 or saved.schema==A.SCHEMA)
     if writable then
         saved.records=type(saved.records)=="table" and saved.records or {}
         saved.expeditions=type(saved.expeditions)=="table" and saved.expeditions or {}
@@ -159,6 +183,7 @@ function ns.CreateAtlasJournal(saved)
         saved.settings=type(saved.settings)=="table" and saved.settings or {}
         saved.settings.layers=type(saved.settings.layers)=="table" and saved.settings.layers or {}
         saved.schema=A.SCHEMA
+        A.EnsureReferences(saved)
     end
     local j={saved=saved,records=writable and saved.records or {},expeditions=writable and saved.expeditions or {},
         state=writable and saved.settings or {layers={}},readOnly=not writable,revision=0}
@@ -193,6 +218,7 @@ function ns.CreateAtlasJournal(saved)
         if out then
             out.id=id;out.created=A.Integer(v.created,0,9999999999) and v.created or 0
             out.updated=A.Integer(v.updated,0,9999999999) and v.updated or 0
+            out.reference=v.reference
         end
         return out -- Callers always receive detached data, including adapters/UI.
     end
@@ -209,9 +235,13 @@ function ns.CreateAtlasJournal(saved)
             until not self.records[id] and not self.expeditions[id]
         end
         out.id=id;out.created=store[id] and store[id].created or A.Now();out.updated=A.Now()
+        out.reference=store[id] and store[id].reference
+        out.referenceLegacy=store[id] and store[id].referenceLegacy
+        local newlyCreated=store[id]==nil
         -- Editing a received record never silently upgrades its knowledge source.
         if store[id] and not expedition then out.provenance=A.Copy(store[id].provenance or out.provenance) end
-        store[id]=out;self.revision=self.revision+1;return id
+        store[id]=out;A.EnsureReferences(saved);if newlyCreated then out.referenceLegacy=nil end
+        self.revision=self.revision+1;return id
     end
     function j:Delete(id,expedition)
         if self.readOnly then return false end

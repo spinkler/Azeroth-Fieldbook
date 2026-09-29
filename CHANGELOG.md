@@ -2,6 +2,26 @@
 
 ## v0.17.0 - Unreleased
 
+- Persist fishing evidence identities and contributor partitions at capture.
+  Preserve original attribution across character exports and account imports;
+  reconcile grounded legacy aliases without replaying earlier cumulative totals.
+  Keep historical totals with missing observers explicitly unknown, and keep
+  reported evidence out of personal counts. Separate new account allocations
+  from the retained opt-out stores.
+- Preserve Lore-to-Atlas destinations with durable references and saved,
+  character-scoped migration mappings. Repair already-migrated links from
+  surviving identity evidence; retain ambiguous mappings as unavailable.
+  Local scope can resolve the corresponding original discovery without borrowing
+  another character's colliding ID. Lore's stored references are not rewritten.
+- Reconcile account Ledger contacts sharing an exact original-report identity,
+  including duplicates left by earlier migration. Preserve old contact aliases,
+  both characters' annotations, full original evidence and delivery receipts;
+  direct subsequent report updates to the canonical contact. Retain long notes
+  in the existing details pane. Matching NPC templates alone do not merge contacts.
+- Add production-path F1-F3 regressions for capture, export/import, both migration
+  orders, already-migrated saves, reloads, scope changes, aliases, missing identity
+  evidence, private annotations and the latched startup guard. Keep this batch
+  uncommitted pending separate review and focused native acceptance.
 - Preserve unsupported or malformed main saves before normalization, account
   import-key allocation or journal/UI setup. Initialize defaults only for absent
   saves, show a concise diagnostic when blocked, and disable the session until a

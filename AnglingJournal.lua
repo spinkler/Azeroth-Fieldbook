@@ -66,11 +66,38 @@ local function poolIdentity(pool)
 end
 A.ItemIdentity=itemIdentity;A.PoolIdentity=poolIdentity
 local function aggregateKey(context)
-    return A.Key(context.waterID,context.spotID,context.poolID,context.source,context.association,context.method)
+    return A.Key(context.waterID,context.spotID,context.poolID,context.source,context.association,context.method,context.contributor)
+end
+A.AggregateKey=aggregateKey
+function A.AddLegacyKey(origin,key)
+    origin.legacyKeys=origin.legacyKeys or {}
+    for _,old in ipairs(origin.legacyKeys) do if old==key then return end end
+    origin.legacyKeys[#origin.legacyKeys+1]=key
+end
+local function newOrigin(db,id,method,source,namespace)
+    local key=(namespace or db.captureOrigin or db.origin)..":"..id
+    return {source=source,key=key,method=method,legacyKeys={key}}
+end
+-- Old totals did not store their observer. Freeze them as historical evidence;
+-- never assign an account aggregate to the character who next opens it.
+function A.PrepareOrigins(db)
+    if ns.InitializationBlocked or (db.schema or 0)>A.SCHEMA then return end
+    if not A.Text(db.origin,100) then db.origin=tostring(A.Now()).."-"..math.random(1,999999999) end
+    for _,field in ipairs({"waters","spots","pools","items","merged","aggregates"}) do
+        for id,e in pairs(db[field] or {}) do
+            if field=="aggregates" or e.personal then
+                if not e.origin then
+                    e.origin=newOrigin(db,id,e.method or (e.personal and e.personal.observed and "observed" or "recorded"),"Unknown original observer",db.origin)
+                    e.originUnknown=true
+                end
+                if field=="aggregates" and not e.contributor then e.contributor="legacy:"..e.origin.key end
+            end
+        end
+    end
 end
 
 function ns.CreateAnglingJournal(saved)
-    local readOnly=type(saved.schema)=="number" and saved.schema>A.SCHEMA
+    local readOnly=ns.InitializationBlocked or (type(saved.schema)=="number" and saved.schema>A.SCHEMA)
     local db=readOnly and {} or saved
     -- v0 is the empty wishlist/early local schema. Preserve any existing owned
     -- tables and add only missing stores. Future schemas stay completely intact.
@@ -80,6 +107,7 @@ function ns.CreateAnglingJournal(saved)
     end
     db.schema=A.SCHEMA;db.serial=A.Integer(db.serial,0,999999999) and db.serial or 0
     if not A.Text(db.origin,100) then db.origin=tostring(A.Now()).."-"..math.random(1,999999999) end
+    A.PrepareOrigins(db)
     local function reindexAggregates()
         local keys={}
         -- Keep the destination's current aggregate when a merge creates matching
@@ -139,7 +167,10 @@ function ns.CreateAnglingJournal(saved)
     function j:Get(id)
         return db.waters[id] or db.spots[id] or db.pools[id] or db.items[id]
     end
-    function j:Origin(id) return {source=A.Player(),key=db.origin..":"..id,method="recorded"} end
+    function j:Origin(id)
+        local e=db.aggregates[id] or self:Get(id)
+        return e and A.Copy(e.origin)
+    end
     function j:Ensure(kind,input,method,stamp)
         if self.readOnly then return nil,"Newer Almanac schema: read-only." end
         stamp=stamp or A.Now()
@@ -162,6 +193,7 @@ function ns.CreateAnglingJournal(saved)
             store[id]=e;keys[key]=id
         elseif kind=="item" and method and A.Name(input.name) then e.name=A.Name(input.name) end
         if kind=="item" and method and A.Integer(input.icon,1,2147483647) then e.icon=input.icon end
+        if method and not e.origin then e.origin=newOrigin(db,e.id,method,A.Player()) end
         touch(e,stamp,method)
         return e
     end
@@ -180,6 +212,7 @@ function ns.CreateAnglingJournal(saved)
         for _,key in ipairs({"mapID","zone","subzone","x","y","precision"}) do e[key]=p[key] end
         if input.precision=="approximate" and A.Position(p) then e.precision="approximate" end
         e.note=A.Text(input.note,4000,true) and input.note or e.note
+        if not e.origin then e.origin=newOrigin(db,e.id,"recorded",A.Player()) end
         touch(e,stamp,"recorded")
         self:Log("Recorded",(pool and "Recorded pool sighting: " or "Remembered spot: ")..e.name.." — "..water.name)
         self:Changed();return e
@@ -206,6 +239,7 @@ function ns.CreateAnglingJournal(saved)
             db.spots[id]=e;db.hoverKeys[hoverKey]=id
             self:Log("Discovery","Pool type seen: "..pool.name.." — "..p.zone..". Exact position unknown.")
         end
+        if not e.origin then e.origin=newOrigin(db,e.id,"observed",A.Player()) end
         local previous=e.last;touch(e,stamp,"observed")
         if previous~=stamp then self:Changed() end
         return e
@@ -281,8 +315,9 @@ function ns.CreateAnglingJournal(saved)
         return c
     end
     function j:RecordCatch(token,context,items)
-        if self.readOnly then return nil,"Newer Almanac schema: read-only." end
+        if self.readOnly or ns.InitializationBlocked then return nil,"Almanac is read-only." end
         if type(context)=="table" then
+            context.contributor=A.Key(A.Player(),db.captureOrigin or db.origin)
             for _=1,64 do
                 local archived=db.merged[context.spotID]
                 if not archived then break end
@@ -320,8 +355,9 @@ function ns.CreateAnglingJournal(saved)
             local key=aggregateKey(context)
             aggregate=db.aggregates[db.aggregateKeys[key]]
             if not aggregate then
-                aggregate={id=self:ID("catch"),waterID=context.waterID,spotID=context.spotID,poolID=context.poolID,
+                aggregate={id=self:ID("catch"),waterID=context.waterID,spotID=context.spotID,poolID=context.poolID,contributor=context.contributor,
                     source=context.source,association=context.association,method=context.method,events=0,items={},first=stamp,last=stamp}
+                aggregate.origin=newOrigin(db,aggregate.id,context.method,A.Player())
                 db.aggregates[aggregate.id]=aggregate;db.aggregateKeys[key]=aggregate.id
             end
             ledger={aggregateID=aggregate.id,items={},at=stamp};db.recent[token]=ledger

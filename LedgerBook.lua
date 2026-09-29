@@ -75,6 +75,8 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         if detail=="services" then
             local lines={}
             if e.note~="" then lines[#lines+1]=e.note end
+            local retained=journal:ImportedNotes(e);if retained~="" then lines[#lines+1]=retained end
+            if e.migrationIssue then lines[#lines+1]=e.migrationIssue end
             local roles=journal:RoleText(e);if roles~="" then lines[#lines+1]=roles end
             for speciality,o in pairs(e.specialities) do lines[#lines+1]="Speciality: "..speciality.." ("..o.method..")" end
             if e.ambiguous then lines[#lines+1]="Identity unresolved: another contact shares this NPC template. Use Link identity after reviewing both records." end

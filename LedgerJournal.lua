@@ -46,19 +46,108 @@ function L.GoodKey(v) return L.Key(v.itemID,v.currencyID,v.spellID,v.bundle,v.va
 function L.LessonKey(v) return L.Key(v.name,v.rank,v.category) end
 function L.Date(v) return L.Integer(v,1,9999999999) and ns.AtlasUI.Date(v) or "Not recorded" end
 local function touch(f,at) f.first=f.first and math.min(f.first,at) or at;f.last=math.max(f.last or 0,at) end
+local function reportIdentity(report)
+    local o=report.identity and report.identity.origin
+    if o and L.Text(o.source,160) and L.Text(o.key,700) then return L.Key(o.source,o.key) end
+end
+function L.ReconcileReports(db)
+    if ns.InitializationBlocked or (db.schema or 0)>L.SCHEMA then return end
+    local contacts=db.contacts or {};local parent,ids={},{}
+    for id in pairs(contacts) do parent[id]=id;ids[#ids+1]=id end;table.sort(ids)
+    local function root(id) while parent[id] and parent[id]~=id do id=parent[id] end;return id end
+    local origins={}
+    for _,id in ipairs(ids) do for _,report in ipairs(contacts[id].reports or {}) do
+        local key=reportIdentity(report)
+        if key then
+            local prior=origins[key]
+            if prior then
+                local a,b=root(prior),root(id)
+                local indexed=db.reportKeys and db.reportKeys[key]
+                if indexed and parent[indexed] and root(indexed)==b then parent[a]=b else parent[b]=a end
+            else origins[key]=id end
+        end
+    end end
+    local function retain(into,e)
+        into.migrationEvidence=into.migrationEvidence or {}
+        for key,original in pairs(e.migrationEvidence or {}) do
+            if not into.migrationEvidence[key] then into.migrationEvidence[key]=L.Copy(original) end
+        end
+        local key=L.Key(e.id,e.reference)
+        if not into.migrationEvidence[key] then
+            local original={};for field,value in pairs(e) do if field~="migrationEvidence" then original[field]=L.Copy(value) end end
+            into.migrationEvidence[key]=original
+        end
+    end
+    for _,id in ipairs(ids) do
+        local destination=root(id)
+        if destination~=id then
+            local a,b=contacts[destination],contacts[id]
+            retain(a,a);retain(a,b)
+            if b.note and b.note~="" and a.note~=b.note then
+                local combined=(a.note or "")..((a.note or "")~="" and "\n\n" or "")..b.note
+                if #combined<=4000 then a.note=combined end
+                -- Over-limit or conflicting originals remain accessible in the
+                -- ordinary details pane, outside the editable 4,000-byte note.
+            end
+            a.favourite=a.favourite or b.favourite
+            for _,field in ipairs({"roles","manualRoles","specialities","goods","lessons"}) do
+                a[field]=a[field] or {}
+                for key,v in pairs(b[field] or {}) do
+                    local old=a[field][key]
+                    local stamp=v.last or v.at or 0
+                    if not old or stamp>(old.last or old.at or 0) then a[field][key]=L.Copy(v) end
+                end
+            end
+            for _,p in ipairs(b.sightings or {}) do a.sightings[#a.sightings+1]=L.Copy(p) end
+            local reportKeys={};for i,r in ipairs(a.reports) do local key=reportIdentity(r);if key then reportKeys[key]=i end end
+            for _,r in ipairs(b.reports or {}) do
+                local key=reportIdentity(r);local index=key and reportKeys[key]
+                if index then
+                    local combined,reason=ns.LedgerReports.MergeStored(a.reports[index],r)
+                    if combined then a.reports[index]=combined
+                    else a.migrationIssue=reason.." Both original reports are retained with the imported contact evidence." end
+                else a.reports[#a.reports+1]=L.Copy(r);if key then reportKeys[key]=#a.reports end end
+            end
+            for _,field in ipairs({"personal","recorded"}) do a[field]=a[field] or b[field] end
+            if b.first then a.first=math.min(a.first or b.first,b.first) end
+            if b.last then a.last=math.max(a.last or 0,b.last) end
+            for field,value in pairs(b) do if a[field]==nil and field~="migrationEvidence" then a[field]=L.Copy(value) end end
+            a.aliases=a.aliases or {};for guid,at in pairs(b.aliases or {}) do a.aliases[guid]=math.max(a.aliases[guid] or 0,at) end
+            db.contactAliases=db.contactAliases or {};db.contactAliases[id]=destination
+            contacts[id]=nil
+        end
+    end
+    for _,index in ipairs({db.references or {},db.aliases or {},db.reportKeys or {},db.contactAliases or {}}) do
+        for key,id in pairs(index) do if parent[id] then index[key]=root(id) end end
+    end
+    db.reportKeys=db.reportKeys or {};db.references=db.references or {}
+    for id,e in pairs(contacts) do
+        db.references[e.reference]=id
+        for _,original in pairs(e.migrationEvidence or {}) do db.references[original.reference]=id end
+        for _,r in ipairs(e.reports or {}) do local key=reportIdentity(r);if key then db.reportKeys[key]=id end end
+    end
+end
 function ns.CreateLedgerJournal(saved)
-    local readOnly=type(saved.schema)=="number" and saved.schema>L.SCHEMA
+    local readOnly=ns.InitializationBlocked or (type(saved.schema)=="number" and saved.schema>L.SCHEMA)
     local db=readOnly and {} or saved
     for _,k in ipairs({"contacts","state","aliases","reportKeys","references"}) do if type(db[k])~="table" then db[k]={} end end
     db.schema=L.SCHEMA;db.serial=L.Integer(db.serial,0,999999999) and db.serial or 0
     if not L.Text(db.origin,100) then db.origin=tostring(L.Now())..'-'..math.random(1,999999999) end
     local j={db=db,state=db.state,readOnly=readOnly,revision=0,cache={}}
-    function j:Changed(id) self.revision=self.revision+1;self.cache[id or false]=nil;if self.onChange then self.onChange(id) end end
-    function j:Get(id) return db.contacts[id] end
+    function j:Changed(id)
+        local e=id and self:Get(id);id=e and e.id or id
+        self.revision=self.revision+1;self.cache[id or false]=nil;if self.onChange then self.onChange(id) end
+    end
+    function j:Get(id)
+        local seen={}
+        while db.contactAliases and db.contactAliases[id] and not seen[id] do seen[id]=true;id=db.contactAliases[id] end
+        return db.contacts[id]
+    end
     function j:New(name)
         if self.readOnly or L.Count(db.contacts)>=L.MAX_CONTACTS or L.Count(db.references)>=L.MAX_REFERENCES then return nil,"Contact/reference limit reached or newer schema is read-only." end
-        db.serial=db.serial+1;local id="contact:"..db.serial
-        local e={id=id,reference="ledger:"..db.origin..":"..db.serial,name=name,sublabel="",roles={},manualRoles={},specialities={},
+        local id
+        repeat db.serial=db.serial+1;id="contact:"..db.serial until not db.contacts[id] and not (db.contactAliases and db.contactAliases[id])
+        local e={id=id,reference="ledger:"..(db.contactOrigin or db.origin)..":"..db.serial,name=name,sublabel="",roles={},manualRoles={},specialities={},
             sightings={},goods={},lessons={},reports={},note="",favourite=false,aliases={}}
         db.contacts[id]=e;db.references[e.reference]=id;return e
     end
@@ -121,21 +210,34 @@ function ns.CreateLedgerJournal(saved)
     function j:Favourite(id) local e=self:Get(id);if e and not self.readOnly then e.favourite=not e.favourite;self:Changed(id) end end
     function j:Remove(id)
         if self.readOnly then return nil,"Newer Ledger schema is read-only." end
-        if not self:Get(id) then return nil,"Contact no longer exists." end
+        local e=self:Get(id);if not e then return nil,"Contact no longer exists." end
+        local selected=self:Get(self.state.selected);id=e.id
         db.contacts[id]=nil
         for _,index in ipairs({db.aliases,db.references,db.reportKeys}) do
             for key,value in pairs(index) do if value==id then index[key]=nil end end
         end
-        if self.state.selected==id then
+        if selected==e then
             self.state.selected=nil;self.state.sighting=nil;self.state.sightingKey=nil
             self.state.focus=nil;self.state.focusReported=nil;self.state.detailScroll=0
         end
         self:Changed(id);return true
     end
     function j:Reference(reference) return self:Get(db.references[reference]) end
+    function j:ImportedNotes(e)
+        local notes,seen={},{}
+        for key,original in pairs(e.migrationEvidence or {}) do
+            if original.note and original.note~="" and not (e.note or ""):find(original.note,1,true) and not seen[original.note] then
+                notes[#notes+1]={key=key,text=original.note};seen[original.note]=true
+            end
+        end
+        table.sort(notes,function(a,b) return a.key<b.key end)
+        local lines={};for _,note in ipairs(notes) do lines[#lines+1]="Retained imported note:\n"..note.text end
+        return table.concat(lines,"\n\n")
+    end
     function j:Link(sourceID,destinationID)
         local a,b=self:Get(sourceID),self:Get(destinationID)
         if self.readOnly or not a or not b or a==b then return nil,"Choose two different contacts." end
+        sourceID,destinationID=a.id,b.id
         if a.npcID and b.npcID and a.npcID~=b.npcID then return nil,"NPC templates differ; identity linking is unavailable." end
         local out=L.Copy(b)
         for _,kind in ipairs({"goods","lessons"}) do
@@ -162,12 +264,17 @@ function ns.CreateLedgerJournal(saved)
         if a.first then out.first=math.min(a.first,b.first or a.first) end
         if a.last then out.last=math.max(a.last,b.last or a.last) end
         out.favourite=a.favourite or b.favourite;out.ambiguous=nil;out.linkedAt=L.Now()
+        if a.migrationEvidence then
+            out.migrationEvidence=out.migrationEvidence or {}
+            for key,original in pairs(a.migrationEvidence) do if not out.migrationEvidence[key] then out.migrationEvidence[key]=L.Copy(original) end end
+        end
         for _,kind in ipairs({"merchantInspection","trainerInspection"}) do if a[kind] and (not out[kind] or a[kind].at>out[kind].at) then out[kind]=L.Copy(a[kind]) end end
         -- Binding is a deliberate user assertion, never an automatic name/template merge.
         db.contacts[destinationID]=out;db.contacts[sourceID]=nil
         for guid in pairs(a.aliases) do db.aliases[guid]=nil;self:Bind(out,guid) end
         for key,id in pairs(db.reportKeys) do if id==sourceID then db.reportKeys[key]=destinationID end end
         for key,id in pairs(db.references) do if id==sourceID then db.references[key]=destinationID end end
+        for key,id in pairs(db.contactAliases or {}) do if id==sourceID then db.contactAliases[key]=destinationID end end
         self.cache[sourceID]=nil;self:Changed(destinationID);return out
     end
     function j:Begin(id,kind)
@@ -259,7 +366,7 @@ function ns.CreateLedgerJournal(saved)
     end
     function j:Index(e)
         if self.cache[e.id] then return self.cache[e.id] end
-        local fields={e.name,e.sublabel,e.note,self:RoleText(e)};local offerings={};local recipe=false
+        local fields={e.name,e.sublabel,e.note,self:RoleText(e),self:ImportedNotes(e)};local offerings={};local recipe=false
         for s in pairs(e.specialities) do fields[#fields+1]=s end
         local locations=self:Locations(e);for _,p in ipairs(locations) do fields[#fields+1]=p.zone;fields[#fields+1]=p.subzone end
         local function add(store,kind,reported)
