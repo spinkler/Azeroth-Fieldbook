@@ -2,6 +2,15 @@
 
 ## v0.17.0 - Unreleased
 
+- Extend the existing Account-wide tracking option to Lore and Treasure. Import
+  each character's earlier collections once, including accounts migrated before
+  these sections were supported; keep local and shared journals independent on
+  later toggles. Preserve Lore entries, pages, annotations, reader state, export
+  identities and scoped Atlas references, plus Treasure kinds, encounter history,
+  original provenance and receipts. Update help/storage documentation and add
+  production-path migration, reload, identity and guard regressions. F5 report
+  capacity/deduplication remains outside this change.
+
 - Persist fishing evidence identities and contributor partitions at capture.
   Preserve original attribution across character exports and account imports;
   reconcile grounded legacy aliases without replaying earlier cumulative totals.

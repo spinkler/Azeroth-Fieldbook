@@ -42,9 +42,12 @@ uncommitted; no push, tag, release or publication is part of this request.
 
 ## Model and provenance
 
-`TreasureJournal.lua` owns schema 1 in **per-character**
-`AzerothFieldbookTreasureDB`, independently of account tracking and all other
-journals' resets/backups. It initializes only its own store. Future schemas use
+`TreasureJournal.lua` owns schema 1 in `AzerothFieldbookTreasureDB` in character
+mode, or `AzerothFieldbookAccountDB.sections.treasure` with Account-wide tracking
+enabled. Its initializer uses the existing section selector. Kinds and encounters
+import once, preserving annotations, references, origins and receipts; the local
+store remains intact. Other journals' resets/backups remain independent.
+See [ACCOUNT_TRACKING.md](ACCOUNT_TRACKING.md). Future schemas use
 a detached read-only view. Invalid saved kinds/encounters remain in the original
 store, excluded from active views with a count notice. Valid sparse records have
 their optional fields normalized. No active-loot assignment is persisted.

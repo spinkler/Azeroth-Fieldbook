@@ -115,11 +115,15 @@ function T.Encounter(v,form)
     if out.accessMethod~="manual" and out.accessMethod~="observed" then return nil,"Invalid access provenance." end
     return out
 end
+function T.SupportsStore(saved)
+    if type(saved)~="table" or getmetatable(saved) or (saved.schema~=nil and not T.Integer(saved.schema,0,T.SCHEMA)) then return false end
+    for _,key in ipairs({"kinds","encounters","state"}) do
+        if saved[key]~=nil and type(saved[key])~="table" then return false end
+    end
+    return true
+end
 function ns.CreateTreasureJournal(saved)
-    local readOnly=type(saved)~="table" or (saved.schema~=nil and (not T.Integer(saved.schema,0,T.SCHEMA)))
-    if not readOnly then for _,key in ipairs({"kinds","encounters","state"}) do
-        if saved[key]~=nil and type(saved[key])~="table" then readOnly=true end
-    end end
+    local readOnly=ns.InitializationBlocked or not T.SupportsStore(saved)
     local db=readOnly and {} or saved
     db.kinds=db.kinds or {};db.encounters=db.encounters or {};db.state=db.state or {};db.schema=T.SCHEMA
     db.serial=T.Integer(db.serial,0,999999999) and db.serial or 0
@@ -150,6 +154,7 @@ function ns.CreateTreasureJournal(saved)
     end
     function j:Get(id) return self.kinds[id] end
     function j:Next(prefix)
+        prefix=prefix..(db.idPrefix or "")
         repeat db.serial=db.serial+1 until not db.kinds[prefix..db.serial] and not db.encounters[prefix..db.serial]
         return prefix..db.serial
     end

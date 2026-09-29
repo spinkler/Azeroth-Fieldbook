@@ -145,7 +145,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
         GameTooltip:SetText("Account-wide tracking")
-        GameTooltip:AddLine("Share knowledge across every Fieldbook section: Bestiary, Herbs & Minerals, Atlas, Almanac and Ledger. Turn off to use this character's separate journals. Changes apply after /reload.",1,1,1,true)
+        GameTooltip:AddLine("Share knowledge across every Fieldbook section: Bestiary, Herbs & Minerals, Atlas, Almanac, Ledger, Treasure and Lore. Turn off to use this character's separate journals. Changes apply after /reload.",1,1,1,true)
         GameTooltip:Show()
     end)
     options.accountWideTracking:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)

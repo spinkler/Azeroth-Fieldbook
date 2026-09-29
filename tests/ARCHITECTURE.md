@@ -186,7 +186,7 @@ no generic contact hook, so the Ledger boundary explicitly stops at copy/paste.
 Neither other pages' code nor their data are modified. `tests/LEDGER.md` records
 the identity model, completeness rules, storage limits and live checklist.
 
-`AccountSections.lua` routes the four additional journals under the same global
+`AccountSections.lua` routes the six additional journals under the same global
 tracking option as Bestiary. See [account migration](ACCOUNT_TRACKING.md) for
 one-time imports, identity remapping, original-store preservation and limits.
 
@@ -194,8 +194,9 @@ one-time imports, identity remapping, original-store preservation and limits.
 
 Six Treasure-owned modules initialize immediately after Ledger and before Lore.
 `TreasureJournal.lua` owns schema 1 in the separate
-per-character `AzerothFieldbookTreasureDB`; it does not call account selectors or
-write another journal. `TreasureTracking.lua` starts before lazy UI construction.
+per-character `AzerothFieldbookTreasureDB` or `.sections.treasure` in the account
+root. `InitializeTreasure` selects the active store through `AccountSections.lua`;
+the journal writes only that selected store. `TreasureTracking.lua` starts before lazy UI construction.
 The manual editors, item rows, details and controls belong to the Treasure page.
 `TreasureMap.lua` uses the exposed independent Atlas map factory and exact Atlas
 anchor. `TreasureReports.lua` provides data-only builder/validation/preview/merge
@@ -206,8 +207,8 @@ There is no alternate export protocol or inert sharing control. See
 ## Lore & Landmarks
 
 `LoreJournal.lua` owns schema 1 in the separate per-character
-`AzerothFieldbookLoreDB`. Lore and Treasure do not use the account-wide selectors
-that serve the five preceding journals. Lore stores captured pages, manual
+`AzerothFieldbookLoreDB` or `.sections.lore` in the account root.
+`InitializeLore` uses the same account-wide selector as the other sections. Lore stores captured pages, manual
 passages, personal annotations, locations, relationships and received reports
 with separate provenance. Its bounded additive loader retains malformed saved
 records outside the active view and opens unknown future schemas read-only.
@@ -235,7 +236,8 @@ not claim network delivery or charge Knowledge.
 
 Outside these Lore modules, integration is limited to TOC loading and the new
 SavedVariable, initialization in `AzerothFieldbook.lua`, removal of the Lore
-wishlist definition, and the existing Options/reset interfaces.
+wishlist definition, the existing Options/reset interfaces and AccountSections
+store selection. See [ACCOUNT_TRACKING.md](ACCOUNT_TRACKING.md) for one-time imports.
 `LoreSettings.lua` initializes `autoArchiveLore` and `loreOnlyOpenedPages` on the
 existing character settings root only when absent. `BestiaryPages.lua` presents
 the two controls in the shared Options page; `BestiaryJournal.lua` preserves

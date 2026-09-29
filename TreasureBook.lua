@@ -290,7 +290,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             "|cffffd100Maps and browsing|r\nMap markers mean a past find, not an available container. Only world finds and explicitly recorded acquisitions can create pins. Opening or observing a portable item in your bags never creates an acquisition marker. Approximate player coordinates stay labelled. Use Known maps, Selected kind / All finds in zone, and repeat clicks to cycle overlapping encounters. Expand gives the active details a taller left reading area. Search matches known names, locations, items and private notes. Recent sorts by original observation time, never report receipt.\n\n"..
             "|cffffd100Automatic capture|r\nThe background observer reads openable bag items using the client's hasLoot flag; first observed carriage is not acquisition or current ownership. Portable contents require the loot's exact GUID to match a recently observed openable item and the client to say the loot is from an item. Unsupported, unreadable or ambiguous sources are omitted. Captures may be partial; loot visibility never proves personal recovery. Creature loot, fishing, gathering and unrelated bag changes are not treasure contents. World finds, acquisition context, access methods and recovered quantities require manual recording in this iteration.\n\n"..
             "|cffffd100Reports|r\nThe existing sharing transport and prices are Bestiary-specific, with no generic section adapter. Treasure provides validated, versioned builder/preview/merge hooks for later integration. Delivery and player-facing import/export are deferred; there is no alternate cost-free export. Reported evidence keeps original sources and observation times, separate receipt dates and no personal credit. Private notes require explicit inclusion. Origin claims are not authenticated.\n\n"..
-            "Treasure uses its own per-character saved journal, independently of other pages' account tracking. Limits: 2,000 kinds, 20,000 encounters, 80 contents rows each; 4,000-byte notes. At capacity, new records are refused with existing history retained. Map rendering shows up to 192 marker groups; all encounters remain in History. No stale active container survives a reload.",
+            "Treasure follows Account-wide tracking in Options. When enabled it uses the shared account journal; turn it off to return to this character's journal after /reload. Existing character history imports once; later changes in each scope stay separate. Limits: 2,000 kinds, 20,000 encounters, 80 contents rows each; 4,000-byte notes. At capacity, new records are refused with existing history retained. Map rendering shows up to 192 marker groups; all encounters remain in History. No stale active container survives a reload.",
         onOpen=function() if c.main then c:Refresh();c.main.details:SetVerticalScroll(state.detailScroll) end end})
     journal.onChange=function()
         if not c.main or shell.active~="treasure" or not shell:GetFrame():IsShown() or c.refreshQueued then return end
@@ -304,7 +304,10 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     return c
 end
 function ns.InitializeTreasure(shell)
-    if type(AzerothFieldbookTreasureDB)~="table" then AzerothFieldbookTreasureDB={} end
-    local journal=ns.CreateTreasureJournal(AzerothFieldbookTreasureDB)
+    if ns.InitializationBlocked then return end
+    if AzerothFieldbookTreasureDB==nil then AzerothFieldbookTreasureDB={} end
+    local store=AzerothFieldbookTreasureDB
+    if ns.SelectSectionStorage then store=ns.SelectSectionStorage("treasure",store) end
+    local journal=ns.CreateTreasureJournal(store)
     return ns.CreateTreasureBook(journal,ns.CreateTreasureTracking(journal),shell)
 end

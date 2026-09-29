@@ -37,8 +37,8 @@ other object readers retain unconfirmed page boundaries.
 
 Record people and deliberately save displayed gossip or quest passages; record
 landmarks, private thoughts, related evidence and a mystery's next step. Entry
-and Location views share the existing window. The separate character archive
-`AzerothFieldbookLoreDB` is independent of account tracking and other journals.
+and Location views share the existing window. Lore follows Account-wide tracking;
+turning it off restores the character archive in `AzerothFieldbookLoreDB`.
 Lore reports use bounded copy/paste, exact previews and explicit acceptance.
 Malformed report lists are rejected without dropping source text. Valid older
 stored reports remain readable; malformed stored evidence is retained in the
@@ -58,7 +58,8 @@ Readable openable bag items are recorded in the background as **Observed
 carried**. Strictly matched portable loot can record a partial contents
 inspection; neither bag changes nor loot visibility prove personal recovery.
 World identity, acquisition context and recovery claims require manual input.
-Treasure remains per character in `AzerothFieldbookTreasureDB`. Sharing has tested
+Treasure follows Account-wide tracking, retaining `AzerothFieldbookTreasureDB` for
+character mode. Sharing has tested
 report-builder, validator, preview and merge hooks; delivery/import/export UI
 awaits an extension to the existing transport and points policy. See
 [Treasure model, capture limits and pending in-game checks](tests/TREASURE.md).
@@ -499,10 +500,10 @@ ambiguous or unavailable map may need another observation in that zone. Close
 with Escape or the window's X; closing
 the Bestiary also closes its Locations window.
 
-**Account-wide tracking** is enabled by default in Options and applies to these five
-journals: Bestiary, Herbs & Minerals, Traveller’s Atlas, Angler’s Almanac and
-Merchant’s Ledger. Turning it off uses this character’s separate journals.
-Treasure & Salvage and Lore & Landmarks each use their own per-character store.
+**Account-wide tracking** is enabled by default in Options and applies to all seven
+journals: Bestiary, Herbs & Minerals, Traveller’s Atlas, Angler’s Almanac,
+Merchant’s Ledger, Treasure & Salvage and Lore & Landmarks. Turning it off uses
+this character’s separate journals.
 Changes apply after `/reload`. Shell appearance and Bestiary display options
 remain character preferences; each other section keeps its browsing state with
 its active journal.
@@ -511,7 +512,12 @@ Each additional section merges the character’s existing data once into
 `AzerothFieldbookAccountDB.sections`. Original character databases remain intact.
 Gathering combines resource observations; Atlas preserves records and remaps
 route/place links; fishing combines identities while retaining distinct catch
-facts; Ledger preserves distinct contact identities and references. Repeated
+facts; Ledger preserves distinct contact identities and references. Lore preserves
+distinct entries, pages, annotations, reader positions and original export identities;
+Atlas links use their original character's saved reference mappings. Treasure
+preserves kinds, encounter histories, original identities and private metadata.
+Characters already migrated before Lore/Treasure support import only these newly
+eligible sections once; the earlier section markers remain in place. Repeated
 logins do not repeat imports. Opting out returns to the original character
 journals; later edits in the two modes remain independent after their first
 import. Section resets, reports and Bestiary backups retain their existing scope.
@@ -1041,15 +1047,17 @@ remains intact. Ledger resets and reports remain independent of other journals. 
 preferences survive reloads. A newer unknown Ledger schema stays untouched
 and opens read-only. No existing character database is repurposed or cleared.
 
-Treasure adds schema 1 in `AzerothFieldbookTreasureDB`, independently of account
-tracking, resets, backups and the other journals. Kinds, encounters, provenance,
+Treasure adds schema 1 in `AzerothFieldbookTreasureDB`, or
+`AzerothFieldbookAccountDB.sections.treasure` when account tracking is enabled.
+Other journals' resets and backups remain independent. Kinds, encounters, provenance,
 notes, bookmarks and browsing state persist. Active loot correlation is session
 only. Malformed records are preserved but excluded from the view with a notice;
 an unknown future schema uses a detached read-only view. Capacity limits refuse
 new records without discarding detailed history or notes.
 
-Lore adds schema 1 in `AzerothFieldbookLoreDB`, independent of account tracking
-and the other journals' resets and backups. Preserved pages, provenance,
+Lore adds schema 1 in `AzerothFieldbookLoreDB`, or
+`AzerothFieldbookAccountDB.sections.lore` when account tracking is enabled.
+Other journals' resets and backups remain independent. Preserved pages, provenance,
 annotations, reports and browsing positions survive reloads. Capture sessions
 are temporary and never resume against stale text after reload. Loading missing
 settings defaults preserves explicit OFF choices; Bestiary reset preserves both

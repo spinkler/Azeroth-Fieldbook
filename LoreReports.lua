@@ -29,18 +29,7 @@ end
 local function version()
     return L.Read(C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata,addonName,'Version')
 end
-local function player()
-    local fn=UnitNameUnmodified or UnitName
-    if type(fn)~='function' then return 'Unknown player' end
-    local ok,name,surname=pcall(fn,'player')
-    if not ok or not public(name) or not public(surname) or type(name)~='string' or name=='' then return 'Unknown player' end
-    if type(surname)=='string' and surname~='' then
-        local full=L.Read(NameUtil and NameUtil.GetFullNameWithoutRealm,name,surname)
-        if L.Text(full,160) then return full end
-        return 'Unknown player'
-    end
-    return name
-end
+local player=L.Player
 local function selected(values,index) return values==nil or values[index]==true end
 local encode
 local function normalize(v,stored)
@@ -150,8 +139,8 @@ function R.Build(journal,id,options)
     local base=options.report and e.reports and e.reports[options.report]
     if options.report and not base then return nil,'Select an existing received report.' end
     local out={format='AFB-LORE',version=R.VERSION,addonVersion=version(),sender=player(),created=L.Now(),
-        sourceKey=base and base.sourceKey or (tostring(journal.db.archiveID or player())..':'..tostring(e.id)..':'..tostring(e.created)),
-        originalSource=base and base.originalSource or player(),kind=e.kind,title=base and base.title or journal:Title(e),sourceTitle=base and base.sourceTitle or e.sourceTitle or '',
+        sourceKey=base and base.sourceKey or e.exportKey or (tostring(journal.db.exportOrigin or journal.db.archiveID or player())..':'..tostring(e.id)..':'..tostring(e.created)),
+        originalSource=base and base.originalSource or e.exportSource or player(),kind=e.kind,title=base and base.title or journal:Title(e),sourceTitle=base and base.sourceTitle or e.sourceTitle or '',
         subtype=base and base.subtype or e.subtype or '',pages={},passages={},locations={},annotations={},references={}}
     local pages={}
     for key,p in pairs(base and base.pages or e.pages or {}) do pages[#pages+1]={key=key,page=p} end

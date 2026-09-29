@@ -11,15 +11,15 @@ expedition notes, and Angler’s Almanac for personal fishing observations.
 Merchant’s Ledger adds a personal contact and offering directory with a separate character store in
 `AzerothFieldbookLedgerDB`; see `tests/LEDGER.md` for identity, capture, report,
 storage and validation boundaries.
-Treasure & Salvage adds a per-character historical container journal in
+Treasure & Salvage adds a historical container journal with a retained character store in
 `AzerothFieldbookTreasureDB`; see `tests/TREASURE.md` for attribution, report
 adapter and manual-recording boundaries. Lore & Landmarks adds a personal archive
 of writings, landmarks, people and mysteries in per-character
 `AzerothFieldbookLoreDB`; see `tests/LORE.md` for capture, provenance, report and
 live-verification boundaries. All seven section slots are implemented.
-Account-wide tracking applies to the five journals preceding Treasure. Bestiary uses
+Account-wide tracking applies to all seven journals. Bestiary uses
 `AzerothFieldbookAccountDB.bestiary`; `AccountSections.lua` selects shared stores
-under `.sections` for gathering, Atlas, angling and Ledger. Each character's
+under `.sections` for gathering, Atlas, angling, Ledger, Treasure and Lore. Each character's
 existing section journals import once, with collision-safe IDs and preserved
 links. Original per-character SavedVariables remain intact for opt-out. Section
 resets, Bestiary backups and report protocols retain their independent scope.

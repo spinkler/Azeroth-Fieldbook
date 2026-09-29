@@ -31,19 +31,19 @@ function ns.RegisterLoreReferences(controller,shell,sources)
         end
         local function ref(key,e)
             local scope=id=='angling' and journal.db and journal.db.origin or ''
-            local identity=(id=='atlas' or id=='merchants') and e.reference
+            local identity=(id=='atlas' or id=='merchants' or id=='treasure') and e.reference
             return {key=identity or tostring(key)..'@'..scope..':'..stamp(e),name=tostring(e.name or e.title or (journal.GetCreatureName and journal:GetCreatureName(key)) or key)}
         end
-        local function find(key)
+        local function find(key,link)
             if ns.InitializationBlocked or type(key)~='string' then return end
             if id=='atlas' and ns.ResolveAtlasLoreReference and journal.saved then
-                return ns.ResolveAtlasLoreReference(journal,key)
+                return ns.ResolveAtlasLoreReference(journal,key,link and link.atlasOwner)
             end
             if id=='atlas' and journal.saved and journal.saved.loreAliases then
                 key=journal.saved.loreAliases[key] or key
-            elseif id=='merchants' and journal.Reference then
+            elseif (id=='merchants' and journal.Reference) or id=='treasure' then
                 local reference=key:match('^.-@:(.+)$') or key
-                local e=journal:Reference(reference);if e then return e.id,e end
+                local e=journal.Reference and journal:Reference(reference);if e then return e.id,e end
                 -- A known record can predate its lookup index. Require its full
                 -- durable reference; a matching local ID is never a fallback.
                 for recordID,known in pairs(records()) do
@@ -55,9 +55,9 @@ function ns.RegisterLoreReferences(controller,shell,sources)
         end
         controller.references:Register(id,{title=titles[id] or id,list=function()
             local rows={};for key,e in pairs(records()) do rows[#rows+1]=ref(key,e) end;return rows
-        end,resolve=function(key) local recordID,e=find(key);if e then return ref(recordID,e) end end,
-        open=function(key)
-            local recordID,e=find(key);if not e then return false,'The linked record is no longer available.' end
+        end,resolve=function(key,link) local recordID,e=find(key,link);if e then return ref(recordID,e) end end,
+        open=function(key,link)
+            local recordID,e=find(key,link);if not e then return false,'The linked record is no longer available.' end
             if id=='bestiary' then return shell:ShowSection(id,{creatureID=recordID}) end
             if type(owner.Select)=='function' then shell:ShowSection(id);owner:Select(recordID);return true end
             if type(owner.OpenEntry)=='function' then return owner:OpenEntry(recordID) end
@@ -66,9 +66,12 @@ function ns.RegisterLoreReferences(controller,shell,sources)
     end end
 end
 function ns.InitializeLore(shell,settings,sources)
+    if ns.InitializationBlocked then return end
     if AzerothFieldbookLoreDB==nil then AzerothFieldbookLoreDB={} end
     ns.LoreSettings.Initialize(settings or AzerothFieldbookDB or {})
-    local journal=ns.CreateLoreJournal(AzerothFieldbookLoreDB)
+    local store=AzerothFieldbookLoreDB
+    if ns.SelectSectionStorage then store=ns.SelectSectionStorage("lore",store) end
+    local journal=ns.CreateLoreJournal(store)
     local eventJournal=sources and sources.bestiary
     local kindNames={writing="Writing",landmark="Landmark",person="Person",mystery="Mystery"}
     journal.onRecorded=function(entry)

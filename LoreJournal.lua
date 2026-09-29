@@ -1,5 +1,5 @@
 local _,ns=...
--- Lore owns a character archive. These utilities are pure and never select an account store.
+-- Lore owns the selected archive. These utilities never select an account store.
 local L={SCHEMA=1,MAX_ENTRIES=2000,MAX_PAGES=256,MAX_PAGE_BYTES=131072,MAX_WORK_BYTES=4194304,
     MAX_ARCHIVE_BYTES=33554432,MAX_PASSAGES=256,MAX_LOCATIONS=100,MAX_LINKS=100,MAX_TAGS=32}
 ns.Lore=L
@@ -35,6 +35,18 @@ function L.Copy(value)
         seen[v]=nil;return out
     end
     return copy(value,0)
+end
+function L.Player()
+    local fn=UnitNameUnmodified or UnitName
+    if type(fn)~='function' then return 'Unknown player' end
+    local ok,name,surname=pcall(fn,'player')
+    if not ok or not L.Public(name) or not L.Public(surname) or type(name)~='string' or name=='' then return 'Unknown player' end
+    if type(surname)=='string' and surname~='' then
+        local full=L.Read(NameUtil and NameUtil.GetFullNameWithoutRealm,name,surname)
+        if L.Text(full,160) then return full end
+        return 'Unknown player'
+    end
+    return name
 end
 function L.Plain(raw)
     if not L.Public(raw) or type(raw)~='string' then return '' end
@@ -132,6 +144,10 @@ function L.Link(value)
     if not ({lore=true,bestiary=true,gathering=true,atlas=true,angling=true,merchants=true,ledger=true,treasure=true})[out.section]
         or not (L.Text(out.id,160) or L.Integer(out.id,1,2147483647)) or not L.Text(out.label,200,true)
         or not L.Text(out.explanation,4000,true) then return nil,'Choose a valid related record and plain labels.' end
+    if value.atlasOwner~=nil then
+        if out.section~='atlas' or not L.Integer(value.atlasOwner,1,2147483647) then return nil,'Invalid Atlas reference owner.' end
+        out.atlasOwner=value.atlasOwner
+    end
     return out
 end
 local function tags(value)
@@ -241,9 +257,13 @@ bytesOf=function(e)
     for _,key in ipairs({'tags','pages','passages','locations','links','reports'}) do bytes=bytes+itemBytes(e[key]) end
     return bytes
 end
+function L.SupportsStore(saved)
+    if not plainTable(saved) or (saved.schema~=nil and not L.Integer(saved.schema,0,L.SCHEMA)) then return false end
+    for _,key in ipairs({'entries','state'}) do if saved[key]~=nil and not plainTable(saved[key]) then return false end end
+    return true
+end
 function ns.CreateLoreJournal(saved)
-    local readOnly=not plainTable(saved) or (saved.schema~=nil and not L.Integer(saved.schema,0,L.SCHEMA))
-    if not readOnly then for _,key in ipairs({'entries','state'}) do if saved[key]~=nil and not plainTable(saved[key]) then readOnly=true end end end
+    local readOnly=ns.InitializationBlocked or not L.SupportsStore(saved)
     local db=readOnly and {} or saved
     db.schema=L.SCHEMA;db.entries=db.entries or {};db.state=db.state or {}
     db.serial=L.Integer(db.serial,0,999999999) and db.serial or 0
@@ -287,6 +307,7 @@ function ns.CreateLoreJournal(saved)
         e.reports,err=reports(value and value.reports);if not e.reports then return nil,err end
         if bytesOf(e)>L.MAX_WORK_BYTES or self:ArchiveBytes()+bytesOf(e)>L.MAX_ARCHIVE_BYTES then return nil,'Archive capacity exceeded; nothing was removed.' end
         e.id=self:Next();e.created=L.Now();e.updated=e.created;e.locations={};e.links={};e.passages={};e.pages={}
+        if db.exportOrigin then e.exportSource=L.Player() end
         db.entries[e.id]=e;self.entries[e.id]=e;self:Changed(e)
         if not deferRecorded then self:Recorded(e) end
         return e

@@ -225,7 +225,95 @@ local function mergeLedger(target,source,key)
     for alias,id in pairs(source.contactAliases or {}) do target.contactAliases["char"..key..":"..alias]=ids[id] or id end
     for field,value in pairs(source) do if target[field]==nil then target[field]=copy(value) end end
 end
-local mergers={gathering=mergeGathering,atlas=mergeAtlas,angling=mergeAngling,ledger=mergeLedger}
+-- Lore and Treasure preserve individual records, including private annotations.
+-- Reserve dangling links as well as records before assigning import-local IDs.
+-- Only well-formed identities are rewritten; malformed evidence stays invalid.
+local function journalIDs(target,fields,key)
+    local ids,reserved={},{};local serial=0
+    for _,field in ipairs(fields) do for id,e in pairs(target[field] or {}) do
+        reserved[id]=true
+        if type(e)=="table" then
+            if e.variantOf then reserved[e.variantOf]=true end
+            if e.kindID then reserved[e.kindID]=true end
+            for _,link in pairs(type(e.links)=="table" and e.links or {}) do
+                if type(link)=="table" and link.section=="lore" and link.id then reserved[link.id]=true end
+            end
+        end
+    end end
+    return function(id)
+        if id==nil then return end
+        if not ids[id] then
+            local candidate
+            repeat serial=serial+1;candidate="char"..key..":"..serial until not reserved[candidate]
+            ids[id]=candidate;reserved[candidate]=true
+        end
+        return ids[id]
+    end
+end
+local function mergeLore(target,source,key,first)
+    target.entries=target.entries or {}
+    local idFor=first and function(id) return id end or journalIDs(target,{"entries"},key)
+    for id in pairs(source.entries or {}) do idFor(id) end
+    for id,e in pairs(source.entries or {}) do
+        local out=copy(e)
+        if type(out)=="table" then
+            if ns.Lore.Text(id,64) and out.id==id then out.id=idFor(id) end
+            -- R.Build used archive + local ID + created before account storage.
+            -- Freeze that key on the imported copy; new account entries use a
+            -- separate export origin. Never consolidate similar writings.
+            local origin=source.exportOrigin or source.archiveID
+            if not out.exportKey and origin then out.exportKey=tostring(origin)..":"..tostring(id)..":"..tostring(e.created) end
+            if not out.exportSource then out.exportSource=ns.Lore.Player() end
+            if ns.Lore.Text(out.variantOf,64) then out.variantOf=idFor(out.variantOf) end
+            for _,link in pairs(type(out.links)=="table" and out.links or {}) do if type(link)=="table" then
+                local original=link.id or link.key
+                if link.section=="lore" and (ns.Lore.Text(original,160) or ns.Lore.Integer(original,1,2147483647)) then
+                    link.id=idFor(original)
+                elseif link.section=="atlas" and not link.atlasOwner then
+                    -- Keep the original reference and use its owner's F2 map,
+                    -- even when another character browses this account entry.
+                    link.atlasOwner=key
+                end
+            end end
+        end
+        target.entries[idFor(id)]=out
+    end
+    local state=copy(source.state or {})
+    if state.selected then state.selected=idFor(state.selected) end
+    if type(state.reading)=="table" then
+        local reading={};for id,value in pairs(state.reading) do reading[idFor(id)]=value end;state.reading=reading
+    end
+    target.state=target.state or {};missing(target.state,state)
+    for field,value in pairs(source) do if target[field]==nil then target[field]=copy(value) end end
+    -- Passage/location IDs stay attached to their entries and reader positions.
+    -- Keep the allocator beyond both stores so later annotations cannot reuse one.
+    if ns.Lore.Integer(source.serial,0,999999999) then
+        target.serial=math.max(ns.Lore.Integer(target.serial,0,999999999) and target.serial or 0,source.serial)
+    end
+end
+local function mergeTreasure(target,source,key)
+    local idFor=journalIDs(target,{"kinds","encounters"},key)
+    for _,field in ipairs({"kinds","encounters"}) do
+        target[field]=target[field] or {}
+        for id in pairs(source[field] or {}) do idFor(id) end
+    end
+    for _,field in ipairs({"kinds","encounters"}) do for id,e in pairs(source[field] or {}) do
+        local out=copy(e)
+        if type(out)=="table" then
+            if ns.Treasure.Text(id,64) and out.id==id then out.id=idFor(id) end
+            if ns.Treasure.Text(out.kindID,64) then out.kindID=idFor(out.kindID) end
+        end
+        -- Kind references, encounter origins and received reports stay intact.
+        target[field][idFor(id)]=out
+    end end
+    local state=copy(source.state or {})
+    if state.selected then state.selected=idFor(state.selected) end
+    if state.encounter then state.encounter=idFor(state.encounter) end
+    target.state=target.state or {};missing(target.state,state)
+    for field,value in pairs(source) do if target[field]==nil then target[field]=copy(value) end end
+end
+local mergers={gathering=mergeGathering,atlas=mergeAtlas,angling=mergeAngling,ledger=mergeLedger,
+    lore=mergeLore,treasure=mergeTreasure}
 local settings
 ns.ActiveSectionStores={}
 function ns.InitializeSectionTracking(value)
@@ -292,11 +380,12 @@ local function atlasMappings(account,personal,shared,key,ids)
     end
     account.atlasReferenceRepairs[key]=true
 end
-function ns.ResolveAtlasLoreReference(journal,key)
+function ns.ResolveAtlasLoreReference(journal,key,owner)
     if ns.InitializationBlocked then return end
     local db=journal.saved;local account=AzerothFieldbookAccountDB
-    local map=account and account.atlasReferenceMaps and settings and account.atlasReferenceMaps[settings.accountTrackingKey] or {}
-    local issues=account and account.atlasReferenceIssues and settings and account.atlasReferenceIssues[settings.accountTrackingKey] or {}
+    local character=owner or (settings and settings.accountTrackingKey)
+    local map=account and account.atlasReferenceMaps and account.atlasReferenceMaps[character] or {}
+    local issues=account and account.atlasReferenceIssues and account.atlasReferenceIssues[character] or {}
     -- A legacy key whose original scope was lost is ambiguous in both scopes.
     -- Explicit durable local identities remain usable even if their account
     -- mapping is unavailable; only the conflicted old alias is refused here.
@@ -347,6 +436,12 @@ function ns.SelectSectionStorage(section,personal)
         ns.ActiveSectionStores[section]=personal;return personal
     end
     local account=AzerothFieldbookAccountDB
+    local supported=section=="lore" and ns.Lore.SupportsStore or section=="treasure" and ns.Treasure.SupportsStore
+    local prior=account.sections and account.sections[section]
+    if supported and (not supported(personal) or (prior~=nil and not supported(prior))) then
+        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..section.." has unsupported saved data; account migration deferred.") end
+        ns.ActiveSectionStores[section]=personal;return personal
+    end
     account.sections=account.sections or {};account.sectionImports=account.sectionImports or {}
     local imports=account.sectionImports[section] or {};account.sectionImports[section]=imports
     local key=settings.accountTrackingKey
@@ -361,7 +456,10 @@ function ns.SelectSectionStorage(section,personal)
     local ids
     if not imports[key] then
         local staged=copy(existing or {})
-        if not existing then staged=copy(personal)
+        if section=="lore" then
+            if not existing then staged=copy(personal) end
+            mergeLore(staged,personal,key,not existing)
+        elseif not existing then staged=copy(personal)
         else ids=mergers[section](staged,personal,key) end
         account.sections[section]=staged;imports[key]=true
         if section=="atlas" and not existing then account.atlasFirstImport=key;ids={} end
@@ -369,10 +467,13 @@ function ns.SelectSectionStorage(section,personal)
     local selected=account.sections[section]
     -- A one-time import forks the store. New allocations in the account and in
     -- the retained opt-out copy must never mint the same original identity.
-    local allocation=({atlas="referenceOrigin",angling="captureOrigin",ledger="contactOrigin"})[section]
+    local allocation=({atlas="referenceOrigin",angling="captureOrigin",ledger="contactOrigin",lore="exportOrigin"})[section]
     if allocation and not selected[allocation] then
         selected[allocation]="account-"..tostring(ns.Atlas.Now()).."-"..math.random(1,999999999)
     end
+    -- Account encounter IDs cannot collide with later allocations on the retained
+    -- local copy, even when both append to the same original Treasure kind.
+    if section=="treasure" then selected.idPrefix="account:" end
     if section=="atlas" then
         ns.Atlas.EnsureReferences(selected);atlasMappings(account,personal,selected,key,ids)
     elseif section=="angling" then

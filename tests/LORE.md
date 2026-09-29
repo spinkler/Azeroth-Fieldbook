@@ -137,9 +137,12 @@ known label for manual navigation rather than changing that section's API.
 
 ## Persistence, provenance and limits
 
-`AzerothFieldbookLoreDB` schema 1 is per character and independent of account
-tracking, resets/backups and all other section data. Missing fields initialize
-additively. Unsupported saves use a detached read-only view; malformed entries
+Schema 1 uses `AzerothFieldbookLoreDB` in character mode or
+`AzerothFieldbookAccountDB.sections.lore` with Account-wide tracking enabled.
+Other sections' resets/backups remain independent. Existing entries import once
+per character without consolidation; original export keys, reader positions and
+Atlas reference ownership survive. See [ACCOUNT_TRACKING.md](ACCOUNT_TRACKING.md).
+Missing fields initialize additively. Unsupported saves use a detached read-only view; malformed entries
 remain in the saved store and are omitted with a notice. Lore option values
 survive Bestiary reset. No migrations repurpose another journal.
 
