@@ -124,6 +124,7 @@ function ns.CreateAnglingTracking(journal)
     local cast,assignment,failedWindow
     local function changed() if t.onChange then t.onChange() end end
     function t:ObserveWorldCursor()
+        if ns.InitializationBlocked then return end
         local pool=worldPool();if not pool then return end
         self.observingHover=true
         local e=journal:ObservePool(pool,A.CurrentLocation())
@@ -261,6 +262,7 @@ function ns.CreateAnglingTracking(journal)
         return fact,err
     end
     function t:OnEvent(event,a,b,c,d)
+        if ns.InitializationBlocked then return end
         if event=="UI_ERROR_MESSAGE" or event=="UI_INFO_MESSAGE" then
             local failure=fishingFailure(a,b)
             if failure then

@@ -65,6 +65,7 @@ function ns.StartBestiaryLoot(journal)
     frame:RegisterEvent("LOOT_READY");frame:RegisterEvent("LOOT_OPENED")
     frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
     frame:SetScript("OnEvent",function(_,event)
+        if ns.InitializationBlocked then return end
         if event=="GET_ITEM_INFO_RECEIVED" then journal:Touch() else snapshot() end
     end)
     return frame

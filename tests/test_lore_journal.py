@@ -102,7 +102,7 @@ class LoreJournalTests(unittest.TestCase):
             assert(capture('e',nil,2,'Different ending',false,true).id==c.id and count(j.entries)==2)
         ''')
 
-    def test_reload_collapses_existing_exact_duplicates_preserving_notes_and_links(self):
+    def test_reload_retains_duplicate_identities_notes_and_links_without_aliases(self):
         self.lua.execute('''
             local a=assert(capture('a',nil,1,'Original page',true,false));a.notes='First private note'
             local b=L.Copy(a);b.id='lore:99';b.notes='Second private note';b.revisit=true
@@ -110,10 +110,13 @@ class LoreJournalTests(unittest.TestCase):
             local mystery=assert(j:Create('mystery',{title='Question'}))
             assert(j:AddLink(mystery.id,{section='lore',id=b.id,label=b.title}))
             local reload=ns.CreateLoreJournal(saved);local rows=reload:List({kind='writing'})
-            assert(#rows==1 and rows[1].notes=='First private note' and rows[1].revisit)
-            assert(rows[1].passages[1].raw=='Second private note' and rows[1].passages[1].private)
-            assert(mystery.links[1].id==rows[1].id and saved.state.selected==rows[1].id)
-            assert(#ns.CreateLoreJournal(saved):List({kind='writing'})==1)
+            -- A duplicate's ID/creation stamp can already be in an exported
+            -- report. Keep both identities until persistent aliases are defined.
+            assert(#rows==2 and reload:Get(a.id).notes=='First private note')
+            assert(reload:Get(b.id).notes=='Second private note' and reload:Get(b.id).revisit)
+            assert(#reload:Get(a.id).passages==0 and #reload:Get(b.id).passages==0)
+            assert(mystery.links[1].id==b.id and saved.state.selected==b.id)
+            assert(#ns.CreateLoreJournal(saved):List({kind='writing'})==2)
         ''')
 
     def test_conflicting_later_page_forks_session_evidence_without_composite(self):

@@ -127,19 +127,20 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     settings=settings or {};if settings.autoArchiveLore==nil then settings.autoArchiveLore=true end
     if settings.loreOnlyOpenedPages==nil then settings.loreOnlyOpenedPages=true end
     local a=adapter or defaultAdapter()
-    local t={journal=journal,settings=settings,status="Open a readable source to preserve its displayed pages."}
+    local t={journal=journal,settings=settings,status=journal.consolidationNotice or "Open a readable source to preserve its displayed pages."}
     local serial=0
     local function changed()
         if t.onChange then t.onChange() end
         if t.onStatus then t.onStatus(t.status) end
     end
     local function status(text,s,code,reason)
+        if s and s.consolidationNotice then text=text..' '..s.consolidationNotice end
         t.status=text
         if s and s.entryID then journal:SetCaptureStatus(s.entryID,code or "partial",reason) end
         if a.Progress then a.Progress(s and (s.traversing or s.restoring) and text or nil) end
         changed()
     end
-    local function alive(s) return t.active==s and not s.closed end
+    local function alive(s) return not ns.InitializationBlocked and t.active==s and not s.closed end
     local function release(s)
         s.closed=true
         if journal.EndCapture then journal:EndCapture(s.sessionID) end
@@ -238,10 +239,10 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         local context={sessionID=s.sessionID,title=v.title or "Untitled readable source",sourceKind=v.sourceKind or "readable",
             locale=v.locale or "unknown",identity=v.identity,location=s.location,method=method,
             firstPage=n==1 and 1 or nil,lastPage=atEnd and n or nil}
-        local e,err=journal:CapturePage(context,{number=n,sourcePage=v.page,raw=v.raw,method=method,
+        local e,err,notice=journal:CapturePage(context,{number=n,sourcePage=v.page,raw=v.raw,method=method,
             personallyViewed=method~="automatic",first=n==1,last=atEnd and n~=nil})
         if not e then finish(s,"Partial archive: "..(type(err)=="string" and err or "the page could not be preserved."),"partial");return end
-        s.entryID=e.id;s.currentPage=v.page
+        s.entryID=e.id;s.currentPage=v.page;s.consolidationNotice=notice or s.consolidationNotice
         return e
     end
     local function consume(s,v,confirmed,explicit)
@@ -310,6 +311,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         if not after(s,0.05,sample) then sample() end
     end
     function t:OnNavigation(direction)
+        if ns.InitializationBlocked then return end
         if self.issuing then return end
         local s=self.active;if not s then return end
         if s.traversing or s.restoring or s.pending or s.queue then finish(s,"Capture interrupted: you took control of the reader.") end
@@ -335,16 +337,18 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         -- Other object dialogues may have additional branches or pages.
         local complete=d.sourceTitle=="Draconic for Dummies"
         local sessionID="gossip:"..tostring(L.Now())..":"..serial
-        local e,err=journal:CapturePage({sessionID=sessionID,title=d.sourceTitle,identity=d.identity,
+        local e,err,notice=journal:CapturePage({sessionID=sessionID,title=d.sourceTitle,identity=d.identity,
             sourceKind="object-dialogue",locale=read(GetLocale) or "unknown",location=d.location,
             firstPage=complete and 1 or nil,lastPage=complete and 1 or nil},
             {number=1,raw=d.raw,method="displayed",personallyViewed=true,first=complete,last=complete})
         journal:EndCapture(sessionID)
         t.status=e and (complete and "Complete archive: single-page object reader."
             or "Displayed object text archived; source page boundaries are unknown.") or err
+        if e and notice then t.status=t.status..' '..notice end
         return e,err
     end
     function t:CaptureCurrent()
+        if ns.InitializationBlocked then return end
         if self.dialogue and self.dialogue.writing then
             local d=a.Dialogue and a.Dialogue("gossip")
             if not d or not d.writing or d.identity~=self.dialogue.identity or d.sourceTitle~=self.dialogue.sourceTitle then
@@ -380,6 +384,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
             sourceTitle=context.sublabel,npcID=context.npcID,locale=read(GetLocale) or "unknown",subtype="NPC"})
     end
     function t:RecordPerson()
+        if ns.InitializationBlocked then return end
         local context
         if self.dialogue then
             context=self.dialogue.speaker
@@ -390,6 +395,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         return e,err
     end
     function t:SavePassage()
+        if ns.InitializationBlocked then return end
         local d=self.dialogue
         if not d then return nil,"Open supported gossip or quest text, or add a manual quotation." end
         local current=a.Dialogue and a.Dialogue(d.kind)
@@ -403,6 +409,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         journal:AddLocation(e.id,d.location);return e
     end
     function t:Event(event,...)
+        if ns.InitializationBlocked then return end
         if event=="ITEM_TEXT_BEGIN" then
             local v=a.Read and a.Read() or {}
             local active=self.active

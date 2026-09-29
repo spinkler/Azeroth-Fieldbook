@@ -616,6 +616,7 @@ function ns.CreateFieldbookShell(settings)
         return book~=nil and book:IsShown() and self.active==id
     end
     function shell:ShowSection(id,context)
+        if ns.InitializationBlocked then return false end
         local section=self.sections[id]
         if not section then return false end
         local content=self:EnsureSection(id)

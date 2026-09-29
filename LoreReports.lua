@@ -23,8 +23,8 @@ end
 local function flag(v) need(type(v)=='boolean','Invalid report flag.');return v end
 local function list(v,max)
     need(public(v) and type(v)=='table' and not getmetatable(v),'Expected a report list.')
-    local count=0;for k in pairs(v) do int(k,1,max);count=count+1;need(count<=max,'Report list limit exceeded.') end
-    need(count==#v,'Sparse report list.');return v
+    need(L.Array(v,max),'Invalid, sparse or oversized report list.')
+    return v
 end
 local function version()
     return L.Read(C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata,addonName,'Version')

@@ -173,7 +173,12 @@ local function reports(values)
     for _,report in ipairs(values or {}) do
         if not plainTable(report) then return nil,'Invalid report snapshot.' end
         if not L.Integer(report.received,0,9999999999) or (report.receivedFrom~=nil and not L.Text(report.receivedFrom,160,true)) then return nil,'Invalid report receipt provenance.' end
-        local copy=L.Copy(report);copy.received=nil;copy.receivedFrom=nil
+        -- Normalize builds new output without mutating its input. Preserve raw
+        -- nested lists here so invalid keys cannot disappear before validation.
+        local copy={}
+        for key,value in pairs(report) do
+            if key~='received' and key~='receivedFrom' then copy[key]=value end
+        end
         if not ns.LoreReports or not ns.LoreReports.Normalize then return nil,'Report validation is unavailable; saved data was preserved.' end
         local valid,err=ns.LoreReports.Normalize(copy,true);if not valid then return nil,err end
         valid.received=report.received;valid.receivedFrom=report.receivedFrom;out[#out+1]=valid
@@ -405,6 +410,47 @@ function ns.CreateLoreJournal(saved)
         e.captureStatus=status;e.captureReason=reason or '';self:Changed(e);return true
     end
     function j:EndCapture(sessionID) self.sessions[sessionID]=nil end
+    -- Preflight on detached data only. Distinct saved IDs also appear in exported
+    -- source keys, which we cannot rewrite or redirect without durable aliases.
+    -- Until that identity policy exists, even a capacity-valid merge is skipped.
+    local function consolidationReason(source,target,archiveBytes)
+        local merged=L.Copy(target)
+        for _,key in ipairs({'title','subtype','description','notes','theory','nextStep'}) do
+            if source[key]~='' and source[key]~=target[key] then
+                local p=L.Passage({raw=source[key],origin='manual',nature='annotation',method='manual',
+                    source='Duplicate entry '..key,private=true,at=source.updated})
+                p.id='merged:'..source.id..':'..key;merged.passages[#merged.passages+1]=p
+            end
+        end
+        for _,key in ipairs({'passages','locations','links','reports'}) do
+            for index,value in ipairs(source[key]) do
+                local item=L.Copy(value)
+                if key=='passages' or key=='locations' then item.id='merged:'..source.id..':'..key..':'..index end
+                merged[key][#merged[key]+1]=item
+            end
+        end
+        for _,tag in ipairs(source.tags) do
+            local found=false;for _,old in ipairs(merged.tags) do if old==tag then found=true end end
+            if not found then merged.tags[#merged.tags+1]=tag end
+        end
+        merged.revisit=merged.revisit or source.revisit
+        merged.created=math.min(merged.created,source.created);merged.updated=math.max(merged.updated,source.updated)
+        for _,at in ipairs({source.firstEncounter,source.lastEncounter}) do j:Encounter(merged,at) end
+        for key,page in pairs(source.pages) do if page.personallyViewed then merged.pages[key].personallyViewed=true end end
+        local valid,reason=L.ValidateEntry(merged,target.id)
+        if valid and (archiveBytes or j:ArchiveBytes())-bytesOf(source)-bytesOf(target)+bytesOf(merged)>L.MAX_ARCHIVE_BYTES then
+            reason='Archive is full (32 MiB).'
+        end
+        return reason or 'Their saved identities and existing report references must be preserved.'
+    end
+    local function consolidationNotice(source,target,archiveBytes)
+        -- Optional preflight must never turn a saved page into a failed capture,
+        -- including if bounded copying cannot represent an unusually large work.
+        local ok,reason=pcall(consolidationReason,source,target,archiveBytes)
+        if not ok then reason='The complete merge could not be validated; original records were preserved.' end
+        j.consolidationNotice='Duplicate writings kept separate: '..reason
+        return j.consolidationNotice
+    end
     function j:CapturePage(context,value)
         if self.readOnly then return nil,'Archive is read-only.' end
         if not plainTable(context) or not plainTable(value) or not L.Text(context.sessionID,160) then return nil,'Readable source needs a valid session identity.' end
@@ -501,8 +547,9 @@ function ns.CreateLoreJournal(saved)
         e.firstPage=first or e.firstPage;e.lastPage=last or e.lastPage
         self:Encounter(e,L.Now())
         s.id=e.id;s.pages=pending;s.first=first;s.last=last;self.sessions[context.sessionID]=s
-        -- A completed identical sequence can also retire an older redundant
-        -- unedited capture that did not overlap when this session began.
+        -- Capture succeeds independently of this optional consolidation preflight.
+        -- Keep the existing protections for selected, referenced and edited works.
+        local notice
         if meta.identity=='' and first==1 and last and self:WritingSummary(e).complete then
             for _,candidate in pairs(self.entries) do
                 if candidate.id~=e.id and candidate.kind=='writing' and candidate.identity=='' and candidate.sourceTitle==meta.sourceTitle
@@ -516,17 +563,15 @@ function ns.CreateLoreJournal(saved)
                     end;if referenced then break end end
                     if same and self.state.selected~=e.id and not referenced and e.title==meta.title and e.subtype==''
                         and e.notes=='' and e.description=='' and e.theory=='' and e.nextStep=='' and #e.passages==0 and #e.reports==0 and #e.links==0 and #e.tags==0 and not e.revisit then
-                        for n,page in pairs(e.pages) do if page.personallyViewed then candidate.pages[n].personallyViewed=true end end
-                        for _,location in ipairs(e.locations) do self:AddLocation(candidate.id,location) end
-                        self:Encounter(candidate,e.firstEncounter);self:Encounter(candidate,e.lastEncounter)
-                        db.entries[e.id]=nil;self.entries[e.id]=nil;e=candidate;s.id=e.id;s.borrowed=true;break
+                        notice=consolidationNotice(e,candidate)
+                        break
                     end
                 end
             end
         end
         self:Changed(e)
         if createdID==e.id then self:Recorded(e) end
-        return e
+        return e,nil,notice
     end
     function j:SearchText(e)
         local cached=self.cache[e.id];if cached then return cached end
@@ -575,8 +620,8 @@ function ns.CreateLoreJournal(saved)
         end)
         return out
     end
-    -- Repair exact duplicate captures left by older readers. Never merge merely
-    -- matching titles or disjoint partial books; retain annotations separately.
+    -- Inspect exact duplicates left by older readers using the same detached
+    -- preflight. Reload must not undo capture-time preservation of saved IDs.
     function j:CollapseDuplicateWritings()
         if self.readOnly then return end
         local groups={};local archiveBytes=self:ArchiveBytes()
@@ -595,45 +640,7 @@ function ns.CreateLoreJournal(saved)
                 local signature=table.concat(parts);local target=groups[signature]
                 if not target then groups[signature]=e
                 else
-                    local merged=L.Copy(target)
-                    for _,key in ipairs({'title','subtype','description','notes','theory','nextStep'}) do
-                        if e[key]~='' and e[key]~=target[key] then
-                            local p=L.Passage({raw=e[key],origin='manual',nature='annotation',method='manual',
-                                source='Duplicate entry '..key,private=true,at=e.updated})
-                            p.id='merged:'..e.id..':'..key;merged.passages[#merged.passages+1]=p
-                        end
-                    end
-                    for _,key in ipairs({'passages','locations','links','reports'}) do
-                        for index,v in ipairs(e[key]) do
-                            local copy=L.Copy(v)
-                            if key=='passages' or key=='locations' then copy.id='merged:'..e.id..':'..key..':'..index end
-                            merged[key][#merged[key]+1]=copy
-                        end
-                    end
-                    for _,tag in ipairs(e.tags) do
-                        local found=false;for _,old in ipairs(merged.tags) do if old==tag then found=true end end
-                        if not found then merged.tags[#merged.tags+1]=tag end
-                    end
-                    merged.revisit=merged.revisit or e.revisit
-                    merged.created=math.min(merged.created,e.created);merged.updated=math.max(merged.updated,e.updated)
-                    for _,at in ipairs({e.firstEncounter,e.lastEncounter}) do self:Encounter(merged,at) end
-                    for key,page in pairs(e.pages) do if page.personallyViewed then merged.pages[key].personallyViewed=true end end
-                    -- Validate the entire merged record before changing either source.
-                    local proposedBytes=archiveBytes-bytesOf(target)-bytesOf(e)+bytesOf(merged)
-                    if L.ValidateEntry(merged,target.id) and proposedBytes<=L.MAX_ARCHIVE_BYTES then
-                        archiveBytes=proposedBytes
-                        db.entries[target.id]=merged;self.entries[target.id]=merged;groups[signature]=merged
-                        db.entries[e.id]=nil;self.entries[e.id]=nil
-                        for _,owner in pairs(self.entries) do
-                            for _,link in ipairs(owner.links) do if link.section=='lore' and link.id==e.id then link.id=merged.id end end
-                            if owner.variantOf==e.id then owner.variantOf=merged.id end
-                        end
-                        if self.state.selected==e.id then self.state.selected=merged.id end
-                        if self.state.reading and self.state.reading[e.id] then
-                            self.state.reading[merged.id]=self.state.reading[merged.id] or self.state.reading[e.id];self.state.reading[e.id]=nil
-                        end
-                        self:Changed()
-                    end
+                    consolidationNotice(e,target,archiveBytes)
                 end
             end
         end

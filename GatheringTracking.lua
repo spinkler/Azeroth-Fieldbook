@@ -127,6 +127,7 @@ function ns.CreateGatheringTracking(journal)
             and read(C_TooltipInfo and C_TooltipInfo.GetWorldCursor)==nil)
     end
     function controller:ObserveWorldCursor()
+        if ns.InitializationBlocked then return end
         if journal.readOnly then return end
         local resource=worldResource()
         if resource then
@@ -176,6 +177,7 @@ function ns.CreateGatheringTracking(journal)
         journal:ObserveLoot(lootContext.id,items,read(time))
     end
     function controller:OnEvent(event,unit,a,b,c)
+        if ns.InitializationBlocked then return end
         if journal.readOnly then return end
         if event=="LOOT_READY" or event=="LOOT_OPENED" or event=="LOOT_SLOT_CHANGED" then snapshotLoot();return end
         if event=="LOOT_CLOSED" then lootContext=nil;return end

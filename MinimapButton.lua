@@ -22,6 +22,7 @@ function minimap:UpdatePosition()
     button:SetPoint("CENTER",Minimap,"CENTER",x*ratio,y*ratio)
 end
 local function dragUpdate()
+    if ns.InitializationBlocked then return end
     if not dragging or db.minimapButtonLocked then return end
     local x,y=GetCursorPosition()
     local cx,cy=Minimap:GetCenter()
@@ -70,6 +71,7 @@ function minimap:Initialize(settings, book)
         border:SetSize(54,54); border:SetPoint("TOPLEFT")
         button:SetScript("OnMouseDown",function() suppressClick=false end)
         button:SetScript("OnDragStart",function()
+            if ns.InitializationBlocked then return end
             if db.minimapButtonLocked or (IsShiftKeyDown and IsShiftKeyDown()) then return end
             dragging=true; suppressClick=true
             if GameTooltip then GameTooltip:Hide() end
@@ -79,6 +81,7 @@ function minimap:Initialize(settings, book)
         button:SetScript("OnDragStop",function() dragUpdate(); stopDrag() end)
         button:SetScript("OnHide",stopDrag)
         button:SetScript("OnClick",function()
+            if ns.InitializationBlocked then return end
             if suppressClick then suppressClick=false; return end
             if IsShiftKeyDown and IsShiftKeyDown() then
                 db.minimapButtonLocked=not db.minimapButtonLocked

@@ -7,7 +7,7 @@ sys.path.insert(0, str(ROOT.parent / '.codex-test-deps'))
 from lupa.lua51 import LuaRuntime
 
 
-def new_client(diagnostics=False, tracking=False, beast_lore=False):
+def new_client(diagnostics=False, tracking=False, beast_lore=False, initialize=True):
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(r'''
         ns, frames, messages, SlashCmdList, units, actorUnits = {}, {}, {}, {}, {}, {}
@@ -91,5 +91,6 @@ def new_client(diagnostics=False, tracking=False, beast_lore=False):
         lua.execute(ROOT.joinpath('DebugReport.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
         lua.execute('ns.ShowDebugReport = function(text) copiedReport = text end')
     lua.execute(ROOT.joinpath('AzerothFieldbook.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
-    lua.execute("fire('ADDON_LOADED', 'AzerothFieldbook')")
+    if initialize:
+        lua.execute("fire('ADDON_LOADED', 'AzerothFieldbook')")
     return lua

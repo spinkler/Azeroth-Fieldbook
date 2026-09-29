@@ -5,6 +5,9 @@ ns.PlayerNames=names
 local classes={}
 local classOrder,nextClass,classLimit={},1,512
 local function savedClasses()
+    -- Observe, Remember and even Format can default or write this store.
+    -- Retained callers must check the session latch before touching the root.
+    if ns.InitializationBlocked then return end
     if type(AzerothFieldbookDB)~="table" then return end
     if type(AzerothFieldbookDB.sourceClasses)~="table" then AzerothFieldbookDB.sourceClasses={} end
     return AzerothFieldbookDB.sourceClasses
@@ -29,6 +32,7 @@ local function fullName(unit)
     if surname==nil or surname=="" then return schema.Character(first) end
 end
 function names:Observe(unit)
+    if ns.InitializationBlocked then return end
     if not schema.Text(unit,20) or read(UnitIsPlayer,unit)~=true then return end
     local name=fullName(unit)
     if not name or type(UnitClass)~="function" then return end
@@ -104,4 +108,5 @@ frame:SetScript("OnEvent",function(_,event,unit)
     elseif event=="UNIT_NAME_UPDATE" or event=="UNIT_CONNECTION" then names:Observe(unit)
     else names:Refresh() end
 end)
-names:Refresh()
+-- Initial observation comes from PLAYER_LOGIN after main-save preflight;
+-- loading this file must not default a root before ADDON_LOADED validates it.

@@ -544,11 +544,13 @@ function ns.InitializeSharing(journal)
     frame:RegisterEvent("PLAYER_REGEN_ENABLED")
     frame:RegisterEvent("UNIT_NAME_UPDATE")
     frame:SetScript("OnEvent",function(_,event,...)
+        if ns.InitializationBlocked then return end
         if event=="CHAT_MSG_ADDON" then engine:Receive(...)
         elseif event~="UNIT_NAME_UPDATE" or (...)=="player" then initialize() end
     end)
     local elapsed=0
     frame:SetScript("OnUpdate",function(_,delta)
+        if ns.InitializationBlocked then return end
         runtime=runtime+delta
         elapsed=elapsed+delta
         if elapsed>=0.25 then elapsed=0; engine:Tick() end

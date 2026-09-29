@@ -122,6 +122,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         pin:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         frame.pinButton=pin
         pin:SetScript("OnClick",function()
+            if ns.InitializationBlocked then return end
             pinned=not pinned
             frame.afbPinned=pinned
             if pinned and ns.WindowPositions then
@@ -149,6 +150,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         frame.message=label(frame,"",230,-113,150)
         frame.message:SetHeight(36); frame.message:SetTextColor(1,0.65,0.45)
         frame.spellInput:SetScript("OnEnterPressed",function(self)
+            if ns.InitializationBlocked then return end
             local ok, message=journal:AddNoteSpell(selected,self:GetText())
             frame.message:SetText(message or "")
             if ok then self:SetText(""); render() end
@@ -169,6 +171,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
             local cross=label(row.remove,"x",5,-3,16,"GameFontNormal")
             cross:SetTextColor(1,0.2,0.15)
             row.remove:SetScript("OnClick",function()
+                if ns.InitializationBlocked then return end
                 journal:RemoveNoteSpell(selected,row.spellID); frame.message:SetText(""); render()
             end)
             frame.rows[index]=row
@@ -200,6 +203,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         frame.notesBorder:SetScript("OnMouseDown",focusNotes)
         frame.notes:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
         frame.notes:SetScript("OnTextChanged",function(self)
+            if ns.InitializationBlocked then return end
             local value=self:GetText()
             local _, count=value:gsub("[^\128-\191]", "")
             frame.notesCount:SetText(count .. "/400")
@@ -243,6 +247,7 @@ function ns.CreateCreatureNotesWindow(journal,getBook)
         if id then self:SetCreature(id) end
     end
     function controller:Open(id)
+        if ns.InitializationBlocked then return end
         build()
         -- Refresh even when a creature was selected before the window was built.
         selected,entry=false,false

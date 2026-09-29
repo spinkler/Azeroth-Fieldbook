@@ -193,6 +193,7 @@ function ns.CreateLedgerTracking(journal)
         end
     end
     function t:Begin(kind)
+        if ns.InitializationBlocked then return end
         if self.visits[kind] then self.visits[kind].closed=true end
         self.visits[kind]=nil
         local unit=L.Unit("npc");if not unit then return end -- never fall back to a changed target
@@ -209,6 +210,7 @@ function ns.CreateLedgerTracking(journal)
         end
     end
     function t:Scan(visit)
+        if ns.InitializationBlocked then return end
         if visit.closed or self.visits[visit.kind]~=visit then return end
         if L.Read(UnitGUID,"npc")~=visit.guid then return end
         local contact=journal:Get(visit.contact)
@@ -268,6 +270,7 @@ function ns.CreateLedgerTracking(journal)
     end
     local services={BANKFRAME_OPENED="banker",AUCTION_HOUSE_SHOW="auctioneer",PET_STABLE_SHOW="stable",TAXIMAP_OPENED="transport",CONFIRM_BINDER="innkeeper"}
     function t:OnEvent(event,...)
+        if ns.InitializationBlocked then return end
         if event=="MERCHANT_SHOW" then self:Open("merchant")
         elseif event=="TRAINER_SHOW" then self:Open("trainer")
         elseif event=="MERCHANT_CLOSED" or event=="TRAINER_CLOSED" then

@@ -187,6 +187,7 @@ local function setup()
     end
     local elapsed = 0
     panel:SetScript("OnUpdate", function(_, delta)
+        if ns.InitializationBlocked then return end
         elapsed = elapsed + delta
         if elapsed >= 0.25 then
             elapsed = 0
@@ -357,6 +358,7 @@ local function observeCast()
     end
 end
 events:SetScript("OnEvent", function(_, event, unit, second, id, bar)
+    if ns.InitializationBlocked then return end
     if not db or db.displaySpellIDWindow == false then return end
     if event == "PLAYER_TARGET_CHANGED" then
         seen.target = {}; castBars = {}; castBarOrder = {}

@@ -21,6 +21,7 @@ function ns.CreateTreasureTracking(journal)
         if self.active and now-self.active.at>60 then self.active=nil end
     end
     function t:ScanBags()
+        if ns.InitializationBlocked then return end
         self:Expire()
         if journal.readOnly or not C_Container then return end
         local maximum=T.Integer(NUM_BAG_SLOTS,0,5) and NUM_BAG_SLOTS or 4
@@ -105,6 +106,7 @@ function ns.CreateTreasureTracking(journal)
         self:Status("Portable contents captured (partial); personal receipt unconfirmed.")
     end
     function t:Event(event,...)
+        if ns.InitializationBlocked then return end
         self:Expire()
         if event=="PLAYER_ENTERING_WORLD" then self.active=nil;self.pending=nil;self.bagGUIDs={};self.recent={} end
         if event=="BAG_UPDATE_DELAYED" or event=="PLAYER_ENTERING_WORLD" then

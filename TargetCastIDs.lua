@@ -58,6 +58,7 @@ local function Linger()
     local token = generation
     -- Keep the already-rendered secret text in place; never read it back.
     C_Timer.After(lingerSeconds, function()
+        if ns.InitializationBlocked then return end
         if token == generation then Clear("linger expired") end
     end)
 end
@@ -195,6 +196,7 @@ local unitEvents = {
     "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_SENT",
 }
 events:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4, arg5)
+    if ns.InitializationBlocked then return end
     if not enabled then return end
     if event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_ENTERING_WORLD"
         or event == "PLAYER_LOGIN" or event == "PLAYER_REGEN_ENABLED" then
@@ -239,6 +241,7 @@ events:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4, arg5)
             -- One deferred query handles stop/start ordering without a polling loop.
             local token = generation
             C_Timer.After(0, function()
+                if ns.InitializationBlocked then return end
                 if token == generation then Refresh() end
             end)
         else

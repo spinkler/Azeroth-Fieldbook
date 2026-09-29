@@ -398,8 +398,52 @@ local function addSpellIDTooltip(tooltip, tooltipData)
     tooltip:AddLine("Spell ID: " .. spellID, 1.00, 0.82, 0.20)
 end
 
+-- This preflight must precede every initializer: Tracking allocates import keys,
+-- and journal/UI setup can normalize saved data even before the first event.
+-- A missing marker is not evidence of a supported legacy format.
+local function supportedRoot(value)
+    local function plain(v) return public(v) and type(v)=="table" and not getmetatable(v) end
+    if not plain(value) or not public(value.version) or value.version~=1 then return false end
+    if value.accountTrackingKey~=nil and not positiveID(value.accountTrackingKey) then return false end
+    if value.accountWideTracking~=nil and type(value.accountWideTracking)~="boolean" then return false end
+    for _,key in ipairs({"bestiary","eventLog","bestiaryBackups","spellIDWindowBlacklist"}) do
+        if value[key]~=nil and not plain(value[key]) then return false end
+    end
+    local bestiary=value.bestiary
+    if bestiary then
+        for _,key in ipairs({"creatures","entries","points","recentKills","sharing","sharingCharacters","zoneTerritories"}) do
+            if bestiary[key]~=nil and not plain(bestiary[key]) then return false end
+        end
+        for id,creature in pairs(bestiary.creatures or {}) do
+            if not positiveID(id) or not plain(creature) or not plain(creature.spells)
+                or (creature.names~=nil and not plain(creature.names)) then return false end
+        end
+        for id,entry in pairs(bestiary.entries or {}) do
+            if not positiveID(id) or not plain(entry) then return false end
+        end
+    end
+    return true
+end
+
 local function initialize()
-    if type(AzerothFieldbookDB) ~= "table" or AzerothFieldbookDB.version ~= 1 then
+    if ns.InitializationBlocked or (AzerothFieldbookDB~=nil and not supportedRoot(AzerothFieldbookDB)) then
+        -- Latch until a real /reload creates a new namespace. Independent section
+        -- observers and queued captures must not retain access to earlier stores.
+        ns.InitializationBlocked=true
+        -- Pinned notes outlive the book. Force closure without unpinning or
+        -- saving; the latch already protects retained callbacks during OnHide.
+        if AzerothFieldbookCreatureNotes then AzerothFieldbookCreatureNotes:Hide() end
+        if fieldbook then fieldbook:Hide() end
+        -- Drop the main dispatcher's old references as well as any pending reset.
+        -- No initializer, normalization, account import or capture setup may run.
+        db,trackingDB,journal,encounters=nil,nil,nil,nil
+        book,fieldbook,ledgerBook,gatheringBook=nil,nil,nil,nil
+        AzerothFieldbookRecordAtlasPoint=nil
+        wipeDeadline=0
+        say("Unsupported or malformed saved data; Fieldbook is disabled for this session. Saved data was left unchanged. Restore a supported save, then /reload.")
+        return
+    end
+    if AzerothFieldbookDB == nil then
         AzerothFieldbookDB = { version = 1, bestiary = { creatures = {}, entries = {} }, announce = false }
     end
     db = AzerothFieldbookDB
@@ -534,13 +578,16 @@ end
 
 frame:SetScript("OnEvent", function(_, event, ...)
     local unit, castGUID, spellID, sentSpellID = ...
+    if event == "ADDON_LOADED" then
+        if unit == addonName then initialize() end
+        return
+    end
+    if not db then return end
     if journal and not afterWipeHold and journal.BeastLoreEvent then
         journal:BeastLoreEvent(event,unit,castGUID,spellID,sentSpellID)
     end
     if encounters then encounters:Event(event) end
-    if event == "ADDON_LOADED" then
-        if unit == addonName then initialize() end
-    elseif event == "MODIFIER_STATE_CHANGED" then
+    if event == "MODIFIER_STATE_CHANGED" then
         if unit == "LCTRL" or unit == "RCTRL" then refreshAbilityTooltip() end
     elseif event == "SPELL_TEXT_UPDATE" then
         refreshAbilityTooltip()
@@ -603,6 +650,7 @@ end)
 -- target/mouseover. Never scan spell lists or inspect completed/hidden casts.
 local elapsedSinceScan = 0
 frame:SetScript("OnUpdate", function(_, elapsed)
+    if not db then return end
     if journal and not afterWipeHold and journal.PollBeastLore then journal:PollBeastLore(elapsed) end
     if journal and not afterWipeHold and journal.PollBuffs then journal:PollBuffs(elapsed) end
     if encounters then encounters:Update(elapsed) end

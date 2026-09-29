@@ -43,6 +43,7 @@ local function applyDefault(frame, registration)
 end
 
 function positions:Save(frame, key)
+    if ns.InitializationBlocked then return end
     key = key or (frames[frame] and frames[frame].key)
     if not db or not key then return end
     local left, top = frame:GetLeft(), frame:GetTop()

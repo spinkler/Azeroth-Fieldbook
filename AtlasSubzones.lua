@@ -83,6 +83,7 @@ function S.Cancel(job)
     if job then job.thread,job.done,job.owner=nil,nil,nil end
 end
 function S.Step()
+    if ns.InitializationBlocked then return end
     local job=table.remove(jobs,1)
     if job and job.thread then
         if job.owner and A.Read(job.owner.IsVisible,job.owner)==false then
@@ -880,6 +881,7 @@ function S.Track(j,onChange)
     local s=j.subzones;local observer=CreateFrame("Frame");local elapsed=0;local away=false
     s.onChange=onChange
     observer:SetScript("OnEvent",function(_,event)
+        if ns.InitializationBlocked then return end
         if event=="PLAYER_LOGOUT" then s:Flush();return end
         if event=="PLAYER_LEAVING_WORLD" then away=true;s:Reset();return end
         if event=="PLAYER_ENTERING_WORLD" or event=="ZONE_CHANGED_NEW_AREA" then away=false;s:Reset() end
@@ -889,6 +891,7 @@ function S.Track(j,onChange)
         pcall(observer.RegisterEvent,observer,event)
     end
     observer:SetScript("OnUpdate",function(_,dt)
+        if ns.InitializationBlocked then return end
         elapsed=elapsed+dt
         if elapsed<0.25 then return end
         elapsed=0

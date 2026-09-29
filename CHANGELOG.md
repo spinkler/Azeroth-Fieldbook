@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.17.0 - Unreleased
+
+- Preserve unsupported or malformed main saves before normalization, account
+  import-key allocation or journal/UI setup. Initialize defaults only for absent
+  saves, show a concise diagnostic when blocked, and disable the session until a
+  real reload. Stop main and section callbacks, queued captures, commands and
+  bindings from using stale state or a pending reset. Force pinned Bestiary notes
+  closed and block retained text and spell-edit callbacks after shutdown.
+  Guard the shared player-name class store against blocked observers, retained
+  helpers and formatting reads; defer initial observation until login so file
+  loading cannot default an unsupported save before main-save validation.
+- Preflight Lore duplicate consolidation on detached data. Keep accepted pages
+  and both original records when limits or identity preservation prevent a merge;
+  leave the destination, locations and read flags unchanged. Keep distinct saved
+  IDs on reload as well, preserving annotations, references, reading positions and
+  exported report identities until durable alias semantics are designed. Ordinary
+  matching rereads still reuse records; the 101st-location capture policy is unchanged.
+- Reject sparse Lore report lists before normalization can discard elements.
+  Preserve valid older stored reports and retain malformed saved evidence through
+  existing invalid-entry handling. Validate original nested stored lists before
+  copying can discard invalid keys, including boolean-keyed evidence.
+  Keep schema versions, exact installed-version
+  compatibility and explicit acceptance unchanged.
+- Add Lua 5.1 regressions for blocked initialization and later callbacks, supported
+  reloads, real Lore location/work/archive limits, skipped-merge status, identity
+  preservation and all five report-list types. Update duplicate-preservation
+  coverage and documentation. Native WoW acceptance remains a separate check.
+
 ## v0.16.9-beta - 2026-09-29
 
 This release includes all changes since v0.16.6-beta and the previous push at

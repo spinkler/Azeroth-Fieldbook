@@ -91,11 +91,14 @@ session are idempotent. Read-here is always the interaction location, including
 for a carried item; found-here is never inferred from opening it.
 
 Version 0.16.3 keeps same-source adjacent page BEGIN events in one session and
-handles READY delivered before a post-call navigation hook. On load, exact saved
-page-set duplicates coalesce after validating the merged record. Different notes
-and titles become private annotations, locations/reports/links are retained, and
-incoming references and selection follow the retained record. If merging would
-exceed safety limits, both originals remain intact. Delete an entry using
+handles READY delivered before a post-call navigation hook. Starting in 0.17.0,
+exact saved page-set duplicates remain separate on capture and reload. A detached
+candidate checks collection and byte limits, but retiring distinct IDs would also
+change existing export identities without durable aliases. That destructive step
+is deferred. Original annotations, locations, reports, links, read flags, selection
+and reading positions stay with their original IDs. A skipped-consolidation notice
+is independent of successful page capture; it does not turn a complete archive
+into a failed capture. Ordinary exact rereads still reuse the same record. Delete an entry using
 **Sources / manage → Delete entry…**, then confirm. Deletion sets no blacklist;
 opening the source again can archive it normally. Reopen pages missing from old
 captures: text never received cannot be reconstructed. Live verification remains
