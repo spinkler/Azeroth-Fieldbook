@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.17.0 (Beta)
+# Azeroth Fieldbook 0.17.0 (Release)
 
 Version 0.17.0 protects saved data at initialization, Lore consolidation and
 report validation boundaries. An unsupported or malformed main save disables

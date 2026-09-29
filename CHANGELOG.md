@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.17.0 - Unreleased
+## v0.17.0 - 2026-09-29
+
+This release includes all changes since v0.16.9-beta and the previous push at
+`bf8baf3fdaa0b184e079d54485a3ac8c675c8624`, completing the eight-finding
+stabilisation pass.
 
 - Extend the existing Account-wide tracking option to Lore and Treasure. Import
   each character's earlier collections once, including accounts migrated before
@@ -35,8 +39,7 @@
   in the existing details pane. Matching NPC templates alone do not merge contacts.
 - Add production-path F1-F3 regressions for capture, export/import, both migration
   orders, already-migrated saves, reloads, scope changes, aliases, missing identity
-  evidence, private annotations and the latched startup guard. Keep this batch
-  uncommitted pending separate review and focused native acceptance.
+  evidence, private annotations and the latched startup guard.
 - Preserve unsupported or malformed main saves before normalization, account
   import-key allocation or journal/UI setup. Initialize defaults only for absent
   saves, show a concise diagnostic when blocked, and disable the session until a
@@ -61,7 +64,9 @@
 - Add Lua 5.1 regressions for blocked initialization and later callbacks, supported
   reloads, real Lore location/work/archive limits, skipped-merge status, identity
   preservation and all five report-list types. Update duplicate-preservation
-  coverage and documentation. Native WoW acceptance remains a separate check.
+  coverage and documentation. The bounded stabilisation pass completed matching
+  implementation validation, independent review and focused native acceptance
+  in the isolated synthetic client environment.
 
 ## v0.16.9-beta - 2026-09-29
 
