@@ -482,7 +482,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 row.zone:SetText(L.Safe((p and p.zone or "Unknown zone")..(p and p.subzone~="" and " / "..p.subzone or "").." • "..e.id:match('%d+$')))
                 row.roles:SetText(L.Safe(journal:RoleText(e)))
                 row.reason:SetText(found.match and L.Safe((found.match.reported and "Report: " or "Offers: ")..found.match.name) or (e.personal and "Personally encountered" or e.recorded and "Manually recorded" or "Reported only"))
-                row.selected:SetShown(e.id==state.selected);row:Show()
+                row:SetSelected(e.id==state.selected);row:Show()
             end
         end
         m.roles:SetText(next(state.roles) and "Roles ("..L.Count(state.roles)..")" or "All roles")
@@ -492,7 +492,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.favourites:SetChecked(state.favourites==true);m.recipes:SetChecked(state.recipes==true)
         local e=journal:Get(state.selected)
         if not e and rows[1] then
-            state.selected=rows[1].contact.id;state.sighting=1;state.sightingKey=nil;e=rows[1].contact;if m.rows[1].id==e.id then m.rows[1].selected:Show() end
+            state.selected=rows[1].contact.id;state.sighting=1;state.sightingKey=nil;e=rows[1].contact;if m.rows[1].id==e.id then m.rows[1]:SetSelected(true) end
             state.detail=self:DefaultDetail(e)
         end
         m.remove:SetEnabled(e~=nil and not journal.readOnly)
@@ -573,11 +573,8 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             if not m.updatingList then state.contactScroll=value or self:GetVerticalScroll();c:Refresh() end
         end)
         for i=1,10 do
-            local row=CreateFrame("Button",nil,m.listBody);row:SetPoint("TOPLEFT",0,-(i-1)*65);row:SetSize(228,64)
-            row.hover=row:CreateTexture(nil,"HIGHLIGHT")
-            row.hover:SetAllPoints();row.hover:SetColorTexture(1,0.9,0.65,0.16)
-            row:SetHighlightTexture(row.hover)
-            row.selected=row:CreateTexture(nil,"BACKGROUND");row.selected:SetAllPoints();row.selected:SetColorTexture(0.95,0.7,0.15,0.18)
+            local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*65);row:SetSize(228,64)
+            ns.FieldbookUI.StyleMenuRow(row)
             row.name=U.Label(row,"",3,-1,222,"GameFontNormalSmall")
             row.sublabel=U.Label(row,"",3,-13,222,"GameFontHighlightSmall")
             row.zone=U.Label(row,"",3,-25,222,"GameFontDisableSmall")

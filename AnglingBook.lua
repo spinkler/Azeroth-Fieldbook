@@ -173,7 +173,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         for i,row in ipairs(m.rows) do
             local e=rows[s.offset+i];row.id=e and e.id;row:SetShown(e~=nil)
             if e then
-                row.name:SetText((e.favourite and U.SavedIcon(true) or "")..A.Safe(e.name));row.selected:SetShown(e.id==s.selected)
+                row.name:SetText((e.favourite and U.SavedIcon(true) or "")..A.Safe(e.name));row:SetSelected(e.id==s.selected)
                 row.zone:SetText((e.personal and "Personal" or "Reported").." • "..(e.kind=="spot" and (e.hover and "Pool zone sighting" or e.poolID and "Pool sighting" or "Remembered spot") or e.kind))
                 row.icon:SetTexture(e.kind=="item" and itemIcon(e) or "Interface\\Icons\\Trade_Fishing")
             end
@@ -362,8 +362,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         m.count=U.Label(m,"",42,-277,250,"GameFontHighlightSmall");m.rows={}
         for i=1,PAGE_SIZE do
             local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-300-(i-1)*30);row:SetSize(250,29)
-            row:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
-            row.selected=row:CreateTexture(nil,"BACKGROUND");row.selected:SetAllPoints();row.selected:SetColorTexture(0.95,0.7,0.15,0.18)
+            ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",3,-6);row.icon:SetSize(20,20)
             row.name=U.Label(row,"",28,-2,217,"GameFontHighlightSmall");row.name:SetWordWrap(false)
             row.zone=U.Label(row,"",28,-17,217,"GameFontDisableSmall");row.zone:SetWordWrap(false)

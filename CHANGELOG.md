@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Use Lore & Landmarks' parchment hover across all seven journal menus, with
+  Bestiary's gold border and dark fill for every selected entry.
+- Remove repeated page labels from the Lore reader, separate source details in
+  grey, and display preserved lore in white at two points above the normal text size.
+
 ## v0.17.0 - 2026-09-29
 
 This release includes all changes since v0.16.9-beta and the previous push at

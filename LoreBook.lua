@@ -46,6 +46,28 @@ local function provenance(p,report)
     lines[#lines+1]="Method: "..(p.method=="manual" and "manual transcription / record" or p.method or "unknown").." • "..dateText(p.at)
     return table.concat(lines,"\n")
 end
+local function sourceReader(parent)
+    local width,height=543,438
+    local reader,body=U.Scroll(parent,342,-215,width,height)
+    local header=U.Label(body,"",0,0,width,"GameFontHighlight")
+    header:SetWordWrap(true);header:SetSpacing(3);header:SetTextColor(0.65,0.65,0.65)
+    local text=U.Label(body,"",0,0,width,"GameFontHighlight")
+    text:SetWordWrap(true);text:SetSpacing(4)
+    local path,size,flags=text:GetFont()
+    function reader:SetText(content,metadata,lore)
+        local hasSource=metadata~=nil
+        header:SetText(L.Safe(metadata or ""));header:SetShown(hasSource)
+        local top=hasSource and header:GetStringHeight()+20 or 0
+        text:ClearAllPoints();text:SetPoint("TOPLEFT",0,-top)
+        if path and type(size)=="number" then text:SetFont(path,size+(hasSource and 2 or 0),flags) end
+        if hasSource then text:SetTextColor(1,1,1) else text:SetTextColor(0.75,0.8,0.8) end
+        text:SetText(L.Safe(hasSource and lore or content))
+        body:SetHeight(math.max(height,top+text:GetStringHeight()+12))
+        self:UpdateScrollChildRect();self:RefreshScrollBar()
+    end
+    reader.text=text;reader.header=header
+    return reader
+end
 function ns.CreateLoreBook(journal,tracking,shell,references)
     local state=journal.state
     state.query=type(state.query)=="string" and state.query or ""
@@ -137,10 +159,12 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
     end
     function c:SourceText(e,row)
         if row.overview then return self:Overview(e) end
-        if row.missing then return row.label.."\n\nThis page has not been preserved. Missing text is never filled from an external source." end
+        if row.missing then return "This page has not been preserved. Missing text is never filled from an external source." end
         if row.page then
             local p=row.page
-            return row.label.."\n"..provenance(p,row.report).."\n\n"..(p.raw=="" and "[This source page was empty.]" or L.Plain(p.raw or ""))
+            local metadata=provenance(p,row.report)
+            local lore=p.raw=="" and "[This source page was empty.]" or L.Plain(p.raw or "")
+            return metadata.."\n\n"..lore,metadata,lore
         end
         local r=row.report;local lines={row.label,r.receivedFrom and "Received from (your record): "..r.receivedFrom or "Actual sender not recorded.",
             "Sender claim: "..nonempty(r.sender,"unknown").." (not authenticated)","Claimed original observer: "..nonempty(r.originalSource,"unknown"),"Received: "..dateText(r.received),
@@ -168,7 +192,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         for i,row in ipairs(m.rows) do
             local e=rows[state.offset+i];row.id=e and e.id;row:SetShown(e~=nil)
             if e then
-                row.name:SetText(L.Safe(journal:Title(e)));row.icon:SetTexture(icons[e.kind]);row.selected:SetShown(e.id==state.selected)
+                row.name:SetText(L.Safe(journal:Title(e)));row.icon:SetTexture(icons[e.kind]);row:SetSelected(e.id==state.selected)
                 local text=L.kinds[e.kind]
                 if e.kind=="writing" then text=text.." • "..(journal:WritingSummary(e).complete and "complete" or "partial") end
                 if e.kind=="mystery" then text=text.." • "..(mysteryNames[e.status] or "Open") end
@@ -194,7 +218,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         for _,control in ipairs({m.reader,m.sourceMenu,m.pagePrevious,m.pageNext}) do control:SetShown(state.view=="entry") end
         for _,control in ipairs({m.map,m.locationMenu,m.addLocation,m.place,m.locationDescription,m.mapZone}) do control:SetShown(state.view=="location") end
         if state.view=="entry" then
-            local content,key,scroll
+            local content,key,scroll,metadata,lore
             if e then
                 local sources=self:Sources(e);self.sources=sources
                 local r=state.reading[e.id]
@@ -202,13 +226,13 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
                 local selected,index
                 for i,v in ipairs(sources) do if v.id==r.source then selected=v;index=i;break end end
                 if not selected then index=e.kind=="writing" and #sources>1 and 2 or 1;selected=sources[index];r.source=selected.id;r.scroll=0 end
-                content=self:SourceText(e,selected);key=e.id..":"..selected.id;scroll=type(r.scroll)=="number" and r.scroll or 0
+                content,metadata,lore=self:SourceText(e,selected);key=e.id..":"..selected.id;scroll=type(r.scroll)=="number" and r.scroll or 0
                 m.sourceMenu:SetText(L.Safe(selected.label));m.pagePrevious:SetEnabled(index>1);m.pageNext:SetEnabled(index<#sources)
             else
                 content="The Atlas remembers where something is. Lore & Landmarks remembers what you found out about it—and what you still don't understand.\n\nEncounter a source, preserve its words, add your thoughts, connect your evidence and leave yourself a reason to return.\n\nAutomatic book capture works in the background. It never opens this window or changes your selected entry."
                 m.sourceMenu:SetText("Preserved sources & personal notes");m.pagePrevious:SetEnabled(false);m.pageNext:SetEnabled(false);scroll=0
             end
-            if m.readerContent~=content or m.readerKey~=key then m.reader:SetText(content);m.readerContent=content;m.readerKey=key;m.reader:SetVerticalScroll(scroll) end
+            if m.readerContent~=content or m.readerKey~=key then m.reader:SetText(content,metadata,lore);m.readerContent=content;m.readerKey=key;m.reader:SetVerticalScroll(scroll) end
         else
             local locations=L.VisibleLocations(e);local p=locations[state.location]
             if not p and #locations>0 then state.location=1;p=locations[1] end
@@ -267,8 +291,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         m.rows={}
         for i=1,7 do
             local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-269-(i-1)*44);row:SetSize(250,43)
-            row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-            row.selected=row:CreateTexture(nil,"BACKGROUND");row.selected:SetAllPoints();row.selected:SetColorTexture(0.42,0.29,0.1,0.38)
+            ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",3,-5);row.icon:SetSize(20,20)
             row.name=U.Label(row,"",29,-3,214,"GameFontHighlightSmall");row.name:SetWordWrap(false)
             row.context=U.Label(row,"",29,-24,215,"GameFontDisableSmall");row.context:SetWordWrap(false)
@@ -325,7 +348,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         end)
         m.pagePrevious=U.Button(m,"<",747,-175,73,function() c:Page(-1) end)
         m.pageNext=U.Button(m,">",832,-175,78,function() c:Page(1) end)
-        m.reader=U.ReadArea(m,342,-215,543,438);m.reader.text:SetFontObject(textFont("GameFontHighlight"));m.reader.text:SetSpacing(4)
+        m.reader=sourceReader(m)
         m.reader:HookScript("OnVerticalScroll",function() c:Remember() end)
         m.locationMenu=U.MenuButton(m,"Recorded location",342,-175,569,function(button)
             local e=journal:Get(state.selected);if not e then return end

@@ -126,7 +126,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             if data then
                 row.name:SetText((data.id==state.selected and "> " or "")..A.Safe(data.name));row.zone:SetText(A.Safe(data.zone~="" and data.zone or "Unpositioned / unknown zone"))
                 row.icon:SetTexture(A.category[data.category].icon)
-                local selected=data.id==state.selected;row.selected:SetShown(selected)
+                local selected=data.id==state.selected;row:SetSelected(selected)
                 row.name:SetTextColor(selected and 1 or 0.75,selected and 0.82 or 0.8,selected and 0.14 or 0.8)
             end
         end
@@ -184,8 +184,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.rows={}
         for i=1,12 do
             local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-204-(i-1)*30);row:SetSize(250,29)
-            row:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
-            row.selected=row:CreateTexture(nil,"BACKGROUND");row.selected:SetAllPoints();row.selected:SetColorTexture(0.95,0.7,0.15,0.18)
+            ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",3,-6);row.icon:SetSize(20,20)
             row.name=U.Label(row,"",28,-2,217,"GameFontHighlightSmall");row.name:SetWordWrap(false)
             row.zone=U.Label(row,"",28,-17,217,"GameFontDisableSmall");row.zone:SetWordWrap(false)

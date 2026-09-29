@@ -61,9 +61,9 @@ class LoreUITests(unittest.TestCase):
             click(m.rows[1]);assert(c.state.selected==e.id)
             assert(m.reader.text:GetText():find('First paragraph — café.',1,true))
             assert(not m.reader.text:GetText():find('<HTML>',1,true))
-            assert(m.reader.text:GetText():find('Presented in the original reader',1,true))
+            assert(m.reader.header:GetText():find('Presented in the original reader',1,true))
             c:Page(1);assert(m.reader.text:GetText():find('has not been preserved',1,true))
-            c:Page(1);assert(m.reader.text:GetText():find('not personally opened',1,true))
+            c:Page(1);assert(m.reader.header:GetText():find('not personally opened',1,true))
             assert(not e.pages[3].personallyViewed)
         ''')
 
@@ -182,8 +182,8 @@ class LoreUITests(unittest.TestCase):
                 passages={},annotations={notes='Sender chose to share'},references={},
                 locations={{zone='Synthetic hills',mapID=102,x=3500,y=4500,meaning='read-here',origin='captured'}}}}
             c:Select(e.id);c:Page(0,'report:1:page:1')
-            local text=m.reader.text:GetText();assert(text:find('Recorded sender',1,true) and text:find('Claimed author',1,true))
-            assert(text:find('Not personally encountered',1,true) and text:find('Received text',1,true))
+            local text=m.reader.header:GetText();assert(text:find('Recorded sender',1,true) and text:find('Claimed author',1,true))
+            assert(text:find('Not personally encountered',1,true) and m.reader.text:GetText():find('Received text',1,true))
             assert(e.pages[1].raw:find('First paragraph',1,true) and e.notes=='')
             c:SetView('location');assert(m.locationMenu:GetText():find('Reported location',1,true))
             assert(m.locationMenu:GetText():find('Read here',1,true))
@@ -196,7 +196,7 @@ class LoreUITests(unittest.TestCase):
                 sourceTitle='Reported title',pages={{number=1,raw='Received text',nature='source',origin='captured',method='displayed'}},
                 passages={},annotations={},references={},locations={}}}
             c:Select(e.id);c:Page(0,'report:1:page:1')
-            local text=m.reader.text:GetText()
+            local text=m.reader.header:GetText()
             assert(text:find('Sender claim: Payload sender',1,true))
             assert(text:find('Claimed original observer',1,true))
             assert(not text:find('Received from Payload sender',1,true))

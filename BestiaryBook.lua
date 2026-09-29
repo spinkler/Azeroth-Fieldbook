@@ -426,8 +426,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 if hasRumours then row.text:SetTextColor(114/255,214/255,91/255)
                 else row.text:SetTextColor(rowSelected and 1.00 or ink[1], rowSelected and 0.82 or ink[2], rowSelected and 0.14 or ink[3]) end
                 row.scrollingName:SetTextColor(row.text:GetTextColor())
-                row.highlight:SetShown(rowSelected)
-                row:SetBackdropBorderColor(0.95, 0.70, 0.15, rowSelected and 1 or 0)
+                row:SetSelected(rowSelected)
                 row:Show()
             else row:Hide() end
         end
@@ -908,12 +907,7 @@ local ink = { 0.75, 0.8, 0.8 }
         for i = 1, creaturePageSize do
             local row = CreateFrame("Button", nil, book, "BackdropTemplate")
             row:SetPoint("TOPLEFT", 135, -110 - (i-1)*30); row:SetSize(162, 28)
-            row:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=8, insets={left=1,right=1,top=-3,bottom=1}})
-            row:SetBackdropBorderColor(0.95, 0.70, 0.15, 0)
-            row.highlight = row:CreateTexture(nil, "BACKGROUND")
-            row.highlight:SetPoint("TOPLEFT", 1, -1)
-            row.highlight:SetPoint("BOTTOMRIGHT", -1, 1)
-            row.highlight:SetColorTexture(0.18,0.10,0.02,0.50)
+            ns.FieldbookUI.StyleMenuRow(row)
             row.reviewMark = label(row, "", 5, -8, 10)
             row.reviewMark:SetTextColor(1, 1, 1)
             row.reviewMark:SetWordWrap(false)

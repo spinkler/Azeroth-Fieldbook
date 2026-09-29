@@ -64,7 +64,22 @@ local function edit(parent, x, y, width, limit)
     return e
 end
 
-ns.FieldbookUI = {Label=label, Button=button, MenuButton=menuButton, Close=cornerClose, Edit=edit}
+local function styleMenuRow(row)
+    -- Lore's parchment hover and Bestiary's persistent selection treatment.
+    -- Rows use BackdropTemplate so the border follows their full current size.
+    row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    row:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8,insets={left=1,right=1,top=-3,bottom=1}})
+    row.selected=row:CreateTexture(nil,"BACKGROUND")
+    row.selected:SetPoint("TOPLEFT",1,-1);row.selected:SetPoint("BOTTOMRIGHT",-1,1)
+    row.selected:SetColorTexture(0.18,0.10,0.02,0.50)
+    function row:SetSelected(selected)
+        self.selected:SetShown(selected)
+        self:SetBackdropBorderColor(0.95,0.70,0.15,selected and 1 or 0)
+    end
+    row:SetSelected(false)
+end
+
+ns.FieldbookUI = {Label=label, Button=button, MenuButton=menuButton, Close=cornerClose, Edit=edit, StyleMenuRow=styleMenuRow}
 
 function ns.CreateFieldbookShell(settings)
     settings=settings or {}

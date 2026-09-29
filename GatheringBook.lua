@@ -194,7 +194,7 @@ function ns.CreateGatheringBook(journal,shell)
                 row.text:SetText(data.name)
                 local active=data.id==selected
                 row.text:SetTextColor(active and 1 or 0.75,active and 0.82 or 0.8,active and 0.14 or 0.8)
-                row.highlight:SetShown(active);row:SetBackdropBorderColor(0.95,0.70,0.15,active and 1 or 0)
+                row:SetSelected(active)
             end
         end
         book.entryCount:SetText(#journal:List().." entries")
@@ -406,11 +406,7 @@ function ns.CreateGatheringBook(journal,shell)
         for i=1,PAGE_SIZE do
             local row=CreateFrame("Button",nil,book,"BackdropTemplate")
             row:SetPoint("TOPLEFT",135,-110-(i-1)*30);row:SetSize(162,28)
-            row:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8,insets={left=1,right=1,top=-3,bottom=1}})
-            row:SetBackdropBorderColor(0.95,0.70,0.15,0)
-            row.highlight=row:CreateTexture(nil,"BACKGROUND")
-            row.highlight:SetPoint("TOPLEFT",1,-1);row.highlight:SetPoint("BOTTOMRIGHT",-1,1)
-            row.highlight:SetColorTexture(0.18,0.10,0.02,0.50)
+            ns.FieldbookUI.StyleMenuRow(row)
             row.text=label(row,"",17,-8,140);row.text:SetWordWrap(false);addNameScroller(row)
             row:SetScript("OnClick",function(self) if self.id then choose(self.id) end end)
             row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",wheel);book.rows[i]=row

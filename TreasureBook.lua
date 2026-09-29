@@ -163,7 +163,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
                 local e,s=found.entry,found.summary;row.name:SetText((e.bookmark and U.SavedIcon(true) or "")..T.Safe(found.title));row.icon:SetTexture(icon(e))
                 row.kind:SetText(T.Safe((e.form=="world" and "World" or "Portable").." / "..e.category.." • "..found.zone))
                 row.knowledge:SetText((s.personal==0 and s.reported>0 and "[R] " or "")..(s.contents>0 and "Contents recorded" or "Contents not recorded"))
-                row.selected:SetShown(e.id==state.selected)
+                row:SetSelected(e.id==state.selected)
             end
         end
         m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+PAGE<#rows)
@@ -223,9 +223,8 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         m.notes=U.Button(d,"Kind notes",170,-208,122,function() c:Notes() end)
         m.count=U.Label(d,"",42,-241,250,"GameFontHighlightSmall");m.rows={}
         for i=1,PAGE do
-            local row=CreateFrame("Button",nil,d);row:SetPoint("TOPLEFT",42,-263-(i-1)*54);row:SetSize(250,53)
-            row:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
-            row.selected=row:CreateTexture(nil,"BACKGROUND");row.selected:SetAllPoints();row.selected:SetColorTexture(0.95,0.7,0.15,0.18)
+            local row=CreateFrame("Button",nil,d,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-263-(i-1)*54);row:SetSize(250,53)
+            ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",2,-2);row.icon:SetSize(19,19)
             row.name=U.Label(row,"",25,-2,223,"GameFontHighlightSmall")
             row.kind=U.Label(row,"",3,-22,244,"GameFontDisableSmall");row.knowledge=U.Label(row,"",3,-37,244,"GameFontHighlightSmall")
