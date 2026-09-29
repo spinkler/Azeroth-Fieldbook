@@ -7,6 +7,12 @@ local mysteryNames={open="Open",investigating="Investigating",resolved="Resolved
 local natureNames={source="Preserved source text",observation="Direct observation",account="Reported account",interpretation="Personal interpretation",annotation="Annotation",paraphrase="Paraphrase",rumour="Rumour",theory="Working theory"}
 local function dateText(at) return at and U.Date(at) or "Time unknown" end
 local function nonempty(value,fallback) return type(value)=="string" and value~="" and value or fallback end
+local function latestReceipt(report)
+    local r=report.latestReceipt;if not r then return nil end
+    return "Latest delivery — received: "..dateText(r.received).."\n"..
+        (r.receivedFrom and "Received from (your record): "..r.receivedFrom or "Actual sender not recorded.")..
+        "\nSender claim: "..nonempty(r.sender,"unknown").." (not authenticated)\nExported: "..dateText(r.created)
+end
 local function captureStatus(c,value)
     if not c.main then return end
     local full=type(value)=='table' and (value.message or value.reason or value.status) or value
@@ -26,6 +32,7 @@ local function provenance(p,report)
         lines[#lines+1]="Claimed original observer: "..nonempty(report.originalSource,"unknown")
         lines[#lines+1]="Reported source: "..nonempty(p.source,nonempty(p.sourceTitle,nonempty(report.sourceTitle,report.title or "Unknown")))
         lines[#lines+1]="Not personally encountered. Original capture claims are unverified."
+        lines[#lines+1]=latestReceipt(report)
     elseif p.origin=="captured" then
         lines[#lines+1]="Origin: Captured during your encounter"
         lines[#lines+1]=p.personallyViewed and "Presented in the original reader; no claim that you read it." or "Automatically retrieved; not personally opened in the original reader."
@@ -138,6 +145,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         local r=row.report;local lines={row.label,r.receivedFrom and "Received from (your record): "..r.receivedFrom or "Actual sender not recorded.",
             "Sender claim: "..nonempty(r.sender,"unknown").." (not authenticated)","Claimed original observer: "..nonempty(r.originalSource,"unknown"),"Received: "..dateText(r.received),
             "Reported source: "..nonempty(r.sourceTitle,nonempty(r.title,"Unknown")),"Not personally encountered. Sender and original observer claims are not independently verified."}
+        lines[#lines+1]=latestReceipt(r)
         for _,key in ipairs({"description","notes","theory","nextStep"}) do
             local value=r.annotations and r.annotations[key]
             if value and value~="" then lines[#lines+1]="Reported "..key.." (sender explicitly included)\n"..value end

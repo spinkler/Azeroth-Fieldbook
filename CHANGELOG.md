@@ -8,8 +8,14 @@
   later toggles. Preserve Lore entries, pages, annotations, reader state, export
   identities and scoped Atlas references, plus Treasure kinds, encounter history,
   original provenance and receipts. Update help/storage documentation and add
-  production-path migration, reload, identity and guard regressions. F5 report
-  capacity/deduplication remains outside this change.
+  production-path migration, reload, identity and guard regressions.
+
+- Deduplicate unchanged Lore re-exports by original identity and selected
+  evidence, independently of sender and export time. Preserve the first and
+  latest delivery receipts in the existing reader, keep meaningful revisions
+  distinct, and count historical equivalent snapshots once toward the unchanged
+  32-revision limit without deleting them. Cover account/local exports, selected
+  pages, forwarding, historical capacity, reloads and guarded receipt updates.
 
 - Persist fishing evidence identities and contributor partitions at capture.
   Preserve original attribution across character exports and account imports;

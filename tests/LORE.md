@@ -158,7 +158,7 @@ treated as verified local capture.
 Limits refuse additional material with explicit errors; old books are not
 pruned: 2,000 entries, 256 pages and 256 passages per work, 128 KiB per source
 page/passage, 4 MiB per entry, 32 MiB archive content, 100 local locations,
-100 relationships, 32 tags and 32 received snapshots per entry. No source
+100 relationships, 32 tags and 32 distinct received evidence revisions per entry. No source
 is silently shortened to fit. Search projections are cached per changed entry.
 
 ## Sharing path
@@ -182,7 +182,34 @@ actual sender. The recipient's entered sender is stored separately. Imported
 pages stay in reported snapshots with source/method claims and receipt time;
 they never set personally-viewed/encountered flags. Imports may attach to an
 explicitly selected same-kind entry without replacing notes or local source
-text. Repeated exact reports deduplicate. Historical report versions remain
+text. Unchanged re-exports deduplicate by original source/work identity and the
+complete selected evidence, ignoring envelope sender, export time, receipt data
+and installed-addon version. Page batches, text, references, locations,
+passages, annotations and provenance (including evidence timestamps) remain part
+of the revision. Identical text from independent original identities stays
+distinct. Forwarding and exporting shared account Lore retain the original
+identity while recording the current transmitter.
+
+The initial snapshot and its receipt remain intact. An unchanged import updates
+one `latestReceipt` (claimed sender, export time, import time and optional
+recipient-entered sender), visible alongside the original receipt in report
+details and reported source pages. Intermediate deliveries are not retained;
+metadata cannot grow with the number of deliveries. Receipts are local metadata,
+not new wire fields. AFBLR1 and the same-installed-version transfer gate remain
+unchanged.
+
+Historical redundant snapshots are neither deleted nor consolidated on startup.
+They retain their list positions, contents and original receipts; equivalent
+snapshots count once toward the 32-revision capacity. A pre-fix store could have
+at most 32 snapshots, hence at most 31 redundant copies. The physical validation
+ceiling is consequently 63 (32 revisions plus 31 preserved historical copies),
+while new imports only append genuinely distinct revisions. Existing 4 MiB work
+and 32 MiB archive byte limits still apply, including historical duplicates and
+receipts. A byte-full historical store can still refuse additional evidence or
+receipt metadata; nothing is pruned to make room. No new report IDs or persisted
+deduplication index are allocated on reload.
+
+Historical report versions remain
 readable after an addon update; new transfers require the same installed version.
 
 Envelopes have a 1 MiB limit with bounded strings, lists, depth and node count;

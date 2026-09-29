@@ -1,7 +1,7 @@
 local _,ns=...
 -- Lore owns the selected archive. These utilities never select an account store.
 local L={SCHEMA=1,MAX_ENTRIES=2000,MAX_PAGES=256,MAX_PAGE_BYTES=131072,MAX_WORK_BYTES=4194304,
-    MAX_ARCHIVE_BYTES=33554432,MAX_PASSAGES=256,MAX_LOCATIONS=100,MAX_LINKS=100,MAX_TAGS=32}
+    MAX_ARCHIVE_BYTES=33554432,MAX_PASSAGES=256,MAX_LOCATIONS=100,MAX_LINKS=100,MAX_TAGS=32,MAX_REPORTS=32}
 ns.Lore=L
 for _,key in ipairs({'Public','Read','Text','Safe','Number','Integer','Array','Count','Now','Position'}) do L[key]=ns.Atlas[key] end
 L.kinds={writing='Writings',landmark='Landmarks',person='People',mystery='Mysteries'}
@@ -184,20 +184,18 @@ local function fields(value,kind)
     return out
 end
 local function reports(values)
-    if not L.Array(values or {},32) then return nil,'Use at most 32 report snapshots per entry.' end
-    local out={}
+    -- At most 32 historical copies could predate evidence deduplication. Keeping
+    -- all of them can leave at most 31 redundant copies alongside 32 revisions.
+    -- This physical ceiling and the unchanged byte limits bound preserved data.
+    if not L.Array(values or {},L.MAX_REPORTS*2-1) then return nil,'Too many stored report snapshots.' end
+    local out,seen,count={},{},0
     for _,report in ipairs(values or {}) do
-        if not plainTable(report) then return nil,'Invalid report snapshot.' end
-        if not L.Integer(report.received,0,9999999999) or (report.receivedFrom~=nil and not L.Text(report.receivedFrom,160,true)) then return nil,'Invalid report receipt provenance.' end
-        -- Normalize builds new output without mutating its input. Preserve raw
-        -- nested lists here so invalid keys cannot disappear before validation.
-        local copy={}
-        for key,value in pairs(report) do
-            if key~='received' and key~='receivedFrom' then copy[key]=value end
-        end
-        if not ns.LoreReports or not ns.LoreReports.Normalize then return nil,'Report validation is unavailable; saved data was preserved.' end
-        local valid,err=ns.LoreReports.Normalize(copy,true);if not valid then return nil,err end
-        valid.received=report.received;valid.receivedFrom=report.receivedFrom;out[#out+1]=valid
+        if not ns.LoreReports then return nil,'Report validation is unavailable; saved data was preserved.' end
+        local valid,err=ns.LoreReports.NormalizeStored(report);if not valid then return nil,err end
+        local key=ns.LoreReports.EvidenceKey(valid)
+        if not seen[key] then seen[key]=true;count=count+1 end
+        if count>L.MAX_REPORTS then return nil,'Use at most 32 evidence revisions per entry.' end
+        out[#out+1]=valid
     end
     return out
 end

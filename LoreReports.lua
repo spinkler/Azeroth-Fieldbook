@@ -1,6 +1,6 @@
 local addonName, ns = ...
 local L=ns.Lore
-local R={VERSION=1,MAX_BYTES=1048576,MAX_REPORTS=32};ns.LoreReports=R
+local R={VERSION=1,MAX_BYTES=1048576,MAX_REPORTS=L.MAX_REPORTS};ns.LoreReports=R
 local kinds={writing=true,landmark=true,person=true,mystery=true}
 local origins={captured=true,manual=true,reported=true}
 local natures={source=true,observation=true,account=true,interpretation=true,annotation=true,paraphrase=true,rumour=true,theory=true}
@@ -100,6 +100,41 @@ function R.Normalize(v,stored)
     if #encode(out)+7>R.MAX_BYTES then return nil,'Report exceeds 1 MiB. Select fewer pages; no text was truncated.' end
     return out
 end
+-- Only validated evidence belongs in this key. Delivery claims and installed
+-- addon versions do not revise a work; source identities and all selected
+-- content/provenance (including observation times) still do.
+function R.EvidenceKey(report)
+    local evidence={}
+    for k,v in pairs(report) do
+        if k~='sender' and k~='created' and k~='addonVersion' and k~='received'
+            and k~='receivedFrom' and k~='latestReceipt' then evidence[k]=v end
+    end
+    return encode(evidence)
+end
+local function receipt(v)
+    fields(v,{sender=true,created=true,received=true,receivedFrom=true})
+    local out={sender=str(v.sender,160),created=int(v.created,0,9999999999),received=int(v.received,0,9999999999)}
+    if v.receivedFrom~=nil then
+        need(L.Text(v.receivedFrom,160,true),'Invalid recorded sender.');out.receivedFrom=v.receivedFrom
+    end
+    return out
+end
+function R.NormalizeStored(report)
+    -- Shallow projection deliberately leaves nested lists untouched until they
+    -- have passed strict validation (including malformed nonnumeric keys).
+    if not public(report) or type(report)~='table' or getmetatable(report) then return nil,'Invalid report snapshot.' end
+    local copy={}
+    for k,v in pairs(report) do if k~='received' and k~='receivedFrom' and k~='latestReceipt' then copy[k]=v end end
+    local out,err=R.Normalize(copy,true);if not out then return nil,err end
+    local ok,first=pcall(receipt,{sender=out.sender,created=out.created,received=report.received,receivedFrom=report.receivedFrom})
+    if not ok then return nil,tostring(first) end
+    out.received=first.received;out.receivedFrom=first.receivedFrom
+    if report.latestReceipt~=nil then
+        local valid,latest=pcall(receipt,report.latestReceipt);if not valid then return nil,tostring(latest) end
+        out.latestReceipt=latest
+    end
+    return out
+end
 function R.Validate(v) local r,err=R.Normalize(v);return r~=nil,err end
 function R.Encode(v) local r,err=R.Normalize(v);if not r then return nil,err end;return 'AFBLR1:'..encode(r) end
 function R.Decode(data)
@@ -130,9 +165,9 @@ function R.Decode(data)
     end
     local ok,value=pcall(parse);if not ok then return nil,tostring(value) end;return R.Normalize(value)
 end
-local function pageCopy(p)
+local function pageCopy(p,originalSource)
     return {number=p.number,raw=p.raw,method=methods[p.method] and p.method or 'manual',origin=origins[p.origin] and p.origin or 'manual',
-        nature='source',source=type(p.source)=='string' and p.source~='' and p.source or player(),at=p.at or L.Now(),first=p.first,last=p.last}
+        nature='source',source=type(p.source)=='string' and p.source~='' and p.source or originalSource,at=p.at or L.Now(),first=p.first,last=p.last}
 end
 function R.Build(journal,id,options)
     local e=journal:Get(id);if not e then return nil,'Select an entry.' end;options=options or {}
@@ -145,11 +180,11 @@ function R.Build(journal,id,options)
     local pages={}
     for key,p in pairs(base and base.pages or e.pages or {}) do pages[#pages+1]={key=key,page=p} end
     table.sort(pages,function(a,b) return (a.page.number or 100001)<(b.page.number or 100001) or a.page.number==b.page.number and tostring(a.key)<tostring(b.key) end)
-    if options.includePages~=false then for _,v in ipairs(pages) do if selected(options.pages,v.key) then out.pages[#out.pages+1]=pageCopy(v.page) end end end
+    if options.includePages~=false then for _,v in ipairs(pages) do if selected(options.pages,v.key) then out.pages[#out.pages+1]=pageCopy(v.page,out.originalSource) end end end
     if options.includePassages~=false then for i,p in ipairs(base and base.passages or e.passages or {}) do
         if selected(options.passages,i) and (not p.private or options.interpretations==true)
             and (({source=true,observation=true,account=true})[p.nature] or options.interpretations==true) then
-            local copy=pageCopy(p);copy.number=nil;copy.first=nil;copy.last=nil;copy.nature=natures[p.nature] and p.nature or 'source';copy.title=p.title or ''
+            local copy=pageCopy(p,out.originalSource);copy.number=nil;copy.first=nil;copy.last=nil;copy.nature=natures[p.nature] and p.nature or 'source';copy.title=p.title or ''
             copy.private=p.private==true;copy.speaker=p.speaker;copy.sourceTitle=p.sourceTitle;out.passages[#out.passages+1]=copy
         end
     end end
@@ -190,7 +225,7 @@ end
 function R.Cancel(ticket) if ticket then pending[ticket]=nil end end
 function R.Accept(journal,ticket,selectedID)
     local staged=pending[ticket];if not staged then return nil,'Preview this report first.' end
-    if journal.readOnly then return nil,'This Lore journal is read-only.' end
+    if ns.InitializationBlocked or journal.readOnly then return nil,'This Lore journal is read-only.' end
     local r,err=R.Normalize(staged.report);if not r then return nil,err end
     local e=selectedID and journal:Get(selectedID)
     if selectedID and not e then return nil,'The selected entry no longer exists.' end
@@ -201,18 +236,33 @@ function R.Accept(journal,ticket,selectedID)
         end;if e then break end end
     end
     if e and e.kind~=r.kind then return nil,'The original report identity belongs to a different entry kind.' end
-    local canonical=encode(r)
-    for _,old in ipairs(e and e.reports or {}) do
-        local normalized=R.Normalize((function() local copy=L.Copy(old);copy.received=nil;copy.receivedFrom=nil;return copy end)())
-        if normalized and encode(normalized)==canonical then pending[ticket]=nil;return e,'This exact report is already archived.' end
+    -- Validate before copying, so malformed stored list keys cannot be lost.
+    local archived={}
+    if e then
+        local valid;valid,err=L.ValidateEntry(e,e.id);if not valid then return nil,err end
+        archived=valid.reports
     end
-    if e and #(e.reports or {})>=R.MAX_REPORTS then return nil,'Entry report limit reached; no report was changed.' end
-    local reports=L.Copy(e and e.reports or {});r.received=L.Now();r.receivedFrom=staged.receivedFrom;reports[#reports+1]=r
+    local canonical=R.EvidenceKey(r)
+    local seen,count,duplicate={},0,nil
+    for i,old in ipairs(archived) do
+        local key=R.EvidenceKey(old)
+        if not seen[key] then seen[key]=true;count=count+1 end
+        if key==canonical and not duplicate then duplicate=i end
+    end
+    if not duplicate and count>=R.MAX_REPORTS then return nil,'Entry report limit reached; no report was changed.' end
+    local reports=archived
+    if duplicate then
+        -- Keep the original snapshot and first receipt intact. A single latest
+        -- receipt is bounded even after arbitrarily many unchanged deliveries.
+        reports[duplicate].latestReceipt={sender=r.sender,created=r.created,received=L.Now(),receivedFrom=staged.receivedFrom}
+    else
+        r.received=L.Now();r.receivedFrom=staged.receivedFrom;reports[#reports+1]=r
+    end
     local result
     if e then
         local replacement=L.Copy(e);replacement.reports=reports
         result,err=journal:ReplaceEntry(e.id,replacement)
     else result,err=journal:Create(r.kind,{title=r.title,sourceTitle=r.sourceTitle,subtype=r.subtype,origin='reported',reports=reports}) end
     if not result then return nil,err end
-    pending[ticket]=nil;return result
+    pending[ticket]=nil;return result,duplicate and 'This evidence is already archived; latest receipt updated.' or nil
 end
