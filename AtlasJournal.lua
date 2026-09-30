@@ -172,6 +172,8 @@ local function normalize(value,expedition)
     end
     return out
 end
+-- Whole-save recovery checks records without projecting away private metadata.
+A.ValidateRecord=normalize
 function ns.CreateAtlasJournal(saved)
     -- Additive schema-0 -> 1 migration. Preserve unknown fields and unsupported
     -- future schemas; never rewrite or reset another SavedVariable.

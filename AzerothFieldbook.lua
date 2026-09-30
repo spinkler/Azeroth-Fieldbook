@@ -3,6 +3,18 @@
 -- No bundled spell list or creature database. Sharing requires explicit acceptance.
 local addonName, ns = ...
 ns = ns or {}
+-- The observer also supports running without the optional journal module.
+local applySpellIDTooltipPreference = ns.ApplySpellIDTooltipPreference or function(settings)
+    if type(settings.showSpellIDs) ~= "boolean" then settings.showSpellIDs = true end
+    settings.spellIDTooltipInitialized = nil
+    if type(GetCVarBool) == "function" then
+        local ok, enabled = pcall(GetCVarBool, "tooltipShowAuraSpellIDs")
+        if ok and enabled == settings.showSpellIDs then return end
+    end
+    if type(SetCVar) == "function" then
+        pcall(SetCVar, "tooltipShowAuraSpellIDs", settings.showSpellIDs and "1" or "0")
+    end
+end
 local db, trackingDB
 local encounters
 local journal, book, fieldbook, ledgerBook, gatheringBook
@@ -425,7 +437,33 @@ local function supportedRoot(value)
     return true
 end
 
-local function initialize()
+-- Whole-save restoration commits only in a fresh namespace, before any of the
+-- ordinary schema migrations and before observers hold saved-table references.
+local backupStartupChecked=false
+function ns.HoldForFieldbookRestore()
+    ns.InitializationBlocked=true
+    local closing=fieldbook
+    db,trackingDB,journal,encounters=nil,nil,nil,nil
+    book,fieldbook,ledgerBook,gatheringBook=nil,nil,nil,nil
+    AzerothFieldbookRecordAtlasPoint=nil
+    wipeDeadline=0
+    -- Drop writers before UI hooks run; even a failing OnHide cannot leave the
+    -- main dispatcher live while a restore is awaiting reload.
+    if AzerothFieldbookCreatureNotes then pcall(AzerothFieldbookCreatureNotes.Hide,AzerothFieldbookCreatureNotes) end
+    if closing then pcall(closing.Hide,closing) end
+end
+local function initializeImpl()
+    if not backupStartupChecked then
+        backupStartupChecked=true
+        if ns.FieldbookBackups then
+            local ok,err=ns.FieldbookBackups.ApplyPending()
+            if not ok then
+                ns.HoldForFieldbookRestore()
+                say("Backup recovery paused: "..ns.Atlas.Safe(err).." Use /fieldbook backups to export or cancel the pending restore, then /reload.")
+                return
+            end
+        end
+    end
     if ns.InitializationBlocked or (AzerothFieldbookDB~=nil and not supportedRoot(AzerothFieldbookDB)) then
         -- Latch until a real /reload creates a new namespace. Independent section
         -- observers and queued captures must not retain access to earlier stores.
@@ -440,7 +478,7 @@ local function initialize()
         book,fieldbook,ledgerBook,gatheringBook=nil,nil,nil,nil
         AzerothFieldbookRecordAtlasPoint=nil
         wipeDeadline=0
-        say("Unsupported or malformed saved data; Fieldbook is disabled for this session. Saved data was left unchanged. Restore a supported save, then /reload.")
+        say("Unsupported or malformed saved data; Fieldbook is disabled for this session. Saved data was left unchanged. Use /fieldbook backups for recovery, or restore supported saved files, then /reload.")
         return
     end
     if AzerothFieldbookDB == nil then
@@ -453,12 +491,7 @@ local function initialize()
     trackingDB.bestiary.creatures = type(trackingDB.bestiary.creatures) == "table" and trackingDB.bestiary.creatures or {}
     trackingDB.bestiary.entries = type(trackingDB.bestiary.entries) == "table" and trackingDB.bestiary.entries or {}
     if type(db.creatureAnnouncements) ~= "boolean" then db.creatureAnnouncements = true end
-    if db.spellIDTooltipInitialized ~= true then
-        db.showSpellIDs, db.spellIDTooltipInitialized = true, true
-        if type(SetCVar) == "function" then pcall(SetCVar, "tooltipShowAuraSpellIDs", "1") end
-    elseif type(db.showSpellIDs) ~= "boolean" then
-        db.showSpellIDs = true
-    end
+    applySpellIDTooltipPreference(db)
     -- Discard malformed saved entries rather than trying to infer missing data.
     for id, creature in pairs(trackingDB.bestiary.creatures) do
         if not positiveID(id) or type(creature) ~= "table" or type(creature.spells) ~= "table" then
@@ -501,7 +534,11 @@ local function initialize()
     if journal and ns.InitializeSharing then ns.InitializeSharing(journal) end
     if journal and ns.StartBestiaryLoot then ns.StartBestiaryLoot(journal) end
     if journal and ns.CreateFieldbookShell then
-        fieldbook=ns.CreateFieldbookShell({getBrightness=function() return journal:GetBackgroundBrightness() end, getDarkMode=function() return journal:GetDarkMode() end})
+        fieldbook=ns.CreateFieldbookShell({
+            getStorageScope=function(id) return ns.GetActiveStorageScope(id,trackingDB.bestiary) end,
+            getBrightness=function() return journal:GetBackgroundBrightness() end,
+            getDarkMode=function() return journal:GetDarkMode() end,
+        })
     end
     if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal,fieldbook) end
     if fieldbook and ns.InitializeGathering then
@@ -532,6 +569,16 @@ local function initialize()
         end)
     end
     if encounters and db.ignoreEncounterHistory then encounters:ForgetHistory() end
+    if ns.ReportTrackingTransition then ns.ReportTrackingTransition(db, say) end
+end
+
+local function initialize()
+    local ok,err=pcall(initializeImpl)
+    local restored=ns.FieldbookBackups and ns.FieldbookBackups.FinishStartup(ok and not ns.InitializationBlocked)
+    if restored and (not ok or ns.InitializationBlocked) then
+        ns.HoldForFieldbookRestore()
+        say("Fieldbook restore could not initialize. The original saved journals were put back unchanged. Use /fieldbook backups to cancel the pending restore or export recovery data, then /reload.")
+    elseif not ok then error(err,0) end
 end
 
 local bindingReminderShown = false
@@ -682,8 +729,9 @@ end
 SLASH_AZEROTHFIELDBOOK1 = "/fieldbook"
 SLASH_AZEROTHFIELDBOOK2 = "/bestiary"
 SlashCmdList.AZEROTHFIELDBOOK = function(message)
-    if not db then return end
     local command = message:lower():match("^%s*(.-)%s*$"):gsub("%s+", " ")
+    if command=="backups" and ns.OpenFieldbookBackups then ns.OpenFieldbookBackups();return end
+    if not db then return end
     if command == "wipe" or command == "reset" or command == "reset confirm" then
         wipeDeadline = GetTime() + 60
         local scope = trackingDB ~= db and "the account-wide" or "this character's"
@@ -698,11 +746,10 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         else
             for key in pairs(db) do db[key] = nil end
             db.version, trackingDB.bestiary, db.announce, db.creatureAnnouncements = 1, { creatures = {}, entries = {} }, false, true
-            db.showSpellIDs, db.spellIDTooltipInitialized = true, true
+            applySpellIDTooltipPreference(db)
         end
         if ns.CastIDs then ns.CastIDs:Initialize(db) end
         if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
-        if type(SetCVar) == "function" then pcall(SetCVar, "tooltipShowAuraSpellIDs", "1") end
         -- Prevent retained meter history from silently restoring wiped knowledge
         -- after reload. New sessions after each load can still be learned.
         db.ignoreEncounterHistory = true

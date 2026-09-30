@@ -289,13 +289,18 @@ local function sameOrigin(incoming,stored)
     for _,key in ipairs(stored.legacyKeys or {}) do if incoming.key==key then return true end end
     return false
 end
-function R.Accept(journal,ticket)
+function R.Accept(journal,ticket,dryRun)
     if journal.readOnly or ns.InitializationBlocked then return nil,"Almanac is read-only." end
     local report=pending[ticket];if not report then return nil,"Preview this report before accepting it." end
     -- Stage all writes. A bad reference, conflicting origin or capacity limit
     -- cannot leave half an imported report in the character's journal.
     local staged=ns.CreateAnglingJournal(A.Copy(journal.db));local db=staged.db
     local refs={};local added,updated=0,0
+    local identities={added=0,updated=0,known=0}
+    local function claimEvidence(claim)
+        if not claim then return end
+        return encode({origin=claim.origin,record=claim.record,notes=claim.notes,first=claim.first,last=claim.last,recordID=claim.recordID})
+    end
     for _,kind in ipairs({"water","pool","item","spot"}) do for _,r in ipairs(report.records) do if r.kind==kind then
         local originKey=A.Key(r.origin.source,r.origin.key)
         local aliases={};local prior
@@ -303,6 +308,7 @@ function R.Accept(journal,ticket)
             aliases[#aliases+1]=key
             if not prior or key==originKey then prior=claim end
         end end
+        local priorEvidence=claimEvidence(prior)
         local e
         if kind=="spot" then
             e=prior and staged:Get(prior.recordID)
@@ -341,6 +347,8 @@ function R.Accept(journal,ticket)
             if r.last>=old.last then old.record=record;if r.notes~=nil then old.notes=r.notes end end
         end
         e.last=math.max(e.last,r.last)
+        local outcome=not old and "added" or priorEvidence~=claimEvidence(db.claims[originKey]) and "updated" or "known"
+        identities[outcome]=identities[outcome]+1
     end end end
     for _,r in ipairs(report.facts) do
         local f={origin=A.Copy(r.origin),waterID=refs[r.waterID],spotID=refs[r.spotID],poolID=refs[r.poolID],source=r.source,
@@ -395,6 +403,18 @@ function R.Accept(journal,ticket)
         end
     end
     if A.Count(db.reported)>R.MAX_STORED_FACTS or A.Count(db.claims)>R.MAX_CLAIMS then return nil,"Reported-knowledge capacity reached; nothing imported." end
+    local delta={added=added,updated=updated,known=#report.facts-added-updated,identities=identities}
+    if dryRun then return true,added,updated,delta end
     for _,key in ipairs({"serial","waters","pools","items","spots","waterKeys","poolKeys","itemKeys","reported","claims","reportOrigins"}) do journal.db[key]=db[key] end
-    pending[ticket]=nil;journal:Changed();return true,added,updated
+    pending[ticket]=nil;journal:Changed();return true,added,updated,delta
+end
+
+-- Acceptance already stages a detached journal. Stop before committing it;
+-- keep the ticket usable and never fire the real journal's callbacks.
+function R.Preflight(journal,ticket)
+    local ok,added,updated,delta=R.Accept(journal,ticket,true)
+    if not ok then return "Cannot accept now: "..added,false end
+    local i=delta.identities
+    return string.format("Against this journal now: %d new, %d updated, %d already-known catch summaries.\nIdentity claims: %d new, %d updated, %d already known.",
+        added,updated,delta.known,i.added,i.updated,i.known),true,delta
 end

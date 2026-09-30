@@ -334,6 +334,19 @@ function ns.CreateFieldbookShell(settings)
             right:SetPoint("TOPRIGHT",book,"TOPRIGHT",0,-27)
             right:SetPoint("BOTTOMRIGHT",bottomRight,"TOPRIGHT",0,0)
         end
+        book.scope=CreateFrame("Frame",nil,book)
+        book.scope:SetPoint("TOPRIGHT",-24,-31);book.scope:SetSize(190,18)
+        book.scope:EnableMouse(true)
+        book.scope:SetFrameLevel(book:GetFrameLevel()+3)
+        book.scopeLabel=label(book.scope,"",0,0,190,"GameFontHighlightSmall")
+        book.scopeLabel:SetJustifyH("RIGHT");book.scopeLabel:SetWordWrap(false)
+        book.scope:SetScript("OnEnter",function(self)
+            if GameTooltip then
+                GameTooltip:SetOwner(self,"ANCHOR_TOP");GameTooltip:SetText(book.scopeLabel:GetText())
+                GameTooltip:AddLine(book.scopeExplanation or "",1,1,1,true);GameTooltip:Show()
+            end
+        end)
+        book.scope:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         book.windowTitle=book.titleBar:CreateFontString(nil,"OVERLAY",textFont("GameFontNormal"))
         book.windowTitle:SetPoint("CENTER",book,"TOP",0,-15)
         book.windowTitle:SetWidth(700)
@@ -644,6 +657,12 @@ function ns.CreateFieldbookShell(settings)
             end
         end
         self.active=id
+        local scope=settings.getStorageScope or ns.GetActiveStorageScope
+        if scope then
+            local title,explanation=scope(id)
+            book.scopeLabel:SetText(title);book.scopeExplanation=explanation
+        end
+        book.scope:SetShown(scope~=nil)
         book:SetSize(section.width,section.height)
         book.windowTitle:SetText("Azeroth Fieldbook - "..section.definition.title.." - v"..addonVersion())
         for _,key in ipairs({"help","options","eventLog"}) do

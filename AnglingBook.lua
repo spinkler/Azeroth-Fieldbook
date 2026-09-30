@@ -324,7 +324,9 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             p.preview=U.ReadArea(p,14,-314,214,237)
             p.check=U.Button(p,"Preview",14,-280,109,function()
                 R.Cancel(p.ticket);local ticket,err=R.Prepare(p.data:GetText());p.ticket=ticket
-                p.preview:SetText(ticket and ticket.preview or err,true);p.accept:SetEnabled(ticket~=nil and not journal.readOnly)
+                local summary,canAccept
+                if ticket then summary,canAccept=R.Preflight(journal,ticket) end
+                p.preview:SetText(ticket and summary.."\n\n"..ticket.preview or err,true);p.accept:SetEnabled(canAccept==true)
             end)
             p.accept=U.Button(p,"Accept report",132,-280,110,function()
                 local ok,added,updated=R.Accept(journal,p.ticket)

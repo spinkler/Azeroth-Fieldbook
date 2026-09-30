@@ -1,5 +1,19 @@
 local _, ns = ...
 
+-- The saved Fieldbook choice owns startup intent; the CVar is client-wide.
+-- Apply only at initialization, explicit option changes and settings resets.
+function ns.ApplySpellIDTooltipPreference(db)
+    if type(db.showSpellIDs) ~= "boolean" then db.showSpellIDs = true end
+    db.spellIDTooltipInitialized = nil -- obsolete first-run marker
+    if type(GetCVarBool) == "function" then
+        local ok, enabled = pcall(GetCVarBool, "tooltipShowAuraSpellIDs")
+        if ok and enabled == db.showSpellIDs then return end
+    end
+    if type(SetCVar) == "function" then
+        pcall(SetCVar, "tooltipShowAuraSpellIDs", db.showSpellIDs and "1" or "0")
+    end
+end
+
 ns.BestiaryImmunityEffects = {
     "Bleed", "Poison", "Disease", "Curse", "Stun", "Fear", "Horror", "Polymorph",
     "Charm", "Sleep", "Disorient", "Incapacitate", "Root", "Snare", "Daze",
@@ -633,17 +647,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         self:Touch()
     end
     function journal:GetSpellIDTooltips()
-        if type(GetCVarBool) == "function" then
-            local ok, enabled = pcall(GetCVarBool, "tooltipShowAuraSpellIDs")
-            if ok and type(enabled) == "boolean" then return enabled end
-        end
-        return db.showSpellIDs == true
+        return db.showSpellIDs ~= false
     end
     function journal:SetSpellIDTooltips(enabled)
         db.showSpellIDs = enabled == true
-        if type(SetCVar) == "function" then
-            pcall(SetCVar, "tooltipShowAuraSpellIDs", enabled and "1" or "0")
-        end
+        ns.ApplySpellIDTooltipPreference(db)
     end
     function journal:GetDarkMode()
         return db.darkMode == true
@@ -1537,6 +1545,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:ResetDatabase()
         local personalBestiary, trackingKey, eventLog = db.bestiary, db.accountTrackingKey, self:GetEventLog()
         local savedBackups = db.bestiaryBackups
+        local trackingActive = db.accountTrackingActive
         local autoArchiveLore,loreOnlyOpenedPages=db.autoArchiveLore,db.loreOnlyOpenedPages
         for key in pairs(db) do db[key] = nil end
         db.autoArchiveLore,db.loreOnlyOpenedPages=autoArchiveLore,loreOnlyOpenedPages
@@ -1544,8 +1553,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         db.bestiaryBackups=savedBackups
         db.version, db.announce, db.creatureAnnouncements = 1, false, true
         db.accountTrackingKey, db.accountWideTracking = trackingKey, activeAccountWideTracking
+        db.accountTrackingActive = trackingActive
         if trackingDB ~= db then db.bestiary = personalBestiary end
-        db.showSpellIDs, db.spellIDTooltipInitialized = true, true
+        self:SetSpellIDTooltips(true)
         db.backgroundBrightness = 1
         self:SetDisplayCastIDs(true)
         if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end

@@ -432,10 +432,17 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             p.data:SetScript("OnTextChanged",function(...) if changed then changed(...) end;R.Cancel(p.ticket);p.ticket=nil;if p.accept then p.accept:Disable() end end)
             p.review=U.Button(p,"Preview pasted data",4,-252,250,function()
                 R.Cancel(p.ticket);local ticket,err=R.Prepare(p.data:GetText());p.ticket=ticket
-                if ticket then p.preview:SetText(ticket.preview,true);p.accept:Enable();c:Message("Review reported claims before accepting.") else p.preview:SetText(err,true);p.accept:Disable() end
+                if ticket then
+                    local summary,canAccept=R.Preflight(journal,ticket,p.attach:GetChecked() and p.contact or nil)
+                    p.preview:SetText(summary.."\n\n"..ticket.preview,true);p.accept:SetEnabled(canAccept)
+                    c:Message("Review reported claims before accepting.")
+                else p.preview:SetText(err,true);p.accept:Disable() end
             end)
             p.preview=U.ReadArea(p,7,-287,221,190)
-            p.attach=U.Check(p,"Attach to selected contact",4,-486,217,function() end)
+            p.attach=U.Check(p,"Attach to selected contact",4,-486,217,function()
+                R.Cancel(p.ticket);p.ticket=nil;p.accept:Disable()
+                p.preview:SetText("Attachment changed. Preview pasted data again.",true)
+            end)
             p.accept=U.Button(p,"Accept reported facts",4,-521,250,function()
                 local e,err=R.Accept(journal,p.ticket,p.attach:GetChecked() and p.contact or nil)
                 if e then p.ticket=nil;p.accept:Disable();c:ClosePanel();c:Reset();c:Select(e.id);c:Message("Report accepted; personal evidence and notes preserved.") else c:Message(err) end

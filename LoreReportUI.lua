@@ -118,7 +118,8 @@ function ns.CreateLoreReportUI(parent,journal,getSelected,onChanged,shell)
             if not ticket then p.message:SetText(L.Safe(err));return end
             self.targetID=p.attach:GetChecked() and getSelected() or nil
             if p.attach:GetChecked() and not self.targetID then R.Cancel(ticket);p.message:SetText('Select an entry before attaching a report.');return end
-            self.ticket=ticket;p.preview:SetText((self.targetID and 'Attach to: '..journal:Title(self.targetID)..'\n\n' or 'Archive as reported material; match only an existing report identity.\n\n')..ticket.preview,true);p.accept:SetEnabled(true)
+            local summary,canAccept=R.Preflight(journal,ticket,self.targetID)
+            self.ticket=ticket;p.preview:SetText(summary..'\n\n'..(self.targetID and 'Attach to: '..journal:Title(self.targetID)..'\n\n' or 'Archive as reported material; match only an existing report identity.\n\n')..ticket.preview,true);p.accept:SetEnabled(canAccept)
             p.message:SetText('Review all included material. Accept stores a report; it does not confirm its claims.')
         end
     end

@@ -11,7 +11,9 @@ local function normalize(value)
 end
 
 function textSize:Get()
-    return normalize(AzerothFieldbookAccountDB and AzerothFieldbookAccountDB.textSizeOffset)
+    -- The standalone recovery UI can open before a damaged account save has
+    -- been initialized. Reading a font preference must not repair that save.
+    return normalize(type(AzerothFieldbookAccountDB)=="table" and AzerothFieldbookAccountDB.textSizeOffset or nil)
 end
 
 function textSize:Initialize()

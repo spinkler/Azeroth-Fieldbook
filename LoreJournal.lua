@@ -285,6 +285,21 @@ function ns.CreateLoreJournal(saved)
         return (prefix or 'lore:')..db.serial
     end
     function j:ArchiveBytes() local n=0;for _,e in pairs(self.entries) do n=n+bytesOf(e) end;return n end
+    -- Requested by the visible catalogue only; uses the capture/import byte
+    -- model, not serialized file size. Never normalizes or writes saved data.
+    function j:StorageStatus()
+        if self.readOnly then return 'Archive: read-only', 'Saved data is unsupported; archive usage is unavailable. Preserved data has not been measured.' end
+        local bytes,entries=self:ArchiveBytes(),L.Count(db.entries)
+        local usage=string.format('Archive: %.2f / %g MiB',math.floor(bytes/1048576*100)/100,L.MAX_ARCHIVE_BYTES/1048576)
+        local detail=string.format('%d / %d archive bytes\n%d / %d entry slots',bytes,L.MAX_ARCHIVE_BYTES,entries,L.MAX_ENTRIES)
+        detail=detail..string.format('\nCounts archived text and evidence, not total SavedVariables file size. Each entry also has a %g MiB limit.',L.MAX_WORK_BYTES/1048576)
+        if self.invalid>0 then
+            usage='Archive: usage incomplete'
+            detail=detail..'\nByte usage covers valid entries only. '..self.invalid..' invalid saved entries are preserved but cannot be measured.'
+        elseif bytes>=L.MAX_ARCHIVE_BYTES or entries>=L.MAX_ENTRIES then detail='An archive limit has been reached.\n'..detail
+        elseif bytes>=L.MAX_ARCHIVE_BYTES*0.9 or entries>=L.MAX_ENTRIES*0.9 then detail='Near an archive limit.\n'..detail end
+        return usage,detail
+    end
     function j:Encounter(e,at)
         at=L.Integer(at,0,9999999999) and at or L.Now()
         e.firstEncounter=e.firstEncounter and math.min(e.firstEncounter,at) or at
@@ -298,19 +313,20 @@ function ns.CreateLoreJournal(saved)
     function j:Recorded(e)
         if self.onRecorded then self.onRecorded(e) end
     end
-    function j:Create(kind,value,deferRecorded)
+    function j:Create(kind,value,deferRecorded,dryRun)
         if self.readOnly then return nil,'This archive uses an unsupported schema and is read-only.' end
         if L.Count(db.entries)>=L.MAX_ENTRIES then return nil,'Archive is full (2,000 entries); nothing was removed.' end
         local e,err=fields(value or {},kind);if not e then return nil,err end
         e.reports,err=reports(value and value.reports);if not e.reports then return nil,err end
         if bytesOf(e)>L.MAX_WORK_BYTES or self:ArchiveBytes()+bytesOf(e)>L.MAX_ARCHIVE_BYTES then return nil,'Archive capacity exceeded; nothing was removed.' end
+        if dryRun then return e end
         e.id=self:Next();e.created=L.Now();e.updated=e.created;e.locations={};e.links={};e.passages={};e.pages={}
         if db.exportOrigin then e.exportSource=L.Player() end
         db.entries[e.id]=e;self.entries[e.id]=e;self:Changed(e)
         if not deferRecorded then self:Recorded(e) end
         return e
     end
-    function j:ReplaceEntry(id,candidate)
+    function j:ReplaceEntry(id,candidate,dryRun)
         if self.readOnly then return nil,'Archive is read-only.' end
         local old=self:Get(id);if not old then return nil,'Entry no longer exists.' end
         local replacement,err=L.ValidateEntry(candidate,id);if not replacement then return nil,err end
@@ -318,6 +334,7 @@ function ns.CreateLoreJournal(saved)
         if bytesOf(replacement)>L.MAX_WORK_BYTES or self:ArchiveBytes()-bytesOf(old)+bytesOf(replacement)>L.MAX_ARCHIVE_BYTES then return nil,'Archive is full (32 MiB); nothing was changed.' end
         -- Preserve unrecognized local metadata while validating every owned collection.
         local merged=L.Copy(candidate);for key,v in pairs(replacement) do merged[key]=v end
+        if dryRun then return merged end
         db.entries[id]=merged;self.entries[id]=merged;self:Changed(merged);return merged
     end
     function j:Update(id,value)
@@ -542,8 +559,13 @@ function ns.CreateLoreJournal(saved)
         if sessionLocation then sessionLocations[#sessionLocations+1]=loc end
         local newLocation=loc~=nil
         if loc and e then for _,location in ipairs(e.locations) do if sameLocation(location,loc) then newLocation=false;break end end end
-        if newLocation then
-            if (e and #e.locations>=L.MAX_LOCATIONS) or #sessionLocations>L.MAX_LOCATIONS then return nil,'Entry has 100 locations; source and location were left unchanged.' end
+        local locationNotice
+        if newLocation and ((e and #e.locations>=L.MAX_LOCATIONS) or #sessionLocations>L.MAX_LOCATIONS) then
+            -- Decline only the extra location, including its session copy and
+            -- byte cost. The page still passes every ordinary archive limit.
+            if sessionLocation then table.remove(sessionLocations) end
+            loc=nil;newLocation=false
+            locationNotice='Page archived. This reading location was not saved because the entry has reached the 100-location limit.'
         end
         local count,total=0,bytesOf(meta)+itemBytes(sessionLocations);for _,item in pairs(pending) do count=count+1;total=total+itemBytes(item) end
         if count>L.MAX_PAGES then return nil,'Work has 256 pages; nothing was removed.' end
@@ -590,6 +612,7 @@ function ns.CreateLoreJournal(saved)
         end
         self:Changed(e)
         if createdID==e.id then self:Recorded(e) end
+        if locationNotice then notice=locationNotice..(notice and (' '..notice) or '') end
         return e,nil,notice
     end
     function j:SearchText(e)

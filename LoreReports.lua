@@ -223,7 +223,7 @@ function R.Prepare(value,receivedFrom)
     local ticket={preview=R.Preview(r)};pending[ticket]={report=r,receivedFrom=receivedFrom and receivedFrom~='' and receivedFrom or nil};return ticket
 end
 function R.Cancel(ticket) if ticket then pending[ticket]=nil end end
-function R.Accept(journal,ticket,selectedID)
+function R.Accept(journal,ticket,selectedID,dryRun)
     local staged=pending[ticket];if not staged then return nil,'Preview this report first.' end
     if ns.InitializationBlocked or journal.readOnly then return nil,'This Lore journal is read-only.' end
     local r,err=R.Normalize(staged.report);if not r then return nil,err end
@@ -261,8 +261,19 @@ function R.Accept(journal,ticket,selectedID)
     local result
     if e then
         local replacement=L.Copy(e);replacement.reports=reports
-        result,err=journal:ReplaceEntry(e.id,replacement)
-    else result,err=journal:Create(r.kind,{title=r.title,sourceTitle=r.sourceTitle,subtype=r.subtype,origin='reported',reports=reports}) end
+        result,err=journal:ReplaceEntry(e.id,replacement,dryRun)
+    else result,err=journal:Create(r.kind,{title=r.title,sourceTitle=r.sourceTitle,subtype=r.subtype,origin='reported',reports=reports},nil,dryRun) end
     if not result then return nil,err end
-    pending[ticket]=nil;return result,duplicate and 'This evidence is already archived; latest receipt updated.' or nil
+    local delta={newEntry=not e,newEvidence=not duplicate,knownEvidence=duplicate~=nil}
+    if not dryRun then pending[ticket]=nil end
+    return result,duplicate and 'This evidence is already archived; latest receipt updated.' or nil,delta
+end
+
+function R.Preflight(journal,ticket,selectedID)
+    local result,err,delta=R.Accept(journal,ticket,selectedID,true)
+    if not result then return 'Cannot accept now: '..err,false end
+    local summary=delta.newEntry and 'Would add 1 reported entry with 1 evidence revision.'
+        or delta.knownEvidence and 'Evidence already archived; only the latest receipt would update.'
+        or 'Would add 1 evidence revision to an existing entry. Earlier versions and personal material stay separate.'
+    return 'Against this journal now: '..summary,true,delta
 end

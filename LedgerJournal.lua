@@ -143,8 +143,9 @@ function ns.CreateLedgerJournal(saved)
         while db.contactAliases and db.contactAliases[id] and not seen[id] do seen[id]=true;id=db.contactAliases[id] end
         return db.contacts[id]
     end
-    function j:New(name)
+    function j:New(name,dryRun)
         if self.readOnly or L.Count(db.contacts)>=L.MAX_CONTACTS or L.Count(db.references)>=L.MAX_REFERENCES then return nil,"Contact/reference limit reached or newer schema is read-only." end
+        if dryRun then return true end
         local id
         repeat db.serial=db.serial+1;id="contact:"..db.serial until not db.contacts[id] and not (db.contactAliases and db.contactAliases[id])
         local e={id=id,reference="ledger:"..(db.contactOrigin or db.origin)..":"..db.serial,name=name,sublabel="",roles={},manualRoles={},specialities={},

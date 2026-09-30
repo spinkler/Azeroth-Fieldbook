@@ -165,7 +165,41 @@ local function mergeEntry(target, source)
     for key, value in pairs(source) do if target[key] == nil and key ~= "lockedBasic" then target[key] = copy(value) end end
 end
 
+-- Ephemeral outcomes collected only after existing import commits. This does
+-- not select stores or replace any of the per-section replay guards.
+local trackingResult
+function ns.RecordTrackingResult(section, deferred)
+    if trackingResult then trackingResult[section] = deferred and "deferred" or "imported" end
+end
+
+function ns.ReportTrackingTransition(settings, say)
+    local enabled = settings.accountWideTracking ~= false
+    local changed = type(settings.accountTrackingActive) == "boolean" and settings.accountTrackingActive ~= enabled
+    local imported, deferred = {}, {}
+    for _,section in ipairs({{"bestiary","Bestiary"},{"gathering","Herbs & Minerals"},{"atlas","Atlas"},
+        {"angling","Almanac"},{"ledger","Ledger"},{"treasure","Treasure"},{"lore","Lore"}}) do
+        local result = trackingResult and trackingResult[section[1]]
+        if result == "imported" then imported[#imported+1] = section[2]
+        elseif result == "deferred" then deferred[#deferred+1] = section[2] end
+    end
+    if enabled and (#imported > 0 or changed) then
+        local message = "Account-wide tracking enabled. "
+        if #imported > 0 then
+            message = message .. "One-time import completed for: " .. table.concat(imported, ", ") .. ". Original character journals retained separately. "
+        else
+            message = message .. "Resumed existing account journals; previously imported sections do not re-import later character-only changes. "
+        end
+        if #deferred > 0 then message = message .. "Migration deferred for: " .. table.concat(deferred, ", ") .. "; saved data preserved. " end
+        say(message .. "Later account and character data are not continuously synchronized.")
+    elseif not enabled and changed then
+        say("Account-wide tracking disabled. Using this character's separate journals; account data was not copied back. Account journals remain available when re-enabled.")
+    end
+    settings.accountTrackingActive = enabled
+    trackingResult = nil
+end
+
 function ns.InitializeTracking(settings)
+    trackingResult = {}
     if type(settings.accountWideTracking) ~= "boolean" then settings.accountWideTracking = true end
     if not settings.accountWideTracking then return settings end
     if type(AzerothFieldbookAccountDB) ~= "table" then AzerothFieldbookAccountDB = {} end
@@ -234,6 +268,7 @@ function ns.InitializeTracking(settings)
         -- This registry survives journal resets, preventing old character data
         -- from resurrecting cleared account progress on the next login.
         account.importedCharacters[key] = true
+        ns.RecordTrackingResult("bestiary")
     end
     return account
 end

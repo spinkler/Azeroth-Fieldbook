@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.19.0-beta - 2026-09-30
+
+This Beta includes the complete batch since v0.18.0 and previous-push baseline
+`0698876c6ffd629103fe010d77e59c5ed9ed4d35`, verified before publication.
+Automated validation passed all 72 test files, followed by nine affected suites
+after final recovery refinements. Native WoW acceptance remains pending for the
+combined in-game verification batch.
+
+- Add whole-Fieldbook backup and recovery for all seven journals, including
+  account and retained character knowledge, private text, provenance, reader
+  state and cross-journal identities. Keep two saved copies and one automatic
+  recovery copy in a separate archive; export/import checksummed text in parts.
+  Preview scope and counts before replacing data on a fresh reload, retain
+  Knowledge accounting and identity allocation counters, and roll back if startup
+  fails. Recovery remains available when normal startup is blocked. Preserve
+  legacy Bestiary backups and independent reports/resets. Add full preservation,
+  failure, lifecycle and large-archive tests, plus offline SavedVariables recovery
+  instructions and a deferred native acceptance checklist.
+
+- Show Lore archive byte usage below the catalogue, with exact bytes, entry
+  slots, near-capacity and preservation/read-only explanations on hover.
+- Show the actual active account or character scope in the shared shell across
+  all seven journals, including pending reloads and deferred section migrations.
+- Add local preflight summaries to Angling, Ledger and Lore import reviews.
+  Reuse acceptance validation without writes, retain provenance/detail, explain
+  repeated evidence and surface conflicts/capacity failures before acceptance.
+  Add focused regressions and defer native layout checks to the combined batch.
+
+- Keep automatic spell/aura tooltip IDs on by default using the saved Fieldbook
+  choice, respect opt-out on reload, avoid redundant client preference writes,
+  and explain the client-wide setting and settings-reset behaviour.
+- Archive valid Lore pages when the 100-location list is full. Keep existing
+  locations and show a capture-status note that the extra location was declined;
+  page validation, byte limits and preservation rules remain in force.
+- Summarize actual one-time account imports and applied scope changes in one
+  chat message, naming imported/deferred sections without invented counts.
+  Explain retained character journals and independent later changes; ordinary
+  logins stay quiet. Add focused lifecycle and preservation regressions.
+
 ## v0.18.0 - 2026-09-30
 
 This release includes the full batch since v0.17.0 and previous-push commit

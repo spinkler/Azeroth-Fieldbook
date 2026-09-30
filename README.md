@@ -1,9 +1,12 @@
-# Azeroth Fieldbook 0.18.0 (Release)
+# Azeroth Fieldbook 0.19.0 (Beta)
 
-Version 0.18.0 adds optional Atlas sub-zone overlays on Blizzard's world map,
-revises Knowledge rewards and sharing costs by creature rank, and improves
-journal navigation, reading and merchant lists. Container and lore sections
-are now Treasure Journal and Lorekeeper's Chronicle.
+Version 0.19.0 adds whole-Fieldbook backup and recovery for all seven journals,
+including account and retained character knowledge, private text and identities.
+Open **Options → Whole-Fieldbook backups** or use `/fieldbook backups` to save,
+export, preview and restore a backup. This Beta also adds storage diagnostics,
+report import summaries and account-scope notices, and fixes saved spell-ID
+preferences and Lore capture at the location limit. Automated preservation and
+failure tests pass; native WoW acceptance remains pending for the combined batch.
 
 Saved-data protections cover initialization, Lore consolidation and
 report validation boundaries. An unsupported or malformed main save disables
@@ -116,7 +119,7 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.18.0 includes sharing, addon-version compatibility
+spell databases. Version 0.19.0 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
@@ -433,13 +436,65 @@ pinned Notes and the independent spell-ID utility retain their existing lifetime
 In the Bestiary, the list button left of Options opens the **Event log**. It records timestamped discoveries, knowledge awards, observed-cast alerts and sharing activity even with chat announcements disabled. This per-character history starts on first use, survives reloads and Bestiary resets, and keeps all events with newest-first pages of 50. Earlier events cannot be reconstructed. Transfer entries record the other character, creature, rumour count, Knowledge cost and outcome, including retries and failed delivery.
 
 The gold cog immediately left of **?** opens **Options**, containing all settings
-and **Reset Bestiary**, **Backup Bestiary** and **Restore Bestiary**. **?** opens instructions and About. Both buttons toggle
+and **Reset Bestiary**, **Backup Bestiary**, **Restore Bestiary**, and a
+**Whole-Fieldbook backup and recovery** group. **?** opens instructions and About. Both buttons toggle
 their page and close the other page when switching between Help and Options.
 Both pages share the last top-left position, so dragging either page also sets
 where the other opens. Help includes a separate **Knowledge** block with sections
 for earning knowledge through discovery and kills, and using it to share creature information.
 
-**Backup Bestiary** saves a dated copy immediately and opens the backup window.
+**Fieldbook backups** in Options, or `/fieldbook backups`, protects all seven
+journals. Choose **Save Fieldbook**, review the date, source character and record
+counts, then **Export selected**. Copy every numbered part into a separate text
+file. To check or restore that file, choose **New import**, paste each part and
+click **Add / check part**. Parts can arrive in any order; all parts and both
+checksums must pass before restoration is available. Checking a copy does not
+change your journals. Keep exports private: they include personal notes and
+player identities. Reports are selective sharing documents, not backups.
+
+A whole backup contains **both** the account journals and the current character's
+retained journals, even when account tracking is off. It includes settings, logs,
+annotations, Lore pages and reading positions, provenance, report receipts,
+identity indexes and cross-journal links. Offline characters' separate journals
+are unavailable to the addon; export on each character or use the file-copy
+method below. Two recent whole backups and one automatic recovery copy are kept
+in the account archive; saving another replaces the oldest saved copy. In-game
+copies share SavedVariables storage and must be exported for protection against
+file loss. Reload or log out normally to write them to disk.
+
+Restore on the **same character** that made the copy. **Restore / reload** asks
+for confirmation, saves a recovery copy, and replaces all account journals and
+this character's retained journals, settings and logs on a fresh reload. This
+also changes what other characters see in account mode. Newer records will be
+replaced. Current Bestiary earned milestones, spending and delivery state remain;
+old offers are not replayed. Surviving identity allocation counters and completed
+one-time import markers are retained, so old character journals do not import
+again after an older restore. A backup predating account mode restores the local
+journals without silently re-importing them. Other characters' local files are untouched.
+Select **Before last restore** to return to the previous journals. Malformed or
+unsupported imports are refused; preserved invalid Lore/Treasure records remain
+preserved. A late initialization failure puts the original roots back and pauses
+the addon. Cancel the pending restore in the backup window, then reload to resume.
+
+`/fieldbook backups` also works when a damaged main save blocks normal startup.
+You can export the raw saved data before attempting recovery. Unsupported raw
+copies remain exportable but cannot be applied by an incompatible addon. The
+portable whole-backup limit is 256 MiB of encoded text, with 256 KiB export parts;
+no content is silently truncated. The format has independent versioning and does
+not require the exact addon version used by report sharing.
+
+**For large archives or every character at once:** exit WoW normally, then copy
+the client's **WTF** folder to a separate location. For focused copies, keep the
+account's `SavedVariables/AzerothFieldbook.lua` and each realm/character's
+`SavedVariables/AzerothFieldbook.lua` together, including available `.lua.bak`
+files. The account file contains the shared journals and the whole-backup archive;
+each character file contains its settings and seven retained journals. To recover,
+close WoW, preserve the damaged/current files separately, and replace the matching
+files from the same backup set. Then start WoW and inspect both tracking scopes.
+Do not edit or replace these files while WoW is running. A copy of the addon
+folder does not contain your journals. See [recovery and verification details](tests/WHOLE_BACKUPS.md).
+
+The older **Backup Bestiary** button saves a dated **Bestiary-only** copy and opens its window.
 It keeps the five most recent manual backups for the active account-wide or
 character Bestiary; saving another replaces the oldest. Backups survive Reset
 Bestiary. They include creature records, abilities, damage observations, notes,
@@ -532,6 +587,13 @@ import. Section resets, reports and Bestiary backups retain their existing scope
 Shared storage is loaded as each character logs in; it cannot read an offline
 character’s SavedVariables. Unsupported future schemas defer account migration
 and leave the original data untouched.
+
+An actual import produces one grouped chat summary naming the imported sections
+and any deferred sections. It explains the one-time import and retained character
+journals. Disabling confirms that account data was not copied back; re-enabling
+existing journals does not announce a fresh import or re-import later character
+changes. Ordinary later logins do not repeat the summary. Detailed warnings for
+unsupported saved data remain available.
 
 Each character's existing journal is merged into the account journal once, the
 first time that character loads with account tracking enabled. Creature records,
@@ -1005,6 +1067,11 @@ box. These records persist per creature and do not automatically confirm abiliti
 **Show spell IDs on tooltips if possible** controls IDs on supported aura tooltips,
 journal ability tooltips and these spell links. Turning it off keeps the spell
 tooltips themselves available.
+It starts on automatically and applies WoW's client-wide
+`tooltipShowAuraSpellIDs` preference at startup and when changed in Fieldbook.
+The saved Fieldbook choice survives reload; Fieldbook does not continually rewrite
+external changes during play. Journal-only resets preserve the choice. The
+confirmed Bestiary reset/wipe that also resets settings restores the on default.
 Creature notes follow eligible target selections by default, without opening
 a closed window or changing the selected Bestiary page. Disable this in Options
 to follow only manual selections. Pin prevents Close and Escape from dismissing
@@ -1050,12 +1117,16 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.18.0 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
+Version 0.19.0 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,
-Event log and backups. Backup archives live alongside `bestiary` in the active
-database, so account and character backups remain separate.
+Event log and backups. Legacy Bestiary backup archives live alongside `bestiary`
+in the active database, so account and character Bestiary backups remain separate.
+Whole backups live in account-wide `AzerothFieldbookBackupDB`, outside section
+reset boundaries. They include all eight knowledge/settings roots; backup
+containers themselves are excluded to avoid recursive copies. Existing legacy
+Bestiary archives stay in place during a whole restore.
 
 Merchant’s Ledger adds schema 1 in per-character `AzerothFieldbookLedgerDB`.
 Account-wide tracking selects the shared Ledger store; the character store

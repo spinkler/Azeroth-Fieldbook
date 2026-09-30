@@ -227,7 +227,15 @@ function R.MergeStored(existing,incoming)
     end
     return merged
 end
-function R.Accept(journal,ticket,selected)
+-- Compare evidence only: forwarding/receipt times do not make facts new.
+local function evidence(value)
+    local out={}
+    for _,key in ipairs({"identity","roles","specialities","goods","lessons","notes","notesOrigin"}) do out[key]=value[key] end
+    out.locations={}
+    for _,p in ipairs(value.locations) do out.locations[L.Key(p.origin.source,p.origin.key)]=p end
+    return encode(out)
+end
+function R.Accept(journal,ticket,selected,dryRun)
     local original=pending[ticket];if not original then return nil,"Preview this report first." end
     local r,err=R.Normalize(original);if not r then return nil,err end
     if journal.readOnly or ns.InitializationBlocked then return nil,"Ledger is read-only." end
@@ -240,13 +248,21 @@ function R.Accept(journal,ticket,selected)
     for i,old in ipairs(e and e.reports or {}) do if L.Key(old.identity.origin.source,old.identity.origin.key)==sourceKey then existing=old;index=i;break end end
     if not existing and e and #e.reports>=L.MAX_REPORTS then return nil,"Contact report-source limit reached." end
     if not existing and L.Count(journal.db.reportKeys)>=R.MAX_STORED_REPORTS then return nil,"Character report-source limit reached." end
-    if not e then e,err=journal:New(r.identity.name);if not e then return nil,err end end
+    local newContact=not e
+    if not e then
+        local available;available,err=journal:New(r.identity.name,true);if not available then return nil,err end
+    end
     if existing then
         -- Same-source cumulative updates cannot delete earlier positive facts.
         local merged,mergeError=R.MergeStored(existing,r);if not merged then return nil,mergeError end
         -- Compare factual payload before receipt fields; forwards do not refresh old observations.
         r=merged;r.received=existing.received
     else r.received=L.Now() end
+    local changed=existing and evidence(existing)~=evidence(r) or false
+    local delta={newContact=newContact,newSource=not existing,
+        updatedSource=changed,knownSource=existing~=nil and not changed}
+    if dryRun then return true,nil,delta end
+    if not e then e,err=journal:New(r.identity.name);if not e then return nil,err end end
     -- A bounded receipt per fact version, distinct from observation and forwarding time.
     local receipts={}
     local function received(o)
@@ -259,5 +275,15 @@ function R.Accept(journal,ticket,selected)
     for _,kind in ipairs({"goods","lessons","locations"}) do for _,v in ipairs(r[kind]) do received(v.origin) end end
     r.factReceipts=receipts;r.lastReceived=L.Now();e.reports[index or #e.reports+1]=r;journal.db.reportKeys[sourceKey]=e.id
     if not e.personal and not e.recorded then e.name=r.identity.name;e.sublabel=r.identity.sublabel;e.npcID=r.identity.npcID end
-    pending[ticket]=nil;journal:Changed(e.id);return e
+    pending[ticket]=nil;journal:Changed(e.id);return e,nil,delta
+end
+
+function R.Preflight(journal,ticket,selected)
+    local result,err,delta=R.Accept(journal,ticket,selected,true)
+    if not result then return "Cannot accept now: "..err,false end
+    local summary=delta.newContact and "Would add 1 contact with 1 report source."
+        or delta.newSource and "Would add 1 report source to an existing contact."
+        or delta.updatedSource and "Would update an existing contact's reported evidence."
+        or "Reported evidence already known; only delivery details would update."
+    return "Against this journal now: "..summary,true,delta
 end

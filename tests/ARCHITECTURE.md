@@ -1,5 +1,12 @@
 # Fieldbook section integration
 
+Whole-Fieldbook backups cross section boundaries deliberately: `FieldbookBackups.lua`
+captures the eight loaded SavedVariables roots without using report projections.
+`FieldbookBackupWindow.lua` uses shared UI primitives but can open independently
+of the shell and malformed character settings. Restoration happens before normal
+startup, with a latched hold and rollback on initialization failure. Legacy
+Bestiary backup/reset boundaries are unchanged. See [WHOLE_BACKUPS.md](WHOLE_BACKUPS.md).
+
 `WindowFocus` registers independent addon windows on `MEDIUM`, with native
 top-level raising and hooks on clickable children. This lets normal game windows
 raise above the Fieldbook instead of being trapped below its former `DIALOG`

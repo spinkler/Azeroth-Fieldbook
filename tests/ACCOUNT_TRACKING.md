@@ -52,7 +52,9 @@ the original character's existing F2 mapping. The same resolver handles durable
 references, historical account aliases and unavailable ambiguous mappings from
 any viewing character. The original local link is unchanged. This adds no new
 Atlas migration or reference-map store. Captures still reuse matching entries;
-F4's conservative preservation and the 101st-location policy are unchanged.
+F4's conservative preservation remains intact. The later O3 policy archives a
+valid new page even when its additional reading location exceeds the cap;
+see [LORE.md](LORE.md).
 
 Treasure imports retain individual kinds and encounters, rekeying only their
 local IDs, kind links and selection state. Kind references, encounter origins,
@@ -67,12 +69,31 @@ copies do not use or broaden `L.Copy`. Unsupported new-section roots defer migra
 and both initializers/selectors respect the latched startup guard. No saved data
 is written during module loading.
 
-Bestiary resets/backups do not include or clear other section stores. Reports
+Bestiary resets/legacy backups do not include or clear other section stores.
+Whole-Fieldbook backups include shared and retained character roots together,
+including these import registries and reference maps. See [WHOLE_BACKUPS.md](WHOLE_BACKUPS.md)
+for replacement scope, counter preservation and offline-character recovery. Reports
 keep section-specific provenance and confirmation rules. Bestiary display settings
 and the shell remain per character; other sections' browsing preferences follow
 the active store. Future unsupported schemas are preserved and migration deferred
 with a chat notice. No publication or SavedVariables schema-version change is
 needed for this additive account container.
+
+The O8 summary collects section outcomes only after their existing import commits.
+After initialization, one formatted chat message names actual one-time imports
+and any deferred sections, states that character journals remain separate, and
+explains that subsequent changes are not continuously synchronized. No record
+counts are inferred. Detailed unsupported-schema warnings remain separate.
+Disable confirms character scope with no account-to-character copy. Re-enable
+without new imports explains that existing account journals resume and later
+character-only edits are not re-imported. A newly eligible deferred section gets
+its own one-time result in the next grouped summary.
+
+The additive character setting `accountTrackingActive` remembers only the last
+applied scope for messaging; existing import markers still govern all migration.
+Legacy saves with completed imports establish this value silently. Bestiary
+settings reset preserves it. `test_account_summaries.py` covers full-TOC startup,
+fresh-namespace reload, transitions, partial/deferred imports and failed commits.
 
 Automated checks exercise all six section migrations, repeated logins, opt-out/re-enable,
 record-ID collisions, route links, fishing totals/references, contact references,
@@ -89,3 +110,24 @@ cover account ownership and reset isolation. Native multi-character acceptance
 is pending: log in on two characters, inspect all seven journals, reload, then
 opt out and confirm each original journal returns. Verify map/reference views,
 private notes, counts and reset isolation before using section resets.
+
+### O7 active scope reminder (pending native acceptance)
+
+The shared shell displays **Account-wide** or **Character-specific** at the top
+right, below the title and above section controls. Hover gives one sentence about
+the active store. The label compares actual selected store references, including
+Bestiary's active root; it does not read a pending checkbox value or keep seven
+copies of that value. The merchants tab maps to the Ledger store. A deferred
+section migration truthfully displays character scope even when other sections
+use the account store. No synchronization or deletion is implied.
+
+`test_storage_scope.py` exercises all seven production sections, a shared widget,
+non-mutating label/tooltip reads, pending changes, fresh-namespace reload and a
+future-schema deferred Lore migration.
+
+- [ ] In the later combined O3/O4/O8 native acceptance batch, inspect all seven
+  labels and hover text at supported resolutions, UI/addon scales and text sizes.
+  Check the title, right-side tabs and section buttons remain unobstructed.
+- [ ] Toggle tracking without reloading: the label must retain the active scope.
+  Reload to apply each direction and verify the label against the actual journal.
+  Include a deferred section migration and retained character journals.

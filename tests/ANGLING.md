@@ -386,3 +386,17 @@ v0.13.28: the Almanac zone selector now matches the Atlas selector at 306 UI uni
 wide; its position, menu behavior and saved selection are unchanged.
 Its shared dropdown arrow now uses native artwork with a dark drop shadow rather
 than a typed `v`.
+
+### O6 import preflight (pending native acceptance)
+
+Pasted-report previews now count new, updated and already-known catch summaries
+and identity claims against the active journal. Existing original-source/sender,
+observed-result detail and reported-only explanations remain below the summary.
+Preflight uses the existing detached acceptance stage and stops before commit;
+errors show the real conflict/capacity/read-only reason and disable Accept.
+Acceptance checks again against current data. Nothing is written by preview.
+
+- [ ] In the later combined O3/O4/O8 acceptance batch, preview new, repeated,
+  cumulative, mixed and conflicting reports; verify readability and scrolling
+  in the narrow report panel with large payloads and supported text sizes.
+  Confirm original attribution stays visible and blocked reports cannot accept.

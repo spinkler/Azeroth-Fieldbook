@@ -9,6 +9,11 @@ source = Path(__file__).resolve().parents[1].joinpath('AzerothFieldbook.lua').re
 lua = LuaRuntime(unpack_returned_tuples=True)
 lua.execute(r'''
 clock = 0
+tooltipIDs=false;tooltipWrites=0
+function GetCVarBool(key) assert(key=='tooltipShowAuraSpellIDs');return tooltipIDs end
+function SetCVar(key,value)
+    assert(key=='tooltipShowAuraSpellIDs');tooltipIDs=value=='1';tooltipWrites=tooltipWrites+1
+end
 function GetTime() return clock end
 secret = {}
 function issecretvalue(v) return rawequal(v, secret) end
@@ -68,6 +73,7 @@ fire('ADDON_LOADED', 'OtherAddon')
 check(AzerothFieldbookDB == nil, 'unrelated load')
 fire('ADDON_LOADED', 'AzerothFieldbook')
 check(count() == 0, 'empty start')
+check(tooltipIDs and tooltipWrites==1, 'standalone observer enables tooltip IDs by default')
 tooltipHook(GameTooltip)
 check(#GameTooltip.lines == 0 and #lookups == 0, 'unknown hover leaks nothing')
 cast('target', 101)
@@ -157,12 +163,14 @@ SlashCmdList.AZEROTHFIELDBOOK('alerts')
 cast('target', 107)
 check(messages[#messages]:find('107'), 'optional discovery message')
 saved = AzerothFieldbookDB
+saved.showSpellIDs=false;saved.spellIDTooltipInitialized=false
 ''')
 # Reload through the current SavedVariables database.
 lua.execute(source, 'AzerothFieldbook')
 lua.execute(r'''
 frames[2].handler(frames[2], 'ADDON_LOADED', 'AzerothFieldbook')
 check(AzerothFieldbookDB == saved and count() == 8, 'current database reloads without data loss')
+check(not tooltipIDs and tooltipWrites==2 and saved.showSpellIDs==false, 'standalone reload respects explicit opt-out despite stale marker')
 SlashCmdList.AZEROTHFIELDBOOK('reset')
 check(count() == 8, 'reset requires explicit command')
 SlashCmdList.AZEROTHFIELDBOOK('wipe confirm all')
@@ -179,6 +187,7 @@ SlashCmdList.AZEROTHFIELDBOOK('wipe')
 SlashCmdList.AZEROTHFIELDBOOK('  WIPE   CONFIRM  ')
 check(messages[#messages]:find('has been wiped', 1, true), 'second command completes wipe with extra spaces')
 check(count() == 0, 'reset clears')
+check(tooltipIDs and tooltipWrites==3, 'standalone settings wipe restores tooltip default')
 AzerothFieldbookDB = nil
 ''')
 lua.execute(source, 'AzerothFieldbook')

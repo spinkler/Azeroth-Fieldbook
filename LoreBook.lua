@@ -203,6 +203,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         end
         m.empty:SetShown(#rows==0);m.empty:SetText(next(journal.entries) and "No matching entries.\nTry clearing the filters." or
             "Your archive begins empty.\n\nOpen supported readable lore to preserve it, or record a writing, landmark, person or mystery.")
+        local usage=journal:StorageStatus();m.capacity:SetText(usage)
         m.count:SetText(#rows.." entries"..(state.zone and " • "..L.Safe(tostring(state.zone)) or ""))
         m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+7<#rows)
         m.kind:SetText(state.kind and L.kinds[state.kind] or "All entry kinds")
@@ -298,6 +299,17 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             row:SetScript("OnClick",function(self) if self.id then c:Select(self.id) end end);m.rows[i]=row
         end
         m.empty=U.Label(m,"",46,-280,242,"GameFontHighlight");m.empty:SetWordWrap(true)
+        m.capacity=U.Label(m,"",42,-701,250,"GameFontHighlightSmall")
+        m.capacity:SetWordWrap(false)
+        m.capacityHover=CreateFrame('Frame',nil,m);m.capacityHover:SetPoint('TOPLEFT',42,-699);m.capacityHover:SetSize(250,20)
+        m.capacityHover:EnableMouse(true)
+        m.capacityHover:SetScript('OnEnter',function(self)
+            if GameTooltip then
+                local title,detail=journal:StorageStatus()
+                GameTooltip:SetOwner(self,'ANCHOR_RIGHT');GameTooltip:SetText(title);GameTooltip:AddLine(detail,1,1,1,true);GameTooltip:Show()
+            end
+        end)
+        m.capacityHover:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         m.count=U.Label(m,"",42,-582,250,"GameFontHighlightSmall")
         m.previous=U.Button(m,"Previous",42,-604,120,function() state.offset=math.max(0,state.offset-7);c:Refresh() end)
         m.next=U.Button(m,"Next",173,-604,119,function() state.offset=state.offset+7;c:Refresh() end)

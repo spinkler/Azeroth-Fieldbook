@@ -329,3 +329,20 @@ The existing mouseover binding now opens a matching Ledger contact before trying
 the Bestiary. Exact GUID aliases take priority; a unique matching template/name
 may be browsed without binding a new GUID or changing saved observations.
 Filters are cleared and the selected contact is scrolled into view.
+
+### O6 import preflight (pending native acceptance)
+
+Pasted-report previews identify a new contact, a new report source on an existing
+contact, an update to existing reported evidence, or already-known evidence with
+only delivery details changing. Evidence comparison ignores forwarding and receipt
+times, uses the real MergeStored result and retains the original sender/observer
+preview. Capacity, identity and read-only errors use the acceptance path. A dry-run
+capacity check allocates no contacts or references; merge works on copies.
+Changing Attach to selected contact invalidates the preview. Accept revalidates
+against current data; intervening captures can change the outcome.
+
+- [ ] In the later combined O3/O4/O8 native acceptance batch, review new/repeated,
+  updated and explicitly attached reports, plus conflicts and blocked imports.
+  Check the summary and original observer/quote details remain readable and
+  scrollable with large offering lists and supported text sizes. Toggle Attach
+  after preview and verify a fresh preview is required before Accept.

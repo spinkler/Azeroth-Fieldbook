@@ -170,15 +170,83 @@ class LorePreservationTests(unittest.TestCase):
                     assert(j:Get(old.id)==old and snapshot(target)==before,'protected source was consolidated')
                 ''')
 
-    def test_new_101st_location_policy_still_refuses_page_atomically(self):
+    def test_new_page_at_location_101_is_archived_without_changing_any_locations(self):
+        self.lua.execute(r'''
+            fixture(1,1)
+            for i=1,99 do assert(j:AddLocation(old.id,location(3000+i))) end
+            assert(j:CapturePage(ctx('revisit',1000),page(2,true)).id==old.id)
+            local expected=L.Copy(saved);local locations=snapshot(old.locations)
+            local e,err,notice=j:CapturePage(ctx('revisit',9999),page(1,true))
+            assert(e==old and not err and e.pages[1].raw=='Page 1')
+            assert(#e.locations==100 and snapshot(e.locations)==locations)
+            assert(notice:find('Page archived.',1,true) and notice:find('location was not saved',1,true))
+            assert(notice:find('100-location limit',1,true),notice)
+            expected.entries[e.id].pages[1]=L.Copy(e.pages[1]);expected.entries[e.id].firstPage=1
+            assert(snapshot(saved)==snapshot(expected),'only the new page and its boundary may change')
+            assert(#j.sessions.revisit.locations==1,'declined location leaked into session evidence')
+            local reloaded=ns.CreateLoreJournal(saved)
+            assert(reloaded:Get(e.id).pages[1] and snapshot(saved)==snapshot(expected))
+        ''')
+
+    def test_duplicate_page_at_location_101_warns_without_adding_evidence(self):
+        self.lua.execute(r'''
+            fixture(1,1)
+            for i=1,99 do assert(j:AddLocation(old.id,location(3000+i))) end
+            local before=snapshot(saved)
+            local e,err,notice=j:CapturePage(ctx('revisit',9999),page(2,true))
+            assert(e==old and not err and snapshot(saved)==before)
+            assert(notice:find('Page archived.',1,true) and notice:find('100-location limit',1,true))
+            assert(#j.sessions.revisit.locations==0)
+        ''')
+
+    def test_new_page_at_known_location_when_full_needs_no_location_warning(self):
+        self.lua.execute(r'''
+            fixture(1,1)
+            for i=1,99 do assert(j:AddLocation(old.id,location(3000+i))) end
+            assert(j:CapturePage(ctx('revisit',1000),page(2,true)).id==old.id)
+            local locations=snapshot(old.locations)
+            local e,err,notice=j:CapturePage(ctx('revisit',1000),page(1,true))
+            assert(e==old and e.pages[1] and not err and snapshot(e.locations)==locations)
+            assert(not notice or not notice:find('location was not saved',1,true))
+        ''')
+
+    def test_location_cap_does_not_bypass_page_validation_or_work_capacity(self):
         self.lua.execute(r'''
             fixture(1,1)
             for i=1,99 do assert(j:AddLocation(old.id,location(3000+i))) end
             assert(j:CapturePage(ctx('revisit',1000),page(2,true)).id==old.id)
             local before=snapshot(saved)
-            local e,err=j:CapturePage(ctx('revisit',9999),page(1,true))
-            assert(not e and err:find('100 locations',1,true))
-            assert(snapshot(saved)==before and not old.pages[1],'101st-location policy was changed')
+            local invalidLocation=ctx('revisit',9999);invalidLocation.location.x=10001
+            assert(not j:CapturePage(invalidLocation,page(1,true)))
+            local limit=L.MAX_ARCHIVE_BYTES;L.MAX_ARCHIVE_BYTES=j:ArchiveBytes()+1
+            local e,err,notice=j:CapturePage(ctx('revisit',9999),page(1,true))
+            assert(not e and err:find('32 MiB',1,true) and not notice)
+            assert(snapshot(saved)==before and not old.pages[1])
+            L.MAX_ARCHIVE_BYTES=limit
+            fillWork(j,old,L.MAX_WORK_BYTES)
+            before=snapshot(saved)
+            local invalid=page(1,true);invalid.raw=string.rep('x',L.MAX_PAGE_BYTES+1)
+            assert(not j:CapturePage(ctx('revisit',9999),invalid))
+            local large=page(1,true);large.raw=string.rep('x',2048)
+            local e,err,notice=j:CapturePage(ctx('revisit',9999),large)
+            assert(not e and err:find('4 MiB',1,true) and not notice)
+            assert(snapshot(saved)==before and not old.pages[1])
+        ''')
+
+    def test_native_adapter_status_says_page_saved_but_location_101_declined(self):
+        from test_lore_tracking import client
+        lua = client()
+        lua.execute(r'''
+            book.pages={'First page','Second page'}
+            begin(2);step(1);local e=writing();close()
+            for i=1,99 do assert(j:AddLocation(e.id,{meaning='observation',zone='Zone',mapID=37,x=2000+i,y=4000,precision='manual'})) end
+            function GetRealZoneText() return 'New reading zone' end
+            local visible;t.onStatus=function(text) visible=text end
+            begin(2);step(1);turn(1);step(1)
+            assert(t.active.entryID==e.id and e.pages[1] and e.pages[2] and #e.locations==100)
+            assert(visible==t:GetStatus() and visible:find('Complete archive.',1,true))
+            assert(visible:find('Page archived.',1,true) and visible:find('location was not saved',1,true))
+            assert(visible:find('100-location limit',1,true),visible)
         ''')
 
     def test_native_adapter_status_distinguishes_saved_page_from_skipped_merge(self):

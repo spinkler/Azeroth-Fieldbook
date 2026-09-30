@@ -22,7 +22,11 @@ Account-wide tracking applies to all seven journals. Bestiary uses
 under `.sections` for gathering, Atlas, angling, Ledger, Treasure and Lore. Each character's
 existing section journals import once, with collision-safe IDs and preserved
 links. Original per-character SavedVariables remain intact for opt-out. Section
-resets, Bestiary backups and report protocols retain their independent scope.
+resets, legacy Bestiary backups and report protocols retain their independent scope.
+Whole-Fieldbook backups capture the account root plus all seven loaded character
+SavedVariables, with identity maps and private fields; see `tests/WHOLE_BACKUPS.md`.
+Their separate account archive survives section resets. Restoration is staged
+until a fresh reload, and must preserve the startup guard and atomic rollback.
 See `tests/ACCOUNT_TRACKING.md`, `tests/ANGLING.md` and `tests/LEDGER.md` for
 migration, provenance and validation boundaries. Display-only expected immunity
 guidance is optional, off by default, and never grants observed knowledge.

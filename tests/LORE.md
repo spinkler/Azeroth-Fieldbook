@@ -161,6 +161,17 @@ page/passage, 4 MiB per entry, 32 MiB archive content, 100 local locations,
 100 relationships, 32 tags and 32 distinct received evidence revisions per entry. No source
 is silently shortened to fit. Search projections are cached per changed entry.
 
+Location capacity alone does not veto a valid captured page. At a new 101st
+reading location the page is archived, locations 1–100 remain unchanged, and
+the existing capture status says: "Page archived. This reading location was not
+saved because the entry has reached the 100-location limit." The declined location
+is also excluded from session evidence and byte accounting. A duplicate page
+remains archived and gets the same location warning; a new page at an already
+known location needs no location warning. All independent page, entry and archive
+limits still fail normally. Optional consolidation notices can accompany this
+success without weakening preservation. `test_lore_preservation.py` covers these
+boundaries and the player-visible tracking status.
+
 ## Sharing path
 
 Reports uses the existing section-report copy/paste, same-version envelope,
@@ -331,3 +342,36 @@ other readers retain unknown boundaries. It neither translates nor
 traverses dialogue options. Test in Forever by reopening the book, checking one
 writing and one initial chat/event-log notice, then disabling automatic capture
 and using Capture / retry current text. Native API behavior still needs live QA.
+
+### O2/O6 diagnostics and review previews (pending native acceptance)
+
+The catalogue now shows `Archive: used / 32 MiB` beneath Capture / retry.
+Hover for exact byte usage, entry slots out of 2,000, the 4 MiB per-entry limit
+and a notice at 90% or when a limit is reached. MiB is rounded down so a nearly
+full archive is not displayed as full. Bytes use the existing capture/import
+accounting, including reports and annotations; they are not serialized file size.
+Invalid saved entries remain preserved: byte totals are explicitly incomplete.
+Unsupported/read-only saves show usage unavailable rather than a false empty
+archive. Computation runs on visible catalogue refresh or hover, never a periodic
+update, and adds no cache or chat messages. O3 location-cap capture is unchanged.
+
+Lore import previews now distinguish a new reported entry, an additional evidence
+revision, and already-archived evidence whose latest receipt would update. Source
+variants are preserved as separate revisions, not labelled as rejected conflicts.
+The real importer validates the proposed Create/ReplaceEntry in dry-run mode:
+no IDs, callbacks, receipt writes or real journal changes occur during preview.
+Acceptance still checks current state again; intervening captures can change the
+outcome. Source claims, recorded courier, private-field choices and local material
+precedence retain their existing semantics.
+
+Add these to the later combined O3/O4/O8 acceptance batch:
+
+- [ ] Check the capacity line and tooltip at supported resolutions, addon/UI
+  scales and text sizes, with short/long titles and capture-status messages.
+  Add/remove text and entries, close/reopen, switch scope and reload; confirm
+  fresh usage and truthful incomplete/read-only states without chat noise.
+- [ ] Review new, repeated, attached and revised same-version reports. Confirm
+  the summary remains readable above source details, long page text scrolls,
+  recorded sender remains visible, and blocked imports disable Accept.
+- [ ] With Lore and Bestiary open in turn, confirm the shared scope text near
+  the top right and Lore capacity at lower left do not compete or overlap.

@@ -439,6 +439,7 @@ function ns.SelectSectionStorage(section,personal)
     local supported=section=="lore" and ns.Lore.SupportsStore or section=="treasure" and ns.Treasure.SupportsStore
     local prior=account.sections and account.sections[section]
     if supported and (not supported(personal) or (prior~=nil and not supported(prior))) then
+        if ns.RecordTrackingResult then ns.RecordTrackingResult(section,true) end
         if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..section.." has unsupported saved data; account migration deferred.") end
         ns.ActiveSectionStores[section]=personal;return personal
     end
@@ -448,6 +449,7 @@ function ns.SelectSectionStorage(section,personal)
     local existing=account.sections[section]
     -- Preserve unsupported schemas unchanged rather than interpreting future data.
     if (personal.schema or 0)>1 or (existing and (existing.schema or 0)>1) then
+        if ns.RecordTrackingResult then ns.RecordTrackingResult(section,true) end
         if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..section.." uses a newer data schema; account migration deferred.") end
         ns.ActiveSectionStores[section]=personal;return personal
     end
@@ -462,6 +464,7 @@ function ns.SelectSectionStorage(section,personal)
         elseif not existing then staged=copy(personal)
         else ids=mergers[section](staged,personal,key) end
         account.sections[section]=staged;imports[key]=true
+        if ns.RecordTrackingResult then ns.RecordTrackingResult(section) end
         if section=="atlas" and not existing then account.atlasFirstImport=key;ids={} end
     end
     local selected=account.sections[section]
@@ -481,4 +484,16 @@ function ns.SelectSectionStorage(section,personal)
     elseif section=="ledger" then ns.Ledger.ReconcileReports(selected) end
     ns.ActiveSectionStores[section]=selected
     return selected
+end
+
+-- Compare selected stores, not the option (which may await reload). Deferred
+-- migrations can still use a retained character journal in account mode.
+function ns.GetActiveStorageScope(section,bestiaryStore)
+    if section=="merchants" then section="ledger" end
+    local store=section=="bestiary" and bestiaryStore or ns.ActiveSectionStores[section]
+    if not store or ns.InitializationBlocked then return "Storage unavailable", "This journal has no active storage." end
+    local account=AzerothFieldbookAccountDB
+    local shared=account and (section=="bestiary" and account.bestiary or account.sections and account.sections[section])
+    if store==shared then return "Account-wide", "This journal is currently using the account store." end
+    return "Character-specific", "This journal is currently using this character's retained journal."
 end
