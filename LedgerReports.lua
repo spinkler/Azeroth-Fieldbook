@@ -64,10 +64,13 @@ local function offering(v,created,training)
     return out
 end
 local function normalize(v)
-    fields(v,{format=true,version=true,addonVersion=true,sender=true,created=true,identity=true,locations=true,roles=true,specialities=true,goods=true,lessons=true,notes=true,notesOrigin=true})
+    fields(v,{format=true,version=true,addonVersion=true,sender=true,created=true,identity=true,locations=true,roles=true,specialities=true,goods=true,lessons=true,notes=true,notesOrigin=true,part=true,parts=true})
     need(v.format=="AFB-LEDGER" and v.version==R.VERSION,"Unsupported Ledger report schema.")
     need(version() and text(v.addonVersion,32)==version(),"Ledger reports require the same installed addon version.")
     local out={format=v.format,version=v.version,addonVersion=v.addonVersion,sender=text(v.sender,160),created=num(v.created,0,L.Now()),locations={},goods={},lessons={}}
+    if v.part~=nil or v.parts~=nil then
+        out.parts=num(v.parts,2,7);out.part=num(v.part,1,out.parts)
+    end
     fields(v.identity,{name=true,sublabel=true,npcID=true,origin=true,sublabelOrigin=true})
     out.identity={name=text(v.identity.name,160),sublabel=text(v.identity.sublabel,160,true),origin=origin(v.identity.origin,out.created)}
     if v.identity.npcID then out.identity.npcID=num(v.identity.npcID,1,10000000) end
@@ -143,14 +146,30 @@ local function offeringCopy(v,training)
         or {"itemID","currencyID","spellID","bundle","variant","recipe","profession","stock","stockAt","costs","costsAt","costsKnown","purchasable","usable"}
     for _,k in ipairs(fields) do out[k]=L.Copy(v[k]) end;return out
 end
+local function partCount(goods,lessons)
+    return math.max(1,math.ceil(#goods/R.MAX_OFFERINGS),math.ceil(#lessons/R.MAX_OFFERINGS))
+end
+local function partIndex(options,total)
+    local requested=options.part or 1
+    if not L.Integer(requested,1,500) then return nil,"Invalid report part." end
+    return (requested-1)%total+1
+end
+local function partSlice(values,index)
+    local out={};local first=(index-1)*R.MAX_OFFERINGS+1
+    for i=first,math.min(first+R.MAX_OFFERINGS-1,#values) do out[#out+1]=values[i] end
+    return out
+end
 function R.Build(journal,id,options)
     local e=journal:Get(id);if not e then return nil,"Select a contact." end;options=options or {}
     if options.report then
         local report=e.reports[options.report];if not report then return nil,"Select an original report to forward." end
         local out=pick(report,{"format","version","addonVersion","sender","created","identity","locations","roles","specialities","goods","lessons","notes","notesOrigin"})
         out.sender=L.Player();out.addonVersion=version();if not options.notes then out.notes=nil;out.notesOrigin=nil end
+        local total=partCount(out.goods,out.lessons);local index,err=partIndex(options,total);if not index then return nil,err end
+        out.goods=partSlice(out.goods,index);out.lessons=partSlice(out.lessons,index)
+        if total>1 then out.part=index;out.parts=total end
         -- Original creation and every original fact timestamp/source survive forwarding.
-        return R.Normalize(out)
+        local normalized;normalized,err=R.Normalize(out);return normalized,err,total,index
     end
     if not e.identityOrigin then return nil,"This contact has reported knowledge only; choose a received report." end
     local out={format="AFB-LEDGER",version=R.VERSION,addonVersion=version(),sender=L.Player(),created=L.Now(),
@@ -158,17 +177,22 @@ function R.Build(journal,id,options)
         roles=L.Copy(e.roles),specialities=L.Copy(e.specialities),locations={},goods={},lessons={}}
     for role,o in pairs(e.manualRoles) do if not out.roles[role] then out.roles[role]=L.Copy(o) end end
     if options.locations~=false then for _,p in ipairs(e.sightings) do out.locations[#out.locations+1]=pick(p,{"zone","subzone","mapID","x","y","precision","first","last","origin"}) end end
+    local selected={goods={},lessons={}}
     for _,kind in ipairs({"goods","lessons"}) do if options[kind]~=false then
-        local keys={};for key in pairs(e[kind]) do if not options.selection or options.selection[key] then keys[#keys+1]=key end end;table.sort(keys)
-        if #keys>R.MAX_OFFERINGS then return nil,"Select at most 80 offerings per report using the current search, or exclude goods/training." end
-        for _,key in ipairs(keys) do out[kind][#out[kind]+1]=offeringCopy(e[kind][key],kind=="lessons") end
+        for key in pairs(e[kind]) do if not options.selection or options.selection[key] then selected[kind][#selected[kind]+1]=key end end
+        table.sort(selected[kind])
     end end
+    local total=partCount(selected.goods,selected.lessons);local index,err=partIndex(options,total);if not index then return nil,err end
+    for _,kind in ipairs({"goods","lessons"}) do
+        for _,key in ipairs(partSlice(selected[kind],index)) do out[kind][#out[kind]+1]=offeringCopy(e[kind][key],kind=="lessons") end
+    end
+    if total>1 then out.part=index;out.parts=total end
     if options.notes and e.noteOrigin then out.notes=e.note;out.notesOrigin=L.Copy(e.noteOrigin) end
-    return R.Normalize(out)
+    local normalized;normalized,err=R.Normalize(out);return normalized,err,total,index
 end
 function R.Preview(value)
     local r,err=R.Normalize(value);if not r then return nil,err end
-    local lines={"Contact report: "..r.identity.name,r.identity.sublabel,"Sender claim: "..r.sender.." (not authenticated)",
+    local lines={"Contact report: "..r.identity.name,r.identity.sublabel,r.parts and ("Part "..r.part.." of "..r.parts.."; import each part separately.") or "Complete single-part report.","Sender claim: "..r.sender.." (not authenticated)",
         "Original observer: "..r.identity.origin.source.." • "..L.Date(r.identity.origin.at),
         "Accept stores reported facts. Personal notes, observations and points stay unchanged.",""}
     for role,o in pairs(r.roles) do lines[#lines+1]=L.roles[role].." • "..o.source.." / "..o.method.." • "..L.Date(o.at) end
@@ -198,7 +222,7 @@ function R.MergeStored(existing,incoming)
         for _,o in ipairs(r[kind]) do
             local i=keys[o.key]
             if i then if o.last>merged[kind][i].last then merged[kind][i]=o end
-            elseif #merged[kind]<R.MAX_OFFERINGS then merged[kind][#merged[kind]+1]=o;keys[o.key]=#merged[kind]
+            elseif #merged[kind]<(kind=="goods" and L.MAX_GOODS or L.MAX_LESSONS) then merged[kind][#merged[kind]+1]=o;keys[o.key]=#merged[kind]
             else return nil,"Reported offering limit reached; personal knowledge is unchanged." end
         end
     end
@@ -238,6 +262,8 @@ end
 function R.Accept(journal,ticket,selected,dryRun)
     local original=pending[ticket];if not original then return nil,"Preview this report first." end
     local r,err=R.Normalize(original);if not r then return nil,err end
+    -- Part labels describe transport, not the cumulative report kept in the journal.
+    r.part=nil;r.parts=nil
     if journal.readOnly or ns.InitializationBlocked then return nil,"Ledger is read-only." end
     if selected then local contact=journal:Get(selected);selected=contact and contact.id or selected end
     local sourceKey=L.Key(r.identity.origin.source,r.identity.origin.key)

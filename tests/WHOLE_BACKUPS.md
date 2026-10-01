@@ -132,6 +132,44 @@ restoration. Adding a bad part does not mutate the previously collected set.
 Changing text/selection invalidates approval; acceptance rechecks current state.
 Closing the UI releases transient decoded/part buffers and text focus.
 
+Native acceptance on 2026-09-30 found that pasting a 256 KiB part could stall the
+Forever client for roughly a minute even though checking it was instant. Batching
+text/layout callbacks reduced but did not resolve the stall. A subsequent one-byte
+input with an `OnChar` collector failed the native paste test: typing worked but
+Ctrl+V left the byte count empty. A following native visible-text limit of 96 bytes
+also restricted input according to the operator's test, so that limit was removed.
+Allowing the complete native buffer restored paste acceptance but also the freeze.
+A bounded native probe then confirmed **128 OnChar bytes delivered / 95 bytes
+stored** with `SetMaxLetters(0)` and `SetMaxBytes(96)`. The UI now uses those exact
+settings and accumulates character events in bounded Lua chunks, updating the
+short preview once per frame and joining the full input only on explicit check.
+It does not install a custom key handler or a native visible-text limit.
+Add / check part validates the complete capture, never the truncated native text;
+empty input, missing character delivery, deletion/cut and overflow fail closed.
+Checking clears the native field; the next character starts a new part. Clear
+input drops the draft while retaining checked parts; New import clears the set.
+Export still uses full selectable text. The AFBWP1 format and existing files are
+unchanged. The operator's full-size native retest captured **262,173 bytes** in a
+reported split second, with the original part-1 header and Restore disabled.
+Subsequent native screenshots confirm part checks at 1/3 and 2/3 with Restore
+disabled, then successful complete-set decoding with the original timestamp and
+seven-journal account/character counts and Restore enabled. Part sizes were
+262,173, 262,173 and 155,007 bytes. Check/final-decode latency was not explicitly
+reported. Native external-backup restore automatically reloaded without reported
+errors, returned the original Lore description and blank Copper Vein notes, and
+returned exact Lore usage from 59 to 52 bytes. The automatic recovery copy dated
+18:09:10 then restored both edited notes; the operator reported that test passed.
+Both journal views remained Account-wide. This establishes the two-journal
+replacement/recovery path, not every scope, corruption or baseline-preservation
+case; broader native acceptance remains in progress. A subsequent native import
+of a deliberately truncated part was rejected with "Incomplete or changed backup
+part" and Restore disabled. The operator verified no reload and both recovered
+Lore/Gathering notes remained unchanged, supported by screenshots of both views.
+Automated tests model the observed 128/95 result and complete 262,173-byte parts,
+per-character/end-of-paste text notifications, frame boundaries, truncation,
+overflow, missing character delivery, deletion, duplicate parts, approval
+invalidation and close/reopen cleanup. These are not native timing measurements.
+
 For a large archive, use a file copy rather than hundreds of clipboard actions:
 
 1. Exit WoW normally so its SavedVariables are written.
@@ -151,6 +189,27 @@ The addon cannot inspect offline character files; it must not claim otherwise.
 Copying only the addon installation folder does not back up user knowledge.
 
 ## UI integration and native acceptance (deferred)
+
+Legacy Bestiary import also reproduced the paste stall during native acceptance
+on 2026-09-30. `BackupWindow.lua` now uses the same proven 96-byte native capacity
+and chunked character capture for import. Its separate export field, AFB1 codec,
+4 MiB limit and Bestiary-only restore semantics are unchanged. Preview validates
+all captured bytes, never the visible prefix; edits, clear, mode changes and close
+invalidate or discard input/review as appropriate, and stale confirmation callbacks
+cannot restore. `test_backup_window.py` covers a complete large export/import,
+Unicode/multiline notes, bounded native reads and batched preview updates,
+corruption, missing character delivery, deletion, overflow, cleanup and a real
+legacy restore/recovery while another journal remains unchanged. These widget
+tests do not establish native paste latency. The operator then retested through
+Options > Restore Bestiary > Import a backup after `/reload`: 171,497 bytes
+captured with an acceptable split-second pause, and Preview import displayed
+Backup checked with the original 19:16:03 timestamp, 123 creatures, 10 abilities,
+0 creature notes and account-wide scope. Native legacy replacement then cleared
+a deliberate Bestiary note, displayed Bestiary restored and created its recovery
+copy; the operator confirmed the Gathering marker stayed unchanged. The practical
+single-character O1 acceptance gate passed. Cross-character, fault-injection,
+boundary and additional visual cases are not implied by that result; broader
+native acceptance continues.
 
 The existing Options page gets a separate whole-backup group after Lore controls.
 Legacy Bestiary buttons retain their names and meaning. `/fieldbook backups`

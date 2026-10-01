@@ -190,11 +190,14 @@ import, price refresh or repeat visit touches points.
 
 Select personal/manual facts or a specific original received report to forward.
 Goods, training and locations can be selected independently for local reports;
-the current item/lesson search selects offerings. At most 80 of each kind fit;
-oversized selections fail with an instruction to narrow the search or exclude
-that kind. Forwarding keeps an original report intact apart from omitting notes
-unless selected. Notes are unchecked by default. The prepared text is bounded;
-preview shows original observers, methods, observation dates, costs and stock.
+the current item/lesson search selects offerings. A prepared report contains at
+most 80 goods and 80 lessons. For larger selections, Prepare advances through
+numbered parts and wraps to part 1 after the last; copy and import each part
+separately. Parts from the same original source merge cumulatively up to the
+journal's 500-per-kind contact limit. Forwarding a large received source uses
+the same parts and retains original observations. Notes are unchecked by
+default. The prepared text is bounded; preview shows original observers,
+methods, observation dates, costs and stock.
 
 Preview tickets retain detached validated data, and edited pasted text clears
 consent. Acceptance can create a separately labelled contact or explicitly
@@ -229,9 +232,11 @@ No sightings, goods or rewards are backfilled from other sections.
 - 500 known personal goods and 500 lessons per contact, one latest observation
   each; no append-only stock history. Identity collisions/limits make a scan
   partial and preserve previously stored knowledge.
-- 16 original report sources per contact; 512 across the character; 80 goods,
-  80 lessons, 24 locations and 32 speciality facts per source report. Receipts
-  are bounded to those retained facts. Report size is 128 KiB; literal parser
+- 16 original report sources per contact; 512 across the character. Each wire
+  part holds at most 80 goods and 80 lessons; a cumulative source can hold up
+  to 500 of each after separately accepting its parts. It also retains up to
+  24 locations and 32 speciality facts. Receipts are bounded to those facts.
+  Each wire part is at most 128 KiB; literal parser
   depth 12, 24,000 nodes, 4,000-byte strings and 200 fields per table.
 - Notes: 4,000 bytes; names/sublabels: 160 bytes; query: 200 bytes. Metadata
   callback references: at most 512, session-only. Search caches are session-only.

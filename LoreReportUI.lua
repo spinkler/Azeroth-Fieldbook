@@ -11,8 +11,11 @@ function ns.CreateLoreReportUI(parent,journal,getSelected,onChanged,shell)
         if c.ticket then R.Cancel(c.ticket);c.ticket=nil end
         c.targetID=nil
         if c.mode=='export' then
+            c.reviewedText=''
             c.filling=true;p.data:SetText('');c.filling=false
             p.copy:SetEnabled(false);p.preview:SetText('Selections changed. Prepare the exact preview again.',true)
+        else
+            c.reviewedText=nil
         end
         p.accept:SetEnabled(false);p.message:SetText('Prepare or preview again after changing selections.')
     end
@@ -76,9 +79,11 @@ function ns.CreateLoreReportUI(parent,journal,getSelected,onChanged,shell)
     local onText=p.data:GetScript('OnTextChanged')
     p.data:SetScript('OnTextChanged',function(self,...)
         if onText then onText(self,...) end
-        if not c.filling then invalidate() end
+        if not c.filling and self:GetText()~=c.reviewedText then invalidate() end
     end)
-    p.from:SetScript('OnTextChanged',function() if not c.filling then invalidate() end end)
+    p.from:SetScript('OnTextChanged',function(self)
+        if not c.filling and c.mode=='import' and self:GetText()~=c.reviewedFrom then invalidate() end
+    end)
     function c:ResetSelection()
         local report=self.selection.report
         self.selection={report=report,includePages=true,includePassages=true,includeLocations=true}
@@ -90,6 +95,7 @@ function ns.CreateLoreReportUI(parent,journal,getSelected,onChanged,shell)
     end
     function c:Open(mode)
         R.Cancel(self.ticket);self.ticket=nil;self.targetID=nil;self.mode=mode;self.id=getSelected();self.filling=true
+        self.reviewedText='';self.reviewedFrom=''
         self.selection={};self:ResetSelection();p.source:SetText('Local sources');p.data:SetText('');p.from:SetText('');p.attach:SetChecked(false)
         p.preview:SetText(mode=='export' and 'Choose exactly what to include, then prepare the preview. Private fields and related references start excluded.' or
             'Paste a Lore report. Record who gave it to you if known, then preview before accepting. Payload sender names are claims, not authentication.',true)
@@ -110,7 +116,8 @@ function ns.CreateLoreReportUI(parent,journal,getSelected,onChanged,shell)
             local report,err=R.Build(journal,self.id,self.selection)
             if not report then p.message:SetText(L.Safe(err));return end
             local data;data,err=R.Encode(report);if not data then p.message:SetText(L.Safe(err));return end
-            p.preview:SetText(R.Preview(report),true);self.filling=true;p.data:SetText(data);self.filling=false
+            p.preview:SetText(R.Preview(report),true);self.reviewedText=data
+            self.filling=true;p.data:SetText(data);self.filling=false
             p.copy:SetEnabled(true)
             p.message:SetText('Exact preview prepared: '..#data..' bytes. Select report text and copy. Nothing has been sent.')
         else
@@ -119,7 +126,8 @@ function ns.CreateLoreReportUI(parent,journal,getSelected,onChanged,shell)
             self.targetID=p.attach:GetChecked() and getSelected() or nil
             if p.attach:GetChecked() and not self.targetID then R.Cancel(ticket);p.message:SetText('Select an entry before attaching a report.');return end
             local summary,canAccept=R.Preflight(journal,ticket,self.targetID)
-            self.ticket=ticket;p.preview:SetText(summary..'\n\n'..(self.targetID and 'Attach to: '..journal:Title(self.targetID)..'\n\n' or 'Archive as reported material; match only an existing report identity.\n\n')..ticket.preview,true);p.accept:SetEnabled(canAccept)
+            self.ticket=ticket;self.reviewedText=p.data:GetText();self.reviewedFrom=p.from:GetText()
+            p.preview:SetText(summary..'\n\n'..(self.targetID and 'Attach to: '..journal:Title(self.targetID)..'\n\n' or 'Archive as reported material; match only an existing report identity.\n\n')..ticket.preview,true);p.accept:SetEnabled(canAccept)
             p.message:SetText('Review all included material. Accept stores a report; it does not confirm its claims.')
         end
     end

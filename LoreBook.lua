@@ -299,7 +299,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             row:SetScript("OnClick",function(self) if self.id then c:Select(self.id) end end);m.rows[i]=row
         end
         m.empty=U.Label(m,"",46,-280,242,"GameFontHighlight");m.empty:SetWordWrap(true)
-        m.capacity=U.Label(m,"",42,-701,250,"GameFontHighlightSmall")
+        m.capacity=U.Label(m,"",42,-701,250,"GameFontDisableSmall")
         m.capacity:SetWordWrap(false)
         m.capacityHover=CreateFrame('Frame',nil,m);m.capacityHover:SetPoint('TOPLEFT',42,-699);m.capacityHover:SetSize(250,20)
         m.capacityHover:EnableMouse(true)

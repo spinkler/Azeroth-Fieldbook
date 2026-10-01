@@ -181,6 +181,7 @@ class LedgerTests(unittest.TestCase):
     def test_goods_training_overlays_toggle_and_leave_notes_visible(self):
         self.lua.execute('''
             local e=visit();e.note='Use the side entrance'
+            trainer={{name='Sword lesson',status='available',rank='',category='',price=10}};fire('TRAINER_SHOW')
             shell:ShowSection('merchants');c:Select(e.id);local m=c.main
             local notes=m.details.text:GetText();assert(notes:find(e.note,1,true))
             m.detailButtons.goods.scripts.OnClick()
@@ -639,6 +640,63 @@ class LedgerTests(unittest.TestCase):
             assert(L.Count(e.goods)==1 and not e.merchantInspection.complete)
         ''')
 
+    def test_large_contact_shares_all_offerings_in_bounded_parts(self):
+        self.lua.execute('''
+            trainer={{name='Lesson 1',status='available',rank='',category='Mage',price=100}}
+            fire('TRAINER_SHOW')
+            local e=j:Get(t.visits.trainer.contact);local template=one(e.lessons)
+            for i=2,170 do
+                local lesson=L.Copy(template);lesson.name='Lesson '..i
+                lesson.key=L.LessonKey(lesson)
+                lesson.origin=L.Copy(template.origin);lesson.origin.key=lesson.key
+                e.lessons[lesson.key]=lesson
+            end
+            local receiver=ns.CreateLedgerJournal({});local target
+            for part=1,3 do
+                local report,err,total,index=R.Build(j,e.id,{part=part})
+                assert(report,err);assert(total==3 and index==part)
+                assert(#report.lessons==(part<3 and 80 or 10))
+                local wire=assert(R.Encode(report));assert(#wire<=R.MAX_BYTES)
+                local ticket=assert(R.Prepare(wire))
+                target=assert(R.Accept(receiver,ticket,target and target.id or nil))
+                assert(#target.reports==1 and #target.reports[1].lessons==math.min(part*80,170))
+            end
+            assert(#target.reports[1].lessons==170)
+            local first=assert(R.Build(j,e.id,{part=1}))
+            local ticket=assert(R.Prepare(assert(R.Encode(first))))
+            local summary=assert(R.Preflight(receiver,ticket,target.id))
+            assert(summary:find('already known',1,true))
+            assert(R.Accept(receiver,ticket,target.id) and #target.reports[1].lessons==170)
+            local forwarded,err,total,index=R.Build(receiver,target.id,{report=1,part=3})
+            assert(forwarded,err);assert(total==3 and index==3 and #forwarded.lessons==10)
+            assert(forwarded.identity.origin.source==first.identity.origin.source)
+        ''')
+
+    def test_report_parts_stop_atomically_at_contact_offering_limit(self):
+        self.lua.execute('''
+            local e=visit();local template=one(e.goods)
+            for i=2,L.MAX_GOODS do
+                local good=L.Copy(template);good.itemID=1000+i;good.name='Synthetic good '..i
+                good.key=L.GoodKey(good);good.origin=L.Copy(template.origin);good.origin.key=good.key
+                e.goods[good.key]=good
+            end
+            local receiver=ns.CreateLedgerJournal({});local target
+            for part=1,7 do
+                local report,err,total,index=R.Build(j,e.id,{part=part})
+                assert(report,err);assert(total==7 and index==part)
+                target=assert(R.Accept(receiver,assert(R.Prepare(assert(R.Encode(report)))),target and target.id or nil))
+            end
+            assert(#target.reports==1 and #target.reports[1].goods==L.MAX_GOODS)
+            local extra=assert(R.Build(j,e.id,{part=7}))
+            local good=extra.goods[1];good.itemID=999999;good.name='Unseen extra'
+            good.key=L.GoodKey(good);good.origin.key=good.key
+            local ticket=assert(R.Prepare(assert(R.Encode(extra))))
+            local before=snapshot(receiver.db)
+            local summary,canAccept=R.Preflight(receiver,ticket,target.id)
+            assert(not canAccept and summary:find('limit',1,true))
+            assert(not R.Accept(receiver,ticket,target.id) and snapshot(receiver.db)==before)
+        ''')
+
     def test_native_service_events_and_manual_annotations_are_distinct(self):
         self.lua.execute('''
             fire('BANKFRAME_OPENED');local e=one(saved.contacts);assert(e.roles.banker and next(e.goods)==nil)
@@ -664,6 +722,48 @@ class LedgerTests(unittest.TestCase):
 class LedgerUITests(unittest.TestCase):
     def setUp(self):
         self.lua = new_ledger(ui=True)
+
+    def test_training_requires_personal_or_reported_lessons(self):
+        self.lua.execute('''
+            assert(m.detailButtons.training.enabled==false)
+            c:Catalogue('training');assert(c.panel==nil)
+            local e=visit();flush();c:Select(e.id)
+            assert(m.detailButtons.goods.enabled==true and m.detailButtons.training.enabled==false)
+            c:Catalogue('training');assert(c.panel==nil)
+            trainer={{name='Sword lesson',status='available',rank='',category='',price=10}}
+            fire('TRAINER_SHOW');flush()
+            assert(m.detailButtons.training.enabled==true)
+            c:Catalogue('training');assert(c.panel==c.panels.catalogue and c.panel.kind=='training')
+            c:ClosePanel()
+            local report=reportFor(e);assert(j:Remove(e.id));flush()
+            local reported=import(j,report);flush();c:Select(reported.id)
+            assert(next(reported.lessons)==nil and #reported.reports>0)
+            assert(m.detailButtons.training.enabled==true)
+            c:Catalogue('training');assert(c.panel==c.panels.catalogue)
+            c:ClosePanel();local empty=assert(j:Manual({name='Empty contact'}));flush();c:Select(empty.id)
+            assert(m.detailButtons.training.enabled==false)
+        ''')
+
+    def test_known_goods_requires_personal_or_reported_offerings(self):
+        self.lua.execute('''
+            assert(m.detailButtons.goods.enabled==false)
+            c:Catalogue('goods');assert(c.panel==nil)
+            local empty=assert(j:Manual({name='Empty merchant',role='merchant'}));flush();c:Select(empty.id)
+            assert(m.detailButtons.goods.enabled==false)
+            c:Catalogue('goods');assert(c.panel==nil)
+            local stocked=visit();flush();c:Select(stocked.id)
+            assert(m.detailButtons.goods.enabled==true)
+            c:Catalogue('goods');assert(c.panel==c.panels.catalogue)
+            c:ClosePanel()
+            local report=reportFor(stocked)
+            assert(j:Remove(stocked.id));flush()
+            local reported=import(j,report);flush();c:Select(reported.id)
+            assert(next(reported.goods)==nil and #reported.reports>0)
+            assert(m.detailButtons.goods.enabled==true)
+            c:Catalogue('goods');assert(c.panel==c.panels.catalogue)
+            c:ClosePanel();c:Select(empty.id)
+            assert(m.detailButtons.goods.enabled==false)
+        ''')
 
     def test_widget_selection_item_reason_reset_and_empty_states(self):
         self.lua.execute('''
@@ -755,6 +855,28 @@ class LedgerUITests(unittest.TestCase):
             p.data:SetText('malformed');assert(not p.ticket and not p.accept.enabled)
             p.data:SetText(assert(R.Encode(reportFor(e))));click(p.review);click(p.accept)
             assert(c.panel==nil and #j:Get(c.state.selected).reports==1)
+        ''')
+
+    def test_large_report_screen_steps_through_every_part(self):
+        self.lua.execute('''
+            local e=visit();local template=one(e.goods)
+            for i=2,170 do
+                local good=L.Copy(template);good.itemID=1000+i;good.name='Synthetic good '..i
+                good.key=L.GoodKey(good);good.origin=L.Copy(template.origin);good.origin.key=good.key
+                e.goods[good.key]=good
+            end
+            flush();c:Select(e.id);c:Reports();local p=c.panels.reports
+            for index=1,3 do
+                click(p.prepare)
+                local report=assert(R.Decode(p.data:GetText()))
+                assert(report.part==index and report.parts==3)
+                assert(p.preview.text:GetText():find('Part '..index..' of 3',1,true))
+                assert(p.part==index and #report.goods==(index<3 and 80 or 10))
+            end
+            click(p.prepare);assert(p.part==1 and assert(R.Decode(p.data:GetText())).part==1)
+            p.goods:SetChecked(false);p.goods.scripts.OnClick(p.goods)
+            assert(p.part==0 and p.data:GetText()=='' and p.prepare:GetText()=='Prepare')
+            click(p.prepare);assert(not assert(R.Decode(p.data:GetText())).parts)
         ''')
 
     def test_viewport_inherits_scale_once_and_never_changes_shell_size(self):

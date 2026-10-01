@@ -130,6 +130,31 @@ class LoreReportTests(unittest.TestCase):
             c:Close();assert(not c.panel:IsShown())
         ''')
 
+    def test_delayed_text_notifications_keep_unchanged_report_previews(self):
+        self.lua.execute('''
+            shell=ns.CreateFieldbookShell();shell:RegisterSection('lore',{title='Lore',build=function() end});shell:ShowSection('lore')
+            c=ns.CreateLoreReportUI(shell.sections.lore.frame,j,function() return e.id end,function() end,shell)
+            c:OpenExport();local p=c.panel
+            p.checks.description:SetChecked(true);p.checks.description.scripts.OnClick(p.checks.description)
+            c:Prepare()
+            local wire=p.data:GetText()
+            assert(wire:sub(1,7)=='AFBLR1:' and p.copy.enabled)
+            p.data.scripts.OnTextChanged(p.data,false)
+            p.from.scripts.OnTextChanged(p.from,false)
+            assert(p.data:GetText()==wire and p.copy.enabled,'delayed export notification cleared report')
+            assert(p.preview.text:GetText():find('Explicitly included description',1,true))
+
+            c:OpenImport();p.data:SetText(wire);c:Prepare()
+            assert(c.ticket and p.accept.enabled)
+            p.data.scripts.OnTextChanged(p.data,false)
+            assert(c.ticket and p.accept.enabled,'delayed import notification cleared preview')
+            p.from:SetText('Different courier')
+            assert(not c.ticket and not p.accept.enabled,'sender edit retained preview approval')
+            c:Prepare();assert(c.ticket and p.accept.enabled)
+            p.data:SetText(wire..'x')
+            assert(not c.ticket and not p.accept.enabled,'real edit retained preview approval')
+        ''')
+
     def test_private_passages_require_opt_in_and_export_deselection_clears_wire(self):
         self.lua.execute('''
             assert(j:AddPassage(e.id,{raw='PRIVATE OBSERVATION',nature='observation',origin='manual',source='Me'}))

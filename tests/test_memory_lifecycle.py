@@ -217,7 +217,8 @@ class MemoryLifecycleTests(unittest.TestCase):
                 local snapshot,err=decode(...);weak[1]=snapshot;return snapshot,err
             end
             frame.importButton.scripts.OnClick(frame.importButton)
-            frame.text:SetText(assert(data.Encode(j:GetBackups().saved[1])))
+            local wire=assert(data.Encode(j:GetBackups().saved[1]))
+            for i=1,#wire do frame.paste.scripts.OnChar(frame.paste,wire:sub(i,i)) end
             frame.previewButton.scripts.OnClick(frame.previewButton)
             assert(weak[1] and frame.restoreButton.enabled)
             window:Hide();collectgarbage('collect');collectgarbage('collect')

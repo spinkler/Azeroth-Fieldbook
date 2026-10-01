@@ -1,6 +1,8 @@
 local _,ns=...
 local B=ns.FieldbookBackups
-local frame,selected,parts,part,importParts,loading
+local frame,selected,parts,part,importParts,loading,displayedText
+local textDirty,updatePending,cursorTop,cursorHeight
+local importMode,pasteState,setImportMode,readPaste
 local reflow
 local function safe(text) return ns.Atlas.Safe(text or "") end
 local function status(text)
@@ -8,7 +10,11 @@ local function status(text)
     if reflow then reflow() end
 end
 local function setText(text)
-    loading=true;frame.text:SetText(text or "");loading=false
+    if setImportMode then setImportMode(false) end
+    textDirty=false;updatePending=false;cursorTop=nil;cursorHeight=nil
+    frame:SetScript("OnUpdate",nil)
+    displayedText=text or ""
+    loading=true;frame.text:SetText(displayedText);loading=false
     frame.text:ClearFocus()
 end
 local function invalidate()
@@ -17,6 +23,10 @@ local function invalidate()
     frame.summary:SetText("No backup selected. Save a copy or load every part of an external backup.")
 end
 local function review(text)
+    -- A new explicit review supersedes pending edits; subsequent input must
+    -- invalidate this new approval even before the next frame update.
+    displayedText=frame.text:GetText();textDirty=false
+    if pasteState then pasteState.checked=true end
     invalidate()
     local snapshot,err=B.Decode(text)
     if not snapshot then status(err);return end
@@ -69,8 +79,9 @@ local function build()
     end)
     frame.import=U.Button(body,"New import",196,-105,170,function()
         invalidate();importParts={};setText("")
+        setImportMode(true)
         status("Paste one complete export part, then click Add / check part. Repeat for every part in any order.")
-        frame.text:SetFocus()
+        frame.paste:SetFocus()
     end)
     frame.export=U.Button(body,"Export selected",380,-105,170,function()
         if not selected then return end
@@ -93,19 +104,135 @@ local function build()
     frame.text:SetSize(490,130);frame.text:SetMaxLetters(B.PART_BYTES*2+1)
     textScroll:SetScrollChild(frame.text);ns.AutoHideScrollBar(textScroll)
     frame.text:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
-    frame.text:SetScript("OnTextChanged",function()
-        if loading then return end
+    -- Native acceptance confirmed 128 OnChar bytes with only 95 stored at this
+    -- capacity. Keep layout small and capture all characters outside the widget.
+    frame.paste=CreateFrame("EditBox",nil,border)
+    frame.paste:SetPoint("TOPLEFT",8,-30);frame.paste:SetSize(500,26)
+    frame.paste:SetMultiLine(false);frame.paste:SetAutoFocus(false)
+    frame.paste:SetFontObject(ns.TextSize and ns.TextSize:Font("GameFontHighlightSmall") or "GameFontHighlightSmall")
+    frame.paste:SetMaxLetters(0)
+    frame.paste:SetMaxBytes(96)
+    local pasteHint=U.Label(border,"Click here and paste one complete part (Ctrl+V).",8,-8,500,"GameFontHighlightSmall")
+    frame.pasteStatus=U.Label(border,"",8,-65,500,"GameFontHighlightSmall")
+    local function resetPaste()
+        pasteState={blocks={},chars={},bytes=0,prefix="",native="",pending=false}
+    end
+    readPaste=function()
+        local s=pasteState
+        if not s then return end
+        s.native=frame.paste:GetText();s.hasChars=false
+        if not s.text then
+            s.blocks[#s.blocks+1]=table.concat(s.chars);s.chars={}
+            s.text=table.concat(s.blocks);s.blocks={}
+        end
+    end
+    local function showPasteStatus()
+        local s=pasteState;if not s then return end
+        s.pending=false
+        frame.pasteStatus:SetText(s.error or (s.bytes==0 and "Waiting for a complete part." or
+            (s.bytes.." bytes received. Click Add / check part.\nStarts with: "..safe(s.prefix).."\nOnly this short preview is displayed; validation uses all received text.")))
+    end
+    setImportMode=function(enabled)
+        importMode=enabled;pasteState=nil
+        textScroll:SetShown(not enabled);frame.paste:SetShown(enabled)
+        pasteHint:SetShown(enabled);frame.pasteStatus:SetShown(enabled)
+        frame.selectText:SetEnabled(not enabled)
+        frame.paste:ClearFocus();frame.paste:SetText("")
+        frame.pasteStatus:SetText("")
+        frame.clearPaste:SetShown(enabled)
+        if enabled then resetPaste();showPasteStatus() end
+    end
+    local function readText()
+        displayedText=frame.text:GetText();textDirty=false
+        return displayedText
+    end
+    local function flushUpdates()
+        frame:SetScript("OnUpdate",nil);updatePending=false
+        if importMode and pasteState and pasteState.pending then showPasteStatus() end
+        if textDirty then readText();reflow() end
+        local top,height=cursorTop,cursorHeight;cursorTop=nil;cursorHeight=nil
+        if top then
+            local offset=textScroll:GetVerticalScroll()
+            if top<offset then textScroll:SetVerticalScroll(math.max(0,top))
+            elseif top+height>offset+130 then textScroll:SetVerticalScroll(math.max(0,top+height-130)) end
+        end
+    end
+    local function queueUpdate()
+        if updatePending then return end
+        updatePending=true;frame:SetScript("OnUpdate",flushUpdates)
+    end
+    local function invalidatePaste()
         invalidate()
         if StaticPopup_Hide then StaticPopup_Hide("AZEROTHFIELDBOOK_WHOLE_RESTORE") end
-        status("Text changed. Add / check this part before restoring.")
+        frame.status:SetText("Input changed. Add / check this complete part before restoring.")
+    end
+    frame.paste:SetScript("OnChar",function(_,char)
+        if not importMode or loading or not frame:IsShown() or type(char)~="string" or char=="" then return end
+        if not pasteState or pasteState.checked then resetPaste() end
+        local s=pasteState
+        if s.bytes==0 and not s.error then invalidatePaste() end
+        s.hasChars=true
+        if s.error then return end
+        if s.bytes+#char>B.PART_BYTES*2 then
+            s.error="Input is too large. Clear input and paste one complete backup part."
+            s.blocks={};s.chars={}
+        else
+            s.bytes=s.bytes+#char;s.chars[#s.chars+1]=char
+            if #s.prefix<96 then s.prefix=s.prefix..char:sub(1,96-#s.prefix) end
+            if #s.chars>=1024 then s.blocks[#s.blocks+1]=table.concat(s.chars);s.chars={} end
+        end
+        s.pending=true;queueUpdate()
+    end)
+    frame.paste:SetScript("OnTextChanged",function(self)
+        if not importMode or loading or not pasteState or not frame:IsShown() then return end
+        local s=pasteState;local native=self:GetText() -- at most 95 bytes
+        if s.hasChars then s.native=native;s.hasChars=false;return end
+        if native==s.native then return end
+        -- Deletion/cut or input without character delivery cannot reuse an old
+        -- complete capture. Never validate the widget's truncated prefix.
+        resetPaste();pasteState.native=native
+        pasteState.error="Input edited or not captured. Clear input and paste the complete part again."
+        pasteState.pending=true;invalidatePaste()
+        queueUpdate()
+    end)
+    frame.paste:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
+    frame.clearPaste=U.Button(border,"Clear input",370,-108,130,function()
+        loading=true;frame.paste:SetText("");loading=false
+        resetPaste();invalidate();showPasteStatus()
+        if StaticPopup_Hide then StaticPopup_Hide("AZEROTHFIELDBOOK_WHOLE_RESTORE") end
+        status("Input cleared. Paste one complete backup part.");frame.paste:SetFocus()
+    end)
+    frame.text:SetScript("OnTextChanged",function(_,userInput)
+        if importMode or loading or textDirty or not frame:IsShown() then return end
+        -- Native notifications can arrive after SetText returns, or repeat
+        -- without an edit. Preserve export/review for unchanged programmatic text.
+        if userInput~=true and frame.text:GetText()==displayedText then return end
+        -- Invalidate immediately, but do not copy a growing paste buffer or
+        -- relayout/scroll on each notification. Read its final contents next frame.
+        textDirty=true
+        invalidate()
+        if StaticPopup_Hide then StaticPopup_Hide("AZEROTHFIELDBOOK_WHOLE_RESTORE") end
+        frame.status:SetText("Text changed. Add / check this part before restoring.")
+        queueUpdate()
     end)
     frame.text:SetScript("OnCursorChanged",function(_,_,y,_,height)
-        local top,offset=-y,textScroll:GetVerticalScroll()
-        if top<offset then textScroll:SetVerticalScroll(math.max(0,top))
-        elseif top+height>offset+130 then textScroll:SetVerticalScroll(math.max(0,top+height-130)) end
+        if importMode or loading or not frame:IsShown() then return end
+        cursorTop,cursorHeight=-y,height;queueUpdate()
     end)
     frame.check=U.Button(body,"Add / check part",12,-530,160,function()
-        local text=frame.text:GetText()
+        -- A click can precede the queued frame update; consume the final text now.
+        local text
+        if importMode then
+            readPaste()
+            local s=pasteState;s.checked=true
+            showPasteStatus()
+            if s.error or s.bytes==0 then
+                invalidate();status(s.error or "No text received. Click the paste field and paste one complete part.");return
+            end
+            text=s.text
+            loading=true;frame.paste:SetText("");loading=false
+            s.native="";frame.paste:SetFocus()
+        else text=readText() end
         if text:match("^%s*AFBWB1:") then review(text);return end
         local received,err=B.AddPart(importParts or {},text)
         if not received then invalidate();status(err);return end

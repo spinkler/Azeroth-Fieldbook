@@ -113,6 +113,7 @@ local function addNameScroller(row,heading)
     local text=body:CreateFontString(nil,"OVERLAY",textFont("GameFontHighlight"))
     text:SetPoint("TOPLEFT",0,-8);text:SetJustifyH("LEFT");text:SetWordWrap(false)
     text:SetShadowColor(0.05,0.05,0.05)
+    text:SetShadowOffset(1,-1)
     if heading then
         viewport:ClearAllPoints();viewport:SetAllPoints(row)
         text:ClearAllPoints();text:SetPoint("TOPLEFT",0,0)
@@ -134,7 +135,8 @@ local function addNameScroller(row,heading)
         viewport:SetWidth(visible);body:SetWidth(width);text:SetWidth(width)
         if heading then body:SetHeight(self:GetHeight()) end
         text:SetText(self.text:GetText());text:SetTextColor(self.text:GetTextColor())
-        text:SetAlphaGradient(visible-20,20)
+        -- Alpha gradients suppress native font shadows. Let the viewport clip
+        -- the scrolling text so its shadow survives throughout the hover.
         self.text:Hide();viewport:Show();viewport:SetHorizontalScroll(0)
         local elapsed,distance=0,width-visible
         local travel=distance/24 -- Gentle movement in UI pixels per second.
@@ -147,10 +149,6 @@ local function addNameScroller(row,heading)
             elseif elapsed<2+travel then position=distance
             else position=distance-(elapsed-2-travel)*24 end
             viewport:SetHorizontalScroll(position)
-            -- Fade into the stationary right edge while travelling, then show
-            -- the complete ending during the pause. The viewport clips the left.
-            if position<distance then text:SetAlphaGradient(position+visible-20,20)
-            else text:ClearAlphaGradient() end
         end)
     end)
     row:SetScript("OnLeave",function(self) self:StopNameScroll() end)
@@ -282,24 +280,50 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         control:SetSelected(false)
     end
+    local function layoutModel(isBeast)
+        if book.modelIsBeast==isBeast then return end
+        book.modelIsBeast=isBeast
+        book.beastLoreButton:SetShown(isBeast)
+        book.modelBorder:ClearAllPoints()
+        book.modelBorder:SetPoint("TOPLEFT",364,isBeast and -162 or -133)
+        book.modelBorder:SetHeight(isBeast and 139 or 168)
+        book.model:ClearAllPoints()
+        book.model:SetPoint("TOPLEFT",366,isBeast and -164 or -135)
+        book.model:SetHeight(isBeast and 135 or 164)
+    end
+    local function requestModel()
+        book.modelAttempts=book.modelAttempts+1
+        book.modelRetryElapsed=0
+        -- SetCreature can return normally before the client has the appearance.
+        -- Only OnModelLoaded completes the request; retries never clear it.
+        pcall(book.model.SetCreature, book.model, book.modelEntryID)
+    end
     local function safeModel(id)
         local entry=id and journal.entries[id]
         local personal=entry and entry.personalEncountered==true or false
         book.modelEntryID,book.modelPersonal=id,personal
-        book.model:ClearModel()
+        book.modelPending=false
+        -- Keep the frame shown for asynchronous loading, but conceal any old
+        -- rendered appearance until the replacement reports it has loaded.
+        book.model:SetAlpha(0)
         book.model:Hide()
+        book.model:ClearModel()
+        -- Unload the outgoing scene before changing either the lore header,
+        -- surrounding border or native viewport. Load only after layout ends.
+        local basic=entry and basicInfo(id)
+        layoutModel(basic~=nil and basic.category=="Beast")
         book.modelUnknown:SetShown(entry~=nil and not personal)
         if entry and not personal then
             book.modelCaption:SetText("")
             return
         end
-        book.modelCaption:SetText("Illustration not available yet")
+        book.modelCaption:SetText("")
         if not entry then return end
         -- Query appearance only for an already encountered NPC. Never scan IDs.
-        local ok = pcall(book.model.SetCreature, book.model, id)
-        if ok then
-            book.model:Show()
-        end
+        book.model:Show()
+        book.modelPending=true
+        book.modelAttempts=0
+        requestModel()
     end
     local encounterHints={}
     local refresh
@@ -329,6 +353,7 @@ local ink = { 0.75, 0.8, 0.8 }
             book.beastLore.status:SetText("Free to send • 0 Knowledge")
         end
         selected, abilityOffset = id, 0
+        safeModel(id)
         if creatureNotes then creatureNotes:SetCreature(id) end
         if creatureLocations then creatureLocations:SetCreature(id) end
         if rumoursWindow then rumoursWindow:SetCreature(id) end
@@ -336,7 +361,6 @@ local ink = { 0.75, 0.8, 0.8 }
         book.manualEffects={}; if book.effectButton then book.effectButton:SetText("Choose effects") end
         book.damageForm:Hide()
         message("")
-        safeModel(id)
         refresh()
     end
     local function cycleEntry(direction)
@@ -417,10 +441,9 @@ local ink = { 0.75, 0.8, 0.8 }
                 local hasMarker=unknown or skull or reward~=nil
                 if row.text:GetWidth()~=(hasMarker and 121 or 140) then row:StopNameScroll() end
                 row.text:SetWidth(hasMarker and 121 or 140)
-                -- Fade the last 20px of the name, ending before the icon's gap.
-                -- Clear it when recycled rows no longer have an earned reward.
-                if hasMarker then row.text:SetAlphaGradient(101,20)
-                else row.text:ClearAlphaGradient() end
+                -- Native alpha gradients suppress the font's drop shadow.
+                -- The narrower text width already reserves space for markers.
+                row.text:ClearAlphaGradient()
                 local rowSelected = data.id == selected
                 local hasRumours=journal.GetRumours and #journal:GetRumours(data.id)>0
                 if hasRumours then row.text:SetTextColor(114/255,214/255,91/255)
@@ -436,13 +459,10 @@ local ink = { 0.75, 0.8, 0.8 }
         local e = selected and journal.entries[selected]
         local basic=e and basicInfo(selected)
         local isBeast=basic~=nil and basic.category=="Beast"
-        book.beastLoreButton:SetShown(isBeast)
-        book.modelBorder:ClearAllPoints()
-        book.modelBorder:SetPoint("TOPLEFT",364,isBeast and -162 or -133)
-        book.modelBorder:SetHeight(isBeast and 139 or 168)
-        book.model:ClearAllPoints()
-        book.model:SetPoint("TOPLEFT",366,isBeast and -164 or -135)
-        book.model:SetHeight(isBeast and 135 or 164)
+        -- Do not resize a visible model or re-anchor it on routine refreshes.
+        -- Cached models can finish loading synchronously inside safeModel.
+        if book.modelEntryID~=selected or book.modelPersonal~=(e and e.personalEncountered==true or false)
+            or book.modelIsBeast~=isBeast then safeModel(selected) end
         book.damageBorder:ClearAllPoints()
         book.damageBorder:SetPoint("TOPLEFT",579,-133)
         book.damageBorder:SetHeight(115)
@@ -522,7 +542,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.detail:SetShown(e ~= nil)
         book.empty:SetShown(e == nil)
         if not e then
-            book.model:Hide()
+            safeModel(nil)
             book.tameableBadge:Hide()
             book.confirm:Hide()
             book.modelCaption:SetText("")
@@ -801,8 +821,12 @@ local ink = { 0.75, 0.8, 0.8 }
         styleSelection(book.locationsButton,true)
         book.ranksButton = button(book, "Ranks", 42, -511, 88, function() book.rankFrame:SetShown(not book.rankFrame:IsShown()) end)
         styleSelection(book.ranksButton,true)
-        book.entryCount=label(book,"",135,-55,55,"GameFontHighlightSmall")
-        book.pointsCount=label(book,"",190,-55,125,"GameFontHighlightSmall")
+        book.entryCount=label(book,"9999 entries",135,-55,110,"GameFontHighlightSmall")
+        local countWidth=math.max(80,math.ceil(book.entryCount:GetStringWidth())+4)
+        book.entryCount:SetWidth(countWidth)
+        book.entryCount:SetWordWrap(false)
+        book.pointsCount=label(book,"",135+countWidth+6,-55,174-countWidth,"GameFontHighlightSmall")
+        book.pointsCount:SetWordWrap(false)
         book.pointsCount:SetJustifyH("RIGHT")
         book.search = edit(book, 145, -78, 146, 100)
         -- The single-line edit box scrolls within these insets, keeping its
@@ -985,8 +1009,7 @@ local ink = { 0.75, 0.8, 0.8 }
                     if (primary and primary~="") or (secondary and secondary~="") then bound=true end
                 end
             end
-            book.bindingHint:SetText("Click Index to show or hide A-Z filters." ..
-                (bound and "" or "\nBind this book in Options > Keybindings."))
+            book.bindingHint:SetText(bound and "" or "Bind this book in Options > Keybindings.")
         end
         book:RegisterEvent("UPDATE_BINDINGS")
         book:SetScript("OnEvent",refreshBindingHint)
@@ -1126,10 +1149,15 @@ local ink = { 0.75, 0.8, 0.8 }
             return x and x/scale
         end
         book.model:SetScript("OnMouseDown", function()
+            if book.modelPending then return end
             rotating=true; lastCursorX=cursorX()
         end)
         book.model:SetScript("OnMouseUp", function() rotating=false; lastCursorX=nil end)
-        book.model:SetScript("OnUpdate", function()
+        book.model:SetScript("OnUpdate", function(self,elapsed)
+            if book.modelPending and book.modelAttempts<4 then
+                book.modelRetryElapsed=book.modelRetryElapsed+(elapsed or 0)
+                if book.modelRetryElapsed>=0.5 then requestModel() end
+            end
             if rotating then
                 local x=cursorX()
                 if x and lastCursorX then rotation=rotation+(x-lastCursorX)*0.015; book.model:SetRotation(rotation) end
@@ -1140,6 +1168,9 @@ local ink = { 0.75, 0.8, 0.8 }
         book.modelCaption = label(book.modelBorder, "", 8, -76, 191, "GameFontHighlightSmall")
         book.modelCaption:SetJustifyH("CENTER")
         book.model:SetScript("OnModelLoaded", function()
+            if not book.modelPending then return end
+            book.modelPending=false
+            book.model:SetAlpha(1)
             book.modelCaption:SetText("")
         end)
         book.confirm = CreateFrame("Button", nil, book, "BackdropTemplate")

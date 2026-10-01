@@ -7,6 +7,14 @@ from test_player_names_preservation import full_client
 
 SUPPORT = r'''
     B=ns.FieldbookBackups
+    function pasteInput(f,text)
+        assert(f.paste:IsShown(),'paste input is not open')
+        -- Native probe: a 96-byte capacity stores 95 bytes but delivers all
+        -- 128 OnChar bytes. Model overflow delivery separately from storage.
+        for i=1,#text do f.paste.scripts.OnChar(f.paste,text:sub(i,i)) end
+        f.paste.text=((f.paste.text or '')..text):sub(1,95)
+        f.paste.scripts.OnTextChanged(f.paste,true)
+    end
     function copy(v) if type(v)~='table' then return v end;local o={};for k,x in pairs(v) do o[k]=copy(x) end;return o end
     function disk(v)
         if type(v)=='string' then return string.format('%q',v) end
@@ -335,15 +343,293 @@ class WholeFieldbookBackupTests(unittest.TestCase):
             f.export.scripts.OnClick();assert(f.text:GetText():sub(1,7)=='AFBWP1:')
             f.text:SetText(f.text:GetText()..'x');assert(not f.restore.enabled)
             f.check.scripts.OnClick();assert(not f.restore.enabled)
-            f.import.scripts.OnClick();f.text:SetText(B.Parts(whole)[1]);f.check.scripts.OnClick()
+            f.import.scripts.OnClick();pasteInput(f,B.Parts(whole)[1]);f.check.scripts.OnClick()
             assert(f.restore.enabled)
             f.restore.scripts.OnClick();local old=popup.data
-            f.text:SetText('changed');assert(not f.restore.enabled and not popup)
+            pasteInput(f,'changed');assert(not f.restore.enabled and not popup)
             StaticPopupDialogs.AZEROTHFIELDBOOK_WHOLE_RESTORE.OnAccept(nil,old)
             assert(not AzerothFieldbookBackupDB.pending and not reloadRequested)
             f.rows[1].scripts.OnClick(f.rows[1]);f.restore.scripts.OnClick()
             StaticPopupDialogs.AZEROTHFIELDBOOK_WHOLE_RESTORE.OnAccept(nil,popup.data)
             assert(AzerothFieldbookBackupDB.pending and reloadRequested and ns.InitializationBlocked)
+        ''')
+
+    def test_ui_export_survives_deferred_text_notifications_but_real_edits_invalidate(self):
+        for timing in ('immediate', 'deferred', 'both'):
+            with self.subTest(timing=timing):
+                lua=client()
+                lua.globals().textEventTiming=timing
+                lua.execute(r'''
+                    StaticPopupDialogs={};local popup
+                    function StaticPopup_Show(name,a,b,data) popup={name=name,data=data} end
+                    function StaticPopup_Hide() popup=nil end
+                    function ReloadUI() reloadRequested=true end
+                    AzerothFieldbookDB.exportTestText=string.rep('x',B.PART_BYTES*2)
+                    ns.OpenFieldbookBackups();local f=AzerothFieldbookWholeBackups
+                    local originalSetText=f.text.SetText;local pending={}
+                    function f.text:SetText(text)
+                        local handler=self.scripts.OnTextChanged
+                        self.scripts.OnTextChanged=nil
+                        originalSetText(self,text)
+                        self.scripts.OnTextChanged=handler
+                        if textEventTiming~='deferred' then handler(self,false) end
+                        if textEventTiming~='immediate' then
+                            pending[#pending+1]=function() handler(self,false) end
+                        end
+                    end
+                    local function flushText()
+                        local events=pending;pending={}
+                        for _,event in ipairs(events) do event() end
+                    end
+                    f.save.scripts.OnClick()
+                    local whole=AzerothFieldbookBackupDB.saved[1]
+                    local expected=B.Parts(whole);assert(#expected==3)
+                    local before=capture()
+                    f.export.scripts.OnClick();flushText()
+                    local function checkPart(index)
+                        assert(f.text:GetText()==expected[index],'export text changed')
+                        assert(f.part:GetText()=='Export part '..index..' of 3','part label cleared')
+                        assert(f.previous.enabled==(index>1) and f.next.enabled==(index<3),'navigation cleared')
+                        assert(f.export.enabled and f.restore.enabled,'selection cleared')
+                    end
+                    checkPart(1)
+                    f.selectText.scripts.OnClick();f.text.scripts.OnTextChanged(f.text,false)
+                    checkPart(1)
+                    f.next.scripts.OnClick();flushText();checkPart(2)
+                    f.next.scripts.OnClick();flushText();checkPart(3)
+                    f.previous.scripts.OnClick();flushText();checkPart(2)
+
+                    -- Clearing old export text on saved-copy selection is also programmatic.
+                    f.rows[1].scripts.OnClick(f.rows[1]);flushText()
+                    assert(f.text:GetText()=='' and f.export.enabled and f.restore.enabled)
+                    f.export.scripts.OnClick();flushText();checkPart(1)
+                    f.restore.scripts.OnClick();local old=assert(popup).data
+                    f.text.scripts.OnTextChanged(f.text,false)
+                    assert(popup and f.restore.enabled,'unchanged notification cancelled approval')
+                    f.text:SetText(f.text:GetText()..'x');flushText()
+                    assert(not popup and not f.restore.enabled and not f.export.enabled)
+                    assert(not f.next.enabled and not f.previous.enabled and f.part:GetText()=='')
+                    StaticPopupDialogs.AZEROTHFIELDBOOK_WHOLE_RESTORE.OnAccept(nil,old)
+                    assert(not AzerothFieldbookBackupDB.pending and not reloadRequested)
+                    f.text:SetText(expected[1]);flushText()
+                    assert(not f.restore.enabled,'reverting text must not restore approval')
+
+                    -- Genuine paste notifications still require each part to be checked.
+                    f.import.scripts.OnClick();flushText()
+                    for i=1,3 do
+                        pasteInput(f,expected[i]);flushText()
+                        assert(not f.restore.enabled)
+                        f.check.scripts.OnClick()
+                        f.text.scripts.OnTextChanged(f.text,false)
+                        assert(f.restore.enabled==(i==3))
+                    end
+                    assert(f.export.enabled)
+                    f:Hide();flushText()
+                    assert(f.text:GetText()=='' and not f.restore.enabled and not f.export.enabled)
+                    ns.OpenFieldbookBackups();flushText()
+                    f.rows[1].scripts.OnClick(f.rows[1]);flushText()
+                    assert(f.export.enabled and f.restore.enabled)
+                    unchanged(before,'export, edit, import review and reopen')
+                ''')
+
+    def test_ui_paste_bursts_bound_work_and_keep_approval_fail_closed(self):
+        for user_input in ('true', 'false', 'nil'):
+            with self.subTest(user_input=user_input):
+                lua=client()
+                lua.execute('pasteUserInput='+user_input)
+                lua.execute(r'''
+                    StaticPopupDialogs={};local popup
+                    function StaticPopup_Show(name,a,b,data) popup={name=name,data=data} end
+                    function StaticPopup_Hide() popup=nil end
+                    function ReloadUI() reloadRequested=true end
+                    ns.OpenFieldbookBackups();local f=AzerothFieldbookWholeBackups
+                    f.save.scripts.OnClick();f.export.scripts.OnClick()
+                    f.restore.scripts.OnClick();local approval=assert(popup).data
+                    local before=capture()
+                    local reads,writes,layouts,scrolls=0,0,0,0
+                    local getText=f.text.GetText
+                    function f.text:GetText() reads=reads+1;return getText(self) end
+                    local setStatus=f.status.SetText
+                    function f.status:SetText(text) writes=writes+1;setStatus(self,text) end
+                    local getHeight=f.summary.GetStringHeight
+                    function f.summary:GetStringHeight() layouts=layouts+1;return getHeight(self) end
+                    local textScroll=f.text.parent
+                    local setScroll=textScroll.SetVerticalScroll
+                    function textScroll:SetVerticalScroll(value) scrolls=scrolls+1;setScroll(self,value) end
+                    local function flush()
+                        if f.scripts.OnUpdate then f.scripts.OnUpdate(f,0.016) end
+                    end
+                    local function burst()
+                        for i=1,256 do
+                            -- Emulate native incremental input, without the harness SetText callback.
+                            f.text.text=string.rep('x',i*1024)
+                            f.text.scripts.OnTextChanged(f.text,pasteUserInput)
+                            f.text.scripts.OnCursorChanged(f.text,0,-i*20,1,12)
+                            assert(not f.restore.enabled and not f.export.enabled and not popup)
+                        end
+                    end
+                    burst()
+                    assert(reads<=1,'paste repeatedly copies the growing text buffer')
+                    assert(writes<=1 and layouts==0,'paste repeatedly changes layout')
+                    assert(scrolls==0,'paste scrolls for every cursor notification')
+                    StaticPopupDialogs.AZEROTHFIELDBOOK_WHOLE_RESTORE.OnAccept(nil,approval)
+                    assert(not AzerothFieldbookBackupDB.pending and not reloadRequested)
+                    -- Ignore layout work from the explicit rejected confirmation above.
+                    layouts=0
+                    flush()
+                    assert(reads<=2 and layouts==1 and scrolls==1)
+                    assert(textScroll:GetVerticalScroll()==256*20+12-130,'latest cursor lost')
+                    assert(not f.scripts.OnUpdate,'idle window keeps polling')
+                    assert(not f.restore.enabled)
+
+                    -- Explicit check must consume pending text work before approving it.
+                    f.import.scripts.OnClick()
+                    pasteInput(f,B.Parts(AzerothFieldbookBackupDB.saved[1])[1])
+                    f.check.scripts.OnClick();assert(f.restore.enabled)
+                    flush();assert(f.restore.enabled)
+                    f.text.scripts.OnTextChanged(f.text,false)
+                    assert(f.restore.enabled,'late unchanged notification invalidates review')
+
+                    -- A saved-copy review between edit bursts must not inherit suppression.
+                    f.export.scripts.OnClick()
+                    burst();f.save.scripts.OnClick();assert(f.restore.enabled)
+                    f.text.text='Edited after saving'
+                    f.text.scripts.OnTextChanged(f.text,pasteUserInput)
+                    assert(not f.restore.enabled,'pending edit suppressed new approval invalidation')
+
+                    -- Selecting another copy cancels stale paste work, even before a frame tick.
+                    burst();f.rows[1].scripts.OnClick(f.rows[1]);flush()
+                    assert(f.restore.enabled and f.export.enabled and f.text:GetText()=='')
+                    burst();f:Hide()
+                    f.text.scripts.OnTextChanged(f.text,true)
+                    f.text.scripts.OnCursorChanged(f.text,0,-9000,1,12)
+                    assert(not f.scripts.OnUpdate and f.text:GetText()=='')
+                    ns.OpenFieldbookBackups();flush()
+                    assert(not f.restore.enabled and not f.export.enabled)
+                    unchanged(before,'paste bursts and pending-work cancellation')
+                ''')
+
+    def test_ui_capped_native_paste_collects_complete_parts_and_fails_closed(self):
+        lua=client()
+        lua.execute(r'''
+            local create=CreateFrame
+            function CreateFrame(kind,...)
+                local widget=create(kind,...)
+                if kind=='EditBox' then
+                    function widget:SetMaxBytes(value) self.maxBytes=value end
+                    function widget:SetMaxLetters(value) self.maxLetters=value end
+                    function widget:SetMultiLine(value) self.multiLine=value end
+                    function widget:SetVisibleTextByteLimit(value)
+                        error('native visible-byte cap blocks long clipboard input')
+                    end
+                end
+                return widget
+            end
+            StaticPopupDialogs={};local popup
+            function StaticPopup_Show(name,a,b,data) popup={data=data} end
+            function StaticPopup_Hide() popup=nil end
+            AzerothFieldbookDB.largePrivate=string.rep('x',B.PART_BYTES*2)
+            ns.OpenFieldbookBackups();local f=AzerothFieldbookWholeBackups
+            f.save.scripts.OnClick();local whole=AzerothFieldbookBackupDB.saved[1]
+            local all=B.Parts(whole);assert(#all==3)
+            local before=capture()
+            assert(f.paste.maxBytes==96 and f.paste.maxLetters==0 and f.paste.multiLine==false)
+            assert(f.paste.scripts.OnChar and not f.paste.scripts.OnKeyDown)
+            local function flush() if f.scripts.OnUpdate then f.scripts.OnUpdate(f,0.016) end end
+            local addPart=B.AddPart;local submitted
+            function B.AddPart(session,text) submitted=text;return addPart(session,text) end
+            f.import.scripts.OnClick()
+            assert(f.paste:IsShown() and not f.text.parent:IsShown() and not f.selectText.enabled)
+            f.check.scripts.OnClick()
+            assert(not submitted and not f.restore.enabled,'empty input accepted')
+
+            -- Reproduce the native diagnostic: full character delivery, capped storage.
+            pasteInput(f,string.rep('0123456789abcdef',8));flush()
+            assert(#f.paste:GetText()==95)
+            assert(f.pasteStatus:GetText():find('128 bytes received',1,true))
+            f.clearPaste.scripts.OnClick()
+
+            -- Some input paths notify for each character, including once full.
+            local probe=string.rep('0123456789abcdef',8)
+            for i=1,#probe do
+                f.paste.scripts.OnChar(f.paste,probe:sub(i,i))
+                f.paste.text=probe:sub(1,math.min(i,95))
+                f.paste.scripts.OnTextChanged(f.paste,true)
+            end
+            flush();assert(f.pasteStatus:GetText():find('128 bytes received',1,true))
+            f.clearPaste.scripts.OnClick()
+
+            -- Reads during a burst only touch the bounded native prefix.
+            local reads=0;local getText=f.paste.GetText
+            function f.paste:GetText()
+                reads=reads+1;local text=getText(self);assert(#text<=95);return text
+            end
+            for i=1,256 do pasteInput(f,all[1]:sub((i-1)*1024+1,i*1024)) end
+            assert(reads==256);flush();assert(reads==256)
+            f.clearPaste.scripts.OnClick()
+
+            -- A clipboard delivery may span frame ticks. Never validate the short preview.
+            pasteInput(f,all[1]:sub(1,2000));flush()
+            assert(f.pasteStatus:GetText():find('2000 bytes received',1,true))
+            assert(#f.pasteStatus:GetText()<400)
+            pasteInput(f,all[1]:sub(2001,-2));flush()
+            f.check.scripts.OnClick()
+            assert(submitted==all[1]:sub(1,-2) and not f.restore.enabled)
+            assert(f.status:GetText():find('Incomplete or changed',1,true))
+            pasteInput(f,all[1]);f.check.scripts.OnClick()
+            assert(submitted==all[1] and f.status:GetText():find('1 of 3 parts checked',1,true))
+            assert(#submitted==262173,'regression must exercise the reported part size')
+            assert(f.pasteStatus:GetText():find('262173 bytes received',1,true))
+            pasteInput(f,all[1]);f.check.scripts.OnClick()
+            assert(f.status:GetText():find('1 of 3 parts checked',1,true),'duplicate counted twice')
+
+            -- Overflow must fail, never silently truncate and submit a prefix.
+            submitted=nil;pasteInput(f,string.rep('x',B.PART_BYTES*2+1));flush()
+            assert(f.pasteStatus:GetText():find('too large',1,true))
+            f.check.scripts.OnClick();assert(not submitted and not f.restore.enabled)
+            pasteInput(f,all[2]);f.check.scripts.OnClick()
+            assert(submitted==all[2] and f.status:GetText():find('2 of 3 parts checked',1,true))
+            pasteInput(f,all[3]);f.check.scripts.OnClick();flush()
+            assert(submitted==all[3] and f.restore.enabled and f.export.enabled)
+            f.paste.scripts.OnTextChanged(f.paste,false)
+            assert(f.restore.enabled,'unchanged deferred notification invalidated review')
+            f.restore.scripts.OnClick();assert(popup)
+            pasteInput(f,'x')
+            assert(not popup and not f.restore.enabled,'first new character kept approval')
+            f.clearPaste.scripts.OnClick();flush()
+            assert(f.pasteStatus:GetText():find('Waiting',1,true))
+            f.check.scripts.OnClick();assert(not f.restore.enabled)
+
+            -- No OnChar delivery must never validate the capped native prefix.
+            submitted=nil;f.paste.text=all[3]:sub(1,95)
+            f.paste.scripts.OnTextChanged(f.paste,true);f.check.scripts.OnClick()
+            assert(not submitted and not f.restore.enabled)
+            assert(f.status:GetText():find('not captured',1,true))
+
+            -- Deleting native preview text discards the complete capture,
+            -- even if the deletion occurs before the next frame/check.
+            f.clearPaste.scripts.OnClick();pasteInput(f,all[3])
+            f.paste.text=f.paste.text:sub(1,-2)
+            f.paste.scripts.OnTextChanged(f.paste,true)
+            f.check.scripts.OnClick();assert(not submitted and not f.restore.enabled)
+
+            -- Clear current input without losing checked parts, then review again.
+            pasteInput(f,all[3]);f.check.scripts.OnClick();assert(f.restore.enabled)
+            f.restore.scripts.OnClick();f.clearPaste.scripts.OnClick()
+            assert(not popup and not f.restore.enabled)
+            -- New import clears the collected set as well as the current buffer.
+            f.import.scripts.OnClick();pasteInput(f,all[3]);f.check.scripts.OnClick()
+            assert(f.status:GetText():find('1 of 3 parts checked',1,true))
+            -- Explicit saved-copy review between pending edits must not suppress
+            -- invalidation of that new approval on the next edit.
+            pasteInput(f,'pending');f.save.scripts.OnClick();assert(f.restore.enabled)
+            pasteInput(f,'next edit');assert(not f.restore.enabled)
+            f.rows[1].scripts.OnClick(f.rows[1]);f.export.scripts.OnClick()
+            assert(f.text.parent:IsShown() and not f.paste:IsShown() and f.selectText.enabled)
+            assert(f.text:GetText()==all[1] and f.next.enabled)
+            f:Hide();f.paste.scripts.OnTextChanged(f.paste,true);flush()
+            assert(not f.scripts.OnUpdate and f.pasteStatus:GetText()=='')
+            unchanged(before,'bounded native input, validation and cleanup')
         ''')
 
     def test_emergency_ui_raw_scalar_roots_and_retained_callbacks(self):

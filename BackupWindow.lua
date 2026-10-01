@@ -5,7 +5,7 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
     local data=ns.BestiaryBackups
     local frame,body,selected,mode,loading
     local controller={}
-    local refresh
+    local refresh,resetInput,pasteState
     local scope=journal:IsAccountWideTrackingActive() and "account-wide" or "character"
     local function summary(snapshot)
         local creatures,abilities,notes=data.Summary(snapshot)
@@ -18,8 +18,11 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
         frame.status:SetTextColor(problem and 1 or 0.75,problem and 0.4 or 0.8,problem and 0.3 or 0.8)
     end
     local function setMode(nextMode)
+        if StaticPopup_Hide then StaticPopup_Hide("AZEROTHFIELDBOOK_RESTORE_CONFIRM") end
+        resetInput()
         mode=nextMode
-        if mode=="import" then selected=nil;loading=true;frame.text:SetText("");loading=false end
+        loading=true;frame.text:SetText("");loading=false
+        if mode=="import" then selected=nil end
         if mode=="export" then
             local encoded,err
             if selected then encoded,err=data.Encode(selected) end
@@ -28,7 +31,7 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
         end
         refresh()
         if mode=="export" then frame.text:SetFocus();frame.text:HighlightText()
-        elseif mode=="import" then frame.text:SetFocus() else frame.text:ClearFocus() end
+        elseif mode=="import" then frame.text:ClearFocus();frame.paste:SetFocus() else frame.text:ClearFocus() end
     end
     local function build()
         if frame then return end
@@ -64,6 +67,76 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
         frame.text:SetMultiLine(true);frame.text:SetAutoFocus(false);frame.text:SetFontObject(textFont("GameFontHighlightSmall"))
         frame.text:SetWidth(464);frame.text:SetHeight(152);frame.text:SetMaxLetters(data.MAX_BYTES+1)
         frame.textScroll:SetScrollChild(frame.text);ns.AutoHideScrollBar(frame.textScroll)
+        -- Use the native capacity verified by the whole-backup paste probe:
+        -- OnChar delivers the full clipboard while the widget stores 95 bytes.
+        frame.paste=CreateFrame("EditBox",nil,frame.textBorder)
+        frame.paste:SetPoint("TOPLEFT",8,-30);frame.paste:SetSize(480,26)
+        frame.paste:SetMultiLine(false);frame.paste:SetAutoFocus(false)
+        frame.paste:SetFontObject(textFont("GameFontHighlightSmall"))
+        frame.paste:SetMaxLetters(0);frame.paste:SetMaxBytes(96)
+        frame.pasteHint=ui.label(frame.textBorder,"Click here and paste the complete backup (Ctrl+V).",8,-8,480,"GameFontHighlightSmall")
+        frame.pasteStatus=ui.label(frame.textBorder,"",8,-65,480,"GameFontHighlightSmall")
+        local function newPaste()
+            pasteState={blocks={},chars={},bytes=0,prefix="",native="",pending=false}
+        end
+        local function showPasteStatus()
+            local s=pasteState
+            s.pending=false
+            frame.pasteStatus:SetText(s.error or (s.bytes==0 and "Waiting for a complete backup." or
+                (s.bytes.." bytes received. Click Preview import.\nStarts with: "..s.prefix:gsub("|","||")..
+                "\nOnly this short preview is displayed; validation uses all received text.")))
+        end
+        resetInput=function()
+            frame:SetScript("OnUpdate",nil)
+            frame.paste:ClearFocus()
+            loading=true;frame.paste:SetText("");loading=false
+            newPaste();showPasteStatus()
+        end
+        local function invalidatePaste()
+            selected=nil;frame.restoreButton:SetEnabled(false);frame.exportButton:SetEnabled(false)
+            frame.preview:SetText("Preview the pasted backup before restoring.")
+            frame.status:SetText("Input changed. Preview this complete backup before restoring.")
+            if StaticPopup_Hide then StaticPopup_Hide("AZEROTHFIELDBOOK_RESTORE_CONFIRM") end
+        end
+        local function queueUpdate()
+            if pasteState.pending then return end
+            pasteState.pending=true
+            frame:SetScript("OnUpdate",function()
+                frame:SetScript("OnUpdate",nil)
+                if mode=="import" and frame:IsShown() then showPasteStatus() end
+            end)
+        end
+        frame.paste:SetScript("OnChar",function(_,char)
+            if mode~="import" or loading or not frame:IsShown() or type(char)~="string" or char=="" then return end
+            if not pasteState or pasteState.checked then newPaste() end
+            local s=pasteState
+            if s.bytes==0 and not s.error then invalidatePaste() end
+            s.hasChars=true
+            if s.error then return end
+            if s.bytes+#char>data.MAX_BYTES then
+                s.error="Input is too large. Clear input and paste one complete Bestiary backup."
+                s.blocks={};s.chars={}
+            else
+                s.bytes=s.bytes+#char;s.chars[#s.chars+1]=char
+                if #s.prefix<96 then s.prefix=s.prefix..char:sub(1,96-#s.prefix) end
+                if #s.chars>=1024 then s.blocks[#s.blocks+1]=table.concat(s.chars);s.chars={} end
+            end
+            queueUpdate()
+        end)
+        frame.paste:SetScript("OnTextChanged",function(self)
+            if mode~="import" or loading or not pasteState or not frame:IsShown() then return end
+            local s=pasteState;local native=self:GetText() -- bounded native prefix only
+            if s.hasChars then s.native=native;s.hasChars=false;return end
+            if native==s.native then return end
+            newPaste();pasteState.native=native
+            pasteState.error="Input edited or not captured. Clear input and paste the complete backup again."
+            invalidatePaste();queueUpdate()
+        end)
+        frame.paste:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
+        frame.clearPaste=ui.button(frame.textBorder,"Clear input",340,-136,140,function()
+            resetInput();invalidatePaste()
+            status("Input cleared. Paste one complete Bestiary backup.");frame.paste:SetFocus()
+        end)
         local bar=frame.textScroll.ScrollBar
         if bar and type(bar)~="function" then
             local track=bar:CreateTexture(nil,"BACKGROUND")
@@ -72,19 +145,30 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
         frame.text:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
         frame.text:SetScript("OnTextChanged",function(self,userInput)
             if loading then return end
-            if mode=="import" then
-                selected=nil;frame.preview:SetText("Preview the pasted backup before restoring.")
-                frame.restoreButton:SetEnabled(false);frame.exportButton:SetEnabled(false)
-                status("")
-            elseif userInput then status("Export text was edited. Click Export selected to prepare a fresh copy.",true) end
+            if mode=="export" and userInput then status("Export text was edited. Click Export selected to prepare a fresh copy.",true) end
         end)
         frame.text:SetScript("OnCursorChanged",function(_,_,y,_,height)
+            if mode~="export" or loading or not frame:IsShown() then return end
             local top,offset=-y,frame.textScroll:GetVerticalScroll()
             if top<offset then frame.textScroll:SetVerticalScroll(math.max(0,top))
             elseif top+height>offset+152 then frame.textScroll:SetVerticalScroll(math.max(0,top+height-152)) end
         end)
         frame.previewButton=ui.button(body,"Preview import",30,-342,160,function()
-            local snapshot,err=data.Decode(frame.text:GetText())
+            if mode~="import" then return end
+            local s=pasteState
+            s.native=frame.paste:GetText();s.hasChars=false;s.checked=true
+            showPasteStatus()
+            if s.error or s.bytes==0 then
+                invalidatePaste();status(s.error or "No text received. Click the paste field and paste one complete backup.",true);return
+            end
+            if not s.text then
+                s.blocks[#s.blocks+1]=table.concat(s.chars);s.chars={}
+                s.text=table.concat(s.blocks);s.blocks={}
+            end
+            loading=true;frame.paste:SetText("");loading=false
+            s.native="";frame.paste:SetFocus()
+            if StaticPopup_Hide then StaticPopup_Hide("AZEROTHFIELDBOOK_RESTORE_CONFIRM") end
+            local snapshot,err=data.Decode(s.text)
             selected=snapshot
             status(snapshot and "Backup checked. Review the details below before restoring." or err,not snapshot)
             refresh()
@@ -106,9 +190,12 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
             StaticPopupDialogs.AZEROTHFIELDBOOK_RESTORE_CONFIRM={
                 text="%s",button1="Restore",button2="Cancel",timeout=0,whileDead=true,hideOnEscape=true,preferredIndex=3,
                 OnAccept=function(_,snapshot)
+                    if not frame:IsShown() or not selected or snapshot~=selected or mode=="export" then
+                        status("Selection changed. Review the backup again.",true);return
+                    end
                     local ok,err=journal:RestoreBackup(snapshot)
                     if ok then
-                        selected=nil;mode="list"
+                        selected=nil;mode="list";resetInput()
                         onRestored()
                         status("Bestiary restored. Select Before last restore to recover your previous records.")
                     else status(err,true) end
@@ -117,6 +204,7 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
             }
         end
         frame:HookScript("OnHide",function()
+            resetInput();pasteState=nil;frame.pasteStatus:SetText("")
             frame.text:ClearFocus();loading=true;frame.text:SetText("");loading=false
             if StaticPopup_Hide then StaticPopup_Hide("AZEROTHFIELDBOOK_RESTORE_CONFIRM") end
             selected=nil
@@ -153,6 +241,9 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
         local code=mode=="import" or mode=="export"
         frame.empty:SetShown(mode=="list" and #list==0)
         frame.instructions:SetShown(code);frame.textBorder:SetShown(code)
+        frame.textScroll:SetShown(mode=="export")
+        frame.paste:SetShown(mode=="import");frame.pasteHint:SetShown(mode=="import")
+        frame.pasteStatus:SetShown(mode=="import");frame.clearPaste:SetShown(mode=="import")
         frame.previewButton:SetShown(mode=="import");frame.selectAll:SetShown(mode=="export")
         frame.instructions:SetText(mode=="import" and "Paste the complete backup below (Ctrl+V), then click Preview import. Nothing changes until you confirm Restore."
             or "Press Ctrl+C to copy the selected text, then paste it into a text document and save it. The copy includes your personal creature notes.")
@@ -173,6 +264,7 @@ function ns.CreateBackupWindow(journal, ui, onRestored)
     end
     function controller:Open(makeBackup)
         build()
+        resetInput()
         frame.text:ClearFocus()
         selected=nil;mode="list"
         if makeBackup then

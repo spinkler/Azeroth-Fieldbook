@@ -1,5 +1,86 @@
 # Changelog
 
+## Unreleased
+
+Stability checkpoint against previous-push baseline
+`238f5259fbcd5ce58acea146a3cca4c8c9ffad2d`. This batch covers the fixes,
+UI adjustments and regression tests below. Native acceptance has 144 recorded
+passes and no current failures; it remains incomplete. Favourite filtering is
+the next unperformed check. This checkpoint is for repository access, not a
+new published release. See `tests/NATIVE_ACCEPTANCE_2026-09-30.txt` for evidence
+and deferred observations, including fishing-detail readability and uncollected
+loot semantics.
+
+Pre-commit validation passed all 74 test files, all 80 Lua 5.1 files, manifest,
+bindings and version consistency; diff whitespace checks passed.
+
+- Update older backup lifecycle and sharing UI tests to exercise the bounded
+  clipboard input rather than writing into the export-only text box.
+
+- Remove the Bestiary ability-confirmation message and Index filter hint.
+
+- Split oversized Merchant's Ledger contact exports into numbered parts of at
+  most 80 goods and 80 lessons each. Preparing again advances to the next part;
+  importing them separately merges all facts under the same original source up
+  to the journal's 500-per-kind limit. Repeat imports stay idempotent and
+  capacity failures leave the recipient unchanged. Native multipart preparation,
+  acceptance, forwarding and note opt-in/persistence retests passed.
+
+- Keep prepared Lore report export and import previews when delayed text-change
+  notifications report unchanged programmatic content. Genuine edits to report
+  text or recorded courier still require a fresh preview. Native revision,
+  note opt-in, forwarding, receipt and persistence retests passed.
+
+- Keep the shared Options window open when switching between journals, including
+  when leaving Bestiary, and refresh its active storage-scope label for the new
+  journal. Add a navigation regression; native retest passed.
+
+- Keep the Bestiary entry count above its search bar on one line with room for at least four digits,
+  and retain name drop shadows while long names scroll on hover.
+- Disable Known Goods and Observed Training for contacts without the corresponding
+  personally recorded or reported offerings.
+- Move the grey active Account-wide / Character-specific label beside Account-wide
+  tracking in Options. Also grey the Lore archive usage text.
+
+- Apply bounded clipboard capture to legacy Bestiary backup imports after native
+  testing reproduced the large-paste stall there. Show received bytes and a short
+  preview while validating the complete AFB1 text within its existing 4 MiB limit.
+  Clear captured input on mode changes/close and reject stale restore confirmations
+  after edits. Add large-paste, overflow, corruption, cleanup and restore regressions.
+  Native retest captured and checked a 171,497-byte legacy backup with a reported
+  split-second pause and the original backup summary intact.
+
+- Fix whole-Fieldbook export losing its selected backup and part navigation
+  after delayed native text notifications. Unchanged text keeps the current
+  review; actual edits still invalidate restore approval. Add immediate and
+  deferred notification regressions for multipart export and import review.
+  Batch paste-time text reads, layout and cursor scrolling per frame while
+  immediately invalidating restore approval. Cancel queued work on replacement
+  or close, and test burst input, explicit checks and stale confirmations.
+  Keep the native clipboard field at the 96-byte capacity verified by an in-game
+  character-delivery probe, and collect the complete paste in bounded Lua chunks.
+  Show received bytes and a short preview, validate the complete captured input,
+  and reject overflow or incomplete parts. Existing
+  exported parts remain compatible. Native retest captured a 262,173-byte part
+  in a reported split second and validated all three parts back to the original
+  backup summary. Native replacement restore and automatic recovery both returned
+  the expected Lore and Gathering notes; broader acceptance remains in progress.
+
+- Restore creature-name drop shadows on marked Bestiary rows by removing their
+  static text fade; retain the narrower name width to leave room for icons.
+
+- Fix Bestiary model loading to show the viewer before requesting a creature,
+  retry transient failures up to three times, and stop retrying when the model
+  loads or selection changes. Keep the viewer blank while a model is loading or
+  unavailable, conceal the previous appearance immediately on selection, and
+  reveal the replacement only after it loads. Hide and unload the outgoing
+  model before resizing the viewer or changing the Beast Lore header, then
+  request the replacement after layout is complete.
+  Start replacements immediately without an artificial transition delay.
+  Preserve the personal-encounter requirement.
+  Add model request lifecycle regression coverage; native rendering needs an
+  in-game check.
+
 ## v0.19.0-beta - 2026-09-30
 
 This Beta includes the complete batch since v0.18.0 and previous-push baseline

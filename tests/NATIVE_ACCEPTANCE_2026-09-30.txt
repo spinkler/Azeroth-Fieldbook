@@ -1,0 +1,1663 @@
+Azeroth Fieldbook native acceptance session — 2026-09-30
+
+Operator: user. Assistant must never control or automate WoW.
+Current data is sacrificial. No production fixes without explicit authorization
+after an identified failure. No commit, push, tag or publication authorized.
+One test at a time; native results require the user's reported observations.
+
+Repository baseline (read-only inspection):
+- HEAD 238f525, local tag v0.19.0-beta.
+- TOC 0.19.0; README 0.19.0 (Beta); changelog v0.19.0-beta.
+- Pre-existing modified BestiaryBook.lua and CHANGELOG.md; untracked
+  tests/test_bestiary_models.py. Includes local model lifecycle and row shadow
+  changes. This session tests the installed working tree, not a pristine tag.
+- No player SavedVariables inspected. No client observations yet.
+- Read AGENTS.md; WHOLE_BACKUPS.md implementation/report; VERIFICATION.md;
+  DIAGNOSTICS_PREVIEWS.md; SPELL_ID_PREFERENCE.md; ACCOUNT_TRACKING.md;
+  native Lore, Angling, Treasure and Ledger checklists; relevant regression
+  assertions for O1, O2, O3, O4, O6, O7 and O8. Historical automated results
+  are documentation evidence only; no suite rerun or native PASS inferred.
+
+Repository-derived session plan (adapt to observed populated journals):
+1. Open book and establish baseline: representative journal records, notes,
+   scope indicator versus tracking preference, Lore exact bytes/entry slots,
+   Spell-ID preference/CVar, client build and preferred display settings.
+2. O1 save through Options whole-backup UI, review both scopes/seven sections,
+   timestamp/owner/version/counts, multipart export and responsiveness.
+3. Mutate at least two journals through supported UI, then restore/reload;
+   verify all available baseline samples, removed later changes, settings,
+   scope, links/private text and refreshed Lore usage.
+4. Restore Before last restore to prove unwanted successful restore is undoable.
+5. Save every AFBWP1 export part to an external text file and import from that
+   file using the native edit box, review then restore. Import selects detached
+   text; no delete-backup control is present or necessary to prove this path.
+   Check partial import/cancel/focus and complete-set requirements separately.
+6. Controlled invalid/truncated import: truthful error, no live changes or
+   partial restore. Never replace the sole good external copy with corruption.
+7. Both active/retained scopes and pending preference through reload; preserve
+   completed import markers, no replay/synchronization. Two-character claims
+   require another character and are blocked if unavailable.
+8. Legacy AFB1 via separate Restore Bestiary controls if practical fixture exists.
+9. O4 real tooltip/default enablement, off+reload, on, external drift until reload;
+   inspect client-wide explanation and reset semantics when practical.
+10. O8 genuine first migration only with supported safe setup; disable/re-enable
+    and quiet reload. Do not clear markers manually without explicit approval.
+11. O7 all seven actual-store labels, pending toggle and post-reload states.
+12. O2 Lore usage/tooltip refresh, 32 MiB/2000 entries/4 MiB per entry. Extreme
+    near-capacity/read-only fixtures are automated-only unless safely practical.
+13. O3 location 101 preserves page and prior 100 locations with explicit warning.
+    No runtime fixture/debug path found in initial Lua search; investigate before
+    classifying native boundary as impractical, never fabricate a native pass.
+14. O6 Angling/Ledger/Lore recipient new/updated/known previews, provenance,
+    no writes before acceptance, repeated preview ticket validity, invalidation,
+    truthful blocked outcomes and large scrolling where practical.
+15. Lore documented reader traversal, delayed text, cancellation/source changes,
+    manual text/Unicode, reports, references, announcements and persistence.
+16. Angling catches/autoloot/interruption/escaped fish/metadata/Event log.
+17. Treasure portable correlation/READY/OPENED/autoloot, conservative omissions,
+    manual records and metadata; no unsupported report UI.
+18. Ledger discovery/roles/stock/filtering/partial scans/races/metadata; no
+    expensive purchases without approval.
+19. UI/addon scale and available resolutions, restore preferred settings.
+
+O1 accepted semantics to remember:
+- Eight loaded roots: account plus seven retained character globals.
+- Two saved copies and one recovery copy in separate account backup archive.
+- All roots replaced only in fresh reload; recovery captured before replacement.
+- Same originating character required; offline character journals excluded.
+- Current economy/delivery state, identity high-water counters and completed
+  import markers survive. These intentional exceptions are not restore defects.
+- Legacy backup archives excluded from export and retained at destination.
+- AFBWB1 whole format; UI AFBWP1 parts with 256 KiB payload and full-set digest.
+
+Baseline snapshot:
+- Bestiary opening view: 123 entries, 216 knowledge, Account-wide indicator,
+  title Azeroth Fieldbook - Bestiary - v0.19.0. No creature selected.
+- User reported "No errors" and supplied screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-771951fe-4225-41f1-bd91-18e1ccd9ca43.png.
+- Bestiary sample: Black Bear Patriarch; Beast; Hostile; Level Range 17;
+  Locations: Loch Modan; Kills 0; Loot: 0 observed corpses; no item drops
+  observed yet; no recorded abilities; marked unlocked. Bear model visible.
+  Account-wide indicator, 123 entries and 216 knowledge still displayed.
+  Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-e8ede371-2b00-4171-908f-e80879f1d480.png.
+- Lore: Account-wide, empty catalogue, 0 entries; Location view selected.
+  Archive line: 0.00 / 32 MiB. Hover: 0 / 33554432 archive bytes,
+  0 / 2000 entry slots; counts archived text/evidence rather than total
+  SavedVariables file size; each entry also has a 4 MiB limit. Tooltip legible.
+  Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-f310ee9a-4155-4f2a-a5db-c75b924e013d.png.
+- Atlas: Account-wide; Elwynn Forest; Scope: Current map; 0 discoveries on
+  displayed map. No discovery selected. Global discovery count not established.
+  Existing subzone mapping visible: Northshire Valley, Northshire Vineyards,
+  Mirror Lake, Mirror Lake Orchard, Goldshire, The Stonefield Farm, Forest's
+  Edge. Observed Weather: Clear, Rain. Display selected sub-zones on main map,
+  Automatic Mapping, Shading, Points, Labels and Hide zone-name areas checked;
+  brightness 60%, label size 9. Player position is transient, not restore evidence.
+  Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-9603bf2c-f7c9-489c-af22-40bccaaf0e5f.png.
+- Ledger: Account-wide; 25 / 25 contacts; All roles, All zones, All contacts,
+  Sort: name; Favourites and Recipes filters unchecked. Selected Bink,
+  <Mage Trainer>, Trainer, Personal/personally encountered; Favourite unchecked.
+  Encountered near Ironforge / Hall of Mysteries (26.99, 8.38; approximate).
+  Locations (2). First encounter 28 Sep 2026, 16:27; last displayed
+  28 Sep 2026, 16:33 with trailing ellipsis. Ironforge map and marker visible.
+  Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-15ec08af-2661-4c67-a542-27c8aa536fb4.png.
+- Angling: Account-wide; Waters view; 0 recorded waters & spots; blank search;
+  All recorded zones, Knowledge: all, Source: all, Show: all. Map: Westfall.
+  Unclassified water - no source assigned. Footer: Fishing context changed;
+  session source cleared. Subsequent Catches view shows 0 recorded items,
+  unrestricted list filters, Account-wide indicator and Elwynn Forest map.
+  Pool Types not inspected; do not infer the entire journal is empty.
+  Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-dd02ec3d-60aa-43a2-89f9-3f3541d2464b.png.
+  Catches evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-1e7b7e2e-051d-4a60-beab-675fd17e61f5.png.
+- Gathering: Account-wide; 2 entries / 2 shown: Copper Vein and Silverleaf.
+  Selected Copper Vein, Mineral; Westfall, 2 mapped positions; 6 interactions,
+  6 completed gathers; first encountered 28 Sep 2026, 15:05; last interaction
+  28 Sep 2026, 15:37. Observed loot: Copper Ore and Rough Stone, each observed
+  stack 1. Field notes visibly blank. World-map and minimap node options checked.
+  Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-2bd632b0-4d9b-483e-82dd-a4a63e3925fb.png.
+- Treasure: Account-wide; 0 / 0 container kinds; blank search; All categories,
+  All locations, All sources; Sort: name; Look for again filter unchecked.
+  No encounter selected; empty-journal and no historical-find-coordinate text.
+  Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-c5a119c4-bc77-4c91-83bd-6f029e0ca4a5.png.
+- All seven journal screenshots show a legible Account-wide header. This is
+  account-mode visual evidence only, not independent proof of store selection,
+  pending/deferred transitions, character-mode labels or other display scales.
+- Options baseline: Account-wide tracking checked. Addon UI scale 100%; Text
+  size Default; Dark Mode unchecked; minimap button checked. Auto-lock checked,
+  threshold 10; lock newly encountered critters checked; both chat notification
+  options checked; creature notes follow target selection checked.
+  Separate Display Spell ID window checked; lock/indefinite/retain hovered
+  auras/auto-fade unchecked; opacity 35%; automatic ability recording checked;
+  expected immunities unchecked. These do not establish tooltip-ID preference.
+  Evidence: user screenshots
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-c1e9d5b2-1d9a-4a35-a900-6557f79c0da5.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-fa79c57a-afbd-4cd1-a58e-8d11b18e737a.png.
+- Show spell IDs on tooltips if possible checked; Show kill count in creature
+  tooltips and Display Cast IDs also checked. Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-dc49e81c-0be0-431a-ba94-7181f1a4fa56.png.
+- Client GetCVarBool("tooltipShowAuraSpellIDs") returned true, matching saved
+  ON preference. User screenshot:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-a1ce4d5e-9378-41a9-994c-f0f7a04a4516.png.
+  Real tooltip appearance, automatic startup causation, opt-out and re-enable
+  remain untested; this is only a current-value baseline.
+- Lore now contains one manually created writing, O1 Backup Baseline, displayed
+  as Writings - partial in account mode. Status confirms Entry saved; chat
+  confirms Lore recorded: O1 Backup Baseline (Writing). Location view shows no
+  recorded location. Verified private text: Before backup: copper, bear, Bink.
+  It is displayed under Your description / observations (private), rather than
+  the separate Personal notes field originally requested. Accept this observed
+  field as the private-text restore sample; no field-placement defect inferred.
+  Archive tooltip: 52 / 33554432 bytes and 1 / 2000 entry slots; rounded line
+  remains 0.00 / 32 MiB. Created/updated 30 Sep 2026, 16:46. Partial archive,
+  0 captured pages, total unknown. No source passage added.
+  Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-59fe41c5-0baa-4076-a525-6ea74e66b4e4.png.
+  Saved text and usage evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-2fa9b4a9-5401-413e-9ed0-9f4eb3edb227.png.
+
+ID | Test | Result | Evidence / notes
+BASE-01 | Open Fieldbook and observe current section/scope | PASS | User reports no errors; screenshot shows Bestiary v0.19.0, Account-wide, 123 entries, 216 knowledge. Scope label is legible in this view; actual store selection not independently verified.
+BASE-02 | Observe representative Bestiary record | PASS | User screenshot shows Black Bear Patriarch and details recorded above. Baseline observation only; no restoration claim.
+BASE-03 | Observe Lore baseline and archive usage | PASS | User screenshot confirms empty account-wide Lore and zero usage; no text sample available yet.
+O2-01 | Empty Lore archive usage and tooltip | PASS | Visible 0.00 / 32 MiB, exact 0 / 33554432 bytes, 0 / 2000 slots and 4 MiB per-entry explanation. Nonempty/restore refresh and capacity boundaries remain untested.
+BASE-04 | Observe Atlas baseline | PASS | Screenshot establishes current-map empty discovery view plus populated subzone mapping and weather baseline. No individual discovery or global empty-store claim.
+BASE-05 | Observe representative Ledger contact | PASS | Screenshot confirms 25 contacts and Bink's saved identity, role, approximate location, two locations and unchecked Favourite; Account-wide label visible.
+BASE-06 | Observe Angling baseline | PASS | User screenshots establish 0 recorded waters & spots and 0 recorded catch items under unrestricted filters in account mode. No populated sample available in these views; Pool Types uninspected. No catch-capture or restore claim.
+BASE-07 | Observe representative Gathering record | PASS | User screenshot establishes Copper Vein observations, loot, mapped-position count and blank notes; 2 entries in account mode.
+BASE-08 | Observe Treasure baseline | PASS | User screenshot confirms 0 / 0 container kinds under unrestricted filters and Account-wide indicator.
+BASE-09 | Observe saved tracking and Spell-ID options | PASS | User screenshots confirm Account-wide tracking and Show spell IDs on tooltips if possible both checked. Display preferences recorded above; actual client preference tested separately.
+BASE-10 | Read current client tooltip-ID preference | PASS | User screenshot of requested dump shows [1]=true; matches checked tooltip-ID option. Does not establish automatic enablement or real tooltip rendering.
+BASE-11 | Create manual Lore restoration sample | PASS | Screenshot shows O1 Backup Baseline, 1 entry, Entry saved status and Lore recorded chat announcement. Exact private note content not visible in Location view; verify next. Source passage is not required for this private-note sample.
+BASE-12 | Verify saved Lore private text and exact usage | PASS | Screenshot shows exact requested text under private description/observations, 52 bytes and 1 / 2000 slots. Baseline uses actual field; separate Personal notes field not verified. Usage updated from empty baseline.
+O1-01 | Create and review whole-Fieldbook backup | PASS | User screenshot shows Backup saved, Saved Fieldbook 1, whole-backup title, all seven journals and account/current-character scope. Account counts match baseline. Capture timing/responsiveness not explicitly reported; restore/export still untested.
+O1-02 | Open whole-backup export | PASS (after repair) | Retest screenshots retain backup summary, copy instructions, export text, enabled Export/Restore/Next and disabled Previous. Follow-up outer scroll shows Export part 1 of 3 and readable replacement/recovery warnings. Original repeated invalidation failure preserved below; remaining navigation and complete copying require next test.
+O1-03 | Copy all export parts externally | PASS | User reports Done, copied all three parts. UI behaves as expected. This follows instructions to save three separate text files; file locations/content not independently inspected. Checksums/completeness and reopening from saved files remain for native import verification.
+O1-04 | Validate external export through native multipart import | PASS | Three screenshots show 1/3 and 2/3 checked with Restore disabled, followed by Backup checked with original Backup A metadata/counts and Restore enabled. All three captured parts validated and complete set decoded. No restore yet; check/final-decode latency not explicitly reported.
+O1-04P | Native import paste responsiveness | PASS (after repair) | Operator reports split-second paste; screenshot confirms 262173 bytes captured and original part-1 header. Restore remains disabled before explicit check. Historical freezes and failed repairs preserved below; checksum validation of this capture is next.
+O1-04A | Validate external part 1 and block incomplete restore | PASS | Operator reports Add/check instant, no pause. Screenshot shows 1 of 3 parts checked, No journal data has changed, no backup selected, restore disabled. Only first part integrity established, not full backup or restored state.
+O1-05A | Save deliberate post-backup Lore change | PASS | Screenshot confirms O1 Backup Baseline private description is After backup: this change must disappear. Entry saved status, updated 30 Sep 2026 18:05, Account-wide, one entry, zero captured pages. Exact archive-byte tooltip not shown; observe before next mutation.
+O1-05B | Observe Lore usage after deliberate edit | PASS | Tooltip confirms 59 / 33554432 archive bytes, 1 / 2000 entry slots, and 4 MiB per-entry limit. Original backup baseline was 52 bytes. Rounded MiB label remains 0.00 as expected.
+O1-05C | Save deliberate post-backup Gathering note | PASS | User screenshot after requested save/reselect sequence shows Copper Vein note After backup: copper recovery marker. Save notes disabled, Account-wide, 2 entries, 6 interactions/gathers, Westfall 2 positions and original observed loot retained.
+O1-06A | Observe Gathering baseline after restore sequence | PASS | Screenshot shows Copper Vein Field notes blank again, Account-wide, 2 entries, 6 interactions/gathers, Westfall 2 positions, Copper Ore/Rough Stone stack 1, both map display toggles checked. Post-backup note absent.
+O1-06B | Observe Lore baseline after restore sequence | PASS | Screenshot shows original Before backup: copper, bear, Bink. private description, original 30 Sep 2026 16:46 created/updated times, one entry, zero captured pages, Account-wide. Post-backup description absent. Exact archive bytes and automatic reload/errors not yet reported.
+O1-06C | Confirm automatic restore reload and errors | PASS | Operator explicitly reports It auto-reloaded, no errors. Together with restored Lore/Gathering screenshots, confirms observed replacement and reload path. Exact Lore usage and recovery-copy restoration remain pending.
+O1-06D | Verify exact Lore usage after restore | PASS | Screenshot confirms 52 / 33554432 archive bytes, 1 / 2000 entry slots, 4 MiB per-entry limit. Usage returned from changed-state 59 bytes to original Backup A 52 bytes.
+O1-07A | Review automatic pre-restore recovery copy | PASS | Screenshot shows Before last restore selected, created 30 Sep 2026 18:09:10, addon 0.19.0, Spinkler Overclocker, account plus retained character scope, seven journal counts matching expected 123/0,2/0,0/0,0/0,25/11,0/0,1/0. Saved Fieldbook 1 remains available; Restore/reload and Export selected enabled. Notes inside recovery copy not yet observed.
+O1-07B | Restore recovery copy and observe Lore | PASS | Operator reports Pass to recovery/reload test. Screenshot confirms changed private description After backup: this change must disappear., 18:05 update time, Account-wide and one entry. Requested 59-byte usage/reload expectations covered by operator's Pass report, but exact usage tooltip is not visible in this submission.
+O1-07C | Observe Gathering recovery marker | PASS | Screenshot confirms After backup: copper recovery marker. restored, Account-wide, two entries, six interactions/gathers, Westfall two mapped positions, original loot and both map display toggles. Demonstrates automatic recovery undoes previous successful restore across both deliberately changed journals.
+O1-08A | Reject deliberately truncated external part | PASS | Screenshot shows 36-byte truncated fixture, Incomplete or changed backup part., no backup selected, Export/Restore disabled, saved and recovery copies still listed. No explicit reload observation reported. Live-note preservation to be checked next.
+O1-08B | Preserve live notes after rejected import | PASS | Operator replies Verified to both-notes-unchanged/no-reload check. Screenshots show exact recovered Lore description and Copper Vein note still present, both Account-wide; Gathering counts/locations/loot and display toggles remain as before.
+O1-09A | Bestiary baseline preservation after restore/recovery | PASS | Screenshot confirms 123 entries, 216 Knowledge, Account-wide, Black Bear Patriarch Beast/Hostile level 17 Loch Modan, 0 kills, 0 observed corpses, no recorded abilities and unlocked row marker. Matches original observed baseline.
+
+O1-04 incident:
+- User: "The client has frozen up while pasting/checking. I'll give it some time."
+- Allow operator to wait without additional input. Next observation: recovery
+  or continued freeze, approximate duration, part number and whether freeze
+  began during Ctrl+V or after Add / check part. If recovered, capture resulting
+  status/error. Do not infer a permanent hang, successful validation or data loss.
+- No additional repair authorized for this issue yet; original authorization
+  covered export text-notification handling. Destructive testing remains paused.
+- Follow-up: user reports "After around a minute, this appeared." Screenshot
+  shows expected unvalidated-text state rather than a checksum result. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-2678dfed-972f-4823-a24f-5dc05b3ba67d.png.
+- Code review: native multiline EditBox receives up to 256 KiB payload per part;
+  changed-text callback reads text, invalidates selection and reflows controls;
+  cursor callback can scroll. Multipart checksum/decoding executes on Add/check,
+  not automatically on paste. Tests do not model native paste/rendering cost.
+  These are candidate costs, not confirmed timing attribution. Ask which part
+  and whether Add/check had been clicked before the freeze; no repeat paste yet.
+- Operator clarification: "Part 1, I had simply clicked New Import and then
+  paste, which led to the pause, after which this appeared. Nothing further
+  was pressed." The stall is therefore before B.AddPart/checksum/decoding.
+- Classification: confirmed native paste responsiveness failure in the current
+  backup UI; likely EditBox insertion/rendering and/or text/cursor callback
+  work. Not evidence of checksum parser slowness or data corruption. Exact
+  root cause remains uncertain without further diagnostics.
+- Smallest next diagnostic: click Add / check part once on already pasted
+  part 1; observe duration and expected 1 of 3 parts checked, Restore disabled.
+  Do not paste additional parts yet. This isolates validation from paste cost.
+- Operator reports Add/check "instant, no pause". Screenshot confirms
+  1 of 3 parts checked. No journal data has changed. Restore remains disabled.
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-e0a8102f-711b-4cc4-b797-46fa7c9a1b1b.png.
+- First external part passes current native checksum/length check. Full-set
+  decoding on final part is still untested; do not generalize instant part 1
+  checking into a performance claim for final decoding.
+- Proposed next bounded repair, awaiting explicit authorization: coalesce
+  expensive text-read/layout/cursor-scroll work during paste, while preserving
+  immediate restore-approval invalidation for real edits and explicit validation.
+  Keep existing backup format and three exported files compatible. Add focused
+  burst-notification/lifecycle/approval tests and retry native paste afterward.
+  Native EditBox rendering may still contribute; this is a targeted mitigation
+  requiring native confirmation, not a proven complete root-cause attribution.
+- Operator authorized: "Yes. Make the performance fix."
+- Implemented in FieldbookBackupWindow.lua: first edit invalidates selection,
+  navigation and restore popup immediately; further edit notifications during
+  that burst skip full-buffer reads and repeated UI work. One queued OnUpdate
+  reads final text, reflows and scrolls to the latest cursor. Idle polling is
+  removed. Explicit Add/check reads current text and consumes pending edit
+  state; explicit review resets suppression so future edits invalidate it.
+  Programmatic replacement/close cancels queued work; hidden callbacks ignored.
+  Backup codec, part sizes and existing external files remain unchanged.
+- Added burst regression for true/false/missing userInput flags, 256 incremental
+  notifications growing to 256 KiB, bounded text-read/layout/scroll counts,
+  immediate approval cancellation, rejected stale confirmation, checking before
+  frame update, review between edit bursts, replacement and hide/reopen cleanup.
+  Test failed before repair on repeated growing-buffer reads; passes afterward.
+- Validation: 16 whole-backup tests PASS; 7 root-initialization tests PASS;
+  text-size script PASS; 80 Lua 5.1 files compile, manifest/bindings/version
+  0.19.0 checks PASS; git diff --check PASS. Focused validation only.
+  Updated existing Unreleased changelog entry. Pre-existing Bestiary work kept.
+  No version change, commit, push, tag or release. No game automation or
+  development-tool access to player SavedVariables.
+- O1-04P remains native FAIL pending retest. Automated bounded-work assertions
+  do not prove native renderer timing. Next: operator /reload, /fieldbook backups,
+  New import and paste same external part 1; report duration before Add/check.
+  Reload discards the incomplete transient import, so restart at part 1.
+- Native retest: operator reports client again unresponsive for dozens of
+  seconds, shorter than before. Screenshot shows recovered unvalidated-text
+  state and disabled Restore. O1-04P remains FAIL; batching was insufficient.
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-60e1b2e9-a1f9-42f5-aa89-1c49ddd1ee08.png.
+- Continued the authorized performance repair: New import now uses a one-byte
+  single-line native EditBox and collects OnChar data into bounded chunks outside
+  native text layout. A per-frame preview displays received byte count and at
+  most 96 prefix bytes. Add/check joins and validates every captured byte through
+  the unchanged codec. No captured data, overflow and truncated parts fail closed.
+  Following a check, new input replaces the current draft; Backspace/Delete clear
+  that draft while retaining checked parts. New import clears the whole set.
+  Export retains full selectable text, existing part format and size unchanged.
+- Added buffered-input regression for native display cap, no input, multi-frame
+  delivery, exact full-byte submission, truncation, duplicate parts, overflow,
+  completed three-part review, immediate stale-approval cancellation, clearing,
+  new-import reset, export switching, hide cleanup and unchanged journal roots.
+  Tests simulate OnChar delivery; they cannot establish this client's native
+  delivery behavior or actual paste responsiveness.
+- Validation: 17 whole-backup tests PASS; 7 root-initialization tests PASS;
+  text-size script PASS; 80 Lua 5.1 files compile, manifest/bindings/version
+  0.19.0 PASS; git diff --check PASS. Changelog and WHOLE_BACKUPS notes updated.
+  No version change, commit or publication. No player saves accessed or edited
+  by development tools; no game input automated.
+- Next native step: /reload, /fieldbook backups, New import, paste existing
+  external part 1 into the new input. Stop before Add/check and report duration,
+  responsiveness, received byte count and AFBWP1 prefix. Native PASS pending.
+
+O1-04P subsequent native failure and repair:
+- Further O1-04P native retest of the one-byte collector FAILED: operator cannot
+  paste into the new field. Clarification: Ctrl+V leaves Waiting/no byte count,
+  but typing into the box works. Focus failure is less likely; precise native
+  cause (input cap/event delivery/key handling) not independently established.
+- Continued same authorized repair. Removed the OnChar collector and custom
+  OnKeyDown handler. A standard single-line EditBox now retains the entire part
+  with a 2*PART_BYTES+1 capacity sentinel and a 96-byte visible text limit when
+  available. OnTextChanged invalidates approval immediately and queues a single
+  full read per frame; Add/check consumes pending input synchronously. Overflow
+  and empty input fail explicitly. Clear input resets the draft only; a check
+  focuses/selects the full input for replacement by the next paste. Existing
+  three exported parts remain compatible. Native performance is still unproven.
+- Focused tests now simulate clipboard replacement without any OnChar events,
+  assert native capacity independently from visible limit, bound reads through
+  a growing-input burst, and retain exact full-part/incomplete/overflow/approval
+  and lifecycle assertions. 17 backup tests PASS; 80 Lua files compile;
+  manifest/bindings/version 0.19.0 and diff whitespace checks PASS.
+- Next operator step: reload and reopen backups, New import, paste existing
+  part 1 and stop before checking. Observe byte count and paste duration.
+
+- Standard-input native retest also FAILED: operator reports cannot paste and
+  field appears unchanged. External part length reported as 262,173 characters
+  (consistent with 262,144 payload plus header); current source input capacity
+  is 524,289 bytes/letters. The reported text fits that configured capacity.
+  Loaded-client settings have not been independently observed. Do not claim
+  stale code, clipboard failure or a native size limit as established causes.
+- Next smallest diagnostic: New import, paste literal AFBTEST123 copied from
+  outside the game, stop before Add/check; observe whether 10 bytes appear.
+  This separates general paste failure from size-dependent rejection. No new
+  source changes or further large-paste attempts before this observation.
+
+- Operator reports input cannot exceed 96 bytes, matching the newly configured
+  SetVisibleTextByteLimit(96). Removed that native setting; only the separate
+  preview label now truncates to 96 bytes. Retained 524,289-byte/letter input
+  capacity and standard single-line clipboard handling. No codec/part changes.
+- Regression now rejects any use of the native visible-byte limit and verifies
+  a complete 262,173-byte part is submitted unchanged and reported at full size.
+  All 17 whole-backup tests PASS; git diff --check PASS. This validates Lua data
+  handling, not native input capacity or latency. No further native PASS yet.
+- Next native test: /reload, /fieldbook backups, New import, paste saved part 1;
+  stop before Add/check and observe byte count (262173) and duration.
+
+- Native retest after removing visible-byte cap: operator can paste the full
+  part, but freeze returns. Input acceptance is restored; O1-04P responsiveness
+  remains FAIL. No new duration or full received-byte count provided.
+- Reviewed contemporary paste absorber implementation and historical OnChar
+  guidance. Their assumptions about delivery beyond a native cap require direct
+  confirmation on this client; do not repeat a speculative collector patch.
+- Next bounded native diagnostic: with New import active, temporarily cap its
+  native EditBox to 96 bytes, remove letter cap, attach an OnChar byte counter,
+  paste exactly 128 ASCII characters, then report delivered-character count and
+  native stored length. This tests overflow event delivery without a large paste
+  or journal mutation. Reload afterward removes the temporary probe. No source
+  change this turn; old external backup remains intact and restore untested.
+
+- Native probe result screenshot: Delivered: 128 Stored: 95. This confirms
+  character delivery beyond native storage with SetMaxLetters(0), SetMaxBytes(96)
+  on this client for the short ASCII probe. It does not establish full-part speed.
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-a55bde92-50e9-4302-8544-db0b85ca1561.png.
+- Applied the proven probe settings to the import field (96 native bytes, no
+  letter cap); collect OnChar strings into 1,024-character blocks with a total
+  2*PART_BYTES limit. Keep the native field small and update only a short preview
+  per frame. Join the capture on Add/check, validate through unchanged codec.
+  No one-byte cap, native visible-text cap or custom key handler. After checking,
+  clear native input and start a new capture on next character. Clear input and
+  New import retain their documented distinct scopes. Missing delivery, native
+  deletion/cut and overflow discard/deny capture; no truncated-prefix validation.
+- Focused regression models the native 128/95 evidence and complete 262,173-byte
+  captures, end-of-paste and per-character notifications, multi-frame input,
+  duplicate parts, overflow, missing OnChar delivery, deletion before check,
+  stale-approval invalidation, saved-copy review and hide cleanup. Native large
+  paste remains unverified; next operator action is reload/open/New import/paste
+  external part 1, stop before checking, report byte count and responsiveness.
+- Validation of this revision: all 17 whole-backup tests PASS; all 80 runtime
+  Lua files compile; manifest/bindings/version 0.19.0 validation PASS;
+  git diff --check PASS. No source version change, commit, push or publication.
+
+- Full-size native retest PASS for paste responsiveness: operator reports
+  "Ok, that only took a split second." Screenshot confirms 262173 bytes received,
+  prefix AFBWP1:c8bb1717:1:3:aebcb2d8 matching original Backup A part 1,
+  unvalidated-input status, disabled Restore and no backup selected.
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-9142cea4-982b-4eef-9071-c778e1186875.png.
+  This establishes full byte count and reported responsiveness, not checksum
+  integrity or completed-set decoding. Next: Add / check part once; expect
+  1 of 3 parts checked and Restore disabled, observe duration/errors.
+
+- Native multipart validation completed: screenshots show part 1 (262173 bytes),
+  part 2 (262173 bytes) and part 3 (155007 bytes) checked in sequence. Parts 1/2
+  retain disabled Restore; part 3 shows Backup checked and enabled Restore.
+  Decoded owner, 30 Sep 2026 16:49:54 timestamp, version 0.19.0 and all seven
+  account/character counts match original Backup A. No restore performed.
+  Check and final-decode latency were not explicitly reported in this message.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-c102d7ff-4292-4791-a91b-00aa55674c0c.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-f3604576-9a3e-414d-9d45-1029b439f71c.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-97dc0874-6bb6-47ee-9b28-31f2ad9c0e38.png
+- Next test O1-05A (not yet run): deliberately edit O1 Backup Baseline's private
+  description through Lore Edit/Save entry to
+  "After backup: this change must disappear."
+  Observe saved reader text and exact archive-byte tooltip. Follow with a
+  second-journal change before replacement restore, then recovery-copy test.
+
+- O1-05A observed: exact requested changed private description saved, timestamp
+  updated to 30 Sep 2026 18:05; title, Account-wide scope and one entry retained.
+  Rounded archive label still 0.00 / 32 MiB; exact usage tooltip absent.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-42a87a73-1097-4f18-819b-97b0ebabb45f.png.
+  Next smallest observation: hover archive label and capture exact bytes/slots.
+  Do not infer exact native usage from string length or the rounded label.
+
+- O1-05B screenshot confirms 59 bytes and 1 entry slot after the Lore edit;
+  preserve exact comparison 52 bytes before backup versus 59 after edit.
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-839eb15e-dfa2-4dbf-a8bc-afcb03b01a6a.png.
+- Next test O1-05C (pending): Gatherer's Compendium, Copper Vein, replace blank
+  Field notes with "After backup: copper recovery marker." and Save notes.
+  Verify saved text via screenshot before proceeding to restore.
+
+- O1-05C evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-581ab10a-bf69-4a0d-82c6-d41613c7dcce.png.
+  Distinct live pre-restore state now observed in Lore (changed description,
+  59 bytes) and Gathering (new Copper Vein note). No replacement restore yet.
+- Next O1-06 (pending): import original external Backup A parts 1/2/3 again,
+  check complete-set metadata against 30 Sep 2026 16:49:54; restore/reload and
+  confirm replacement through actual UI. First observe Lore original description,
+  52 archive bytes, one entry and Account-wide scope after reload. Then separately
+  verify Gathering and other baseline samples, followed by Before last restore
+  recovery. Use external import selection to establish portability; do not select
+  saved-copy row instead. Current changed state should become recovery copy.
+
+- Operator supplied sequence showing external imported Backup A checked (part 3
+  preview 155007 bytes, timestamp 16:49:54, original counts, Restore enabled),
+  followed by Gathering blank notes and Lore original text/timestamp. These
+  confirm the two observable baseline states have returned; no confirmation
+  dialog/reload event or explicit error/latency report was provided.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-e8589435-9fd0-47f6-a203-c56fda4a7090.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-9c081d3b-446d-426e-b523-142f3658212c.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-7d2e213b-5539-4a4d-899e-698b50bc1550.png
+- Next observation: exact Lore archive tooltip should return from 59 to 52
+  bytes; ask operator to confirm Restore/reload caused automatic reload and
+  whether any error appeared. Then observe recovery copy and remaining baseline
+  sections before recovery restore. Whole O1 gate remains incomplete.
+
+- Operator confirms restore "auto-reloaded, no errors." O1-06C PASS. Exact
+  post-restore Lore archive tooltip still awaited (expected 52 bytes, 1 entry).
+
+- O1-06D evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-54ac521c-4520-4b5c-94eb-e3171d33a1c0.png.
+  Exact native usage restored to 52 bytes, 1 entry. External Backup A restore
+  now confirmed for both deliberately changed journals, scope on those views,
+  automatic reload without errors and refreshed exact Lore usage. Other section
+  baseline spot-checks and complete O1 scope/negative cases remain outstanding.
+- Next O1-07A (pending): open /fieldbook backups and select Before last restore.
+  Observe automatic recovery copy's timestamp, owner, seven-journal counts and
+  eligibility before applying it. Do not create a new backup or restore yet.
+
+- O1-07A evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-082e5260-b087-40fd-b97e-a18ddffc80d2.png.
+  Automatic recovery copy reviewed at timestamp 18:09:10, later than Backup A
+  (16:49:54) and the deliberate Lore edit (18:05). Counts and owner match.
+- Next O1-07B (pending): restore selected Before last restore through confirmation
+  and automatic reload. First verify Lore description returns to
+  "After backup: this change must disappear.", exact archive usage 59 bytes/1
+  entry, Account-wide scope; report reload/errors. Then inspect Copper Vein's
+  post-backup marker to establish multi-journal undo of the first restore.
+
+- Recovery result: operator reports "Pass" and supplies both Lore and Gathering
+  changed-state screenshots. Two-journal recovery restoration established.
+  Lore exact 59-byte tooltip is not shown; distinguish operator test-pass report
+  from visually inspected data. Neither view shows an error; operator reports
+  the requested recovery test passed. Whole O1 scope and negative tests remain.
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-21bfa194-2256-4544-934d-9acd70433378.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-628227a8-fa51-4880-8c24-1ed2d9c56fce.png.
+- Next O1-08 (pending): New import of deliberately truncated original part 1,
+  using AFBWP1:c8bb1717:1:3:aebcb2d8:AFBWB1: (original header plus short payload
+  prefix). Add/check should say Incomplete or changed backup part, leave Restore
+  disabled and cause no reload. Then verify both recovered marker notes remain.
+  Original three external files are not modified.
+
+- O1-08A evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-3eafbea2-020b-4c70-8796-8a5946d6876f.png.
+  Truncated original part header/prefix rejected, restored-state notes not yet
+  inspected after rejection. Next O1-08B: close backup UI and confirm both
+  recovered markers remain exactly as before, with no reload caused by rejection.
+
+- O1-08B evidence: operator "Verified" with both marker-note screenshots.
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-fb7b127e-23dc-4097-a918-6aefe03ef96d.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-5afc5a85-a9d1-45aa-88a6-ff833e4e145f.png.
+  Truncated import rejection and observed live-data preservation PASS.
+- Next O1-09A (pending): spot-check unchanged Bestiary sample Black Bear Patriarch
+  after replacement/recovery. Compare baseline Beast/Hostile, level 17, Loch
+  Modan, zero kills/corpses, no abilities, Account-wide; inspect displayed entry
+  and Knowledge totals against 123/216 baseline. Any naturally acquired new
+  knowledge requires interpretation, not automatic failure from differing totals.
+
+- O1-09A evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-97d58344-52a6-4acb-abd2-c8b72e3d4a50.png.
+  Bestiary sample and aggregate entry/Knowledge counts preserved.
+- Next O1-09B (pending): Merchant's Ledger, Reset filters, select Bink. Compare
+  original 25 contacts, Mage Trainer, Personal, Ironforge/Hall of Mysteries,
+  approximate 26.99/8.38, two locations and unchecked Favourite; Account-wide.
+
+- O1-09B | Ledger baseline preservation after restore/recovery | PASS.
+  Screenshot confirms 25/25 contacts, Bink Mage Trainer / Trainer, Personal,
+  Account-wide, Ironforge / Hall of Mysteries (26.99, 8.38; approximate),
+  Locations (2), Favourite unchecked, original first/last encounter timestamps,
+  and Ironforge map marker. Matches the observed baseline.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-5d4de832-cf01-440c-b5d0-c2cdd8733743.png.
+- Next O1-09C (pending): Traveller's Atlas, choose Elwynn Forest and inspect
+  subzone mapping, Clear/Rain weather history and map display settings against
+  baseline. Zero discovery count alone does not verify this nested data.
+
+- O1-09C | Atlas mapping/weather preservation spot-check | PASS.
+  Screenshot shows Account-wide, Elwynn Forest, Current map, 0 discoveries,
+  Northshire Valley/Vineyards, Mirror Lake/Orchard, Goldshire, Forest's Edge,
+  The Stonefield Farm and colored mapped areas; observed weather Clear, Rain.
+  Brightness 60%, label size 9 and all baseline checked controls except Points
+  match. Points is now unchecked, whereas baseline log records checked.
+  Settings preservation remains pending clarification of an intentional toggle;
+  this discrepancy is not yet classified as a restore defect.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-c20f6667-b590-4345-b392-a5b8d9a430e6.png.
+- Next: clarify whether operator turned Points off during testing before
+  proceeding with remaining journal/scope checks.
+
+- Atlas settings clarification | PASS (operator verified).
+  Operator confirms intentionally switching Points off while also playing:
+  "I did, yes, I'm playing the game at the same time ... Points survived."
+  Prior Points discrepancy resolved; no settings-preservation defect indicated.
+  Interpret later differences against ongoing gameplay, not frozen baseline alone.
+- Next O1-09D (pending): Angler's Almanac Waters and Catches, unrestricted
+  filters, compare original zero waters/spots and zero catches, Account-wide.
+  Any fishing since baseline must be accounted for before interpreting counts.
+
+- O1-09D Catches | Angling catches preservation spot-check | PASS.
+  Screenshot shows Catches selected, 0 recorded items, blank search,
+  All recorded zones / Knowledge: all / Source: all / Show: all, Account-wide.
+  Elwynn Forest map and unclassified water/no session source match expected
+  empty catch view. Waters count is not visible and remains pending.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-78dda62c-c5aa-4189-bfbe-32baffd382eb.png.
+- Next: click Waters and confirm baseline 0 recorded waters & spots.
+
+- O1-09D Waters | Count difference explained by ongoing gameplay.
+  Operator reports just observing an Oily Blackmouth School and Westfall coast.
+  Screenshot shows 2 recorded waters & spots: Oily Blackmouth School,
+  Personal / Pool zone sighting; Westfall, Personal / water. All list filters
+  unrestricted and Account-wide. This accounts for the change from zero;
+  no restore defect indicated. Exact post-restore zero-state was not captured,
+  so this is an explained observation rather than a separate preservation PASS.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-173ecd8d-134a-402e-a0b1-bcd464666291.png.
+- Next O1-09E (pending): Treasure Journal, unrestricted filters; compare
+  baseline 0 container kinds and Account-wide, allowing any new encounters.
+
+- O1-09E | Treasure count difference explained by ongoing gameplay.
+  Operator reports obtaining a barnacled clam from a murloc. Screenshot shows
+  1/1 container kinds, Small Barnacled Clam, Portable / container / Westfall,
+  Contents not recorded; Account-wide and unrestricted filters. Map explicitly
+  shows no historical find coordinates and treats carried/opening locations as
+  metadata. New acquisition explains change from zero; exact post-restore empty
+  state was not captured, so no separate preservation PASS is claimed.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-f8b04068-8641-4211-ab35-272d42e486e4.png.
+- Next O1-10A (pending): disable Account-wide tracking in Options, /reload,
+  inspect Merchant's Ledger with reset filters. Backup A recorded 11 retained
+  character contacts versus 25 account contacts. Expect Character-specific
+  header and the retained 11-contact store, allowing explained new observations.
+  This scope switch does not restore an older backup; account data stays separate.
+
+- O1-10A | Retained character Ledger after restore/recovery and opt-out | PASS.
+  Screenshot shows Character-specific, 11/11 contacts with unrestricted filters,
+  matching backup retained count. Auctioneer Jaxon selected, Personal,
+  Stormwind City / Trade District (61.18, 70.49; approximate), Locations (3),
+  Favourite unchecked. Confirms retained Ledger accessible separately from
+  the account view previously showing 25 contacts.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-9733b1c3-a6ec-4cfd-81f9-939b160382db.png.
+- Next O1-10B (pending): append a character-only note to Auctioneer Jaxon,
+  "O1 character-only scope marker." Save, re-enable Account-wide tracking and
+  /reload. Inspect account Jaxon notes: marker must not migrate again; account
+  contact count should remain 25 unless new gameplay explains a change.
+
+- O1-10B | Character-only edit isolation on account re-enable | PASS (operator).
+  Operator reports "As expected" after saving Jaxon's character-only marker,
+  enabling Account-wide tracking, reloading and inspecting account Jaxon.
+  Confirms requested account header/count and absence of the marker in account
+  notes. No new screenshot; result is operator-confirmed, not visually inspected.
+- Next O1-10C (pending): disable Account-wide tracking, /reload, inspect retained
+  character Jaxon notes. Expect Character-specific and the saved marker present.
+  Then re-enable Account-wide tracking and /reload to return to preferred scope.
+
+- O1-10C | Character-note retention across scope round-trip | PASS (operator).
+  Operator explicitly confirms "The marker survived." Character note retained
+  after opt-out/reload, complementing its absence from the account journal.
+  Instruction to return to Account-wide was given; final active scope not yet
+  independently observed. No cross-character or genuine first-import claim.
+- O1 core practical single-character paths now verified: whole backup creation,
+  external three-part import/restore, multi-journal replacement, automatic recovery,
+  invalid import rejection without journal mutation, and retained/account isolation.
+  Remaining O1 legacy path begins next; broader stress/visual checks still pending.
+- Next O1-11A (pending): ensure Account-wide tracking restored and /reload if
+  needed, open Options > Backup Bestiary. Source BackupWindow.lua confirms this
+  creates a legacy snapshot and opens Bestiary backups with Saved backups,
+  Import a backup and Export selected controls. Inspect title/scope/saved summary.
+
+- O1-11A | Legacy Bestiary-only backup creation/scope | PASS.
+  Native screenshot shows Bestiary backups, Your account-wide Bestiary,
+  five recent backups and one recovery copy, Backup saved. Selected copy:
+  30 Sep 2026 19:16:03, 123 creatures, 10 abilities, 0 creature notes,
+  Account-wide backup / Spinkler / v0.19.0. Creature-only replacement and
+  retained milestones/spending/settings/log/offers text visible. Existing dated
+  copies remain listed. Final account scope after prior toggle is now confirmed.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-997d64f5-3635-4e86-b6b5-6438b20b1059.png.
+- Next O1-11B (pending): Export selected, copy complete legacy AFB1 text to an
+  external text file, then Import a backup and Preview import using saved text.
+  Expect checked preview matching 19:16:03 / 123 / 10 / 0 / account scope.
+  Do not restore in this step; observe paste responsiveness and any errors.
+
+- O1-11B | Legacy external import paste responsiveness | FAIL (operator).
+  Operator reports the same pause on paste as the former whole-backup input.
+  Exact duration, eventual preview acceptance and any error not yet reported.
+  Stop dependent legacy restore tests. No restoration requested in this step.
+  Source inspection: BackupWindow.lua still stores the entire paste in a native
+  multiline EditBox (lines 64-65), up to the 4 MiB legacy codec boundary, with
+  per-change status/preview and cursor-scroll handlers (73-85). Unlike repaired
+  FieldbookBackupWindow.lua, it has no bounded native buffer/OnChar collector.
+  Likely same native large-text layout bottleneck; exact internal client cost
+  unprofiled. Legacy decoder runs only on Preview import, not on paste.
+  Proposed repair: apply the proven bounded input/chunk capture pattern to legacy
+  import, preserve AFB1 format and full-input validation, invalidate stale preview
+  and restore confirmation after edits, test relevant legacy UI regressions.
+  Production changes require explicit operator authorization; none made here.
+
+- O1-11B repair authorized: "Yes, make that fix."
+  Applied bounded native import input (96-byte capacity / OnChar chunks),
+  once-per-frame short preview and complete-input validation only on Preview
+  import. Existing AFB1 codec, export format, 4 MiB limit and legacy restore
+  semantics unchanged. Clear/mode/close releases capture; edits invalidate
+  approval and hide confirmation; retained stale confirmation callbacks rejected.
+  Focused automated checks: 3 new legacy UI regressions PASS, 4 existing legacy
+  backup tests PASS, 17 whole-backup tests PASS. No native responsiveness claim.
+  No version change, commit, push, tag, save-file edit or game automation.
+  Native failure remains open pending /reload and legacy import paste retest
+  from original external AFB1 copy, followed by Preview import. Do not restore yet.
+
+- O1-11B retest | Legacy external paste and checked preview | PASS.
+  Operator: "Perfect, split second pause, it's fine." Screenshot shows 171497
+  bytes received, AFB1:c20bc9ac prefix, Backup checked, original 30 Sep 2026
+  19:16:03 / 123 creatures / 10 abilities / 0 creature notes / Account-wide /
+  Spinkler / v0.19.0 summary. Restore enabled. Historical failure repaired and
+  natively retested; replacement restore not yet exercised.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-b612d5c1-18e2-4c8e-969b-32fbdab5031e.png.
+- Next O1-11C (pending): add Bestiary note "O1 legacy restore marker." to Black
+  Bear Patriarch, reimport original external legacy copy, preview and restore.
+  Expect bear note removed, Bestiary restored status and unchanged Copper Vein
+  note "After backup: copper recovery marker." in Gathering. Legacy restore is
+  in place, unlike whole-backup automatic reload. No new backup needed.
+
+- O1-11C | Legacy Bestiary-only replacement restore | PASS.
+  Operator reports "Perfect" for the prescribed marker-removal and unchanged
+  Copper Vein note check. Screenshots show bear marker before confirmation,
+  then blank notes (0/400), Bestiary restored status, 123 entries, Account-wide,
+  and legacy Before last restore dated 30 Sep 2026 19:32:38 with 1 creature note.
+  Gathering preservation is operator-confirmed; not shown in these screenshots.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-48b9e56b-b9ac-4d59-b9ec-41c3f25c7d0c.png
+  and C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-7fae107d-27cc-4d3e-9a34-a4e4594d504f.png.
+- O1 practical single-current-character acceptance gate: PASS. Creation,
+  external round-trip replacement, automatic recovery, invalid-import isolation,
+  original/retained scope independence and legacy Bestiary-only import/restore
+  demonstrated. Three native UI failures repaired and retested. This does not
+  certify cross-character/offline saves, startup failure injection, extreme limits,
+  sharing transactions, or all resolution/scale combinations; broader session
+  and final release assessment remain outstanding.
+- Next O4-01 (pending): with Show spell IDs on tooltips if possible ON, set
+  client CVar false via normal /run and verify false; /reload then /dump expect
+  true from saved Fieldbook intent. Inspect an actual supported aura tooltip.
+
+- O4-01 | Spell-ID preference reapplied on reload | PASS (operator).
+  Operator confirms explicit CVar off returned false, then /reload returned
+  true without manual re-enable, and a real tooltip displayed a spell ID.
+  This establishes native client acceptance of the saved on preference and
+  actual supported tooltip presentation. No screenshot was supplied.
+- Next O4-02 (pending): uncheck Fieldbook's Show spell IDs on tooltips if
+  possible, /reload, /dump GetCVarBool("tooltipShowAuraSpellIDs"). Expect false
+  and no ID on the same supported tooltip; inspect option text/hover wording.
+
+- O4-02 | Explicit Spell-ID opt-out survives reload | PASS (operator).
+  Operator reports expected result after unchecking the Fieldbook option and
+  /reload: GetCVarBool("tooltipShowAuraSpellIDs") false and no ID on the same
+  kind of supported tooltip. No screenshot supplied.
+- Next O4-03 (pending): re-check Show spell IDs on tooltips if possible;
+  without reloading, /dump expect true and supported tooltip ID visible.
+  This verifies explicit option changes take effect immediately.
+
+- O4-03 | Explicit Spell-ID re-enable after reload | PASS (operator).
+  Operator rechecked the Fieldbook setting, reloaded, and observed
+  GetCVarBool("tooltipShowAuraSpellIDs") true. Immediate effect before reload
+  and reports a real tooltip showing the spell ID again. Immediate effect
+  before reload was not observed, so no immediate-application claim is made here.
+- Next O4-04 (pending): while saved option remains on, externally set CVar 0,
+  confirm /dump false and that it stays false during ordinary play without
+  a reload; then /reload and confirm true. Tests no frame/event enforcement
+  and startup reapplication. The user controls WoW throughout.
+
+- O4-03 additional native result | Immediate checkbox application | PASS
+  (operator). User reports "Confirmed that it toggles without reloading, too."
+  Screenshot shows successive false then true CVar dumps. This supplements
+  prior after-reload re-enable, but exact intervening action between the two
+  dumps is not visible in the cropped screenshot.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-9124dd5b-899c-4eb5-b498-96fed15cdda4.png.
+- O4-04 external-drift test remains NEEDS FURTHER INVESTIGATION until the
+  operator identifies whether true followed a checkbox click or /reload and
+  whether false persisted during ordinary play. Ask only that clarification.
+
+- O4-04 | External CVar change waits until reload | PASS (operator).
+  After the prescribed SetCVar(0), in-play recheck and /reload, the operator
+  reports "It all seems to work as expected." This is operator confirmation
+  of the requested sequence; the cropped screenshot alone shows only false
+  then true and does not time the transition. O4 direct CVar, tooltip on/off,
+  immediate checkbox toggle and startup reapplication now covered natively.
+- Next O8-01 (pending): disable Account-wide tracking and /reload. Capture the
+  exact grouped chat message. Expected disabled/using separate journals and
+  explicit "account data was not copied back", with no claim of import.
+
+- O8-01 | Account tracking disable transition summary | PASS.
+  Screenshot text: "Azeroth Fieldbook: Account-wide tracking disabled.
+  Using this character's separate journals; account data was not copied back.
+  Account journals remain available when re-enabled." This makes retained
+  scope and absence of reverse copying explicit; no false import claim.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-76bb8884-8d4e-4a7d-ac95-3141d88aa48b.png.
+- Next O8-02 (pending): re-enable Account-wide tracking and /reload, capture
+  exact chat summary. With existing import markers, expected "Resumed existing
+  account journals; previously imported sections do not re-import later
+  character-only changes" and no new one-time import claim.
+
+- O8-02 | Account tracking re-enable summary without repeated import | PASS.
+  Screenshot text: "Azeroth Fieldbook: Account-wide tracking enabled. Resumed
+  existing account journals; previously imported sections do not re-import
+  later character-only changes. Later account and character data are not
+  continuously synchronized." No new one-time import or deferred claim.
+  Evidence: C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-65e983fb-9762-4861-a27b-af0d4b529c03.png.
+- O8 genuine first-import/deferred message not natively reproducible on this
+  already-imported character without altering persistent migration markers or
+  using a fresh character. Leave NOT PRACTICAL pending alternative safe fixture;
+  do not infer native PASS from existing automated migration tests.
+- Next O8-03 (pending): ordinary /reload with no preference change. Expect
+  no account-tracking transition or one-time import chat message.
+
+- O8-03 | Ordinary reload makes no tracking announcement | PASS (operator).
+  Operator reports no new chat message after /reload with unchanged preference.
+  Existing import markers did not produce a false transition announcement.
+- Remaining native session has several feature groups, not a fixed count of
+  checks: O7 all-section scope/hover and pending transition, remaining O2 extremes,
+  O3 location cap if safely reproducible, O6 Angling/Ledger/Lore previews,
+  documented Lore/Angling/Treasure/Ledger live cases and UI-scale review.
+  Genuine O8 first import/deferred path requires a fresh supported state and
+  is not claimed from this character. Review each for practical reproduction.
+- O2 practical Lore capacity diagnostics already PASS from earlier native
+  screenshots: empty 0 bytes/0 slots, changed 59 bytes/1 slot, restored 52
+  bytes/1 slot, exact 32 MiB capacity and 4 MiB per-entry explanation. Do not
+  request a duplicate hover. Near-capacity fixture remains automated-only.
+- Next O7-01 (pending): while currently Account-wide, uncheck Account-wide
+  tracking in Options without reloading, then inspect Lore scope label.
+  Expected active label stays Account-wide until /reload despite pending
+  checkbox. Re-check before reload to leave preferred state on.
+
+- O7-01 | Pending scope preference does not change active label | PASS
+  (operator). User unchecked Account-wide without reload, saw the active scope
+  remain Account-wide in Options while viewing Lore, then rechecked it before
+  reload. The subsequent source inspection shows the scope label has moved to
+  the shared Options page; earlier wording about a Lore header was incorrect.
+- O7-02 original seven-journal header check withdrawn: current working-tree
+  FieldbookShell.lua removed the book header scope widget and BestiaryPages.lua
+  presents the single active-scope label only on shared Options. The prior
+  test instruction was stale for this changed working tree.
+- O7-NAV | Shared Options inconsistent on section navigation | FAIL (operator).
+  Options closes when navigating away from Bestiary but stays open when
+  navigating away from another tab. Source FieldbookShell.lua ShowSection
+  lines 641-649 hides previous.pages only; shared Options belongs to
+  bestiary.pages, so non-Bestiary previous.pages does not contain it.
+  The behavior is inconsistent. The intended behavior was clarified later:
+  Options should remain open across all journal switches.
+
+- O7-NAV repair authorized: "Yes, fix that."
+  Initial implementation wrongly closed Options on all switches. Operator
+  corrected the requirement: "No, options should stay open when switching."
+  Revised FieldbookShell.lua to exclude shared Options when hiding
+  Bestiary-owned pages; active-scope refresh is retained. Revised regression
+  covers Bestiary-to-Gathering, Gathering-to-Atlas and Atlas-to-Lore with
+  Options continuously visible. Focused scope suite PASS (4 tests).
+- O7-NAV native retest | PASS (operator): after /reload, Options stayed open
+  on journal switch. Operator directed moving on.
+
+- O6-LORE-EXPORT | Prepared report preview persists | FAIL (operator).
+  For O1 Backup Baseline, Description / observations was checked in Export
+  Lore report. Operator says the prepared preview appears briefly and then
+  disappears. Screenshot shows the selection still checked, preview replaced
+  by "Selections changed. Prepare the exact preview again.", empty report text,
+  and Select report text disabled. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-77e64466-f881-492e-b1fc-5287e8fc0684.png.
+  Source inspection: LoreReportUI.lua Prepare sets preview then programmatically
+  sets encoded text with c.filling=true. OnTextChanged invalidates whenever
+  c.filling is false, without checking userInput or comparing text. A delayed
+  native notification for the programmatic text update plausibly clears the
+  prepared report. Immediate-callback synthetic tests do not exercise this.
+  No production code changed. Acceptance pauses at failure pending operator
+  authorization, per this session's instruction.
+- O6-LORE-EXPORT repair authorized: "Fix it."
+  New regression simulated delayed unchanged OnTextChanged after preparing a
+  description-inclusive export; it failed before repair. LoreReportUI.lua now
+  compares the current report text with the prepared snapshot before
+  invalidating it. The hidden Received from field cannot invalidate export;
+  import preview also retains unchanged delayed callbacks while real courier
+  or text edits clear approval. Focused Lore reports/preflight suites PASS;
+  native retest pending after /reload.
+- O6-LORE-EXPORT native retest | PASS (operator screenshot): after /reload and
+  selecting Description / observations, the 444-byte exact preview remains
+  visible, the report text remains populated, and Select report text is enabled.
+  The preview includes the explicitly selected description and sender claim.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-4f77561a-45e7-4636-9b4e-d41872b33eee.png.
+  No import acceptance or journal mutation inferred. Next: copy this report
+  into Lore Import report, inspect preflight without accepting.
+- O6-LORE-IMPORT-NEW | New reported-entry preflight | PASS (operator screenshot).
+  Same 444-byte Lore report pasted and previewed with Attach unchecked. Summary:
+  "Would add 1 reported entry with 1 evidence revision." Sender claim,
+  original-source claim, no personal credit, 0 pages/passages/locations and the
+  explicitly included description remain visible. Accept reported material is
+  enabled but was not clicked. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-10327f2f-6931-4d7e-ad0b-2bb426d22658.png.
+  Next: toggle Attach to selected entry and verify Accept is disabled until
+  another preview; no report acceptance required for this check.
+- O6-LORE-IMPORT-INVALIDATE | Attachment change revokes approval | PASS
+  (operator screenshot). Checking Attach to selected entry immediately disables
+  Accept reported material and shows "Prepare or preview again after changing
+  selections." The prior summary remains visible until refreshed, so it must
+  not be treated as the current outcome. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-606a1c74-5f95-4e84-8bb6-9e45e41c8cb5.png.
+  No import accepted. Next inspect fresh attached preflight.
+- O6-LORE-IMPORT-ATTACH | Attached preflight | PASS (operator screenshot).
+  Fresh preview with Attach checked names O1 Backup Baseline as target and
+  predicts "Would add 1 evidence revision to an existing entry. Earlier
+  versions and personal material stay separate." Included description and
+  provenance claims remain readable; Accept is enabled only after this fresh
+  preview. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-734c791f-4995-440e-89f3-9a2af14dd0e2.png.
+  No import accepted yet. Next compare actual acceptance with this prediction.
+- O6-LORE-IMPORT-ACCEPT | Attached report accepted once | PASS (operator
+  screenshot). Clicking Accept reported material gives "Reported material
+  archived. Personal notes and encounters are unchanged." Accept becomes
+  disabled. The preflight text remains in future tense until refreshed; it is
+  no longer active approval. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-422ff564-6e7f-4267-8b41-bcf3350022ae.png.
+  The selected entry's received-report row and personal text still need direct
+  inspection; no journal-level count or source provenance inferred here.
+- O6-LORE-READER | Attached report remains a separate source | PASS (operator
+  screenshot). Selected O1 Backup Baseline still appears as one catalogue entry
+  and is marked reports. Reader selector offers Received report 1; its view
+  shows actual sender not recorded, unauthenticated sender/original-observer
+  claims, received time, reported source and the explicitly included reported
+  description. No personal encounter credit is claimed. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-34f08a13-be8c-4617-abcd-f1b5b094a9be.png.
+  The local Entry & personal notes view still needs reinspection to confirm
+  personal text was not overwritten.
+- O6-LORE-PERSONAL | Local description survives attached import | PASS
+  (operator screenshot). Entry & personal notes still shows the same local
+  private description "After backup: this change must disappear." The
+  catalogue remains at one entry, and overview says "1 received reports";
+  updated time reflects report receipt. The local text is not overwritten by
+  the explicitly included reported description. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-1153bf6f-1c02-4181-bad7-e3276761414c.png.
+  Next: repeat the same report preview to inspect already-known evidence.
+- O6-LORE-REPEAT-PREVIEW | Known evidence with a new delivery | PASS
+  (operator screenshot). Operator re-exported the local entry because the
+  earlier clipboard text was unavailable, then previewed the same source and
+  description attached to O1 Backup Baseline. Summary says "Evidence already
+  archived; only the latest receipt would update." Its new report creation
+  timestamp differs, while source identity and content match; Accept is
+  enabled but not yet clicked. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-a13fdc25-d9fc-4b23-ac4a-99aba3921024.png.
+  Next: accept repeat, verify one received report remains.
+- O6-LORE-REPEAT-ACCEPT | Receipt update without duplicate | PASS (operator).
+  Operator accepted the re-exported known report and reports "Yep" to the
+  one-report check. Screenshot shows O1 Backup Baseline remains one catalogue
+  entry, overview still says "1 received reports", local private description
+  unchanged, and updated time advanced to 23:53. This supports the preview's
+  prediction of receipt-only update rather than another evidence revision.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-d5540406-220d-4e33-8825-2c07cdf8d76e.png.
+  Lore O6 basic new/attached/repeated paths passed; revised/conflicting/large
+  report paths remain untested. Continue with Ledger report UI.
+- O6-LEDGER-EXPORT-LARGE | Share Bink's full selected record | FAIL
+  (operator screenshot). With Personal/manual facts, Goods, Training and
+  Locations checked and notes excluded, Prepare yields no report and says
+  "Select at most 80 offerings per report using the current search, or exclude
+  goods/training." Known Goods is disabled in Bink's detail view while
+  Observed Training is enabled, so the excess appears to be training lessons;
+  exact count was not measured. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-f55d4d90-7acc-4af6-8e4f-677148e9906e.png.
+  User asks whether sharing should handle more than 80. Source inspection:
+  LedgerReports.lua MAX_OFFERINGS=80 applies both to wire normalization and
+  same-source MergeStored. Local journal stores up to 500 lessons per contact.
+  Search-filtering can produce batches, but the recipient's same-source
+  stored-report limit prevents accumulating more than 80 lessons for Bink;
+  this is a real completeness gap, not merely a one-message limit. The wire
+  also has a 128 KiB byte bound. No production code changed pending explicit
+  fix direction under the acceptance-session instruction.
+- O6-LEDGER-EXPORT-LARGE repair authorized: "Yes, fix it."
+  LedgerReports.lua now builds numbered wire parts of at most 80 goods/lessons
+  each, while same-source imports merge cumulatively up to the local
+  500-per-kind contact limit. LedgerBook.lua Prepare advances through parts and
+  wraps to the first, with part labels and copy/import guidance; changed export
+  selections reset the sequence. Wire preview labels each part. Forwarding a
+  cumulative source also splits into parts. Focused synthetic tests cover 170
+  trainer lessons in three export/import/forward parts, UI part navigation,
+  duplicate import, and atomic rejection of a 501st offering after seven parts.
+  Native Bink retest after /reload: PASS for initial preparation. With Goods,
+  Training and Locations selected and notes excluded, the screenshot shows
+  "Part 1 of 2; import each part separately", encoded report text, and the
+  "Next 2/2" button. Import/merge completeness still needs native checking.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-f214ad8b-2b2c-482e-831c-5e371f083bcc.png.
+  Operator clicked Next 2/2: screenshot shows Part 2 of 2, encoded report
+  text, and Restart 1/2, so native part navigation passes. No part has yet
+  been accepted. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-ffad6d8c-f914-4e9f-9abd-272e821baf5b.png.
+  Part 2 attached-import preflight: PASS. The operator checked Attach to
+  selected contact and previewed the prepared text; the screen says it would
+  add 1 report source to the existing Bink contact, identifies Part 2 of 2,
+  and enables Accept reported facts. No import was accepted yet. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-64df5c97-2938-4b5d-b0bf-fd3b023c4c42.png.
+  Operator accepted Part 2: PASS. Bink remains the selected personal contact;
+  the detail view adds one report receipt from Spinkler Overclocker and says
+  personal evidence and notes were preserved. The original personal encounter
+  label remains. Locations reads 4 (personal and reported sightings are
+  separate); no second contact was created by this action. Part 1 merge is
+  still pending. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-fad503d4-9e84-4809-b612-2f10aed7293b.png.
+  Part 1 attached-import preflight after Part 2 acceptance: PASS. Preview
+  identifies Part 1 of 2 and says it would update the existing contact's
+  reported evidence. Attachment is checked, Accept is enabled, and the
+  existing single report receipt is still visible. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-077b9f82-4f4b-4128-af75-a29e47b7623c.png.
+  Operator accepted Part 1: PASS for same-source native merge. Bink remains
+  one selected personal contact; the detail still shows one report receipt,
+  Locations (4), and the personal encounter label. No second report-source
+  receipt or second contact appeared. Forwarding the accumulated source in
+  two parts would give a stronger native completeness check. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-f8b412fc-0679-4757-8175-d14feccacb21.png.
+  Native cumulative-source forwarding check: PASS. With "Forward received
+  report 1" selected, Prepare produced a numbered Part 2 of 2 and Restart
+  1/2, demonstrating that the one stored source still requires multiple wire
+  parts after both imports. The screenshot captures part 2, though the exact
+  total offering count was not measured in-client. Automated tests cover exact
+  accumulation of 170 synthetic lessons and seven-part limit behavior.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-bd2b03fa-f584-4f98-8523-84ab7fdcf924.png.
+  O6-LEDGER-MALFORMED-PREVIEW | PASS (operator appshot). Replacing the draft
+  report text with "not a report" and clicking Preview pasted data displays
+  "Invalid Ledger envelope." Accept reported facts is disabled; no import
+  acceptance or journal mutation is shown. Evidence: World of Warcraft
+  appshot supplied 2026-09-30T14-49-34.365Z.
+  O6-LEDGER-EDIT-INVALIDATION | PASS (operator appshot). After a valid
+  forwarded report was prepared/previewed and its text edited, Accept
+  reported facts is disabled. The earlier preview text remains visible but
+  cannot be accepted without a fresh preview. Evidence: World of Warcraft
+  appshot supplied 2026-09-30T14-51-14.438Z.
+  O6-LEDGER-ATTACH-INVALIDATION | PASS (operator appshot). After previewing
+  valid report text, toggling Attach to selected contact clears approval:
+  panel says "Attachment changed. Preview pasted data again." and Accept
+  reported facts is disabled. No import was accepted. Evidence: World of
+  Warcraft appshot supplied 2026-09-30T14-52-48.919Z.
+  O6-LEDGER-REPEAT-PREVIEW | PASS (operator appshot). A valid forwarded part
+  already held by Bink was previewed again with attachment checked. The
+  preview indicates existing reported evidence with only delivery details to
+  update, and Accept reported facts is enabled. No acceptance yet. Evidence:
+  World of Warcraft appshot supplied 2026-09-30T14-56-05.270Z.
+  O6-LEDGER-REPEAT-ACCEPT | PASS (operator screenshot). After accepting the
+  known forwarded part, Bink remains selected among 38 contacts, one report
+  receipt is visible, the personal encounter remains, and the panel reports
+  personal evidence and notes preserved. No duplicate report/contact is shown.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-006ed376-2ce2-4f30-ac7a-8908feb424de.png.
+
+O1-02 investigation:
+
+O1-02 investigation:
+- Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-5d22bea5-0532-48bb-acf2-278bf87f51f3.png.
+- Inspected FieldbookBackupWindow.lua, multipart codec, whole-backup UI
+  regression and ui_test_harness.py. OnTextChanged unconditionally clears
+  selected/parts and disables navigation unless loading is true. The loading
+  flag only spans the synchronous SetText call. showPart sets label/navigation
+  after populating text. Harness fires OnTextChanged synchronously in SetText.
+- Hypothesis: a later native text-change notification invalidates programmatic
+  export after loading becomes false. An actual accidental edit would also
+  explain this state; native callback timing has not been observed directly.
+  Likely addon/native event-handling mismatch if reproducible without typing.
+- Smallest next check: select Saved Fieldbook 1, then Export selected if
+  enabled; wait a few seconds without typing/pasting/keyboard shortcuts.
+  Observe whether selection alone is invalidated or export label/Next survive.
+- No production code modified, no fix authorized, no restore requested.
+- Retry evidence: user reports "Same thing, nothing was typed or touched."
+  Screenshot again shows Text changed, No backup selected, missing part label,
+  disabled navigation/export/restore and export text still present.
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-8774f8f4-caf9-413f-8c9e-3bcde1072cb0.png.
+- Reproduction: create/select baseline whole backup; click Export selected;
+  wait without typing/pasting/shortcuts. Expected Export part 1 of 3 and enabled
+  Next; observed selection and navigation clear. Exact native callback timing
+  remains inferred rather than directly instrumented.
+- Classification: reproducible addon UI defect in native client; likely delayed
+  text notification outside synchronous loading guard. No evidence of journal
+  replacement or saved-backup deletion; restore has not been requested.
+- Proposed targeted repair, awaiting explicit operator authorization: distinguish
+  unchanged programmatic edit-box notifications from actual content edits,
+  retain export parts/selection through those notifications, and preserve
+  invalidation for genuine changes. Add regression covering deferred notification,
+  multipart navigation and real-edit invalidation; run relevant automated checks,
+  then repeat O1-02 natively. No version/publish/commit action proposed.
+- Operator authorized: "Yes. Make that fix."
+- Repair applied to FieldbookBackupWindow.lua: remember displayed text during
+  programmatic writes, ignore unchanged deferred/repeated notifications, and
+  continue clearing selection/parts/restore confirmation for changed contents.
+  Closing the window resets remembered text through its existing clearing path.
+- Added regression with immediate, deferred and combined notification modes,
+  three real-size export parts, forward/back navigation, saved-copy selection,
+  redundant notifications, actual edits and stale confirmation rejection,
+  text reversion, checked multipart imports, hide/reopen and unchanged journals.
+  Regression reproduced failure before repair (all three timing subcases failed
+  on extra/deferred notification) and passes after repair.
+- Automated checks after repair: all 15 whole-backup tests PASS; all 7 root
+  initialization tests PASS; text-size script PASS; all 80 runtime Lua 5.1
+  files compile; manifest/bindings/version 0.19.0 validation PASS;
+  git diff --check PASS. Full suite not rerun for this focused repair.
+- Updated Unreleased changelog; preserved existing Bestiary edits/tests.
+  No version change, commit, push, tag or publication. No player saves read
+  or edited by development tools, and no game input automated.
+- Native O1-02 remains historically FAIL, repair awaiting retest. Next operator
+  action: /reload, /fieldbook backups, select Saved Fieldbook 1 then Export
+  selected; wait without editing and inspect part label / Next button.
+- Native retest screenshot received after those instructions: saved Backup A
+  summary (same 16:49:54 timestamp and counts) retained, copy instructions
+  visible, export text populated; Next, Export selected and Restore / reload
+  enabled, Previous disabled. No Text changed status. Part label below visible
+  viewport, not yet observed. This passes the selection-invalidation retest;
+  copying/completeness and remaining part navigation remain open.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-4d80d543-4ab2-48ab-8dfe-bbd58a3230ae.png.
+- Additional operator screenshot after scrolling outer window confirms Export
+  part 1 of 3, Next enabled, Previous disabled, readable replacement/reload,
+  recovery, economy/import-marker exceptions, private data, all-parts external
+  file verification and offline-character scope explanations. Scrolling makes
+  this content accessible; no clipping defect inferred from first viewport.
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-5395b77f-c310-418e-8e26-48491a22621d.png.
+
+Backup A (baseline copy):
+- Saved Fieldbook 1, created 30 Sep 2026, 16:49:54; addon 0.19.0.
+- Summary owner: Spinkler Overclocker; all account data plus this character's
+  retained character data. Account / character saved-record counts:
+  Bestiary 123 / 0; Gathering 2 / 0; Atlas 0 / 0; Angling 0 / 0;
+  Ledger 25 / 11; Treasure 0 / 0; Lore 1 / 0.
+- Atlas primary-record count 0 does not imply omission of mapping/weather;
+  nested saved fields are included by design and must be checked after restore.
+- Two saved copies plus one recovery copy explained at top. Restore / reload
+  and Export selected visibly enabled. No restore requested yet.
+- Evidence: user screenshot
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-f308c952-36fe-48fd-89e6-91a258809753.png.
+
+- O6-ANGLING-EXPORT | PASS (operator screenshot). Selected Oily Blackmouth
+  School in Westfall, opened Reports with notes unchecked and Accept disabled,
+  then prepared selected knowledge. Encoded text and readable preview show
+  3 identities (pool, spot, supporting water), 0 observed-result summaries,
+  original observer claims and unknown position. No catch or coordinate is
+  invented. Import preview/acceptance is pending. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-3e206fe4-9439-4427-8af6-1d307454c4b4.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-d0b63005-e06a-4b2f-a91c-6e15cf65a334.png.
+
+- O6-ANGLING-NEW-PREVIEW | PASS (operator screenshot). Preview predicts
+  0 new/updated/already-known catch summaries and 3 new identity claims,
+  with 0 updated/already-known claims. Accept report is enabled. Original
+  sender/observer claims and reported-only explanation remain readable;
+  selected personal school still has unknown position and no catches.
+  Acceptance is pending. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-e35a772b-05e3-477c-8b74-6143538c3d77.png.
+
+- O6-ANGLING-NEW-ACCEPT | PASS (operator screenshot). Acceptance displays
+  "Accepted as Reported. 0 new and 0 updated result summaries; personal
+  totals unchanged." Accept report is disabled afterwards. Selected school
+  still shows Position unknown and No personal catches recorded here; no
+  school coordinate pin appears. Identity deduplication remains to be checked
+  by repeat preview. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-59920a25-75eb-4ed9-9370-e5f8f905daf1.png.
+
+- O6-ANGLING-REPEAT-PREVIEW | PASS (operator screenshot). Unchanged accepted
+  report now predicts 0 new, 0 updated, 3 already-known identity claims and
+  0 catch summaries in every category. Accept report is enabled; attribution
+  and reported-only explanation remain visible. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-3c953f28-a4c4-4f19-a7bb-8cc84f80436f.png.
+
+- O6-ANGLING-REPEAT-ACCEPT | PASS for acceptance (operator screenshot).
+  Repeat acceptance reports Accepted as Reported, 0 new/updated result
+  summaries and unchanged personal totals; Accept disables afterwards.
+  School position remains unknown and personal catches absent. Screenshot
+  captures acceptance state rather than the requested subsequent preview;
+  post-repeat identity-count verification remains pending. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-b2f54ea1-812c-4dc0-a977-fe243f348932.png.
+
+- O6-ANGLING-POST-REPEAT | PASS (operator screenshot). Preview after repeat
+  acceptance still shows 0 new, 0 updated and 3 already-known identity claims,
+  with no catch summaries. No duplicate claims are predicted; school remains
+  position unknown with no personal catches. Basic identity-report export,
+  initial acceptance and repeat deduplication are now natively covered.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-ac8f85ab-7bb1-4771-80ff-f3aeb6106612.png.
+
+- O6-ANGLING-EDIT-INVALIDATION | PASS (operator screenshot). Adding a
+  character to the previously previewed report immediately disables Accept
+  report. No acceptance is shown. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-54442cfc-8a3d-40ad-b739-18bf7c4167f6.png.
+
+- O6-ANGLING-MALFORMED | PASS (operator screenshot). Previewing "Not a
+  report" displays "Invalid or oversized fishing envelope." Accept report
+  remains disabled. This checks malformed input, not the oversized boundary.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-3f997695-4f38-4104-8ac0-f3f79e43939e.png.
+
+- O6-ANGLING-NOTE-EXCLUDED | PASS (operator screenshot after prescribed
+  save/prepare sequence). Initial editor had an empty note; operator was
+  instructed to save "Angling private note test" and prepare with notes
+  unchecked. Prepared preview shows the same 3 identities, no catch summaries,
+  and no note text. Explicit inclusion will verify the note was saved.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-aac8f4bf-250e-4353-8515-cafe643ab3e7.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-ee7998c7-c059-4596-a23f-1adf805937cd.png.
+
+- O6-ANGLING-NOTE-INCLUDED | PASS (operator screenshot). With inclusion
+  checked and a fresh Prepare, preview explicitly displays "Included note:
+  Angling private note test" under the school spot claim. This also confirms
+  the note existed during the preceding unchecked export. No import accepted.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-029817a3-1c6a-4ac1-b230-3dcf2c133934.png.
+
+- O6-ANGLING-NOTE-UPDATE-PREVIEW | PASS (operator screenshot). Note-bearing
+  report predicts 0 new, 1 updated, 2 already-known identity claims and no
+  catch-summary changes. Accept is enabled; selected school visibly retains
+  its personal "Angling private note test" note and no personal catches.
+  Acceptance remains pending. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-0bdd15a1-9425-4950-80c0-9710292a5e7b.png.
+
+- O6-ANGLING-NOTE-UPDATE-ACCEPT | PASS for reported update/deduplication
+  (operator screenshot after prescribed accept/preview). Identity claims now
+  read 0 new, 0 updated, 3 already known, with no catch summaries. This
+  confirms the note-bearing update is stored. Crop does not show the personal
+  note view; personal-note preservation after this acceptance awaits operator
+  confirmation. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-7e20131f-dc2f-4c8a-b8f5-b0edf396c3d2.png.
+
+- O6-ANGLING-PERSONAL-NOTE-PRESERVED | PASS (operator confirmation).
+  Operator confirms "The note exists" after returning to the selected
+  school's personal detail view. Notes exclusion, explicit inclusion, reported
+  update and preservation of the local note are now natively covered.
+
+- O6-ANGLING-FORWARD-IDENTITY | PASS (operator screenshots). Prepared
+  selected reported school with notes excluded; preview retains original
+  observer Spinkler Overclocker, last seen 30 Sep 2026 18:51, unknown position,
+  and 3 identities/0 catch summaries. Subsequent catalogue screenshot confirms
+  Knowledge: reported and selected Reported pool sighting; detail retains
+  unauthenticated reported-identity label. This covers self-forwarding original
+  identity provenance; cross-character forwarding remains untested. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-22a5c6b0-784d-420f-8812-cc30db02c35b.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-9fc6cc95-f3d7-4714-b680-8ec9849a2750.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-e2e7632a-2a45-418b-8dee-c17770f03950.png.
+
+- O6-ANGLING-CATCH-FIXTURE | PENDING: Catches view has 0 recorded items
+  with Knowledge all, all recorded zones, Source all and Show all. No catch
+  summary is available for new/cumulative catch-report acceptance. Do not
+  infer that path passed from identity-only reports. Defer until an actual
+  catch or an explicitly approved labelled fixture is available. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-e22a163b-8f74-4f03-b122-d2a4f735fa54.png.
+
+- O6-LORE-REVISED-EXPORT | PASS (operator screenshot). Existing description
+  "After backup: this change must disappear." preserved, with new line
+  "Lore revised report test" saved. Local-source exact export with description
+  explicitly included produces 470 bytes and shows both lines; no source
+  pages/passages/locations are invented. Import revision preflight pending.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-a5d52ddf-3947-40ce-99ec-06c7cc4fbe37.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-666c4afb-e545-417e-a8b7-075da85cb56f.png.
+
+- O6-LORE-REVISED-PREFLIGHT | PASS (operator screenshot). Attached preview
+  targets O1 Backup Baseline and predicts 1 additional evidence revision,
+  with earlier versions and personal material separate. Both description
+  lines and original source/sender claims are readable; Accept is enabled.
+  No acceptance yet. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-7169711c-9f97-4671-9eeb-8e9ea92f78b0.png.
+
+- O6-LORE-REVISED-ACCEPT | PASS (operator screenshot). O1 Backup Baseline
+  now shows 2 received reports after revised acceptance. Local private
+  description retains both the original line and "Lore revised report test".
+  Individual earlier/revised report contents still require reader comparison.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-bc8d18eb-f377-4983-8963-7117349a21a2.png.
+
+- O6-LORE-REVISION-READER | PASS (operator screenshots). Received report 1
+  retains only the original description, including its earlier receipt and
+  latest duplicate delivery details. Received report 2 independently contains
+  the original description plus "Lore revised report test", received
+  01 Oct 2026, 11:49. Both retain original observer/sender claims with
+  unauthenticated and not-personally-encountered labels. Earlier evidence
+  was not overwritten by revised acceptance; local description preservation
+  was confirmed in the preceding acceptance check.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-23876712-5b68-4de3-8bf9-b2fc84e20e00.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-c00a2999-2b96-4d4f-aa68-7e4cab07f96e.png.
+
+- O6-LORE-REVISION-PERSISTENCE | PASS (operator post-/reload screenshots).
+  Both received report revisions remain readable with distinct descriptions,
+  receipt dates, original observer claims and unauthenticated/reported labels.
+  Report 1 retains duplicate delivery details; report 2 retains the added test
+  line. Post-reload local description is not shown in these reader views.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-68b874c5-b256-4a17-8531-625b057ed9f6.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-fb5a7732-1d83-4b49-99c8-2085e9a8f58e.png.
+
+- O6-LORE-LOCAL-REVISION-PERSISTENCE | PASS (operator post-/reload screenshot).
+  Private local description retains both "After backup: this change must
+  disappear." and "Lore revised report test"; overview still shows 2 received
+  reports. Completes the local-material portion of revision persistence.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-ceb9c665-1130-460e-924b-4f78feca1336.png.
+
+- O6-LORE-MALFORMED-REJECT | PASS (operator screenshot). Preview of
+  "Not a report" displays "Invalid, oversized or unsupported Lore envelope."
+  Accept reported material is disabled. This covers malformed text only;
+  oversized and unsupported-version boundaries remain untested natively.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-b2d9c5b5-d5d9-493d-abd1-837e1a23702f.png.
+
+- O6-LORE-NOTES-EXCLUDED | PASS (operator screenshot). Local-source exact
+  preview with Private notes unchecked omits the saved test note; 384 bytes.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-88171dca-df37-4b9b-be8c-7a00a465a51a.png.
+
+- O6-LORE-NOTES-OPT-IN | PASS (operator screenshot). Private notes checked
+  and exact preview prepared explicitly includes "Lore private note test";
+  418 bytes. Description and other private annotation options remain unchecked.
+  Import/local note separation still requires native acceptance.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-afe47a1d-f409-4e16-90e3-8db16c2773e2.png.
+
+- O6-LORE-NOTES-PREFLIGHT | PASS (operator screenshot). Attached import
+  targets O1 Backup Baseline, predicts 1 new evidence revision, explicitly
+  includes "Lore private note test", and keeps earlier versions/personal
+  material separate. Accept enabled; acceptance remains pending.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-c16e0d4b-d783-4a39-9ad2-870637567962.png.
+
+- O6-LORE-NOTES-ACCEPT-SEPARATION | PASS (operator confirmation).
+  After acceptance, received report 3 displays "Lore private note test" as
+  a reported note. Entry & personal notes retains the private test note and
+  both local description lines. Imported annotation and personal material
+  remain separate. Evidence: operator "Confirmed." following the requested
+  report 3 and local-material inspection.
+
+- O6-LORE-FORWARD-PREVIEW | PASS (operator screenshots). Received report 3
+  selected for export retains original source claim. With Private notes
+  unchecked, exact preview excludes note (384 bytes); explicitly checked,
+  preview includes "Lore private note test" (418 bytes). Local description
+  is absent. Same-character preview only; cross-character provenance and
+  forwarded duplicate import remain unverified.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-81acb1c8-433c-47e8-ac29-73fbbcfd3d01.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-1cffafff-cc21-4bcf-a4be-e5128710648b.png.
+
+- O6-LORE-FORWARD-DUPLICATE-PREFLIGHT | PASS (operator screenshot).
+  Forwarded note-bearing received report 3 attached to O1 Backup Baseline
+  is recognized as evidence already archived; only latest receipt would
+  update. Original source claim and explicitly included note remain visible.
+  Duplicate acceptance/report count verification pending.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-d4f1f3f0-38d9-4728-a9ae-98f025587805.png.
+
+- O6-LORE-FORWARD-DUPLICATE-ACCEPT | PASS (operator confirmation).
+  Accepting the forwarded duplicate keeps 3 received reports. Private note
+  and both local description lines remain unchanged. Evidence: operator
+  "Confirmed." after the requested count and personal-material inspection.
+
+- O6-LORE-EDIT-INVALIDATION | PASS (operator confirmation). Following
+  valid preview, adding one character invalidates the report/preview and
+  prevents acceptance. Evidence: operator "Adding one character makes it
+  invalid. Pass." in response to the requested edit-invalidation check.
+
+- O6-LORE-RECEIVED-FROM-INVALIDATION | PASS (operator confirmation).
+  Changing Received from to "Native receipt test" after valid preview
+  disables Accept until re-preview. Evidence: operator "As expected."
+  in response to the requested received-from field invalidation check.
+
+- O6-LORE-RECEIPT-PROVENANCE | PASS (operator screenshot). Received report
+  3 keeps original receipt 01 Oct 2026 12:06 and reported test note. Latest
+  delivery 12:15 independently records Received from (your record): Native
+  receipt test. Sender and original observer claims remain Spinkler
+  Overclocker, with unauthenticated/not-personally-encountered labels.
+  Report 3 is still the final reader item; no additional revision created.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-f79f9c61-4cbf-4fd5-b8c1-b8c51c656390.png.
+
+- O6-LORE-FORWARDED-NOTE-RECEIPT-PERSISTENCE | PASS (operator confirmation).
+  After /reload, received report 3 retains latest delivery label Native
+  receipt test and reported note Lore private note test. Evidence: operator
+  "They remain." following the requested post-reload inspection.
+
+- O6-LEDGER-NOTES-EXCLUDED | PASS (operator confirmation). Bink report
+  preview omits the test note when Include notes is deselected.
+- O6-LEDGER-NOTES-OPT-IN | PASS (operator confirmation). Bink report
+  preview includes the test note when Include notes is selected.
+  Evidence for both: operator "Confirmed both ways, the note appears when
+  Include notes is selected, it does not appear when it is deselected."
+  Import/local-note separation remains unverified for this note-bearing report.
+
+- O6-LEDGER-NOTES-PREFLIGHT | PASS (operator confirmation). Recreated
+  Personal / manual facts report with Include notes selected, copied and
+  pasted, then previewed with Attach to selected contact checked. Preview
+  names Bink and includes Ledger private note test. Acceptance pending.
+  Evidence: operator "Confirmed." following the requested preflight check.
+
+- O6-LEDGER-NOTES-ACCEPT-PRESERVATION | PASS (operator confirmation).
+  After accepting note-bearing facts and returning to contacts, Bink's
+  Edit notes retains Ledger private note test and Bink remains Personally
+  encountered. Reported-note storage/forwarding still requires inspection.
+  Evidence: operator "Confirmed." following those two requested checks.
+
+- O6-LEDGER-NOTES-RECEIVED-FORWARD | PASS (operator confirmation).
+  Reports > Forward received report 1 with Include notes selected prepares
+  a preview containing Ledger private note test, confirming reported-note
+  storage and forwarding. Personal note preservation was checked separately.
+  Evidence: operator "Confirmed." following the requested forward preview.
+
+- O6-LEDGER-NOTES-FORWARD-EXCLUDED | PASS (operator confirmation).
+  Forward received report 1 omits Ledger private note test from prepared
+  preview when Include notes is deselected. Evidence: operator "Confirmed."
+  following the requested forward-note exclusion check.
+
+- O6-LEDGER-NOTES-PERSISTENCE | PASS (operator confirmation). After
+  /reload, Bink's Edit notes retains Ledger private note test and Forward
+  received report 1 includes it with Include notes selected. Personal and
+  reported note persistence both confirmed. Evidence: operator "Confirmed."
+  following the requested post-reload inspection.
+
+- O6-ANGLING-OPEN-WATER-ASSIGN | PASS (operator screenshot). Current
+  zone Loch Modan shows Open water (player assigned), with session assignment
+  status at footer. Catch catalogue now lists 6 personal items; their presence
+  alone does not verify a newly captured catch or attribution. Earlier empty
+  catch-fixture observation is historical, not current.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-02d134a8-97ce-45f1-a1d7-ad6c97268aac.png.
+
+- O6-ANGLING-LIVE-OPEN-WATER-CATCH | PASS (operator screenshot). Loot chat
+  shows Raw Longjaw Mud Snapper and Fishing skill increased to 32. Current
+  zone Loch Modan catch view records 1 item in 1 of 1 catch events, 1 obtained
+  event and 0 player-recorded events. Session shows 1 catch event; status says
+  Fishing loot recorded. Source: Open water. Requirements remain unknown;
+  frequency denominator explicitly uses obtained events rather than casts.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-05c7054e-a90c-4631-b2cd-ce243c2664a7.png.
+
+- O6-ANGLING-CATCH-EXPORT | PASS (operator screenshot). Selected catch
+  knowledge export prepares 4 identities and 2 observed-result summaries,
+  including Raw Longjaw Mud Snapper, Stranglekelp, older Twilight Shore /
+  Darkshore water and The Loch / Loch Modan water. Sender claim Peww Pewz;
+  Loch Modan water original observer Peww Pewz, older identities explicitly
+  show Unknown original observer. Exact catch summary values below visible
+  preview still require inspection; do not infer export contains only new catch.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-7ab7c245-d927-4ede-89bf-547b150e8312.png.
+
+- O6-ANGLING-CATCH-EXPORT-VALUES | PASS (operator screenshot). The Loch /
+  Loch Modan summary: Open water (assigned), Peww Pewz / observed,
+  1 catch event, Raw Longjaw Mud Snapper 1 item in 1 event. Separate older
+  Twilight Shore / Darkshore summary remains Unclassified water (unknown),
+  Unknown original observer, 2 catch events; Mud Snapper 1 item in 1 event
+  and Stranglekelp 2 items in 1 event. Contexts/provenance are not conflated.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-7a7e2ab4-a14b-4d11-a4b4-84f091c1d71f.png.
+
+- O6-ANGLING-CATCH-IMPORT-PREFLIGHT | PASS (operator screenshots).
+  Pasted catch report preview predicts 2 new, 0 updated, 0 already-known
+  catch summaries; 4 new, 0 updated, 0 known identity claims. Both source
+  contexts retain previously verified counts and provenance. Accept enabled;
+  preview states claims stay Reported and personal totals/notes unchanged.
+  Acceptance and actual personal-total preservation remain pending.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-d66bbbfa-2be2-4f59-8645-0831d9b28637.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-d7fc9c7d-856f-4bac-ba7c-dcff44ccd22c.png.
+
+- O6-ANGLING-CATCH-IMPORT-PERSONAL-PRESERVED | PASS (operator screenshot).
+  Following requested report acceptance, Current zone Loch Modan personal
+  Raw Longjaw Mud Snapper remains 1 item in 1 of 1 obtained catch events,
+  0 player-recorded. Imported evidence does not double displayed personal
+  totals. Acceptance message and reported-summary storage not yet inspected.
+  Session source is now unclassified; footer says assignment expired after
+  context change (cause not established by screenshot).
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-e035437c-c037-4ade-8fcd-7dd127a56fd0.png.
+
+- O6-ANGLING-CATCH-REPORTED-STORAGE | PASS (operator screenshots).
+  Knowledge: reported includes Mud Snapper with coexisting Personal item
+  identity. Scrolled detail explicitly shows The Loch / Loch Modan / Open
+  water, Reported by Peww Pewz (not authenticated), source association assigned,
+  1 catch event and Mud Snapper x1 in 1 event; first/latest 01 Oct 2026 12:42.
+  Reported item identity preserves Unknown original observer / observed label.
+  Personal identity and reported catch evidence coexist without upgrading claims.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-dac9e34e-8e27-4e57-a9a2-db77c0d554dd.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-718fa703-4ce6-4095-aa33-76a7f7e0ac9c.png.
+
+- O6-ANGLING-CATCH-DUPLICATE-PREFLIGHT | PASS (operator screenshot).
+  Same pasted catch report after acceptance previews 0 new, 0 updated,
+  2 already-known catch summaries and 0 new, 0 updated, 4 known identity
+  claims. Duplicate acceptance still requires count preservation verification.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-13da32e6-5d2e-4c88-9f89-8c9f10739149.png.
+
+- O6-ANGLING-CATCH-DUPLICATE-ACCEPT | PASS (operator confirmation and
+  screenshot). After duplicate acceptance, personal Loch Modan Mud Snapper
+  remains 1 item in 1 event (visible); operator confirms reported summary
+  also remains 1 item in 1 event. Duplicate does not accumulate quantities.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-5f185dda-5d77-48a0-b8f5-3283f974ce73.png
+  and operator "Confirmed." in response to both total checks.
+
+- O6-ANGLING-LIVE-CUMULATIVE-EVENTS | PASS (operator screenshot).
+  After requested second open-water catch, Loch Modan has 2 obtained events,
+  0 player-recorded. Mud Snapper stays 1 item in 1 of 2 events (50.0% observed
+  frequency); Raw Brilliant Smallfish is newly listed. Open water remains
+  player assigned. Smallfish quantity/export update remain to inspect.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-57dec992-dba6-4736-b4bc-359d0200f795.png.
+
+- O6-ANGLING-CUMULATIVE-EXPORT | PASS (operator screenshot). Updated
+  The Loch / Loch Modan / Open water (assigned) summary attributed to
+  Peww Pewz / observed contains 2 catch events: Mud Snapper 1 item in 1 event,
+  Brilliant Smallfish 1 item in 1 event. Cumulative values retain first catch
+  and include second without summing prior report totals.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-2508550d-8a14-4325-a088-a6f7e653b6cd.png.
+
+- O6-ANGLING-CUMULATIVE-PREFLIGHT | PASS (operator screenshot).
+  Updated report predicts 0 new, 1 updated, 1 already-known catch summaries;
+  identity claims 1 new, 1 updated, 3 known. Contains 5 identities and 2
+  observed-result summaries; claims remain Reported and personal totals/notes
+  unchanged per preview. Actual cumulative acceptance remains pending.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-2c37f381-504e-46af-9a17-bf625d126549.png.
+
+- O6-ANGLING-CUMULATIVE-ACCEPT | PASS (operator screenshots). Reported
+  The Loch / Loch Modan / Open water summary attributed to Peww Pewz
+  (not authenticated), source association assigned, updates to 2 catch events,
+  Brilliant Smallfish x1 in 1 event and Mud Snapper x1 in 1 event. First
+  01 Oct 2026 12:42 retained; latest 12:54. Cumulative evidence replaces
+  earlier totals without adding them. Personal total separately remains
+  Mud Snapper 1 item in 2 events (50%); personal source has one of each fish.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-5cd66056-4168-4117-a3b0-49daa3e71876.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-e546edfb-bdde-418e-81da-27797635385f.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-d24b5d87-b7db-4560-a10b-496ed63f8ed2.png.
+
+- O6-ANGLING-CUMULATIVE-PERSISTENCE | PASS (operator post-/reload
+  screenshot). Reported Loch Modan assigned open-water summary retains
+  2 catch events, Brilliant Smallfish x1 and Mud Snapper x1 each in 1 event,
+  first 12:42/latest 12:54 and unauthenticated provenance labels.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-046a21e3-32aa-49f1-8368-1a82c3f2f9d3.png.
+
+- O6-ANGLING-CANCELLED-CAST | PASS (operator confirmation). Cancelling
+  before a bite and cancelling after a bite both leave personal obtained
+  event count at 2. No acquired catch event fabricated.
+- O6-ANGLING-UNCOLLECTED-LOOT | OBSERVATION / design question. Operator
+  reports visible fishing loot left uncollected does not increase counter
+  from 2; suggests counting observed drops even when declined or bags full.
+  Current UI labels denominator obtained catch events. Observed-result versus
+  acquired-item semantics require review before assigning failure or changing
+  production behavior. No code change authorized by this question alone.
+
+- O6-ANGLING-DELAYED-LOOT | PASS (operator screenshots following delayed
+  collection instructions). Catfish source detail records 1 catch event,
+  Raw Bristle Whisker Catfish x1 in 1 event, observed by Peww Pewz in
+  The Loch / Loch Modan, Unclassified water / association unknown, approximate
+  position 41.38,44.81. Prior assigned open-water reported summary remains
+  separate at 2 events. Subsequent session open-water assignment does not
+  retroactively relabel the recorded unclassified catch. Delay duration not
+  measured; this verifies this operator-performed delayed collection only.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-dd3099d2-169a-49f9-a23d-5684d7c85e18.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-b7fe6f54-f4a5-48f9-a121-ef062bce6d78.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-9179f2c7-3ebc-4561-9bf2-008697fd88ad.png.
+
+- O6-ANGLING-SESSION-SOURCE-CLEAR | PASS (operator confirmation).
+  Clear session source changes header to Unclassified water / no source
+  assigned while recorded Catfish remains 1 item in 1 event. Evidence:
+  operator "Confirmed." following the requested clearing/preservation check.
+
+- O6-ANGLING-MANUAL-EMPTY-VALIDATION | PASS (operator screenshots).
+  Manual form explicitly labels player-recorded fallback, one-event extra
+  items, no current skill attachment and visible session source. Saving
+  with empty item fields rejects with "Enter an item ID or name and a whole
+  quantity from 1 to 1,000,000." No valid manual record saved in this check;
+  independent unchanged-total inspection not provided.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-1fb8e0c9-25d2-4c57-97e4-4882dfaae4b1.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-8b3896fa-483f-4fac-8125-e74e4d8cd44c.png.
+
+- O6-ANGLING-MANUAL-ZERO-VALIDATION | PASS (operator confirmation).
+  Item name Raw Bristle Whisker Catfish with quantity 0 is rejected by
+  Save with the item/whole-quantity validation message; no record saved.
+  Evidence: operator "Confirmed" following the requested zero-quantity check.
+
+- O6-ANGLING-MANUAL-FRACTION-VALIDATION | PASS (operator confirmation).
+  Quantity 1.5 is rejected with whole-number guidance. Operator confirmed
+  the requested rejection and leaving the form without saving.
+  Evidence: operator "Confirmed." following the fractional-quantity check.
+
+- O6-ANGLING-UNCLASSIFIED-PERSISTENCE | PASS (operator post-/reload
+  screenshots). The Loch / Loch Modan unclassified source retains observed
+  Peww Pewz, source association unknown, 1 catch event and Catfish x1 in
+  1 event, approximate position 41.38,44.81. Water-wide total of 3 events
+  is distinct from this individual source summary; no reassignment occurred.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-3f628af0-7a40-4e4c-9581-c1a6a0d031e1.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-9f495c5f-eff6-4b08-a50f-a397b7649348.png.
+- ANGLING-DETAIL-READABILITY | DEFERRED (user request). User finds water
+  totals versus individual source summaries hard to distinguish; formatting
+  improvement requested for later. No production formatting change made.
+
+- O6-ANGLING-ZONE-SOURCE-CLEAR | PASS (operator confirmation). After
+  assigning open water and crossing zones, session source returns to
+  unclassified. Evidence: operator "Confirmed - returns to unclassified
+  when crossing zones." Existing-total preservation not separately confirmed
+  in this response.
+
+- O6-ANGLING-MAP-BROWSE-SOURCE-PRESERVED | PASS (operator confirmation
+  and clarified intended behavior). Browsing a different map via zone
+  dropdown preserves active session source. Actual zone travel clears it,
+  as verified separately. Assistant's proposed clearing expectation was
+  incorrect and withdrawn; no defect or production change inferred.
+  Evidence: operator states browsing should not reset selection, only travel.
+
+- O6-ANGLING-CURRENT-ZONE-SOURCE-PRESERVED | PASS (operator confirmation).
+  Current Zone returns displayed map to actual location after map browsing,
+  while Open water (player assigned) remains active. Evidence: operator
+  "Confirmed." following the requested map-return and assignment check.
+
+- O6-ANGLING-ACTIVE-SOURCE-RELOAD-CLEAR | PASS (operator confirmation).
+  With open-water assignment active, /reload returns session source to
+  unclassified. Evidence: operator "Confirmed. Reverts to unclassified upon
+  /reload." Historical catch persistence was verified in separate checks;
+  this response specifically confirms active assignment clearing.
+
+- O6-ANGLING-REMEMBER-SPOT | PASS (operator screenshot). Native acceptance
+  spot saved as Personal / Remembered spot in Loch Modan / Algaz Station,
+  approximate player fishing position 22.25,18.76 matching displayed player
+  coordinates; note Remembered position test retained. Map pin/tooltip labels
+  approximate remembered position and unknown current availability. Detail
+  shows no personal catches and unknown requirements, without invented loot.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-8ddd7f8b-17b3-45b5-8868-b282fa154e2e.png.
+
+- O6-ANGLING-REMEMBERED-SPOT-ASSIGN | PASS (operator screenshot).
+  Use selected spot sets session header Unclassified water (player assigned)
+  / Native acceptance spot. Footer identifies spot assignment for this
+  session; remembered position/note remain and no personal catches invented.
+  Assigning remembered spot does not infer open-water or pool classification.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-974648cb-856a-4803-b88b-62a0cfb9beac.png.
+
+- O6-ANGLING-REMEMBERED-SPOT-PERSISTENCE | PASS (operator confirmation).
+  Native acceptance spot's saved name, note and approximate coordinates
+  persist through /reload per operator response to requested inspection.
+  Active remembered-spot session clearing not explicitly confirmed by
+  "Confirmed, persists through /reload"; open-water reload clearing was
+  verified separately. Evidence: operator confirmation.
+
+- O6-ANGLING-REMEMBERED-SESSION-RELOAD-CLEAR | PASS (operator confirmation).
+  After /reload, header is unclassified with no active Native acceptance
+  spot assignment, while saved spot remains. Operator additionally created
+  a new waterside spot for subsequent tests; its details not yet inspected.
+  Evidence: operator "Confirmed. I also created new spot at the water for
+  our next tests."
+
+- O6-ANGLING-REMEMBERED-SPOT-LIVE-CATCH | PASS (operator screenshot).
+  Native Acceptance Spot 2 in Loch Modan / The Loch, approximate position
+  41.75,48.05, note Test spot 2, records 1 personal catch event (0 player-
+  recorded), Raw Loch Frenzy x1 in 1 event. Last seen 01 Oct 2026 13:47;
+  availability remains unknown. Visible loot status identifies Unclassified
+  water; catch is associated with selected remembered spot without inferring
+  pool classification. Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-ee2fd2ef-1ff0-4f19-9e69-bf9ff9e66346.png.
+
+- O6-ANGLING-SPOT-EXPORT-IDENTITY | PASS (operator screenshot).
+  Native Acceptance Spot 2 export has 3 identities and 1 observed-result
+  summary. Spot identity is Peww Pewz / recorded, approximate coordinates
+  41.75,48.05 and last seen 01 Oct 2026 13:47. Loch Frenzy item and supporting
+  The Loch water are Peww Pewz / observed. Note option unchecked; Test spot 2
+  absent from visible identity preview. Catch summary values below visible
+  section still require inspection.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-24d38f49-ce5e-47c5-8e84-dd6e285816e6.png.
+
+- O6-ANGLING-SPOT-EXPORT-CATCH-VALUES | PASS (operator screenshot).
+  Export summary shows The Loch / Loch Modan, Unclassified water (unknown),
+  Peww Pewz / observed, 1 catch event and Raw Loch Frenzy 1 item in 1 event.
+  Summary does not visibly name Native Acceptance Spot 2; exported catch-to-
+  spot association is not established by this preview. Spot identity was
+  included separately. Preserve this uncertainty for import inspection.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-ca306448-4691-44fc-aa1e-6ff2b15379dd.png.
+
+- O6-ANGLING-SPOT-IMPORT-PREFLIGHT | PASS (operator screenshot).
+  Spot report predicts 1 new, 0 updated, 0 known catch summaries and
+  2 new, 1 updated, 0 known identity claims. Includes recorded Native
+  Acceptance Spot 2 identity and observed Loch Frenzy identity; claims stay
+  Reported. Actual reported catch-to-spot association remains unverified.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-77b36f75-61ce-427e-96c9-4aadeafc2bde.png.
+
+- O6-ANGLING-SPOT-IMPORT-ASSOCIATION | PASS (operator screenshots).
+  Import creates separate Reported remembered spot beside Personal Native
+  Acceptance Spot 2, preserving approximate position and no personal catches
+  on reported copy. Its scrolled detail contains reported Loch Frenzy x1 in
+  1 event, Peww Pewz (not authenticated), unclassified water / association
+  unknown, first/latest 01 Oct 2026 13:51. Reported spot identity is Peww Pewz
+  / recorded (not authenticated). Personal spot independently retains note
+  Test spot 2 and 1 observed catch. Read-only AnglingReports.lua inspection
+  confirms separate reportedSpot creation and reported fact spotID mapping.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-4a74afa7-3dfc-42d8-98c0-72b794c06ac3.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-634ca576-55fe-455d-b58a-f971941cfc56.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-137ae7f4-caee-48c6-92c1-f025597d22d7.png.
+
+- O6-ANGLING-SPOT-DUPLICATE-PREFLIGHT | PASS (operator screenshot).
+  Same pasted spot report previews 0 new, 0 updated, 1 already-known catch
+  summary and 0 new, 0 updated, 3 already-known identity claims. Duplicate
+  acceptance and reported-spot count preservation remain to verify.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-9e0cd5df-8d23-4d6f-9c2e-7a5d945c3103.png.
+
+- O6-ANGLING-SPOT-DUPLICATE-ACCEPT | PASS (operator screenshots).
+  Duplicate acceptance keeps one Personal and one Reported Native Acceptance
+  Spot 2 in visible catalogue. Reported copy retains 1 Loch Frenzy in 1 event,
+  unclassified source and first/latest 13:51. No extra reported spot or catch
+  quantity added. Personal catch total not re-shown in this response.
+  Evidence:
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-e9f044ff-221d-4340-be46-a112d42c5bbb.png
+  C:/Users/Spinkler/AppData/Local/Temp/codex-clipboard-9baf2cfa-1f0a-4308-869b-373618108600.png.
+
+- O6-ANGLING-REPORTED-SPOT-PERSISTENCE | PASS (operator confirmation).
+  After /reload, Reported Native Acceptance Spot 2 retains approximate
+  position 41.75,48.05 and linked reported 1 Loch Frenzy event. Evidence:
+  operator "Confirmed." following the requested post-reload inspection.
+
+Native results: 144 current PASS, 0 current FAIL; 6 historical
+failures repaired and retested. Initial baseline and O1 backup creation/opening
+established. All three parts copied with normal native navigation. External
+file/import integrity is validated and both mutated journal views match Backup A
+again. Automatic reload without errors and exact 52-byte Lore usage confirmed.
+Automatic recovery restored both edited marker notes. Truncated import rejected;
+both recovered notes remain unchanged after rejection. Shared Options now stays
+open across journal navigation on native retest. O6 Lore export preview now
+persists; Lore import preflight shows a new reported entry. Acceptance continues
+with multipart Ledger full-record sharing: both parts prepared, attached to
+one report source, and the cumulative source forwarded in two parts.
+Practical single-character O1 gate accepted; broader native session incomplete.
+
+STABILITY CHECKPOINT 2026-10-01: Native acceptance paused at operator request.
+Favourite filtering has NOT been confirmed; resume with Personal Native Acceptance Spot 2.
+No observed-drop semantics or fishing readability changes implemented. Screenshot paths
+refer to local evidence and may be unavailable remotely; textual findings are retained.
+Push-only checkpoint for remote access; current version/channel unchanged.

@@ -1389,7 +1389,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if self.ResolveRumours then self:ResolveRumours(id,{kind="ability",value=name,spellID=spellID}) end
         self:Touch()
         if self.AcknowledgeDetectedAbility then self:AcknowledgeDetectedAbility(id,spellID) end
-        return true, "Ability confirmed. Use its checkbox to toggle tooltip display."
+        return true
     end
     function journal:AddDamage(id, level, low, high, playerLevel)
         local entry = self.entries[id]

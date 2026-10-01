@@ -395,9 +395,17 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             end
         end
     end
+    function c:HasOfferings(e,kind)
+        if not e then return false end
+        for _,offering in ipairs(journal:Index(e).offerings) do
+            if offering.kind==kind then return true end
+        end
+        return false
+    end
     function c:Catalogue(kind)
         kind=kind or (state.detail=="training" and "training" or "goods")
         if self.panel and self.panel==self.panels.catalogue and self.panel.kind==kind then self:ClosePanel();return end
+        if not self:HasOfferings(journal:Get(state.selected),kind) then return end
         state.detail=kind
         local p=self:Panel("catalogue",kind=="training" and "Observed Training" or "Known Goods")
         p.kind=kind;p.title:SetText(kind=="training" and "Observed Training" or "Known Goods")
@@ -408,24 +416,40 @@ function ns.CreateLedgerBook(journal,tracking,shell)
     function c:Reports()
         local p=self:Panel("reports","Prepare / import contact report")
         if not p.data then
+            local function resetPrepared()
+                p.part=0;p.batchQuery=nil
+                if p.prepare then p.prepare:SetText("Prepare") end
+                if p.data then p.data:SetText("") end
+                if p.preview then p.preview:SetText("Selections changed. Prepare the report again.",true) end
+                R.Cancel(p.ticket);p.ticket=nil
+                if p.accept then p.accept:Disable() end
+            end
             p.source=U.Button(p,"Personal / manual facts",4,-28,250,function()
                 local e=journal:Get(p.contact);local n=e and #e.reports or 0;p.report=(p.report or 0)+1;if p.report>n then p.report=0 end
                 p.source:SetText(p.report==0 and "Personal / manual facts" or "Forward received report "..p.report)
+                resetPrepared()
             end)
-            p.notes=U.Check(p,"Include notes (opt in)",4,-59,220,function() end)
-            p.goods=U.Check(p,"Goods",4,-85,80,function() end);p.goods:SetChecked(true)
-            p.training=U.Check(p,"Training",119,-85,100,function() end);p.training:SetChecked(true)
-            p.locations=U.Check(p,"Locations",4,-111,100,function() end);p.locations:SetChecked(true)
+            p.notes=U.Check(p,"Include notes (opt in)",4,-59,220,resetPrepared)
+            p.goods=U.Check(p,"Goods",4,-85,80,resetPrepared);p.goods:SetChecked(true)
+            p.training=U.Check(p,"Training",119,-85,100,resetPrepared);p.training:SetChecked(true)
+            p.locations=U.Check(p,"Locations",4,-111,100,resetPrepared);p.locations:SetChecked(true)
             p.prepare=U.Button(p,"Prepare",137,-111,115,function()
+                if p.batchQuery~=state.query then p.part=0 end
                 local selection
                 if state.query~="" then
                     selection={};local e=journal:Get(p.contact)
                     if e then for _,o in ipairs(journal:Index(e).offerings) do if o.text:find(state.query:lower(),1,true) then selection[o.key]=true end end end
                 end
-                local report,err=R.Build(journal,p.contact,{report=p.report and p.report>0 and p.report or nil,notes=p.notes:GetChecked()==true,
-                    goods=p.goods:GetChecked()==true,lessons=p.training:GetChecked()==true,locations=p.locations:GetChecked()==true,selection=selection})
+                local report,err,total,index=R.Build(journal,p.contact,{report=p.report and p.report>0 and p.report or nil,notes=p.notes:GetChecked()==true,
+                    goods=p.goods:GetChecked()==true,lessons=p.training:GetChecked()==true,locations=p.locations:GetChecked()==true,selection=selection,part=(p.part or 0)+1})
                 local data;if report then data,err=R.Encode(report) end
-                if data then p.data:SetText(data);p.preview:SetText(R.Preview(report),true);c:Message("Report prepared for copying. No Ledger addon-message delivery exists.") else c:Message(err) end
+                if data then
+                    p.part=index;p.batchQuery=state.query
+                    p.prepare:SetText(total>1 and (index<total and ("Next "..(index+1).."/"..total) or ("Restart 1/"..total)) or "Prepare")
+                    p.data:SetText(data);p.preview:SetText(R.Preview(report),true)
+                    c:Message(total>1 and ("Part "..index.."/"..total.." ready. Copy, then Next; import each part separately.")
+                        or "Report prepared for copying. No Ledger addon-message delivery exists.")
+                else c:Message(err) end
             end)
             p.data,p.dataScroll=U.TextArea(p,9,-147,217,92,R.MAX_BYTES);p.inputs={p.data}
             local changed=p.data:GetScript("OnTextChanged")
@@ -450,7 +474,8 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             U.Label(p,"Copy/paste boundary; no points or delivery.",4,-554,250,"GameFontDisableSmall")
         end
         if p.contact~=state.selected then
-            p.contact=state.selected;p.report=0;p.source:SetText("Personal / manual facts");p.notes:SetChecked(false);p.attach:SetChecked(false)
+            p.contact=state.selected;p.report=0;p.part=0;p.batchQuery=nil;p.prepare:SetText("Prepare")
+            p.source:SetText("Personal / manual facts");p.notes:SetChecked(false);p.attach:SetChecked(false)
             p.data:SetText("");p.preview:SetText("Notes are excluded by default. Current item/lesson search limits prepared offerings. Report sources are claims, not authentication.",true)
         end
     end
@@ -569,6 +594,8 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.sightings:SetText("Locations ("..#sightings..")");m.sightings:SetEnabled(#sightings>0)
         m.favourite:SetSaved(e and e.favourite,e~=nil);m.favourite:SetText(e and e.favourite and "Saved" or "Favourite");m.favourite:SetEnabled(e~=nil)
         for key,button in pairs(m.detailButtons) do button:SetEnabled(e~=nil) end
+        m.detailButtons.goods:SetEnabled(self:HasOfferings(e,"goods"))
+        m.detailButtons.training:SetEnabled(self:HasOfferings(e,"training"))
         self:UpdateDetailToggles()
         m.details:SetText(self:Details(e,false,"services"));m.map:Render()
         if self.panel==self.panels.catalogue and self.panel then self.panel.read:SetContact(e,false,self.panel.kind) end

@@ -132,10 +132,30 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     options.accountWideTracking=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
     options.accountWideTracking:SetPoint("TOPLEFT",30,-26); options.accountWideTracking:SetSize(24,24)
     label(optionsBody,"Account-wide tracking",58,-32,235,"GameFontHighlightSmall")
-    options.trackingReload=label(optionsBody,"",300,-32,235,"GameFontHighlightSmall")
+    options.scope=CreateFrame("Frame",nil,optionsBody)
+    options.scope:SetPoint("TOPLEFT",300,-29);options.scope:SetSize(235,18)
+    options.scope:EnableMouse(true)
+    options.scopeLabel=label(options.scope,"",0,-3,235,"GameFontHighlightSmall")
+    options.scopeLabel:SetTextColor(0.55,0.57,0.57);options.scopeLabel:SetWordWrap(false)
+    function options:RefreshStorageScope()
+        local title,explanation=shell:GetStorageScope()
+        self.scopeLabel:SetText(title or (journal:IsAccountWideTrackingActive() and "Account-wide" or "Character-specific"))
+        self.scopeExplanation=explanation
+    end
+    options.scope:SetScript("OnEnter",function(self)
+        if GameTooltip then
+            GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(options.scopeLabel:GetText())
+            if options.scopeExplanation then GameTooltip:AddLine(options.scopeExplanation,1,1,1,true) end
+            GameTooltip:Show()
+        end
+    end)
+    options.scope:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+    options.trackingReload=label(optionsBody,"",58,-48,470,"GameFontHighlightSmall")
+    options.trackingReload:SetWordWrap(false)
     local function refreshTrackingOption()
         options.accountWideTracking:SetChecked(journal:GetAccountWideTracking())
         options.trackingReload:SetText(journal:IsTrackingChangePending() and "Applies after /reload" or "")
+        options:RefreshStorageScope()
     end
     options.accountWideTracking:SetScript("OnClick",function(self)
         journal:SetAccountWideTracking(self:GetChecked() == true)
