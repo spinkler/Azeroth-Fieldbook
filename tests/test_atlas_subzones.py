@@ -6,6 +6,7 @@ from atlas_test_harness import new_atlas
 class SubzoneTests(unittest.TestCase):
     def test_ctrl_cleanup_cleans_all_saved_maps_and_preserves_selection(self):
         self.lua.execute('''
+            j.state.subzoneFillMethod='convex'
             for _,id in ipairs({101,102,999}) do
                 local function point(x,y) return {kind='interior',mapID=id,name='Lake',x=x,y=y,at=100} end
                 local border=crossing('Lake','Bank',2500,2000);border.mapID=id
@@ -35,6 +36,7 @@ class SubzoneTests(unittest.TestCase):
 
     def test_all_map_cleanup_skips_stale_map_and_continues(self):
         self.lua.execute('''
+            j.state.subzoneFillMethod='convex'
             for _,id in ipairs({101,102}) do
                 s.store[id]={}
                 for _,p in ipairs({{2000,2000},{8000,2000},{8000,8000},{2000,8000},{5000,5000}}) do
@@ -76,6 +78,121 @@ class SubzoneTests(unittest.TestCase):
                 sample('Forest',.402,.4);assert(#s:Crossings(101)==0,'No crossing across the excluded sea')
                 sample('Hill',.403,.4);assert(#s:Crossings(101)==1,'Nearby land still maps normally')
             end
+        ''')
+
+    def test_traced_fill_indents_through_samples_and_legacy_restores_gap(self):
+        self.lua.execute(r'''
+            local rows={crossing('Meadow','Forest',2000,2000,0,0),crossing('Meadow','Forest',8000,2000,0,0)}
+            for _,p in ipairs({{2000,8000},{8000,8000},{5000,4000}}) do
+                rows[#rows+1]={kind='interior',mapID=101,name='Meadow',x=p[1],y=p[2],at=100}
+            end
+            local original=snapshot(rows)
+            local traced=S.Build(rows)
+            local legacy=S.Build(rows,nil,nil,nil,'convex')
+            assert(legacy:At(5000,2500) and not traced:At(5000,2500),'Leave the unsampled notch blank')
+            for _,r in ipairs(traced.strips) do
+                assert(not (5000>=r.x/traced.grid*10000 and 5000<=(r.x+r.width)/traced.grid*10000
+                    and 2500>=r.y/traced.grid*10000 and 2500<=(r.y+1)/traced.grid*10000),'No rendered strip across the gap')
+            end
+            local function side(a,b,x,y) return (b.x-a.x)*(y-a.y)-(b.y-a.y)*(x-a.x) end
+            for _,t in ipairs(traced.triangles) do
+                local a,b,c=side(t[1],t[2],5000,2500),side(t[2],t[3],5000,2500),side(t[3],t[1],5000,2500)
+                assert(not ((a>=0 and b>=0 and c>=0) or (a<=0 and b<=0 and c<=0)),'No rendered triangle across the gap')
+            end
+            local h=traced.areas.Meadow.hull
+            local detour=false
+            for i,p in ipairs(h) do
+                if p.x==5000 and p.y==4000 then
+                    local a,b=h[(i-2)%#h+1],h[i%#h+1]
+                    detour=a.y==2000 and b.y==2000
+                end
+            end
+            assert(detour,'Border to interior to border, rather than a straight border chord')
+            for _,p in ipairs(rows) do assert(traced:At(p.x,p.y),'Keep every observed point') end
+            local reversed={};for i=#rows,1,-1 do reversed[#reversed+1]=rows[i] end
+            local again=S.Build(reversed)
+            assert(snapshot(again.areas.Meadow.hull)==snapshot(h),'Input order cannot change the outline')
+            assert(snapshot(rows)==original,'Building either mode preserves saved evidence')
+            s.store[101]=rows;s:Changed(101);j.state.showSubzones=true;c:Refresh()
+            local model=m.map.subzoneModel
+            assert(model.method=='traced' and not model:At(5000,2500))
+            m.legacySubzones:SetChecked(true);click(m.legacySubzones);settle()
+            assert(m.map.subzoneModel.method=='convex' and m.map.subzoneModel:At(5000,2500))
+            m.legacySubzones:SetChecked(false);click(m.legacySubzones);settle()
+            assert(m.map.subzoneModel.method=='traced' and not m.map.subzoneModel:At(5000,2500))
+            for name,a in pairs(model.areas) do assert(m.map.subzoneModel.areas[name].colourID==a.colourID) end
+        ''')
+
+    def test_traced_dense_and_collinear_samples_remain_inside_simple_outlines(self):
+        self.lua.execute(r'''
+            for seed=1,4 do
+                local rows={}
+                for i=1,80 do
+                    rows[#rows+1]={kind='interior',mapID=101,name='Survey',x=(i*127*seed)%9800+100,y=(i*271)%9800+100,at=100}
+                end
+                -- Duplicate and collinear observations must not pinch the outline.
+                for x=1000,9000,1000 do
+                    rows[#rows+1]={kind='interior',mapID=101,name='Survey',x=x,y=5000,at=100}
+                end
+                rows[#rows+1]=rows[1]
+                local model=S.Build(rows)
+                for _,p in ipairs(rows) do assert(model:At(p.x,p.y),'Never carve away observed samples') end
+                local h=model.areas.Survey.hull
+                local function cross(a,b,p) return (b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x) end
+                for i,a in ipairs(h) do for k,c in ipairs(h) do
+                    local b,d=h[i%#h+1],h[k%#h+1]
+                    assert(not (cross(a,b,c)*cross(a,b,d)<0 and cross(c,d,a)*cross(c,d,b)<0),'No self-crossing outlines')
+                end end
+                assert(#model.triangles<=S.MAX_TRIANGLES)
+            end
+        ''')
+
+    def test_traced_cleanup_preserves_samples_and_cancels_legacy_cleanup_on_switch(self):
+        self.lua.execute(r'''
+            s.store[101]={}
+            for _,p in ipairs({{2000,2000},{8000,2000},{8000,8000},{2000,8000},{5000,5000}}) do
+                s.store[101][#s.store[101]+1]={kind='interior',mapID=101,name='Lake',x=p[1],y=p[2],at=100}
+            end
+            s:Changed(101);local before=snapshot(s.store);local message
+            assert(not S.CleanInterior(j,101,function(n,text) assert(n==0);message=text end))
+            assert(message:find('preserved') and snapshot(s.store)==before)
+            assert(not S.CleanAllInterior(j,function(n) assert(n==0) end))
+            j.state.subzoneFillMethod='convex'
+            assert(S.CleanInterior(j,101,function(n,text) assert(n==0);message=text end))
+            j.state.subzoneFillMethod='traced';settle()
+            assert(snapshot(s.store)==before and message:find('preserved'))
+        ''')
+
+    def test_native_filters_control_independent_layers_and_preserve_recording(self):
+        self.lua.execute(r'''
+            local modifier;Menu={ModifyMenu=function(tag,fn) assert(tag=='MENU_WORLD_MAP_TRACKING');modifier=fn end}
+            WorldMapFrame=CreateFrame('Frame');WorldMapFrame:Show()
+            local canvas=CreateFrame('Frame',nil,WorldMapFrame);canvas:SetSize(1000,800)
+            function WorldMapFrame:GetCanvas() return canvas end
+            function WorldMapFrame:GetMapID() return 101 end
+            C_Timer=nil
+            local control=S.CreateWorldOverlay(j)
+            local entries={};local root={CreateDivider=function() end,CreateTitle=function(_,title) assert(title=='Azeroth Fieldbook') end}
+            function root:CreateCheckbox(label,selected,toggle) entries[label]={selected=selected,toggle=toggle};return {SetEnabled=function() end} end
+            modifier(nil,root)
+            s.store[101]=ring();s.store[101][5]={kind='interior',mapID=101,name='Isolated',x=9000,y=9000,at=100};s:Changed(101)
+            local before=snapshot(s.store);local atlas=snapshot({j.state.showSubzones,j.state.showSubzoneLabels,j.state.showSubzonePoints})
+            assert(not entries.Zones.selected())
+            entries.Zones.toggle();settle()
+            local overlay=control.overlay;assert(overlay.subzoneModel)
+            for _,dot in ipairs(overlay.subzoneDots) do assert(not dot:IsShown(),'Points off also hides isolated native-map dots') end
+            entries.Points.toggle();settle();assert(entries.Points.selected())
+            local visible=0;for _,dot in ipairs(overlay.subzoneDots) do if dot:IsShown() then visible=visible+1 end end
+            assert(visible==5)
+            entries.Labels.toggle();settle();assert(entries.Labels.selected())
+            entries.Zones.toggle();settle();assert(not entries.Zones.selected() and entries.Points.selected())
+            entries.Points.toggle();entries.Labels.toggle();settle()
+            assert(not overlay.subzoneModel and not overlay.subzonePending)
+            assert(snapshot(s.store)==before and snapshot({j.state.showSubzones,j.state.showSubzoneLabels,j.state.showSubzonePoints})==atlas)
+            assert(j.state.automaticMapping~=false)
+            local reload=ns.CreateAtlasJournal(j.saved)
+            assert(reload.state.worldSubzonePoints==false and reload.state.worldSubzoneLabels==false and reload.state.worldSubzoneZones==false)
+            j.readOnly=true;entries.Zones.toggle();assert(not entries.Zones.selected())
         ''')
 
     def setUp(self):
@@ -221,6 +338,7 @@ class SubzoneTests(unittest.TestCase):
 
     def test_cleanup_keeps_edges_crossings_and_other_maps(self):
         self.lua.execute('''
+            j.state.subzoneFillMethod='convex'
             local function point(x,y) return {kind='interior',mapID=101,name='Lake',x=x,y=y,at=100} end
             local border=crossing('Lake','Bank',2500,2000)
             s.store[101]={point(2000,2000),point(8000,2000),point(8000,8000),point(2000,8000),
@@ -247,6 +365,7 @@ class SubzoneTests(unittest.TestCase):
 
     def test_cleanup_preserves_overlapping_region_ownership_and_rejects_stale_work(self):
         self.lua.execute('''
+            j.state.subzoneFillMethod='convex'
             s.store[101]={}
             local function point(name,x,y)
                 s.store[101][#s.store[101]+1]={kind='interior',mapID=101,name=name,x=x,y=y,at=100}
@@ -254,10 +373,10 @@ class SubzoneTests(unittest.TestCase):
             for _,p in ipairs({{1000,1000},{7000,1000},{7000,7000},{1000,7000},{2000,2000},{6500,4000}}) do point('A',p[1],p[2]) end
             for _,p in ipairs({{5000,2000},{9000,2000},{9000,6000},{5000,6000},{6000,4000}}) do point('B',p[1],p[2]) end
             s.index={};s:Changed(101)
-            local before=S.Build(s:Samples(101));local removed
+            local before=S.Build(s:Samples(101),nil,nil,nil,'convex');local removed
             assert(S.CleanInterior(j,101,function(n) removed=n end));settle()
             assert(removed and removed>0)
-            local after=S.Build(s:Samples(101))
+            local after=S.Build(s:Samples(101),nil,nil,nil,'convex')
             for x=1000,9000,100 do for y=1000,7000,100 do
                 local a,b=before:At(x,y),after:At(x,y)
                 assert((a and a.name)==(b and b.name),'Cleanup must preserve overlap ownership')

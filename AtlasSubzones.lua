@@ -470,6 +470,106 @@ local function inside(points,x,y,checkpoint)
     end
     return true
 end
+-- Preserve the original convex hull above for an exact, selectable rollback.
+-- Peel empty triangles off long edges. Each accepted detour uses a real sample,
+-- shortens both replacement edges, and cannot remove any observed location.
+local function tracedHull(points,checkpoint)
+    local outline=hull(points,checkpoint)
+    if #outline<3 then return outline end
+    local used,unique={},{}
+    -- hull sorted the input already; reuse point identities, avoiding string
+    -- allocation for every candidate on every edge of a dense survey.
+    for _,p in ipairs(points) do
+        checkpoint()
+        local last=unique[#unique]
+        if not last or p.x~=last.x or p.y~=last.y then unique[#unique+1]=p end
+    end
+    points=unique
+    for _,p in ipairs(outline) do used[p]=true end
+    local function onSegment(a,b,p)
+        return math.abs(cross(a,b,p))<0.000001 and p.x>=math.min(a.x,b.x) and p.x<=math.max(a.x,b.x)
+            and p.y>=math.min(a.y,b.y) and p.y<=math.max(a.y,b.y)
+    end
+    local function intersects(a,b,c,d)
+        return (cross(a,b,c)*cross(a,b,d)<0 and cross(c,d,a)*cross(c,d,b)<0)
+            or (c~=a and c~=b and onSegment(a,b,c)) or (d~=a and d~=b and onSegment(a,b,d))
+            or (a~=c and a~=d and onSegment(c,d,a)) or (b~=c and b~=d and onSegment(c,d,b))
+    end
+    local i=1
+    while i<=#outline do
+        checkpoint()
+        local a,b=outline[i],outline[i%#outline+1]
+        local dx,dy=b.x-a.x,b.y-a.y
+        local length=dx*dx+dy*dy
+        local best,depth
+        -- Below 2% of the map, leave closely sampled edges alone.
+        if length>200^2 then for _,p in ipairs(points) do
+            checkpoint()
+            if not used[p] then
+                local side=cross(a,b,p)
+                local projection=((p.x-a.x)*dx+(p.y-a.y)*dy)/length
+                local ap=(p.x-a.x)^2+(p.y-a.y)^2
+                local bp=(p.x-b.x)^2+(p.y-b.y)^2
+                if side>0.000001 and projection>0.1 and projection<0.9
+                    and ap<length*0.81 and bp<length*0.81 and (not depth or side<depth) then
+                    best,depth=p,side
+                end
+            end
+        end end
+        local safe=best~=nil
+        if best then
+            for _,p in ipairs(points) do
+                checkpoint()
+                if p~=a and p~=b and p~=best
+                    and cross(a,b,p)>=0 and cross(b,best,p)>0 and cross(best,a,p)>0 then
+                    safe=false;break
+                end
+            end
+            if safe then for n,c in ipairs(outline) do
+                checkpoint()
+                local d=outline[n%#outline+1]
+                local touching=onSegment(c,d,best)
+                if touching or intersects(a,best,c,d) or intersects(best,b,c,d) then safe=false;break end
+            end end
+        end
+        if safe then table.insert(outline,i+1,best);used[best]=true
+        else i=i+1 end
+    end
+    return outline
+end
+local function traceBuckets(points,checkpoint)
+    local buckets={}
+    for i,a in ipairs(points) do
+        local b=points[i%#points+1];local edge={a,b}
+        for row=math.floor(math.min(a.y,b.y)/100),math.floor(math.max(a.y,b.y)/100) do
+            checkpoint()
+            if not buckets[row] then buckets[row]={} end
+            buckets[row][#buckets[row]+1]=edge
+        end
+    end
+    return buckets
+end
+local function insideTrace(points,x,y,checkpoint,buckets)
+    if #points<3 then return false end
+    local hit=false
+    -- Only edges crossing this horizontal band can affect the ray test.
+    -- Keep hover and contour refinement cheap even for detailed outlines.
+    for i,edge in ipairs(buckets[math.floor(y/100)] or {}) do
+        if i%32==0 then checkpoint(32) end
+        local a,b=edge[1],edge[2]
+        local side=(b.x-a.x)*(y-a.y)-(b.y-a.y)*(x-a.x)
+        if math.abs(side)<0.000001 and x>=math.min(a.x,b.x) and x<=math.max(a.x,b.x)
+            and y>=math.min(a.y,b.y) and y<=math.max(a.y,b.y) then return true end
+        if (a.y>y)~=(b.y>y) and x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x then hit=not hit end
+    end
+    return hit
+end
+function S.FillMethod(journal) return journal.state.subzoneFillMethod=="convex" and "convex" or "traced" end
+local function preserveTrialPoints(journal,done)
+    if S.FillMethod(journal)=="convex" then return false end
+    if done then done(0,"Points preserved: cleanup is paused while traced sub-zone fill is being tested.") end
+    return true
+end
 -- Test whether removing each interior anchor can let a competing area take
 -- ownership anywhere in their overlapping hulls; keep all perimeter evidence.
 local function cleanInterior(journal,id,done,progress,batch)
@@ -571,6 +671,10 @@ local function cleanInterior(journal,id,done,progress,batch)
     end,function(ok,result)
         if not batch then survey.cleaning=nil end
         if not ok then if done then done(nil,"Cleanup could not complete; no samples were removed.") end;return end
+        if S.FillMethod(journal)~="convex" then
+            if done then done(0,"Points preserved: traced fill was enabled during cleanup.") end
+            return
+        end
         if result.removed>0 then
             if survey.store[id]~=result.source or survey:Revision(id)~=result.revision then
                 if done then done(nil,"New samples arrived during cleanup; try again while stationary.") end;return
@@ -590,10 +694,14 @@ local function cleanInterior(journal,id,done,progress,batch)
 end
 
 function S.CleanInterior(journal,id,done,progress)
+    if journal.readOnly then return false end
+    if preserveTrialPoints(journal,done) then return false end
     return cleanInterior(journal,id,done,progress)
 end
 
 function S.CleanAllInterior(journal,done,progress)
+    if journal.readOnly then return false end
+    if preserveTrialPoints(journal,done) then return false end
     local survey=journal.subzones
     if journal.readOnly or survey.cleaning then return false end
     local maps={}
@@ -655,10 +763,13 @@ local function nearest(node,x,y,best)
     if delta*delta<best then best=nearest(far,x,y,best) end
     return best
 end
-function S.Build(rows,checkpoint,preferredResolution,previousModel)
+function S.Build(rows,checkpoint,preferredResolution,previousModel,method)
     checkpoint=checkpoint or noWork
     local checking=checkpoint
-    local model={areas={},names={},rows=rows,strips={},triangles={}}
+    method=method=="convex" and "convex" or "traced"
+    local contains=method=="convex" and inside or insideTrace
+    local outline=method=="convex" and hull or tracedHull
+    local model={areas={},names={},rows=rows,strips={},triangles={},method=method}
     local function area(name)
         if not model.areas[name] then
             model.names[#model.names+1]=name
@@ -683,7 +794,8 @@ function S.Build(rows,checkpoint,preferredResolution,previousModel)
     table.sort(model.names)
     local active={};local minX,minY,maxX,maxY=10000,10000,0,0
     for _,name in ipairs(model.names) do
-        local a=model.areas[name];a.hull=hull(a.points,checkpoint);a.points=nil
+        local a=model.areas[name];a.hull=outline(a.points,checkpoint);a.points=nil
+        if method=="traced" then a.traceBuckets=traceBuckets(a.hull,checkpoint) end
         a.x,a.y=0,0
         for _,p in ipairs(a.anchors) do checkpoint();a.x=a.x+p.x;a.y=a.y+p.y end
         a.x,a.y=a.x/#a.anchors,a.y/#a.anchors
@@ -708,7 +820,7 @@ function S.Build(rows,checkpoint,preferredResolution,previousModel)
     function model:At(x,y)
         local best,distance
         for _,a in ipairs(active) do
-            if x>=a.minX and x<=a.maxX and y>=a.minY and y<=a.maxY and inside(a.hull,x,y,checking) then
+            if x>=a.minX and x<=a.maxX and y>=a.minY and y<=a.maxY and contains(a.hull,x,y,checking,a.traceBuckets) then
                 if #active==1 then return a end
                 local d=nearest(a.tree,x,y,distance or math.huge)
                 if not distance or d<distance then best,distance=a,d end
@@ -957,7 +1069,7 @@ function S.InstallMap(map,journal,cursorPoint)
             for i,p in ipairs((points or regions) and model.rows or {}) do
                 checkpoint()
                 local cell=math.floor(p.x/200)..":"..math.floor(p.y/200)
-                if points or (not model.covered[i] and not cells[cell]) then
+                if points or (not self.subzoneStrictPoints and not model.covered[i] and not cells[cell]) then
                     cells[cell]=true;n=n+1
                     local t=dots[n] or target.frame:CreateTexture(nil,"ARTWORK",nil,-6);dots[n]=t
                     t:ClearAllPoints();t:SetPoint("CENTER",self.canvas,"TOPLEFT",p.x/10000*width,-p.y/10000*height)
@@ -1019,6 +1131,12 @@ function S.InstallMap(map,journal,cursorPoint)
         local regions=journal.state.showSubzones==true
         local names=journal.state.showSubzoneLabels==true
         local points=journal.state.showSubzonePoints==true
+        if self.subzoneWorldLayers then
+            regions=self.subzoneWorldLayers("Zones")
+            names=self.subzoneWorldLayers("Labels")
+            points=self.subzoneWorldLayers("Points")
+        end
+        local method=S.FillMethod(journal)
         local hidden
         if journal.state.hideZoneNameSubzones==true then
             local info=A.Read(C_Map and C_Map.GetMapInfo,id)
@@ -1034,15 +1152,15 @@ function S.InstallMap(map,journal,cursorPoint)
         local w,h=self:GetWidth(),self:GetHeight()
         local revision=journal.subzones:Revision(id)
         if cacheID~=id then front.frame:Hide();self.subzoneModel=nil end
-        if failed and failed.id==id and failed.revision==revision then return end
+        if failed and failed.id==id and failed.revision==revision and failed.method==method then return end
         local pending=self.subzonePending
         if pending and not pending.thread then self.subzonePending=nil;pending=nil end
         if pending and pending.thread then
             if pending.id==id and pending.width==w and pending.height==h and pending.regions==regions
-                and pending.names==names and pending.points==points and pending.size==size and pending.hidden==hidden then return end
+                and pending.names==names and pending.points==points and pending.size==size and pending.hidden==hidden and pending.method==method then return end
             self:CancelSubzones()
         end
-        if cacheID==id and cacheRevision==revision and width==w and height==h
+        if cacheID==id and cacheRevision==revision and model and model.method==method and width==w and height==h
             and lastRegions==regions and lastLabels==names and lastPoints==points and lastSize==size and lastHidden==hidden then
             self.subzoneModel=model;front.frame:Show();return
         end
@@ -1056,10 +1174,10 @@ function S.InstallMap(map,journal,cursorPoint)
             end
             revisionAtStart=journal.subzones:Revision(id)
             local nextModel=model
-            if cacheID~=id or cacheRevision~=revisionAtStart then
+            if cacheID~=id or cacheRevision~=revisionAtStart or not model or model.method~=method then
                 local rows=journal.subzones:Samples(id,checkpoint)
                 local resolution=cacheID==id and model and #rows>=#model.rows*0.75 and model.grid or nil
-                nextModel=S.Build(rows,checkpoint,resolution,cacheID==id and model or journal.subzones:RecallColours(id))
+                nextModel=S.Build(rows,checkpoint,resolution,cacheID==id and model or journal.subzones:RecallColours(id),method)
             end
             paint(self,back,nextModel,w,h,regions,names,points,size,hidden,checkpoint)
             return nextModel
@@ -1067,7 +1185,7 @@ function S.InstallMap(map,journal,cursorPoint)
             if self.subzonePending~=job then return end
             self.subzonePending=nil
             if not ok then
-                failed={id=id,revision=revisionAtStart};self.subzoneError=tostring(result)
+                failed={id=id,revision=revisionAtStart,method=method};self.subzoneError=tostring(result)
                 local handler=A.Read(geterrorhandler);if type(handler)=="function" then handler(result) end
                 return
             end
@@ -1082,7 +1200,7 @@ function S.InstallMap(map,journal,cursorPoint)
             if journal.subzones:Revision(id)~=revisionAtStart then self:RenderSubzones() end
         end,self)
         job.id,job.width,job.height,job.regions,job.names,job.size=id,w,h,regions,names,size
-        job.points=points;job.hidden=hidden
+        job.points=points;job.hidden=hidden;job.method=method
         self.subzonePending=job
     end
     local hoverX,hoverY,hoverModel
@@ -1125,6 +1243,26 @@ end
 -- its shared 1 ms work budget; never attach an idle OnUpdate or scan all maps.
 function S.CreateWorldOverlay(journal)
     local controller={}
+    local keys={Points="showSubzonePoints",Labels="showSubzoneLabels",Zones="showSubzones"}
+    local function selected(layer)
+        local value=journal.state["worldSubzone"..layer]
+        if value==nil then value=journal.state[keys[layer]] end
+        return value==true
+    end
+    if ns.RegisterWorldMapLayer then for _,label in ipairs({"Points","Labels","Zones"}) do
+        local layer=label
+        ns.RegisterWorldMapLayer(layer,function() return journal.state.showSubzonesOnWorldMap==true and selected(layer) end,function(on)
+            if journal.readOnly then return end
+            for name in pairs(keys) do
+                if journal.state["worldSubzone"..name]==nil then
+                    journal.state["worldSubzone"..name]=journal.state.showSubzonesOnWorldMap==true and selected(name)
+                end
+            end
+            journal.state["worldSubzone"..layer]=on
+            if on then journal.state.showSubzonesOnWorldMap=true end
+            controller:Refresh()
+        end,function() return not journal.readOnly end)
+    end end
     local world,overlay,pending
     local function stop()
         if overlay then overlay:CancelSubzones();overlay:Hide() end
@@ -1141,6 +1279,7 @@ function S.CreateWorldOverlay(journal)
         if not overlay then
             overlay=CreateFrame("Frame",nil,canvas);controller.overlay=overlay
             overlay.canvas=overlay;overlay.zoom=1
+            overlay.subzoneWorldLayers=selected;overlay.subzoneStrictPoints=true
             S.InstallMap(overlay,journal,function() return nil end)
             -- The shared Atlas renderer installs hover scripts, which enable
             -- mouse input implicitly. This native-map layer is display-only:

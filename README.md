@@ -1,12 +1,13 @@
-# Azeroth Fieldbook 0.19.0 (Beta)
+# Azeroth Fieldbook 0.19.1 (Beta)
 
-Version 0.19.0 adds whole-Fieldbook backup and recovery for all seven journals,
-including account and retained character knowledge, private text and identities.
-Open **Options → Whole-Fieldbook backups** or use `/fieldbook backups` to save,
-export, preview and restore a backup. This Beta also adds storage diagnostics,
-report import summaries and account-scope notices, and fixes saved spell-ID
-preferences and Lore capture at the location limit. Automated preservation and
-failure tests pass; native WoW acceptance remains pending for the combined batch.
+Version 0.19.1 trials traced sub-zone fill with a Legacy fill rollback switch,
+and adds Points, Labels, Zones, Merchants and Nodes to the main map's Filters
+menu. It also includes the unpublished stability fixes since 0.19.0 Beta:
+bounded backup paste handling, preserved backup/report reviews, multipart
+merchant reports, Bestiary model handling and shared Options refinements.
+Whole-Fieldbook backup and recovery remains available through
+**Options → Whole-Fieldbook backups** or `/fieldbook backups`. This is a Beta;
+the new map controls and traced outlines still need native in-game acceptance.
 
 Saved-data protections cover initialization, Lore consolidation and
 report validation boundaries. An unsupported or malformed main save disables
@@ -119,7 +120,7 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.19.0 includes sharing, addon-version compatibility
+spell databases. Version 0.19.1 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
@@ -234,12 +235,27 @@ sub-zone crossings and encountered weather are observed automatically.
   on the map. New colours maximise their minimum perceptual distance from those
   already assigned, retaining existing colours as the visible map updates.
   **Display selected sub-zones on main map**, above **Toggle Automatic Mapping**,
-  mirrors Shading, Labels and Points on Blizzard's main map. It defaults off and
-  reuses the cached, time-budgeted renderer without a new idle polling loop.
-  **Clean redundant points**, beside Map Layers, removes interior samples strictly
+  enables those layers on Blizzard's main map. It defaults off and
+  reuses the cached, time-budgeted renderer. The main map's **Filters** dropdown
+  has an **Azeroth Fieldbook** group with independent **Points**, **Labels**,
+  **Zones**, **Merchants** and **Nodes** checkboxes. Its sub-zone layers initially
+  follow the Atlas selections; changing a main-map filter saves separate choices.
+  Main-map Points off hides all survey dots. Nodes uses the existing world-map
+  herb/mineral setting without changing the minimap. Merchants shows one recorded
+  location per merchant on the selected map, preferring personal sightings over
+  reports; unlocated contacts are omitted. Merchant pins default off and tooltips
+  identify reported evidence. These filters never change automatic recording.
+  The experimental default fill traces inward through supporting samples instead
+  of spanning every inward bend. It retains every observed location, but remains
+  an estimate: sparse samples can still bridge unknown space. **Legacy fill**,
+  beside Clean Redundant Points, restores the original convex hull on both maps
+  without changing saved samples. Switching back re-enables traced fill.
+  Cleanup is paused in traced mode to protect its supporting points.
+  With Legacy fill, **Clean redundant points** removes interior samples strictly
   inside an area's perimeter on the displayed map. Cross-over points, edge samples
   and interior evidence needed to separate overlapping regions are retained.
-  Cleanup reports a count and leaves other maps and discoveries untouched.
+  Cleanup reports a count and leaves other maps and discoveries untouched;
+  removing those samples can affect a later return to traced fill.
   **Hide zone-name areas** hides shading and labels matching the displayed zone
   name (such as Loch Modan in Loch Modan). It defaults off, saves per character,
   and leaves sample points, neighbouring regions and recorded evidence intact.
@@ -392,10 +408,11 @@ Install the addon as `Interface/AddOns/AzerothFieldbook` and enable
 
 **Record Atlas survey point** adds a sub-zone survey sample at your current
 position, provided all existing survey samples on that map are more than 15 yards
-away. It works with the Atlas closed. Manual points survive reloads; use
+away. It works with the Atlas closed. Manual points survive reloads. In **Legacy fill** mode, use
 **Clean Redundant Points** to simplify the displayed map, or **Ctrl+Click** it
 to clean every map with saved survey points. Each map retains crossing, perimeter
 and overlap-boundary evidence; your displayed map and discoveries stay unchanged.
+Cleanup is paused in the default traced-fill mode so its supporting points survive.
 **Toggle Automatic Mapping**, above that button, starts enabled and saves your
 preference. Turning it off pauses automatic sampling but keeps the manual keybind available.
 
@@ -1117,7 +1134,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.19.0 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
+Version 0.19.1 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,

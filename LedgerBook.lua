@@ -20,6 +20,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
     state.offset=L.Integer(state.offset,0,L.MAX_CONTACTS) and state.offset or 0
     state.detail=({goods=true,training=true,services=true})[state.detail] and state.detail or "services"
     local c={journal=journal,tracking=tracking,shell=shell,state=state,panels={}}
+    c.mapPins=ns.CreateLedgerWorldPins(journal)
     function c:Message(text) self.main.message:SetText(L.Safe(text or "")) end
     function c:Menu(button,build)
         if MenuUtil and type(MenuUtil.CreateContextMenu)=="function" then MenuUtil.CreateContextMenu(button,build) end

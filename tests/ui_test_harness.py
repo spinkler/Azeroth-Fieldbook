@@ -195,6 +195,7 @@ def new_ui_client(modules=()):
     function eq(a,b,label) assert(a==b,(label or '')..': '..tostring(a)..' ~= '..tostring(b)) end
     function plain(text) return text:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','') end
     ''')
+    lua.execute((ROOT/'WorldMapLayers.lua').read_text(encoding='utf-8'),'AzerothFieldbook',lua.globals().ns)
     for name in modules:
         lua.execute((ROOT/name).read_text(encoding='utf-8'),'AzerothFieldbook',lua.globals().ns)
     return lua

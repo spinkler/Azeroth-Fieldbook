@@ -713,3 +713,46 @@ sources, preserved evidence, manual points and resumed coastal sampling.
 Live check: Ctrl+Click with multiple saved maps, then cross between a coastal
 sub-zone and The Great Sea and verify no automatic offshore points or bridging
 crossing is recorded.
+
+### Unreleased — traced fill trial and native map filters
+
+The default outline now peels empty triangles from the convex hull through
+supporting observations. Both replacement edges must be shorter; edges below
+2% of normalized map size stay intact. Detours must preserve all observations
+and cannot cross or touch unrelated outline edges. Horizontal edge buckets
+keep concave containment queries bounded to relevant edges. The existing
+time-budgeted worker, contour refinement and texture limits remain in use.
+This is still an estimate, not proof that every shaded location was visited;
+sparse surveys can retain unsupported bridges. It does not infer disconnected
+patches or holes.
+
+Atlas **Legacy fill** selects the original convex algorithm on both maps.
+Geometry caches include the method, colour assignments survive switching, and
+no stored samples are converted. Cleanup is paused in traced mode, including
+when switched on during an in-flight legacy cleanup. Legacy cleanup remains
+available and can remove evidence relevant to a later return to traced fill.
+
+The native Filters menu gains Points, Labels, Zones, Merchants and Nodes under
+Azeroth Fieldbook. Integration extends `MENU_WORLD_MAP_TRACKING` through
+`Menu.ModifyMenu`; the target client's [Blizzard menu source](https://github.com/Gethe/wow-ui-source/blob/bd2470aed543f72697a044e989285b6c83e63f73/Interface/AddOns/Blizzard_WorldMap/Blizzard_WorldMapTemplates.lua#L212)
+declares that tag. Registration handles delayed menu loading without replacing
+Blizzard's menu generator. Main-map survey filters become independent of Atlas
+choices on their first edit. Points off hides even isolated native-map dots.
+Nodes uses the existing gathering world-map preference; minimap settings are
+unchanged. Merchant pins default off, show one recorded location per merchant
+on the selected map (personal evidence preferred), retain report provenance,
+and cap the reused frame pool at 512. Neither layer fabricates coordinates.
+
+Automated checks: 39 sub-zone, 5 native filter/merchant, 6 gathering map and
+66 Ledger tests passed, as did Lua 5.1 syntax, TOC/version/bindings validation
+and whitespace checks. The synthetic 4,095-crossing benchmark completed within
+the existing texture budget; this is not a measurement of native WoW frames.
+
+Pending live acceptance after `/reload`:
+
+1. Compare a known inward bend with Legacy fill off/on, with Points visible.
+2. Open the main map's Filters dropdown and toggle each of the five layers.
+3. Confirm main-map survey choices do not alter the Atlas selections or recording.
+4. Check known merchant/node positions while panning, zooming, changing maps
+   and closing/reopening the map. Check reported merchant tooltips.
+5. Reload again and verify filter and Legacy fill preferences persist.

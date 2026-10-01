@@ -141,6 +141,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.subzoneLabels:SetChecked(state.showSubzoneLabels==true)
         m.subzonePoints:SetChecked(state.showSubzonePoints==true)
         m.worldSubzones:SetChecked(state.showSubzonesOnWorldMap==true)
+        m.legacySubzones:SetChecked(state.subzoneFillMethod=="convex")
         c.worldSubzones:Refresh()
         m.hideZoneAreas:SetChecked(state.hideZoneNameSubzones==true)
         m.labelSize:Display(A.Integer(state.subzoneLabelSize,2,24) and state.subzoneLabelSize or ns.AtlasSubzones.DEFAULT_LABEL_SIZE)
@@ -241,13 +242,19 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end)
         m.worldSubzones:SetChecked(state.showSubzonesOnWorldMap==true)
         m.worldSubzones:SetEnabled(not journal.readOnly)
-        U.Tip(m.worldSubzones,"Show the selected Shading, Labels and Points layers on Blizzard's main map. Off by default. Uses cached, time-budgeted drawing only while that map is open; does not change automatic mapping.")
+        U.Tip(m.worldSubzones,"Enable sub-zones on Blizzard's main map. Choose Points, Labels and Zones independently in that map's Filters dropdown. Until first changed there, the layers follow the Atlas selections. Off by default; does not change automatic mapping.")
         m.automaticMapping=U.Check(m,"Toggle Automatic Mapping",342,-146,280,function(on)
             if not journal.readOnly then state.automaticMapping=on;journal.subzones:Reset() end
         end)
         m.automaticMapping:SetChecked(state.automaticMapping~=false)
         m.automaticMapping:SetEnabled(not journal.readOnly)
         U.Tip(m.automaticMapping,"Automatically record sub-zone crossings and interior survey points. Pauses in The Great Sea, on flight paths and while flying. City mapping is enabled. Manual survey-point keybindings remain available when this is off.")
+        m.legacySubzones=U.Check(m,"Legacy fill",342,-174,128,function(on)
+            if not journal.readOnly then state.subzoneFillMethod=on and "convex" or "traced" end
+            c:Refresh()
+        end)
+        m.legacySubzones:SetEnabled(not journal.readOnly)
+        U.Tip(m.legacySubzones,"Restore the original convex fill on both maps. Unchecked: trace inward through supporting samples. Saved observations are unchanged when switching. Cleanup is paused in traced mode to protect its supporting points; legacy cleanup permanently removes points and can affect a later return to traced mode.")
         m.cleanPoints=U.Button(m,"Clean Redundant Points",480,-174,168,function()
             local allMaps=A.Read(IsControlKeyDown)==true
             local function done(count,message)
@@ -266,7 +273,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             if started then m.cleanPoints:SetEnabled(false);c:Message(allMaps and "Checking interior samples on all saved maps..." or "Checking interior samples on this map...") end
         end)
         m.cleanPoints:SetEnabled(not journal.readOnly)
-        U.Tip(m.cleanPoints,"Click: remove redundant interior samples on the displayed map. Ctrl+Click: clean ALL saved Atlas maps. Preserves cross-over points, all perimeter points and samples needed to separate overlapping areas. Recorded discoveries are unchanged.")
+        U.Tip(m.cleanPoints,"Cleanup is paused while traced fill is enabled. With Legacy fill: click to remove redundant interior samples on this map, or Ctrl+Click for ALL saved Atlas maps. Preserves cross-over points and convex perimeter/overlap evidence. Removing interior points can affect a later return to traced fill. Recorded discoveries are unchanged.")
         -- Keep the survey controls together within the existing header height.
         local group=CreateFrame("Frame",nil,m,"BackdropTemplate");m.subzoneControls=group
         group:SetPoint("TOPLEFT",660,-91);group:SetSize(262,107);group:EnableMouse(false)
@@ -286,7 +293,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.subzones=U.Check(group,"Shading",10,-23,65,function(on)
             if not journal.readOnly then state.showSubzones=on end;c:Refresh()
         end)
-        U.Tip(m.subzones,"Shade self-discovered sub-zones after three non-collinear observations. Crossings and interior samples with more than 50 yards of clearance collect while playing, even with these layers hidden. Points and Labels are independent display options. Hover for evidence details. Unvisited areas stay blank; inferred boundaries may be inaccurate.")
+        U.Tip(m.subzones,"Shade self-discovered sub-zones after three non-collinear observations. Crossings and interior samples with more than 50 yards of clearance collect while playing, even with these layers hidden. Points and Labels are independent display options. Hover for evidence details. Traced fill bends inward through supporting samples; sparse evidence can still span unknown space. Legacy fill restores the original outline.")
         m.subzonePoints=U.Check(group,"Points",10,-43,88,function(on)
             if not journal.readOnly then state.showSubzonePoints=on end;c:Refresh()
         end)
@@ -349,7 +356,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             "|cffffd1004. Routes and passages|r\nChoose the Route / Passage category, then Save & route stops. Add recorded places or named waypoints; use Up, Down and Remove to arrange them. Stops can span zones. Map lines connect recorded stops, not guaranteed safe paths.\n\n"..
             "|cffffd1005. Expeditions and connections|r\nUse Expeditions for longer journals and Linked notes to attach them to a discovery. Connections links known Atlas discoveries or records in other supported Fieldbook sections. Removing a link leaves the source record intact.\n\n"..
             "|cffffd1006. Field reports|r\nPrepare Field Report saves a draft for a zone or selected discoveries. Choose what to include, add private notes or expedition excerpts only if wanted, then use Preview report. This page provides drafts and previews only; it cannot send or import reports.\n\n"..
-            "|cffffd1007. Self-discovered sub-zones|r\nAutomatic mapping starts on and records area crossings and survey points as you travel, even with the Atlas closed. Toggle Automatic Mapping pauses it. Automatic recording pauses in The Great Sea, on flight paths and while flying.\n\nBind Record Atlas survey point in the game's keybinding settings to add a point where you stand, including with automatic mapping off. You need a readable position and enough distance from existing samples. Clean Redundant Points removes redundant interior samples.\n\nShading, Points and Labels control the display. Display selected sub-zones on main map also shows those layers on Blizzard's map. Shading estimates an area from your samples; it is not an exact border survey. Hover the map to inspect the evidence. Sub-zone samples do not add discovery entries or enter field reports.\n\n"..
+            "|cffffd1007. Self-discovered sub-zones|r\nAutomatic mapping starts on and records area crossings and survey points as you travel, even with the Atlas closed. Toggle Automatic Mapping pauses it. Automatic recording pauses in The Great Sea, on flight paths and while flying.\n\nBind Record Atlas survey point in the game's keybinding settings to add a point where you stand, including with automatic mapping off. You need a readable position and enough distance from existing samples. Cleanup is paused while traced fill is enabled to preserve its supporting points. Legacy fill restores the original convex outline; its cleanup can permanently remove interior samples.\n\nShading, Points and Labels control the display. Display selected sub-zones on main map enables the overlay. The main map Filters dropdown has independent Points, Labels and Zones choices, plus Merchants and Nodes. Shading estimates an area from your samples; it is not an exact border survey. Hover the map to inspect the evidence. Sub-zone samples do not add discovery entries or enter field reports.\n\n"..
             "|cffffd1008. Your journal|r\nAtlas records and browsing settings follow Account-wide tracking in Options. It starts on; turn it off to use this character's separate journal after /reload. Bestiary resets, backups and sharing do not include Atlas records.",
         frameName="AzerothFieldbookAtlasSection",build=build,onOpen=function()
             if c.main then c.main.map:Invalidate() end;c:Refresh()

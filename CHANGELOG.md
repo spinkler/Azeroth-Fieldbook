@@ -1,6 +1,61 @@
 # Changelog
 
-## Unreleased
+## v0.19.1-beta - 2026-10-01
+
+This Beta includes the complete unpublished batch since v0.19.0-beta
+(`238f5259fbcd5ce58acea146a3cca4c8c9ffad2d`), including the push-only stability
+checkpoint. The previous-push baseline was verified before fetching as
+`d24677e3fc027ddd73b31e50697873fcc178472d`; origin/main remained there after fetch.
+Full pre-release validation passed all 75 test files and all 81 Lua 5.1 files,
+manifest, bindings, version consistency and whitespace checks.
+Native acceptance of the new map changes is pending. Earlier stability
+acceptance recorded 144 passes and no failures, but remains incomplete; see
+`tests/NATIVE_ACCEPTANCE_2026-09-30.txt` for its scope and deferred checks.
+
+- Trial traced sub-zone fill that bends inward through supporting samples,
+  preserving observed locations instead of directly joining every outer border
+  sample. Keep the original convex method under Atlas **Legacy fill** for
+  immediate rollback on both maps without converting saved observations.
+  Pause cleanup in traced mode to preserve supporting points. Sparse evidence
+  can still bridge unknown space; this remains an estimated outline.
+- Add **Points**, **Labels**, **Zones**, **Merchants** and **Nodes** to the native
+  main map's Filters dropdown under **Azeroth Fieldbook**. Main-map sub-zone
+  choices become independent of Atlas selections when edited. Nodes uses the
+  existing world-map gathering preference without changing the minimap.
+  Add bounded, zoom-scaled merchant pins for recorded locations, preferring
+  personal sightings and identifying reported evidence. Recording is unchanged.
+- Fix large-paste stalls in whole-Fieldbook and legacy Bestiary backup imports
+  using bounded clipboard capture, received-byte counts and short previews.
+  Validate the complete captured data, reject overflow/incomplete parts and
+  invalidate stale restore confirmations on edits. Preserve selected backups,
+  part navigation and approved reviews across unchanged delayed text events;
+  batch paste work and cancel pending work on replacement or close.
+  Native backup capture, replacement restore and automatic recovery retests
+  passed within the recorded acceptance scope; broader acceptance is pending.
+- Split large Merchant's Ledger reports into numbered parts of at most 80 goods
+  and 80 lessons. Advance with Next, import each part separately and merge facts
+  under the original source. Keep repeat imports idempotent, limits atomic,
+  forwarding and note opt-in intact; reset prepared parts when selections change.
+- Preserve Lore report export/import previews across unchanged delayed text
+  events. Actual report or courier edits still require a fresh preview.
+- Keep shared Options open while switching journals and refresh the active
+  storage scope there. Move the grey account/character scope label beside
+  Account-wide tracking; grey Lore's archive usage text as well.
+- Keep the Bestiary count on one line, retain creature-name shadows during
+  marking and hover scrolling, and remove the ability-confirmation message
+  and Index filter hint. Disable Ledger goods/training controls when the
+  contact has no corresponding personal or reported offerings.
+- Fix Bestiary model request timing and replacement: show the viewer before
+  requesting, retry transient failures up to three times, conceal and unload
+  the outgoing appearance before layout changes, and reveal only the loaded
+  replacement. Preserve the personal-encounter requirement; native rendering
+  acceptance remains pending.
+- Extend regressions for outline concavity, rollback, cleanup preservation,
+  independent native filters, merchant/node layers, backup paste and review
+  lifecycle, multipart reports, model lifecycle and Options navigation. Update
+  older backup/sharing tests for bounded input and document live map checks.
+
+## Development checkpoint - 2026-09-30
 
 Stability checkpoint against previous-push baseline
 `238f5259fbcd5ce58acea146a3cca4c8c9ffad2d`. This batch covers the fixes,

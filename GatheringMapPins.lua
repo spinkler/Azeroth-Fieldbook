@@ -143,6 +143,11 @@ function ns.CreateGatheringMapPins(journal)
         hide(self.miniPins,count+1)
     end
     function controller:Refresh() self:RefreshWorld();self:RefreshMinimap() end
+    if ns.RegisterWorldMapLayer then
+        ns.RegisterWorldMapLayer("Nodes",function() return journal:ShowNodesOn("worldMap") end,function(on)
+            journal:SetShowNodesOn("worldMap",on);controller:RefreshWorld()
+        end,function() return not journal.readOnly end)
+    end
     controller.frame=CreateFrame("Frame")
     local elapsed=0
     controller.frame:SetScript("OnUpdate",function(_,dt)
