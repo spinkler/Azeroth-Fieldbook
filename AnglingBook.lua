@@ -381,7 +381,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         m.remember=U.Button(m,"Remember spot",342,-58,145,function() c:OpenForm("spot") end)
         m.sighting=U.Button(m,"Pool sighting",493,-58,136,function() c:OpenForm("sighting") end)
         m.manual=U.Button(m,"Record catch",794,-91,128,function() c:OpenForm("catch") end)
-        m.reports=U.Button(m,"Reports",635,-58,153,function() c:OpenReports() end)
+        m.reports=U.ShareButton(m,function() c:OpenReports() end)
         m.zone=U.ZoneMenu(m,342,-91,306,function()
             local ids={c:State().mapID};for _,water in pairs(journal.db.waters) do if water.mapID then ids[#ids+1]=water.mapID end end;return ids
         end,function(id,name)
@@ -451,7 +451,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             "|cffffd100Remembering and correcting|r\nRemember spot and Pool sighting save your approximate player position, not the exact pool location. Notes / edit saves notes and can rename remembered spots. Merge spot combines duplicate spots in the same waters and pool type, preserving their notes and history.\n\n"..
             "|cffffd100Fallback and skill|r\nUse Record catch only for a catch missing from automatic history. It adds a player-recorded catch event; do not enter the same catch twice. Item quantities and catch-event counts are different. Recorded skill successes show what worked on that occasion, not a minimum skill requirement.\n\n"..
             "|cffffd100Event log|r\nEvent log in the title bar shows catches, fishing failures, discoveries and corrections. Clear log, then Confirm clear, removes the log without deleting fishing knowledge.\n\n"..
-            "|cffffd100Reports|r\nSelect a record, open Reports and use Prepare selected knowledge to create text for copying. Notes start excluded. To import, paste the data, click Preview, then Accept report. Imported claims stay Reported and do not increase personal catch totals. Choose Knowledge: reported to forward received claims; source names are not verified. Reports are exchanged by copy and paste.\n\n"..
+            "|cffffd100Share|r\nSelect a record, open Share and use Prepare selected knowledge to create text for copying. Notes start excluded. To import, paste the data, click Preview, then Accept report. Imported claims stay Reported and do not increase personal catch totals. Choose Knowledge: reported to forward received claims; source names are not verified. Reports are exchanged by copy and paste.\n\n"..
             "|cffffd100Your journal|r\nAlmanac records, the Event log and browsing settings follow Account-wide tracking in Options. It starts on; turn it off to use this character's separate journal after /reload.",
         onOpen=function() if c.main then c.main.map:Invalidate();c:Refresh();c.main.details:SetVerticalScroll(c:State().detailScroll or 0) end end})
     local function refresh() if c.main and shell.active=="angling" and shell:GetFrame():IsShown() then c:Refresh() end end

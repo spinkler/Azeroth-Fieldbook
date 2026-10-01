@@ -1,13 +1,14 @@
-# Azeroth Fieldbook 0.19.1 (Beta)
+# Azeroth Fieldbook 0.19.2 (Beta)
 
-Version 0.19.1 trials traced sub-zone fill with a Legacy fill rollback switch,
-and adds Points, Labels, Zones, Merchants and Nodes to the main map's Filters
-menu. It also includes the unpublished stability fixes since 0.19.0 Beta:
-bounded backup paste handling, preserved backup/report reviews, multipart
-merchant reports, Bestiary model handling and shared Options refinements.
-Whole-Fieldbook backup and recovery remains available through
+Version 0.19.2 refines the Beta's map controls: one brightness preference across
+Fieldbook maps, aligned grey coordinate/brightness rows and a compact Legacy
+Fill checkbox that clears Map Layers. It also standardizes Share buttons,
+removes the Compendium's A–Z index, adds gathering discovery chat messages and
+optional behaviour traits in creature tooltips, and hardens native map filter
+callbacks. Whole-Fieldbook backup and recovery remains available through
 **Options → Whole-Fieldbook backups** or `/fieldbook backups`. This is a Beta;
-the new map controls and traced outlines still need native in-game acceptance.
+native acceptance of the map filter correction, new controls and traced
+sub-zone outlines remains pending.
 
 Saved-data protections cover initialization, Lore consolidation and
 report validation boundaries. An unsupported or malformed main save disables
@@ -42,7 +43,7 @@ rereads still reuse their existing record.
 Object dialogue readers such as **Draconic for Dummies** also archive their
 displayed text as writings. Draconic for Dummies is a complete single-page reader;
 other object readers retain unconfirmed page boundaries.
-**Capture / retry current text** works when automatic archiving is disabled.
+**Record… > Capture / retry current text** works when automatic archiving is disabled.
 
 Record people and deliberately save displayed gossip or quest passages; record
 landmarks, private thoughts, related evidence and a mystery's next step. Entry
@@ -120,7 +121,7 @@ Azeroth Fieldbook currently contains the **Bestiary**, a personal record of
 creatures encountered by the player, with individually accepted reports from
 other players. It starts empty and records only readable personal observations
 or explicitly accepted shared information. It does not ship with creature or
-spell databases. Version 0.19.1 includes sharing, addon-version compatibility
+spell databases. Version 0.19.2 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
 The main window now has seven native icon tabs down its outside right edge:
@@ -268,8 +269,11 @@ sub-zone crossings and encountered weather are observed automatically.
   independently shows names with a thin, non-monochrome outline. Names use their
   measured width and try two lines before being hidden for lack of space. **Label size**
   adjusts text from 2–24, defaulting to 4 while preserving saved sizes. The styled
-  **Brightness** slider adjusts map artwork from 20–100% without dimming labels,
-  shading, markers or the player arrow. Settings persist per character; existing
+  **Brightness** slider sits on the map below player coordinates and adjusts
+  artwork from 20–100% across every Fieldbook map and Locations window, without
+  dimming labels, shading, markers or the player arrow. One shared preference
+  persists per character, independent of journal storage scope. **Legacy Fill**
+  uses a compact checkbox in the Sub-zones panel. Existing
   enabled overlays retain their visible points on upgrade. Hiding points leaves
   recording and saved evidence intact.
   Hover the map for names, from/to labels,
@@ -305,7 +309,7 @@ sub-zone crossings and encountered weather are observed automatically.
   **Connections** links Atlas records or existing Bestiary / Gatherer's Compendium
   discoveries. Bestiary links use existing entry navigation; gathering links show
   an Atlas-contained summary. Removing a link never deletes its source record.
-- **Prepare Field Report** saves a zone or named-selection draft, explicit record
+- **Share** saves a zone or named-selection field-report draft, explicit record
   selections, optional private notes and chosen expedition excerpts. The preview
   shows the exact included content. Versioned validation, bounded literal
   serialization and recipient staging are implemented; transport, inbox and import
@@ -350,8 +354,8 @@ within two seconds; cached hover identity alone cannot create markers. Actual UI
 controls, out-of-range failures and unrelated errors are excluded. Player
 coordinates are sampled when the interaction is confirmed by the error. Completed gathers are casts, not quantities of looted materials.
 
-The page follows the Bestiary's parchment, left index, A–Z filters, search,
-sort menu, sixteen-row list and Previous/Next controls. Filter by Herbs,
+The page follows the Bestiary's parchment, search, sort menu, sixteen-row list
+and Previous/Next controls. Filter by Herbs,
 Minerals or known locations, search names or zones, and sort by name, type,
 interactions, completed gathers or encounter dates. Each entry includes saved
 field notes and a draggable 3D preview using the classic node's own model in
@@ -548,7 +552,7 @@ A single known zone appears as a heading; multiple zones use a dropdown. The map
 uses the client's own artwork and explored terrain. Kill locations begin with
 new credited kills after this update; old totals have no coordinates to recover.
 
-The **Tracking: Kills / Observations** button beside Map brightness switches
+The **Tracking: Kills / Observations** button at the bottom of Locations switches
 between violet kill positions and cyan observation positions, each with a bright
 border. Both layers record independently of which one is displayed. Observation
 tracking records **your position when you target the creature**, including from
@@ -566,7 +570,7 @@ One or two distinct positions remain dots. Three or more nearby positions can
 form translucent triangles with a soft glow around their outer
 boundary, with every edge limited to **180 yards**. The window's **Map brightness**
 slider adjusts only the terrain underneath (20–100%, default 80%); markers and
-areas retain their brightness. This preference is saved per character.
+areas retain their brightness. This preference is shared by all Fieldbook maps and saved per character.
 Distant groups and isolated points stay separate; points in a straight line
 remain dots. Areas estimate kill locations or observer positions, rather than
 an exact spawn boundary. Repeated samples at the same coordinate share one marker.
@@ -698,6 +702,11 @@ the behaviour. Unchecking removes the mark until fresh automatic evidence
 restores it. Previously observed behaviours retain their cyan **[A]** provenance
 when unchecked or rechecked. Backups and account merging preserve that history;
 recipients receive normal unverified Rumours, not automatic confirmation.
+
+Under **Options → Tooltips and cast IDs**, enable **Show behaviour traits in
+creature tooltips** to display checked Behaviour traits on creature tooltips,
+even without displayed abilities or kill counts. This separate option is off
+by default and excludes Disposition, tameability and unverified Rumours.
 
 **Hostile** and **Neutral** use Blizzard's tooltip red/yellow reaction colours
 in basic information, based on
@@ -1134,7 +1143,7 @@ The legacy `/bestiary` command accepts the same arguments.
 
 ## Data compatibility
 
-Version 0.19.1 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
+Version 0.19.2 stores Bestiary account progress in `AzerothFieldbookAccountDB` and character
 settings and separate character progress in `AzerothFieldbookDB`. Each database
 keeps its journal in `bestiary`. Reset clears only the active journal and current
 character's settings, preserving the tracking mode, one-time migration markers,

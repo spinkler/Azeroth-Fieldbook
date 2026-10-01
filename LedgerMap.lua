@@ -91,8 +91,8 @@ function ns.CreateLedgerWorldPins(journal)
     if ns.RegisterWorldMapLayer then
         ns.RegisterWorldMapLayer("Merchants",function() return journal.state.showMerchantsOnWorldMap==true end,function(on)
             if journal.readOnly then return end
-            journal.state.showMerchantsOnWorldMap=on;controller:Attach();controller:Refresh()
-        end,function() return not journal.readOnly end)
+            journal.state.showMerchantsOnWorldMap=on
+        end,function() return not journal.readOnly end,function() controller:Attach();controller:Refresh() end)
     end
     controller:Attach()
     return controller

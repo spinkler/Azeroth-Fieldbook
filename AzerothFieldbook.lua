@@ -118,7 +118,7 @@ end
 
 local function say(message)
     if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAzeroth Fieldbook:|r " .. message)
+        DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r " .. message)
     end
 end
 
@@ -352,8 +352,9 @@ local function addTooltip(tooltip)
     if journal then
         journal:ObserveTameability(unit)
         local names = journal:ConfirmedNames(id)
+        local behaviours = journal:GetBehaviourTooltips() and journal:TooltipBehaviours(id) or {}
         local showKills=journal:GetKillCountTooltips() and journal.entries[id]~=nil
-        if #names == 0 and not showKills then tooltipStatus = "No confirmed abilities: review this entry in /fieldbook."; return end
+        if #names == 0 and #behaviours == 0 and not showKills then tooltipStatus = "No selected tooltip facts: review this entry in /fieldbook."; return end
         tooltip:AddLine("Azeroth Fieldbook - Bestiary", 0.5, 0.82, 1)
         local expanded = readTrue(IsControlKeyDown)
         local hasDetails = false
@@ -370,11 +371,14 @@ local function addTooltip(tooltip)
         if hasDetails and not expanded then
             tooltip:AddLine("(Ctrl for details)", 0.6, 0.6, 0.6, true)
         end
+        if #behaviours>0 then
+            tooltip:AddLine("Behaviour: " .. table.concat(behaviours, ", "),1,1,1,true)
+        end
         if showKills then
             local _,_,kills=journal:GetKillReward(id)
             tooltip:AddLine("Kills: " .. kills,1,0.82,0.14)
         end
-        tooltipStatus = "Added " .. #names .. " confirmed ability names" .. (showKills and " and kill count." or ".")
+        tooltipStatus = "Added " .. #names .. " confirmed ability names and " .. #behaviours .. " behaviour traits" .. (showKills and " and kill count." or ".")
         return
     end
     if not creature then tooltipStatus = "Eligible NPC, but no saved observations for this creature ID."; return end
@@ -543,6 +547,13 @@ local function initializeImpl()
     if journal and ns.CreateBestiaryBook then book = ns.CreateBestiaryBook(journal,fieldbook) end
     if fieldbook and ns.InitializeGathering then
         gatheringBook=ns.InitializeGathering(fieldbook,function() return journal:GetBackgroundBrightness() end)
+        gatheringBook.journal.onDiscovery=function(entry,title,location)
+            if not journal:GetCreatureAnnouncement() then return end
+            local details=ns.GatheringKinds[entry.kind].title
+            if location then details=details .. " • " .. location end
+            say("|cffffd100[" .. title .. "]|r Herbs & Minerals: " .. entry.name
+                .. " |cff999999(" .. details .. ")|r")
+        end
     end
     local atlasBook,anglingBook,treasureBook
     if fieldbook and ns.InitializeAtlas then atlasBook=ns.InitializeAtlas(fieldbook,journal) end
@@ -552,6 +563,10 @@ local function initializeImpl()
     if fieldbook and ns.InitializeLore then
         ns.InitializeLore(fieldbook,db,{bestiary=journal,gathering=gatheringBook,atlas=atlasBook,
             angling=anglingBook,merchants=ledgerBook,treasure=treasureBook})
+    end
+    if ns.MapBrightness then
+        ns.MapBrightness:Initialize(db,atlasBook and atlasBook.journal and atlasBook.journal.saved or AzerothFieldbookAtlasDB,
+            ns.ActiveSectionStores and ns.ActiveSectionStores.gathering or AzerothFieldbookGatheringDB)
     end
     if fieldbook and ns.RegisterFieldbookWishlistSections then ns.RegisterFieldbookWishlistSections(fieldbook) end
     if journal and journal.sharing then

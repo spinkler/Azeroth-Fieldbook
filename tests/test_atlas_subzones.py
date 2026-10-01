@@ -173,8 +173,31 @@ class SubzoneTests(unittest.TestCase):
             C_Timer=nil
             local control=S.CreateWorldOverlay(j)
             local entries={};local root={CreateDivider=function() end,CreateTitle=function(_,title) assert(title=='Azeroth Fieldbook') end}
-            function root:CreateCheckbox(label,selected,toggle) entries[label]={selected=selected,toggle=toggle};return {SetEnabled=function() end} end
+            local inMenu=false
+            local refresh=control.Refresh
+            function control:Refresh() assert(not inMenu,'Render outside native menu callbacks');return refresh(self) end
+            function root:CreateCheckbox(label,selected,toggle)
+                local entry={selected=selected}
+                function entry.toggle()
+                    inMenu=true;assert(toggle()==nil);inMenu=false
+                end
+                function entry:SetEnabled() end
+                function entry:SetSelectionIgnored() self.ignored=true end
+                entries[label]=entry;return entry
+            end
+            local settleSurvey=settle
+            local function settle()
+                local work={}
+                for _,frame in ipairs(objects) do
+                    if frame.scripts and frame.scripts.OnUpdate and frame:IsShown() then
+                        work[#work+1]={frame,frame.scripts.OnUpdate}
+                    end
+                end
+                for _,row in ipairs(work) do row[2](row[1],0) end
+                settleSurvey()
+            end
             modifier(nil,root)
+            for _,entry in pairs(entries) do assert(entry.ignored) end
             s.store[101]=ring();s.store[101][5]={kind='interior',mapID=101,name='Isolated',x=9000,y=9000,at=100};s:Changed(101)
             local before=snapshot(s.store);local atlas=snapshot({j.state.showSubzones,j.state.showSubzoneLabels,j.state.showSubzonePoints})
             assert(not entries.Zones.selected())
@@ -644,7 +667,7 @@ class SubzoneTests(unittest.TestCase):
             local colour=snapshot(m.map.subzoneTextures[1].colorTexture)
             C_MapExplorationInfo={GetExploredMapTextures=function() return {{textureWidth=128,textureHeight=128,offsetX=0,offsetY=0,fileDataIDs={7777}}} end}
             m.map:Invalidate();c:Refresh()
-            m.brightness.scripts.OnValueChanged(m.brightness,40)
+            m.brightness.scripts.OnValueChanged(m.brightness,.4)
             local base,overlay=0,0
             for _,o in ipairs(objects) do
                 if o.parent==m.map.canvas and type(o.texture)=='number' and o:IsShown() then

@@ -79,7 +79,11 @@ local function styleMenuRow(row)
     row:SetSelected(false)
 end
 
-ns.FieldbookUI = {Label=label, Button=button, MenuButton=menuButton, Close=cornerClose, Edit=edit, StyleMenuRow=styleMenuRow}
+-- A fixed page-relative footer keeps Share stationary across unequal panes.
+local function shareButton(parent,action)
+    return button(parent,"Share",42,-672,120,action)
+end
+ns.FieldbookUI = {Label=label, Button=button, ShareButton=shareButton, MenuButton=menuButton, Close=cornerClose, Edit=edit, StyleMenuRow=styleMenuRow}
 
 function ns.CreateFieldbookShell(settings)
     settings=settings or {}

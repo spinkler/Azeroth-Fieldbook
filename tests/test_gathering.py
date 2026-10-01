@@ -624,7 +624,7 @@ class GatheringUITests(unittest.TestCase):
             assert(positionReads==0,'opening the journal never samples locations')
         ''')
 
-    def test_search_categories_alphabet_sort_scroll_and_cycle(self):
+    def test_search_categories_sort_scroll_and_cycle(self):
         self.lua.execute('''
             for i=1,24 do gather(string.format('Herb %02d',i),'herb'..i) end
             gather('Copper Vein','copper',2575)
@@ -636,8 +636,9 @@ class GatheringUITests(unittest.TestCase):
             book.next.scripts.OnClick();assert(book.title:GetText()=='Herb 02 • Herb' and book.resourceScrollBar:GetValue()==1)
             book.search:SetText('Herb 2');assert(book.rows[1].id=='herb:herb 20' and not book.resourceScrollBar:IsShown())
             book.searchClear.scripts.OnClick();assert(book.search:GetText()=='')
-            book.clearFilters.scripts.OnClick();book.indexButton.scripts.OnClick()
-            book.letterButtons[3].scripts.OnClick();assert(book.rows[1].id=='mineral:copper vein' and not book.rows[2]:IsShown())
+            assert(book.indexButton==nil and book.letterButtons==nil,'Compendium uses filters instead of an A-Z index')
+            book.clearFilters.scripts.OnClick();book.typeButtons.mineral.scripts.OnClick()
+            assert(book.rows[1].id=='mineral:copper vein' and not book.rows[2]:IsShown())
             book.clearFilters.scripts.OnClick();book.sortButton.scripts.OnClick()
             book.sortChoices[8].control.scripts.OnClick()
             assert(book.rows[1].id=='herb:herb 24' and select(2,journal:GetListSort()))
@@ -768,6 +769,29 @@ class GatheringUITests(unittest.TestCase):
             gather('Silverleaf','boot')
             assert(bootGathering.journal.entries['herb:silverleaf'].completed==1)
             assert(AzerothFieldbookDB.bestiary.entries['herb:silverleaf']==nil)
+            local messages={}
+            DEFAULT_CHAT_FRAME={AddMessage=function(_,message) messages[#messages+1]=message end}
+            local journal=bootGathering.journal
+            AzerothFieldbookDB.creatureAnnouncements=true
+            journal:Discover('mineral','Copper Vein',42,'Elwynn',{mapID=37,name='Elwynn'})
+            assert(#messages==1 and messages[1]=='|cff80d0ffAFB:|r |cffffd100[New node type]|r Herbs & Minerals: Copper Vein |cff999999(Mineral • Elwynn)|r')
+            journal:Discover('mineral','Copper Vein',43,'Elwynn',{mapID=37,name='Elwynn'})
+            assert(#messages==1,'repeat hover stays quiet')
+            journal:Discover('mineral','Copper Vein',44,'Westfall',{mapID=52,name='Westfall'})
+            assert(#messages==2 and messages[2]:find('[New observed location]',1,true))
+            local sample={mapID=52,name='Westfall',point={x=2000,y=3000,seenAt=45}}
+            journal:RecordInteraction('mineral','Copper Vein',sample,'Westfall',45)
+            assert(#messages==3 and messages[3]:find('Westfall — 20.0, 30.0',1,true))
+            journal:RecordInteraction('mineral','Copper Vein',sample,'Westfall',46)
+            assert(#messages==3,'known coordinates stay quiet')
+            sample.point.x=8000
+            journal:RecordInteraction('mineral','Copper Vein',sample,'Westfall',47)
+            assert(#messages==4,'new coordinates announced')
+            AzerothFieldbookDB.creatureAnnouncements=false
+            journal:Discover('herb','Peacebloom',48,'Westfall')
+            sample.point.x=5000
+            journal:RecordInteraction('mineral','Copper Vein',sample,'Westfall',49)
+            assert(#messages==4 and journal.entries['herb:peacebloom'],'muting retains discoveries')
         ''')
 
 

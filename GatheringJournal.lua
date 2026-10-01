@@ -129,6 +129,7 @@ function ns.CreateGatheringJournal(saved,getBrightness)
         stamp=number(stamp,0,9999999999) and stamp or 0
         local id=identity(kind,name)
         local entry=self.entries[id]
+        local isNew=not entry
         if not entry then
             entry={id=id,name=name,kind=kind,interactions=0,completed=0,firstSeen=stamp,
                 lastSeen=0,zones={},locations={},note=""}
@@ -142,16 +143,21 @@ function ns.CreateGatheringJournal(saved,getBrightness)
             entry.modelFileID=modelFileID;changed=true
         end
         zone=cleanName(zone)
-        if zone and not entry.zones[zone] then entry.zones[zone]=true;changed=true end
+        local newLocation
+        if zone and not entry.zones[zone] then entry.zones[zone]=true;changed=true;newLocation=zone end
         if type(map)=="table" and number(map.mapID,1,2147483647) and cleanName(map.name)
             and not entry.locations[map.mapID] and count(entry.locations)<64 then
             entry.locations[map.mapID]={name=cleanName(map.name),points={}};changed=true
+            newLocation=newLocation or cleanName(map.name)
         end
         if changed then self:Changed() end
+        if self.onDiscovery and (isNew or newLocation) then
+            self.onDiscovery(entry,isNew and "New node type" or "New observed location",newLocation)
+        end
         return id
     end
     function journal:RecordInteraction(kind,name,sample,zone,stamp,modelFileID)
-        local id=self:Discover(kind,name,stamp,nil,nil,modelFileID)
+        local id=self:Discover(kind,name,stamp,zone,sample,modelFileID)
         if not id then return end
         stamp=number(stamp,0,9999999999) and stamp or 0
         local entry=self.entries[id]
@@ -170,7 +176,12 @@ function ns.CreateGatheringJournal(saved,getBrightness)
                 local w,h=mapSize(sample.mapID)
                 local existing=w and nearby(map.points,p,w,h) or map.points[1+p.x*10001+p.y]
                 if existing then existing.seenAt=math.max(existing.seenAt,p.seenAt)
-                else map.points[1+p.x*10001+p.y]={x=p.x,y=p.y,seenAt=p.seenAt,approximate=true} end
+                else
+                    map.points[1+p.x*10001+p.y]={x=p.x,y=p.y,seenAt=p.seenAt,approximate=true}
+                    if self.onDiscovery then
+                        self.onDiscovery(entry,"New node location",string.format("%s — %.1f, %.1f",map.name,p.x/100,p.y/100))
+                    end
+                end
                 ns.CreatureLocations.TrimPoints(map.points)
             end
         end
@@ -261,10 +272,12 @@ function ns.CreateGatheringJournal(saved,getBrightness)
     end
     function journal:GetBackgroundBrightness() return getBrightness and getBrightness() or 1 end
     function journal:GetLocationMapBrightness()
+        if ns.MapBrightness and ns.MapBrightness.saved then return ns.MapBrightness:Get() end
         local v=saved.mapBrightness
         return type(v)=="number" and v>=0.2 and v<=1 and v or 0.65
     end
     function journal:SetLocationMapBrightness(value)
+        if ns.MapBrightness and ns.MapBrightness.saved then ns.MapBrightness:Set(value);return end
         if self.readOnly then return end
         if public(value) and type(value)=="number" and value>=0.2 and value<=1 then saved.mapBrightness=value end
     end

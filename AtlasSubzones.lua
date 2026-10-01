@@ -1260,8 +1260,7 @@ function S.CreateWorldOverlay(journal)
             end
             journal.state["worldSubzone"..layer]=on
             if on then journal.state.showSubzonesOnWorldMap=true end
-            controller:Refresh()
-        end,function() return not journal.readOnly end)
+        end,function() return not journal.readOnly end,function() controller:Refresh() end)
     end end
     local world,overlay,pending
     local function stop()

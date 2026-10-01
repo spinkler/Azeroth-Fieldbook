@@ -882,7 +882,7 @@ class AnglingUITests(unittest.TestCase):
             for _,map in ipairs({atlasMap,m.map}) do
                 local point=map.playerCoordinates.point
                 assert(point[1]=='BOTTOMLEFT' and point[2]==map and point[3]=='BOTTOMLEFT')
-                assert(point[4]==8 and point[5]==8)
+                assert(point[4]==8 and point[5]==29)
                 assert(map.playerCoordinates.parent~=map.canvas,'Coordinates must not zoom with the artwork')
             end
             for _,shape in ipairs({{1000,668},{1400,500},{800,900}}) do

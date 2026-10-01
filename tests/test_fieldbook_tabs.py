@@ -218,7 +218,7 @@ class FieldbookTabsTests(unittest.TestCase):
         lua.execute('''
             bestiaryOpens=0;ledgerOpens=0;gatheringOpens=0;knownContact=true;node=false
             ns.CreateFieldbookShell=function() return {} end
-            ns.InitializeGathering=function() return {OpenAtMouseover=function()
+            ns.InitializeGathering=function() return {journal={},OpenAtMouseover=function()
                 gatheringOpens=gatheringOpens+1;return node end} end
             ns.InitializeLedger=function() return {OpenAtUnit=function(_,unit)
                 assert(unit=='mouseover');ledgerOpens=ledgerOpens+1;return knownContact end} end

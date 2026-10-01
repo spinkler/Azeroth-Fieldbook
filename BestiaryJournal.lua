@@ -642,6 +642,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if ns.SpellIDWindow then ns.SpellIDWindow:ApplySettings() end
     end
     function journal:GetKillCountTooltips() return db.showKillCountTooltips~=false end
+    function journal:GetBehaviourTooltips() return db.showBehaviourTooltips==true end
+    function journal:SetBehaviourTooltips(enabled)
+        db.showBehaviourTooltips=enabled==true
+        self:Touch()
+    end
     function journal:SetKillCountTooltips(enabled)
         db.showKillCountTooltips=enabled==true
         self:Touch()
@@ -665,11 +670,16 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         return math.max(0.5, math.min(1.5, value))
     end
     function journal:GetLocationMapBrightness()
+        if ns.MapBrightness and ns.MapBrightness.saved then return ns.MapBrightness:Get() end
         local value=db.locationMapBrightness
         if not public(value) or type(value)~="number" or value~=value then return 0.8 end
         return math.max(0.2,math.min(1,value))
     end
     function journal:SetLocationMapBrightness(value)
+        if ns.MapBrightness and ns.MapBrightness.saved then
+            if public(value) and type(value)=="number" and value==value then ns.MapBrightness:Set(math.max(0.2,math.min(1,value))) end
+            return
+        end
         if not public(value) or type(value)~="number" or value~=value then return end
         db.locationMapBrightness=math.max(0.2,math.min(1,value))
     end
@@ -1457,6 +1467,18 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if entry and self:GetCreatureName(id) then
             for name, ability in pairs(entry.abilities) do
             if ability.state == "confirmed" and ability.showInTooltip ~= false then names[#names + 1] = name end
+            end
+        end
+        table.sort(names)
+        return names
+    end
+    function journal:TooltipBehaviours(id)
+        local entry,names=self.entries[id],{}
+        if entry and self:GetCreatureName(id) and type(entry.behaviours)=="table" then
+            -- Only checked, recognised behaviour marks. Disposition, tameability
+            -- and unverified rumours are separate facts, never tooltip traits.
+            for name in pairs(behaviourNames) do
+                if entry.behaviours[name]==true then names[#names+1]=name end
             end
         end
         table.sort(names)

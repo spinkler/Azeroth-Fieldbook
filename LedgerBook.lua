@@ -521,10 +521,11 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         end
         local scroll=state.contactScroll or 0
         if topID then for i,found in ipairs(rows) do if found.contact.id==topID then scroll=tops[i]+within;break end end end
-        scroll=math.max(0,math.min(scroll,math.max(0,fullHeight-420)))
+        local listHeight=m.contactList:GetHeight()
+        scroll=math.max(0,math.min(scroll,math.max(0,fullHeight-listHeight)))
         state.contactScroll=scroll;state.offset=0;self.contactTops=tops
         for i=1,#rows do if tops[i]<=scroll then state.offset=i-1 else break end end
-        m.updatingList=true;m.listBody:SetHeight(math.max(420,fullHeight));m.contactList:SetVerticalScroll(scroll)
+        m.updatingList=true;m.listBody:SetHeight(math.max(listHeight,fullHeight));m.contactList:SetVerticalScroll(scroll)
         m.contactList:UpdateScrollChildRect();m.contactList:RefreshScrollBar();m.updatingList=nil
         m.count:SetText(#rows.." / "..total.." contacts")
         m.empty:SetText(total==0 and "Your Ledger begins empty.\n\nMeet a service provider and open its interface, record a contact manually, or import a labelled report." or "No matching contacts.\nReset filters to show your known directory.")
@@ -628,12 +629,12 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.favourites=U.Check(d,"Favourites",42,-177,98,function(on) state.favourites=on;c:Filter() end)
         m.recipes=U.Check(d,"Recipes",170,-177,90,function(on) state.recipes=on;c:Filter() end)
         m.reset=U.Button(d,"Reset filters",42,-206,121,function() c:Reset() end)
-        m.reports=U.Button(d,"Reports",170,-206,122,function() c:Reports() end)
+        m.reports=U.ShareButton(d,function() c:Reports() end)
         m.count=U.Label(d,"",42,-238,250,"GameFontHighlightSmall");m.rows={}
         m.contactsBackground=d:CreateTexture(nil,"BACKGROUND")
-        m.contactsBackground:SetPoint("TOPLEFT",38,-254);m.contactsBackground:SetSize(258,424)
+        m.contactsBackground:SetPoint("TOPLEFT",38,-254);m.contactsBackground:SetSize(258,378)
         m.contactsBackground:SetColorTexture(0,0,0,0.12)
-        m.contactList,m.listBody=U.Scroll(d,42,-258,228,420)
+        m.contactList,m.listBody=U.Scroll(d,42,-258,228,374)
         m.contactList:HookScript("OnVerticalScroll",function(self,value)
             if not m.updatingList then state.contactScroll=value or self:GetVerticalScroll();c:Refresh() end
         end)
@@ -649,8 +650,8 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             row:SetScript("OnClick",function(self) c:Select(self.id,self.match) end);m.rows[i]=row
         end
         m.empty=U.Label(d,"",49,-285,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
-        m.manual=U.Button(d,"Record contact",42,-687,121,function() c:Manual() end)
-        m.remove=U.Button(d,"Remove contact",170,-687,122,function() c:RemoveContact() end)
+        m.manual=U.Button(d,"Record contact",42,-638,121,function() c:Manual() end)
+        m.remove=U.Button(d,"Remove contact",170,-638,122,function() c:RemoveContact() end)
         m.portraitFrame=CreateFrame("Frame",nil,m)
         m.portraitFrame:SetPoint("TOPLEFT",342,-54);m.portraitFrame:SetSize(42,42)
         m.portrait=m.portraitFrame:CreateTexture(nil,"ARTWORK")
@@ -720,12 +721,12 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             "|cffffd100Observation|r\nOpen a merchant or trainer to record readable offerings without buying. Supported service interactions also record contacts; recognizable class-trainer titles can reveal a trainer before you open its services.\n\nGoods, prices and stock describe past inspections, not live availability. A partial or filtered view may miss offerings. Something absent from the latest inspection is not proof it is no longer sold.\n\n"..
             "|cffffd100Locations and identity|r\nLocations shows remembered encounters. Encountered near means your approximate position during an interaction, not the NPC's exact position. Distant targeting does not add your position as the contact's location.\n\nContacts with the same name may be different individuals. Use Link identity only when you recognize two entries as the same contact; their goods and history are combined after confirmation.\n\n"..
             "|cffffd100Access notes and details|r\nUse Edit notes for entrances, floors, personal notes or a manual role annotation. Known Goods and Observed Training open offering lists; click the same button again or Back to contacts to return to the directory.\n\n"..
-            "|cffffd100Reports|r\nSelect a contact and open Reports. Choose what to include, then Prepare text for copying. When preparing your own observations, the current search limits included offerings. Notes start excluded. To import, use Preview pasted data, review it, then Accept reported facts. Received facts remain Reported with their original source and observation dates; receiving them is not a personal encounter. Reports use copy and paste and cost no Knowledge.\n\n"..
+            "|cffffd100Share|r\nSelect a contact and open Share. Choose what to include, then Prepare text for copying. When preparing your own observations, the current search limits included offerings. Notes start excluded. To import, use Preview pasted data, review it, then Accept reported facts. Received facts remain Reported with their original source and observation dates; receiving them is not a personal encounter. Reports use copy and paste and cost no Knowledge.\n\n"..
             "|cffffd100Your journal|r\nContacts, notes and browsing settings follow the global Account-wide tracking option. It starts on in Options; turn it off to use this character's separate journal after /reload. Existing character records import once; later changes in the two scopes stay separate.",
         onOpen=function() if c.main then c:Refresh();c.main.details:SetVerticalScroll(state.detailScroll or 0) end end})
     journal.onMerchantDiscovered=function(entry)
         if DEFAULT_CHAT_FRAME then
-            DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAzeroth Fieldbook:|r Merchant discovered: |cffffd100"..
+            DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r Merchant discovered: |cffffd100"..
                 L.Safe(entry.name).."|r — added to the Merchant's Ledger.")
         end
     end

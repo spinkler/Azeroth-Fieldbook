@@ -373,6 +373,37 @@ GameTooltip.lines={};tooltipHook(GameTooltip)
 check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Observed trap','kill toggle leaves confirmed abilities visible')
 AzerothFieldbookDB.showKillCountTooltips=true
 
+-- Behaviour tooltip opt-in is independent of abilities, kills and disposition.
+entry.behaviours={Melee=true,Patrols=true,['Flees at low health']=true,Heals=false,
+    Hostile=true,Neutral=true,Tameable=true,Unknown=true}
+entry.disposition='Hostile'
+entry.rumours={{kind='behaviour',value='Summons'}}
+AzerothFieldbookDB.showKillCountTooltips=false
+entry.abilities['Observed trap'].showInTooltip=false
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==0,'behaviour tooltip option defaults off')
+AzerothFieldbookDB.showBehaviourTooltips=true
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Behaviour: Flees at low health, Melee, Patrols',
+    'checked traits display alone on locked entries; dispositions, unchecked marks and rumours stay excluded')
+entry.behaviours.Melee=false;entry.disposition='Neutral'
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(GameTooltip.lines[2]=='Behaviour: Flees at low health, Patrols','unchecked traits disappear without exposing disposition')
+entry.abilities['Observed trap'].showInTooltip=true
+AzerothFieldbookDB.showKillCountTooltips=true
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==4 and GameTooltip.lines[2]=='Observed trap'
+    and GameTooltip.lines[3]=='Behaviour: Flees at low health, Patrols' and GameTooltip.lines[4]=='Kills: 1',
+    'behaviour traits coexist with selected abilities and kill count')
+AzerothFieldbookDB.showBehaviourTooltips=false
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==3 and entry.behaviours.Patrols,'turning off display preserves knowledge and other tooltip facts')
+entry.behaviours={};entry.rumours={};entry.disposition=nil
+AzerothFieldbookDB.showBehaviourTooltips=true
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==3,'no empty behaviour line')
+AzerothFieldbookDB.showBehaviourTooltips=false
+
 -- Resolved abilities render icons and optional public spell descriptions.
 entry.confirmed=false
 local ability=entry.abilities['Observed trap']

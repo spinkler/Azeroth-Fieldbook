@@ -988,17 +988,17 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         deleteForm:Hide()
         table.insert(UISpecialFrames,"AzerothFieldbookDeleteCreature")
-        book.deleteButton=button(book,"Delete",135,-626,84,function()
+        book.deleteButton=button(book,"Delete",174,-672,118,function()
             local entry = selected and journal.entries[selected]
             if not entry then return end
             deleteForm.id, deleteForm.entry = selected, entry
             deleteForm.description:SetText("Permanently delete " .. (basicInfo(selected).name or ("Encountered creature #" .. selected)) .. "?\nIts records and rumours will be removed. Earned credit and spending remain.")
             deleteForm.input:SetText(""); deleteForm:Show(); deleteForm.input:SetFocus()
         end)
-        book.shareButton = button(book, "Share", 229, -626, 86, function()
+        book.shareButton = ui.ShareButton(book, function()
             if sharingWindow then sharingWindow:Open(selected) end
         end)
-        book.indexCount = label(book, "* Unlocked\n|cff72d65bGreen|r: rumours", 135, -660, 180, "GameFontHighlightSmall")
+        book.indexCount = label(book, "* Unlocked\n|cff72d65bGreen|r: rumours", 135, -630, 180, "GameFontHighlightSmall")
         book.indexCount:SetTextColor(0.55,0.58,0.58)
         book.bindingHint=label(book,"",38,-704,256,"GameFontHighlightSmall")
         local function refreshBindingHint()

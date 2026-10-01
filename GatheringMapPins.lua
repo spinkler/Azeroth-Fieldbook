@@ -145,8 +145,8 @@ function ns.CreateGatheringMapPins(journal)
     function controller:Refresh() self:RefreshWorld();self:RefreshMinimap() end
     if ns.RegisterWorldMapLayer then
         ns.RegisterWorldMapLayer("Nodes",function() return journal:ShowNodesOn("worldMap") end,function(on)
-            journal:SetShowNodesOn("worldMap",on);controller:RefreshWorld()
-        end,function() return not journal.readOnly end)
+            journal:SetShowNodesOn("worldMap",on)
+        end,function() return not journal.readOnly end,function() controller:RefreshWorld() end)
     end
     controller.frame=CreateFrame("Frame")
     local elapsed=0

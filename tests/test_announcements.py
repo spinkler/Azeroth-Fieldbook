@@ -3,7 +3,7 @@ import unittest
 from kill_test_harness import new_client
 
 
-PREFIX = '|cff80d0ffAzeroth Fieldbook:|r '
+PREFIX = '|cff80d0ffAFB:|r '
 
 
 def announcement(title, details, points=1):

@@ -364,7 +364,7 @@ local function atlasMappings(account,personal,shared,key,ids)
                 map[e.reference]=false
                 issues[e.reference]=#candidates==0 and "No saved Atlas destination mapping survives in this scope."
                     or "Multiple Atlas records share the surviving migration stamp; the original ID mapping was not saved."
-                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..e.name..": "..issues[e.reference].." Reference retained.") end
+                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("AFB: "..e.name..": "..issues[e.reference].." Reference retained.") end
             end
         end
     end
@@ -373,7 +373,7 @@ local function atlasMappings(account,personal,shared,key,ids)
             local mapped=map[reference] or false
             if not ids and mapped and shared.loreAliases[alias] and shared.loreAliases[alias]~=mapped then
                 mapped=false;issues[alias]="This old Atlas key could refer to different local and account discoveries; its saved scope is unknown."
-                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..issues[alias].." Reference retained.") end
+                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("AFB: "..issues[alias].." Reference retained.") end
             end
             map[alias]=mapped
         end
@@ -440,7 +440,7 @@ function ns.SelectSectionStorage(section,personal)
     local prior=account.sections and account.sections[section]
     if supported and (not supported(personal) or (prior~=nil and not supported(prior))) then
         if ns.RecordTrackingResult then ns.RecordTrackingResult(section,true) end
-        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..section.." has unsupported saved data; account migration deferred.") end
+        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("AFB: "..section.." has unsupported saved data; account migration deferred.") end
         ns.ActiveSectionStores[section]=personal;return personal
     end
     account.sections=account.sections or {};account.sectionImports=account.sectionImports or {}
@@ -450,7 +450,7 @@ function ns.SelectSectionStorage(section,personal)
     -- Preserve unsupported schemas unchanged rather than interpreting future data.
     if (personal.schema or 0)>1 or (existing and (existing.schema or 0)>1) then
         if ns.RecordTrackingResult then ns.RecordTrackingResult(section,true) end
-        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("Azeroth Fieldbook: "..section.." uses a newer data schema; account migration deferred.") end
+        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("AFB: "..section.." uses a newer data schema; account migration deferred.") end
         ns.ActiveSectionStores[section]=personal;return personal
     end
     if section=="atlas" then ns.Atlas.EnsureReferences(personal)

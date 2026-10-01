@@ -80,7 +80,7 @@ function ns.InitializeLore(shell,settings,sources)
         if eventJournal and eventJournal.RecordEvent then
             eventJournal:RecordEvent(message,{kind="lore-recorded",loreID=entry.id,loreKind=entry.kind,origin=entry.origin})
         end
-        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAzeroth Fieldbook:|r "..message) end
+        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r "..message) end
     end
     local tracking=ns.CreateLoreTracking(journal,ns.LoreSettings.db)
     ns.LoreSettings.tracking=tracking

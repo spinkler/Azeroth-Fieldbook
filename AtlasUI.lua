@@ -3,6 +3,7 @@ local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or b
 local U={};ns.AtlasUI=U
 local ui=ns.FieldbookUI
 U.Button=ui.Button;U.Edit=ui.Edit
+U.ShareButton=ui.ShareButton
 U.MenuButton=ui.MenuButton
 function U.ZoneMenu(parent,x,y,width,getMaps,onSelect)
     local button

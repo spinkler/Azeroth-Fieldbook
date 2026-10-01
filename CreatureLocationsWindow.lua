@@ -33,6 +33,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
     local function updatePlayer()
         local arrow=frame.playerArrow
         arrow:Hide()
+        frame.playerCoordinates:SetText("Player coordinates unavailable")
         if not displayedMapID or not C_Map then return end
         if read(C_Map.GetBestMapForUnit,"player")~=displayedMapID then return end
         local position=read(C_Map.GetPlayerMapPosition,displayedMapID,"player")
@@ -40,7 +41,9 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         local x,y=read(function() return position.x end),read(function() return position.y end)
         local facing=read(GetPlayerFacing)
         local function finite(v,low,high) return type(v)=="number" and v>=low and v<=high end
-        if not finite(x,0,1) or not finite(y,0,1) or not finite(facing,0,2*math.pi) then return end
+        if not finite(x,0,1) or not finite(y,0,1) then return end
+        frame.playerCoordinates:SetText(string.format("Player: %.2f, %.2f",x*100,y*100))
+        if not finite(facing,0,2*math.pi) then return end
         arrow:ClearAllPoints()
         arrow:SetPoint("CENTER",frame.map,"TOPLEFT",x*frame.map:GetWidth(),-y*frame.map:GetHeight())
         arrow:SetRotation(facing);arrow:Show()
@@ -270,7 +273,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         frame.legend:SetText(observations and "Cyan: your position when you targeted the creature, including during flight."
             or "Violet: credited kills. Approximate positions use your location at the time.")
         frame.trackingMode:SetText(observations and "Tracking: Observations" or "Tracking: Kills")
-        frame.brightness:SetValue(journal:GetLocationMapBrightness())
+        frame.brightness:Display(journal:GetLocationMapBrightness())
         applyBrightness()
     end
     local function build()
@@ -296,6 +299,13 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         frame.zoneButton:SetSize(420,24);frame.zoneButton:SetPoint("TOPLEFT",16,-60)
         frame.map=CreateFrame("Frame",nil,frame)
         frame.map:SetPoint("TOP",frame,"TOP",0,-92);frame.map:SetSize(WIDTH,HEIGHT)
+        frame.playerCoordinates=label(frame.map,"Player coordinates unavailable",0,0,250)
+        frame.playerCoordinates:ClearAllPoints()
+        frame.playerCoordinates:SetPoint("BOTTOMLEFT",frame.map,"BOTTOMLEFT",8,29)
+        frame.playerCoordinates:SetTextColor(0.55,0.57,0.57)
+        local coordinateFont,coordinateSize=frame.playerCoordinates:GetFont()
+        frame.playerCoordinates:SetFont(coordinateFont,coordinateSize,"OUTLINE")
+        frame.playerCoordinates:SetShadowColor(0,0,0,1);frame.playerCoordinates:SetShadowOffset(1,-1)
         frame.playerArrow=frame.map:CreateTexture(nil,"OVERLAY",nil,7)
         frame.playerArrow:SetSize(18,18)
         frame.playerArrow:SetTexture("Interface\\Minimap\\MinimapArrow")
@@ -305,17 +315,9 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         frame.empty:SetJustifyH("CENTER");frame.empty:SetHeight(60)
         frame.status=label(frame,"",18,-524,640)
         frame.legend=label(frame,"",18,-545,640);frame.legend:SetTextColor(0.45,0.45,0.45);frame.legend:SetHeight(15)
-        label(frame,"Map brightness",18,-571,150)
-        frame.brightness=CreateFrame("Slider",nil,frame,"OptionsSliderTemplate")
-        frame.brightness:SetPoint("TOPLEFT",180,-570);frame.brightness:SetSize(180,16)
-        local brightnessTrack=frame.brightness:CreateTexture(nil,"BACKGROUND")
-        brightnessTrack:SetPoint("TOPLEFT",2,-4);brightnessTrack:SetPoint("BOTTOMRIGHT",-2,4)
-        brightnessTrack:SetColorTexture(0.045,0.032,0.018,1)
-        frame.brightness:SetMinMaxValues(0.2,1);frame.brightness:SetValueStep(0.05);frame.brightness:SetObeyStepOnDrag(true)
-        frame.brightnessValue=label(frame,"",374,-571,80)
-        frame.brightness:SetScript("OnValueChanged",function(_,value)
-            journal:SetLocationMapBrightness(value);applyBrightness()
-        end)
+        frame.brightness=ns.MapBrightness:Attach(frame.map,function() return journal:GetLocationMapBrightness() end,
+            function(value) journal:SetLocationMapBrightness(value) end,applyBrightness)
+        frame.brightnessValue=frame.brightness.valueLabel
         frame.trackingMode=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(frame.trackingMode) end
         frame.trackingMode:SetPoint("TOPLEFT",458,-565);frame.trackingMode:SetSize(200,24)
         frame.trackingMode:SetScript("OnClick",function()

@@ -1,5 +1,60 @@
 # Changelog
 
+## v0.19.2-beta - 2026-10-01
+
+This Beta covers the complete batch since the published v0.19.1-beta and
+previous-push baseline `1556271fe30b68dafa3a9aae1eee174d95c0ab26`, verified before
+fetching; origin/main remained there after fetch. Native acceptance of the new
+map layout and the candidate native-filter correction remains pending.
+Pre-release validation passed all 77 test files, all 82 Lua 5.1 files, manifest,
+bindings, version consistency, publication-note extraction and whitespace checks.
+
+- Remove the Gatherer's Compendium **Index** button, A–Z filter strip and its
+  hint. Browse with type/location filters, search and sorting; keep scrolling
+  and Previous/Next available for longer lists.
+
+- Move Atlas **Legacy Fill** into the Sub-zones panel with a compact checkbox,
+  clearing its overlap with **Map Layers**. Place a brightness slider on every
+  Fieldbook map below the coordinate footer with no surrounding background.
+  Align both rows to the same left edge and use grey text. Share one saved
+  terrain brightness across all seven journals and their Locations windows.
+  Preserve the current Atlas brightness on upgrade and keep overlays at full
+  contrast. Save the shared preference per character, independent of journal
+  storage scope.
+
+- Standardize Bestiary, Atlas, Almanac, Ledger and Lore on a **Share** button
+  with identical bottom-left position and size across page switches. Preserve
+  window framing, pane proportions and map controls. Move nearby footer actions
+  and shorten the Ledger contact viewport; group Lore export/import under Share
+  and retain Capture / retry current text in its Record menu. Existing report
+  capabilities, privacy defaults and delivery rules stay unchanged.
+
+- Announce newly discovered herb/mineral types, observed zones and new
+  interaction locations when discovery chat messages are enabled. Repeated
+  sightings and nearby recorded points stay quiet. Match existing gold discovery
+  titles and grey details, and shorten chat prefixes to AFB while preserving
+  their colours.
+
+- Add **Show behaviour traits in creature tooltips** under Options → Tooltips
+  and cast IDs, off by default. When enabled, show checked recognised Behaviour
+  traits even without displayed abilities or kill counts. Exclude Disposition,
+  tameability, unchecked marks and unverified Rumours; preserve saved knowledge
+  when toggled. Cover tooltip output, option wiring and preference persistence.
+
+- Harden the native map filter callbacks following an out-of-combat addon-block
+  report. Use the native checkbox's default response, exclude addon choices from
+  Blizzard's filter-button selection summary, and defer map redraws to an addon
+  worker on the next frame. Coalesce rapid clicks and discard queued redraws for
+  replaced journals. Add callback-boundary regressions. This is a candidate
+  correction: the reported block has no captured action stack and still needs
+  native confirmation after reloading the updated addon.
+
+- Extend regressions for shared map brightness, upgrade/reload persistence,
+  compact Atlas controls, gathering filters and discovery announcements,
+  behaviour tooltip options, Share layouts and deferred map-filter callbacks.
+  Update older coordinate-placement and gathering-initialization fixtures;
+  update Help, README and native acceptance checklists for the final controls.
+
 ## v0.19.1-beta - 2026-10-01
 
 This Beta includes the complete unpublished batch since v0.19.0-beta

@@ -139,8 +139,8 @@ function ns.CreateGatheringBook(journal,shell)
     local controller={journal=journal}
     local ui=ns.FieldbookUI
     local label,button,edit=ui.Label,ui.Button,ui.Edit
-    local book,selected,category,initial
-    local offset,indexOpen=0,false
+    local book,selected,category
+    local offset=0
     local PAGE_SIZE=16
     local locationFilters,drafts={},{}
     local locations=ns.CreateGatheringLocationsWindow(journal,function() return shell:GetFrame() end)
@@ -151,11 +151,11 @@ function ns.CreateGatheringBook(journal,shell)
         locations:SetResource(id)
         if book then book.message:SetText("");refresh() end
     end
-    local function currentRows(letter)
-        return journal:List(category,book.search:GetText(),letter,locationFilters)
+    local function currentRows()
+        return journal:List(category,book.search:GetText(),nil,locationFilters)
     end
     local function cycle(direction)
-        local rows=currentRows(initial)
+        local rows=currentRows()
         if #rows==0 then return end
         local index=direction>0 and 0 or 1
         for i,e in ipairs(rows) do if e.id==selected then index=i;break end end
@@ -169,17 +169,9 @@ function ns.CreateGatheringBook(journal,shell)
     refresh=function(reloadModel)
         if not book then return end
         book.revision=journal.revision
-        local unlettered=currentRows()
-        local letters={}
-        for _,entry in ipairs(unlettered) do letters[string.upper(entry.name:sub(1,1))]=true end
-        for _,control in ipairs(book.letterButtons) do
-            control:SetShown(indexOpen);control:SetEnabled(letters[control.letter]==true)
-            control:SetSelected(control.letter==initial)
-        end
-        book.indexButton:SetSelected(indexOpen)
+        local rows=currentRows()
         for kind,control in pairs(book.typeButtons) do control:SetSelected(kind==(category or "all")) end
         book.locationsButton:SetSelected(next(locationFilters)~=nil or book.locationFrame:IsShown())
-        local rows=initial and currentRows(initial) or unlettered
         if not selected or not journal.entries[selected] then selected=rows[1] and rows[1].id end
         offset=math.max(0,math.min(offset,math.max(0,#rows-PAGE_SIZE)))
         book.updatingScroll=true
@@ -324,7 +316,7 @@ function ns.CreateGatheringBook(journal,shell)
         end)
         styleSelection(book.locationsButton,true)
         book.clearFilters=button(book,"Clear filters",42,-511,88,function()
-            category,initial=nil,nil;offset=0
+            category=nil;offset=0
             for zone in pairs(locationFilters) do locationFilters[zone]=nil end
             book.search:SetText("");refreshLocationFilter();refresh()
         end)
@@ -415,21 +407,6 @@ function ns.CreateGatheringBook(journal,shell)
         book.previous=button(book,"Previous",135,-596,84,function() cycle(-1) end)
         book.next=button(book,"Next",229,-596,86,function() cycle(1) end)
         book.indexCount=label(book,"",135,-660,180,"GameFontHighlightSmall");book.indexCount:SetTextColor(0.55,0.58,0.58)
-        label(book,"Click Index to show or hide A-Z filters.",38,-704,256,"GameFontHighlightSmall")
-        book.indexButton=button(book,"Index",3,-78,57,function() indexOpen=not indexOpen;initial=nil;offset=0;refresh() end)
-        styleSelection(book.indexButton);book.indexButton:SetFrameLevel(shell:GetFrame().titleIcon:GetFrameLevel()-1)
-        book.letterButtons={}
-        for i=1,26 do
-            local letter=string.char(64+i)
-            local tab=button(book,letter,3,-107-(i-1)*23,29,function()
-                if initial==letter then initial=nil else initial=letter end;offset=0;refresh()
-            end)
-            tab:SetHeight(21)
-            local text=tab:GetFontString()
-            if text then text:ClearAllPoints();text:SetPoint("CENTER",tab,"CENTER",0.5,0) end
-            tab:SetFrameLevel(shell:GetFrame().titleIcon:GetFrameLevel()-1);tab.letter=letter
-            styleSelection(tab);tab:Hide();book.letterButtons[i]=tab
-        end
         book.title=label(book,"Gatherer's Compendium",362,-55,474,"GameFontNormalLarge")
         book.title:SetTextColor(1,0.82,0.14);book.title:SetWordWrap(false)
         local path,size,flags=book.title:GetFont()
@@ -625,7 +602,7 @@ function ns.CreateGatheringBook(journal,shell)
     shell:RegisterSection("gathering",{title="Gatherer's Compendium",icon="Interface\\Icons\\Trade_Herbalism",
         help="|cffffd1001. Discover|r\nBuild a record of herbs and minerals by hovering over their readable world tooltips. You do not need Herbalism or Mining to discover them. Hovering records the resource and zone, not a position or completed gather.\n\n"..
             "|cffffd1002. Record positions|r\nStarting a Herbalism or Mining cast records your approximate position, even if interrupted. A successful cast also counts as a completed gather, not a quantity of loot. An interaction rejected for missing profession or rank can still record a position when the matching skill error is readable.\n\n"..
-            "|cffffd1003. Browse|r\nUse Herbs, Minerals, search, sorting and Locations filters to find an entry. Index opens the A-Z filters; Previous and Next browse matching entries.\n\n"..
+            "|cffffd1003. Browse|r\nUse Herbs, Minerals, search, sorting and Locations filters to find an entry. Previous and Next browse matching entries. Scroll the list if there are more than sixteen matches.\n\n"..
             "|cffffd1004. Review locations|r\nClick a zone under Locations to see recorded interaction positions. Green dots mark herbs; gold dots mark minerals. Hover a dot for coordinates. These are approximate player positions, not proof that a node is currently available. Hover-only discoveries have no dots.\n\n"..
             "|cffffd1005. Map display|r\nEnable Show nodes on world map or Show nodes on minimap to see recorded positions while travelling. Both start off. These maps show a selection of recent or nearby positions; use an entry's Locations view to review its stored positions.\n\n"..
             "|cffffd1006. Field notes|r\nWrite a note and click Save notes. Observed loot records readable drops linked to completed gathers; its stack ranges describe past observations, not guaranteed yields.\n\nAccount-wide tracking in Options applies to this journal too. It starts on; turn it off to use this character's separate journal after /reload. Gathering records are separate from Bestiary resets, backups and sharing.",
@@ -633,7 +610,7 @@ function ns.CreateGatheringBook(journal,shell)
     function controller:OpenAtMouseover()
         local id=self.tracking and self.tracking:DiscoverAtMouseover()
         if not id or not journal.entries[id] then return false end
-        selected=id;category=nil;initial=nil;offset=0
+        selected=id;category=nil;offset=0
         for zone in pairs(locationFilters) do locationFilters[zone]=nil end
         shell:ShowSection("gathering")
         book.search:SetText("");book.search:ClearFocus();book.note:ClearFocus()

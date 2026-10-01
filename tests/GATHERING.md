@@ -20,6 +20,14 @@ World-map visibility investigation and regression evidence are documented in
 
 ## 0.12.2 live checks
 
+Discovery chat uses the shared creatures/nodes/locations option. New resource
+types and observed zones produce gold-titled messages with grey details; new
+interaction coordinates are announced separately. Repeat hovers and points
+within the existing ten-yard merge radius stay quiet. Disabling messages does
+not disable recording. `test_gathering.py` checks the actual initialization
+callback, colours, deduplication and muted discovery. In game, verify both herb
+and mineral messages with the option enabled and disabled.
+
 - Hover and hold each Locations zone button; the label must retain its normal size.
 - Confirm the three-pixel divider above Field notes and the matching thickness
   above Recorded abilities in the Bestiary.
@@ -87,9 +95,10 @@ checking that each marker remains at its recorded coordinate.
 
 These checks do not render native WoW widgets. Live acceptance remains:
 
-1. Open Herbs & Minerals and compare the index, typography, search, sort, list
-   bounds, gold selection and scrollbar with Bestiary. Verify empty states,
-   A–Z toggling, long names, ascending/descending order and Previous/Next.
+1. Open Herbs & Minerals and compare typography, search, sort, list bounds,
+   gold selection and scrollbar with Bestiary. Confirm the Compendium has no
+   Index button or A–Z strip. Verify empty states, type/location filters,
+   long names, ascending/descending order and Previous/Next.
 2. Check Peacebloom, Earthroot, Copper, Silver and rare/ooze-covered node 3D
    previews. Drag to rotate, switch entries quickly and verify no stale models.
    Unrecognized model identities should show an unavailable caption. Verify the

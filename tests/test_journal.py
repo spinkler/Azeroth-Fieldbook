@@ -413,6 +413,15 @@ check(abilities:IsShown(),'toggling the active panel off restores the default vi
 check(click('Lock this entry'),'entry can be locked again')
 local options=AzerothFieldbookOptions
 options.scripts.OnShow(options)
+check(not journal:GetBehaviourTooltips(),'behaviour tooltip setting defaults off')
+options.behaviourTooltips.GetChecked=function() return true end
+options.behaviourTooltips.scripts.OnClick(options.behaviourTooltips)
+check(db.showBehaviourTooltips and journal:GetBehaviourTooltips(),'behaviour tooltip checkbox saves opt-in')
+local reloaded=ns.CreateBestiaryJournal(db,identify)
+check(reloaded:GetBehaviourTooltips(),'behaviour tooltip opt-in survives a new journal')
+options.behaviourTooltips.GetChecked=function() return false end
+options.behaviourTooltips.scripts.OnClick(options.behaviourTooltips)
+check(not journal:GetBehaviourTooltips(),'behaviour tooltip checkbox disables display')
 check(journal:GetAccountWideTracking() and not journal:IsTrackingChangePending(),'account-wide tracking defaults on')
 options.accountWideTracking.GetChecked=function() return false end
 options.accountWideTracking.scripts.OnClick(options.accountWideTracking)

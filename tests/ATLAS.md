@@ -756,3 +756,47 @@ Pending live acceptance after `/reload`:
 4. Check known merchant/node positions while panning, zooming, changing maps
    and closing/reopening the map. Check reported merchant tooltips.
 5. Reload again and verify filter and Legacy fill preferences persist.
+
+### Native filter blocked-action report after v0.19.1-beta
+
+The operator reported an addon-block warning after enabling all five native
+map filters out of combat on Steam Deck. No blocked-function name or taint
+stack was captured. This is a native acceptance failure, not a confirmed
+diagnosis of combat lockdown or a reproduced Lua exception.
+
+Candidate correction: checkbox responders now save addon preferences and queue
+an addon-owned next-frame redraw, return no response override, and mark their
+descriptions selection-ignored. Rapid toggles coalesce and stale queued work or
+open-menu callbacks cannot mutate/repaint replaced journals. Blizzard already
+sets a checkbox's default response to Refresh in
+[MenuTemplates.lua](https://github.com/Gethe/wow-ui-source/blob/bd2470aed543f72697a044e989285b6c83e63f73/Interface/AddOns/Blizzard_Menu/MenuTemplates.lua#L369);
+the native [selection collector](https://github.com/Gethe/wow-ui-source/blob/bd2470aed543f72697a044e989285b6c83e63f73/Interface/AddOns/Blizzard_Menu/DropdownButton.lua#L27)
+skips selection-ignored descriptions. These changes avoid unnecessary native
+menu response overrides and renderer re-entry during the click.
+
+The widget host checks callback boundaries, default response, next-frame
+redraw, final toggle state, read-only behavior and replacement handling. It
+does not emulate WoW's taint engine. Native verification remains required:
+reload with the correction installed (existing session taint is not cleared by
+editing files), enable all five filters out of combat, then reopen the dropdown
+and exercise Blizzard's existing filters. If the block recurs, capture the
+blocked function/stack before attributing its cause to this path.
+
+
+## Shared map brightness and Legacy Fill layout
+
+Legacy Fill uses a 20-unit checkbox in the Sub-zones header where Brightness
+previously sat. Map Layers keeps its own unobstructed button. Every Fieldbook
+map has a compact terrain brightness slider below its player-coordinate footer with no surrounding background,
+including the Bestiary and gathering Locations windows. The per-character
+`AzerothFieldbookDB.mapBrightness` preference applies across journals and storage
+scopes. Upgrade first preserves the active Atlas brightness, then falls back to
+Bestiary/gathering legacy settings and finally 80%. Existing legacy settings are
+retained. Changing brightness updates already-created maps and their sliders,
+including hidden pages, without rebuilding geometry or dimming markers or labels.
+
+Native check pending: reload, verify the Legacy Fill label does not overlap Map
+Layers or Sub-zones, drag brightness on Atlas, visit the other journal maps and
+both Locations windows, and confirm the same percentage and terrain brightness.
+Keep two maps open and confirm immediate synchronization; reload to check the
+saved value. Pan/zoom the map and confirm the slider stays below coordinates.

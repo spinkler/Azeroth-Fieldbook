@@ -227,18 +227,25 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
     end
     map.playerCoordinates=ns.FieldbookUI.Label(border,"",0,0,250,"GameFontHighlightSmall")
     map.playerCoordinates:ClearAllPoints()
-    map.playerCoordinates:SetPoint("BOTTOMLEFT",map,"BOTTOMLEFT",8,8)
+    map.playerCoordinates:SetPoint("BOTTOMLEFT",map,"BOTTOMLEFT",8,29)
+    map.playerCoordinates:SetTextColor(0.55,0.57,0.57)
     map.playerCoordinates:SetJustifyH("LEFT")
     local coordinateFont,coordinateSize=map.playerCoordinates:GetFont()
     map.playerCoordinates:SetFont(coordinateFont,coordinateSize,"OUTLINE")
     map.playerCoordinates:SetShadowColor(0,0,0,1);map.playerCoordinates:SetShadowOffset(1,-1)
     local tiles,overlays,pins,lines={},{},{},{}
     function map:ApplyBrightness()
-        local value=journal.subzones and A.Number(journal.state.mapBrightness,0.2,1) and journal.state.mapBrightness or 1
+        local value=ns.MapBrightness.saved and ns.MapBrightness:Get()
+            or (journal.subzones and A.Number(journal.state.mapBrightness,0.2,1) and journal.state.mapBrightness or 1)
         for _,pool in ipairs({tiles,overlays}) do
             for _,texture in ipairs(pool) do texture:SetVertexColor(value,value,value) end
         end
     end
+    map.brightness=ns.MapBrightness:Attach(map,function()
+        return journal.subzones and A.Number(journal.state.mapBrightness,0.2,1) and journal.state.mapBrightness or 1
+    end,function(value)
+        if journal.state and not journal.readOnly then journal.state.mapBrightness=value end
+    end,function() map:ApplyBrightness() end)
     local cachedMap
     local displayedMapID,playerElapsed
     if journal.subzones and ns.AtlasSubzones then ns.AtlasSubzones.InstallMap(map,journal,cursorPoint) end
