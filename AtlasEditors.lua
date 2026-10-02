@@ -99,11 +99,16 @@ function ns.InstallAtlasEditors(c)
             p.stops=U.Button(p,"Save & route stops",342,-574,186,function()
                 local saved,err=p:Save();if not saved then p.message:SetText(err);return end;c:Stops(saved)
             end)
-            p.delete=U.Button(p,"Delete…",742,-574,108,function()
-                c:Picker({title="Delete "..p.draft.name.."?",back=function() c:Show(p) end,
-                    rows=function() return {{name="Confirm deletion",detail="Links in routes, expeditions and report drafts remain clearly unresolved."}} end,
-                    pick=function() j:Delete(p.id,p.expedition);main() end,
-                    hint="Only this Atlas entry is deleted. Related entries and source-section records are preserved."})
+            p.delete=U.Button(p,"Delete",742,-574,108,function()
+                local id,expedition=p.id,p.expedition
+                local store=expedition and j.expeditions or j.records
+                local entry=store[id];if not entry then return end
+                p.deleteForm=p.deleteForm or ns.FieldbookUI.DeletePanel(p,c.shell,"Delete Atlas entry")
+                p.deleteForm:Open("Delete "..A.Safe(p.draft.name).."?\n\nThis cannot be undone. Related entries and source-section records are preserved.\n\nLinks in routes, expeditions and report drafts remain unresolved.",function()
+                    if p.id~=id or p.expedition~=expedition or store[id]~=entry then return nil,"Selection changed; nothing deleted." end
+                    local ok=j:Delete(id,expedition);if ok then main() end
+                    return ok,"Could not delete this entry."
+                end)
             end)
             p.inputs={p.name,p.notes,p.access,p.interior,p.interiorMapID}
             for _,key in ipairs({"mapID","zone","subzone","x","y"}) do p.inputs[#p.inputs+1]=p.location[key] end
@@ -150,7 +155,7 @@ function ns.InstallAtlasEditors(c)
                 self.noteScroll:SetHeight(self.expedition and 286 or 166)
                 self.source:ClearAllPoints();self.source:SetPoint("TOPLEFT",0,self.expedition and -582 or -884)
                 self.body:SetHeight(self.expedition and 646 or 1010)
-                self.stops:SetShown(not self.expedition and d.category=="route");self.delete:SetEnabled(self.id~=nil)
+                self.stops:SetShown(not self.expedition and d.category=="route");self.delete:SetShown(self.expedition);self.delete:SetEnabled(self.id~=nil)
                 self.scroll:UpdateScrollChildRect();self.scroll:RefreshScrollBar()
             end
         end

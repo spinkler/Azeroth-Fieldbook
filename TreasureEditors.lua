@@ -183,16 +183,18 @@ function T.InstallEditors(c)
         end
     end
     function c:RemoveEncounter()
-        local v=journal.encounters[state.encounter];if not v then return end
+        local v=journal.encounters[state.encounter]
+        if not v or v.kindID~=state.selected or journal.readOnly then return end
         local p=self:Panel("remove","Remove recorded encounter")
         if not p.description then
             p.description=U.Label(p.body,"",2,0,220,"GameFontHighlight");p.description:SetWordWrap(true);p.description:SetSpacing(4)
             U.Button(p,"Confirm removal",4,-548,250,function()
+                if state.encounter~=p.encounterID or state.selected~=p.kindID then c:Message("Selection changed; nothing deleted.");return end
                 local ok,err=journal:Remove(p.encounterID,true)
                 if ok then c:ClosePanel();if state.encounter==p.encounterID then state.encounter=nil end;c:Refresh();c:Message("Encounter removed; summaries and historical markers updated.") else c:Message(err) end
             end)
         end
-        p.encounterID=v.id
+        p.encounterID,p.kindID=v.id,v.kindID
         p.description:SetText(T.Safe("Remove this encounter, its contents and encounter notes?\n\n"..journal:Title(journal:Get(v.kindID)).."\n"..T.Date(v.origin.at).."\n"..T.Outcome(v).."\n\n"..T.LocationText(v.location).."\n\nKind notes and Look for again stay saved. This cannot be undone."))
     end
 end

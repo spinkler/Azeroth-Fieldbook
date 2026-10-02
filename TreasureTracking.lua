@@ -134,7 +134,9 @@ function ns.CreateTreasureTracking(journal)
         elseif event=="LOOT_SLOT_CHANGED" then
             local sample=self.active and self:ReadLoot()
             if sample and sample.guid==self.active.guid then self:Capture(sample) end
-        elseif event=="LOOT_CLOSED" then self.active=nil;self.pending=nil
+        elseif event=="LOOT_CLOSED" then
+            self.active=nil;self.pending=nil
+            for guid,v in pairs(self.recent) do if v.suppressed then self.recent[guid]=nil end end
         elseif event=="GET_ITEM_INFO_RECEIVED" or event=="ITEM_DATA_LOAD_RESULT" then
             local id=...;if T.Integer(id,1,2147483647) and journal.requested[id] then
                 if journal.metadata[id] then journal.metadataCount=math.max(0,journal.metadataCount-1) end
@@ -144,7 +146,12 @@ function ns.CreateTreasureTracking(journal)
     end
     local frame=CreateFrame("Frame");t.frame=frame
     journal.onRemove=function(id)
-        for _,v in pairs(t.recent) do if v.id==id then v.suppressed=true end end
+        -- Ignore duplicate signals from the currently open window only. A new
+        -- opening must be free to rediscover the same item immediately.
+        local active=t.active and t.active.id==id
+        for guid,v in pairs(t.recent) do if v.id==id then
+            if active then v.suppressed=true else t.recent[guid]=nil end
+        end end
         if t.active and t.active.id==id then t.active=nil;t.pending=nil end
     end
     for _,event in ipairs({"PLAYER_ENTERING_WORLD","BAG_UPDATE_DELAYED","LOOT_READY","LOOT_OPENED","LOOT_SLOT_CHANGED","LOOT_CLOSED","GET_ITEM_INFO_RECEIVED","ITEM_DATA_LOAD_RESULT"}) do

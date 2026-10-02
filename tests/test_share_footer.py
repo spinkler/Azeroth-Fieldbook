@@ -6,6 +6,8 @@ from atlas_test_harness import new_atlas
 from angling_test_harness import new_angling
 from ledger_test_harness import new_ledger
 from test_lore_ui import new_lore_ui
+from treasure_test_harness import new_treasure
+from test_gathering import client as new_gathering
 
 
 FOOTER = '''
@@ -18,6 +20,131 @@ FOOTER = '''
 
 
 class ShareFooterTests(unittest.TestCase):
+    def test_delete_footers_match_across_journals(self):
+        for factory, button in (
+            (new_atlas, 'm.deleteButton'), (new_angling, 'm.deleteButton'),
+            (new_ledger, 'm.remove'), (new_treasure, 'm.remove'),
+        ):
+            lua = factory(ui=True)
+            lua.execute(f'''
+                local b={button}
+                assert(b:GetText()=='Delete' and b.point[2]==174 and b.point[3]==-672)
+                assert(b:GetWidth()==118 and b:GetHeight()==24 and not b.enabled)
+            ''')
+        lua = new_lore_ui()
+        lua.execute("assert(m.deleteButton:GetText()=='Delete' and m.deleteButton.point[2]==174 and m.deleteButton.point[3]==-672 and not m.deleteButton.enabled)")
+        lua = new_gathering(ui=True)
+        lua.execute('''
+            shell:ShowSection('gathering');local b=gathering.frame.deleteButton
+            assert(b:GetText()=='Delete' and b.point[2]==174 and b.point[3]==-672 and not b.enabled)
+        ''')
+
+    def test_angling_delete_uses_only_displayed_view_and_keeps_history(self):
+        lua = new_angling(ui=True)
+        lua.execute('''
+            local place=spot('Selected spot','Selected pool')
+            local fact=observe('one','pool',place.poolID,place.id)
+            local water=j:Get(fact.waterID);local pool=j:Get(place.poolID);local fish=j:List('catches')[1]
+            local history=snapshot(saved.history);local facts=snapshot(saved.aggregates)
+            for _,e in ipairs({place,pool,water,fish}) do
+                c:Select(e.id);assert(m.deleteButton.enabled)
+                local view=saved.state.view
+                c:SetView(view=='catches' and 'pools' or 'catches')
+                c:State().selected=e.id;c:Refresh()
+                assert(not m.deleteButton.enabled,'foreign selection must be disabled')
+                m.deleteButton.scripts.OnClick(m.deleteButton);assert(not e.removed)
+                c:Select(e.id);click(m.deleteButton)
+                assert(not e.removed and m.deleteForm:IsShown())
+                click(m.deleteForm.cancel);assert(not e.removed and not m.deleteForm:IsShown())
+                click(m.deleteButton);click(m.deleteForm.confirm)
+                assert(e.removed and not m.deleteButton.enabled and c:State().selected==nil)
+                assert(history==snapshot(saved.history) and facts==snapshot(saved.aggregates))
+                c:State().status='removed';c:Refresh();c:Select(e.id)
+                assert(not m.deleteButton.enabled and m.merge:GetText()=='Restore')
+                click(m.merge);assert(not e.removed)
+            end
+            c:Select(fish.id);click(m.deleteButton);c:Select(pool.id)
+            click(m.deleteForm.confirm);assert(not fish.removed and not pool.removed)
+            c:Select(fish.id);click(m.deleteButton);j.readOnly=true
+            click(m.deleteForm.confirm);assert(not fish.removed)
+            j.readOnly=false;click(m.deleteButton);click(m.deleteForm.cancel)
+            m.deleteForm.confirm.scripts.OnClick(m.deleteForm.confirm);assert(not fish.removed)
+            c:Select(fish.id);j.readOnly=true;c:Refresh()
+            assert(not m.deleteButton.enabled);m.deleteButton.scripts.OnClick(m.deleteButton);assert(not fish.removed)
+            j.readOnly=false;c:Refresh();c:OpenReports()
+            m.deleteButton.scripts.OnClick(m.deleteButton);assert(not fish.removed)
+        ''')
+
+    def test_atlas_and_lore_confirmations_reject_changed_selection(self):
+        lua = new_atlas(ui=True)
+        lua.execute('''
+            local first=j:Save(fixture('First'));local second=j:Save(fixture('Second'))
+            c:Select(first);click(m.deleteButton);c:Select(second)
+            click(m.deleteForm.confirm);assert(j:Get(first) and j:Get(second))
+            c:Select(first);click(m.deleteButton);click(m.deleteForm.cancel);assert(j:Get(first))
+            click(m.deleteButton);click(m.deleteForm.confirm)
+            assert(not j:Get(first) and j:Get(second) and not m.deleteButton.enabled)
+        ''')
+        lua = new_lore_ui()
+        lua.execute('''
+            local first=writing('First');local second=writing('Second')
+            c:Select(first.id);click(m.deleteButton);c:Select(second.id)
+            click(m.deleteForm.confirm);assert(j:Get(first.id) and j:Get(second.id))
+            c:ClosePanel();c:Select(first.id);click(m.deleteButton);click(m.deleteForm.cancel);assert(j:Get(first.id))
+            click(m.deleteButton);click(m.deleteForm.confirm)
+            assert(not j:Get(first.id) and j:Get(second.id))
+        ''')
+
+    def test_gathering_delete_requires_current_selection_and_confirmation(self):
+        lua = new_gathering(ui=True)
+        lua.execute('''
+            local a={id=journal:Discover('herb','Silverleaf',100,'Elwynn',37)}
+            local b={id=journal:Discover('mineral','Copper Vein',100,'Elwynn',37)}
+            shell:ShowSection('gathering');local book=gathering.frame
+            local function selectEntry(id)
+                for _,row in ipairs(book.rows) do if row.id==id then row.scripts.OnClick(row);return end end
+                error('fixture row missing')
+            end
+            selectEntry(a.id)
+            book.deleteButton.scripts.OnClick(book.deleteButton);assert(journal.entries[a.id])
+            assert(not book.deleteForm.confirm.enabled)
+            book.deleteForm.input:SetText('DELETE');book.deleteForm.confirm.scripts.OnClick(book.deleteForm.confirm)
+            assert(journal.entries[a.id])
+            book.deleteForm.cancel.scripts.OnClick(book.deleteForm.cancel);assert(not book.deleteForm:IsShown())
+            book.deleteButton.scripts.OnClick(book.deleteButton)
+            selectEntry(b.id)
+            book.deleteForm.input:SetText('delete');book.deleteForm.input.scripts.OnEnterPressed(book.deleteForm.input)
+            assert(journal.entries[a.id] and journal.entries[b.id])
+            book.deleteButton.scripts.OnClick(book.deleteButton)
+            book.deleteForm.input:SetText('delete');book.deleteForm.input.scripts.OnEnterPressed(book.deleteForm.input)
+            assert(journal.entries[a.id] and not journal.entries[b.id])
+            assert(journal:Discover('mineral','Copper Vein',101,'Elwynn',37)==b.id)
+            gathering:Refresh();selectEntry(b.id);assert(book.deleteButton.enabled)
+        ''')
+
+    def test_ledger_and_treasure_reject_foreign_or_stale_targets(self):
+        lua = new_ledger(ui=True)
+        lua.execute('''
+            local first=visit(42);local second=visit(43);flush()
+            c:Select(first.id);click(m.remove);c:Select(second.id)
+            click(c.panels.remove.confirm);assert(j:Get(first.id) and j:Get(second.id))
+            c:ClosePanel();c:Select(first.id);click(m.remove);click(c.panels.remove.confirm)
+            assert(not j:Get(first.id) and j:Get(second.id))
+            local fresh=visit(42);flush()
+            assert(fresh.id~=first.id and j:Get(fresh.id) and next(fresh.goods))
+        ''')
+        lua = new_treasure(ui=True)
+        lua.execute('''
+            local first,v=record('First');local second,w=record('Second')
+            c:Select(first.id);c:Encounter(w.id)
+            assert(not m.remove.enabled);m.remove.scripts.OnClick(m.remove)
+            assert(not c.panels.remove and j.encounters[w.id])
+            c:Encounter(v.id);assert(m.remove.enabled)
+            for _,row in ipairs(m.rows) do
+                if row:IsShown() then assert(-row.point[3]+row:GetHeight()<=604,'catalogue overlaps footer controls') end
+            end
+        ''')
+
     def test_atlas_angling_and_ledger_keep_footer_and_maps_when_switching(self):
         for factory, section, button, action in (
             (new_atlas, 'atlas', 'm.shareButton', 'assert(c.pages.report:IsShown())'),
@@ -59,6 +186,15 @@ class ShareFooterTests(unittest.TestCase):
             assert(m.deleteButton.point[2]==174 and m.deleteButton.point[3]==-672)
             npcID=43;c:OpenAtUnit('target');checkFooter(m.shareButton)
             m.shareButton.scripts.OnClick(m.shareButton);assert(offeredID==43)
+            m.deleteButton.scripts.OnClick(m.deleteButton);assert(j.entries[43] and not m.deleteForm.confirm.enabled)
+            m.deleteForm.input:SetText('Delete');m.deleteForm.confirm.scripts.OnClick(m.deleteForm.confirm);assert(j.entries[43])
+            m.deleteForm.cancel.scripts.OnClick(m.deleteForm.cancel);assert(j.entries[43] and not m.deleteForm:IsShown())
+            m.deleteButton.scripts.OnClick(m.deleteButton);m.deleteForm.input:SetText('delete')
+            assert(m.deleteForm.confirm.enabled)
+            m.deleteForm.input.scripts.OnEscapePressed(m.deleteForm.input);assert(j.entries[43] and not m.deleteForm:IsShown())
+            m.deleteButton.scripts.OnClick(m.deleteButton);assert(m.deleteForm.input:GetText()=='' and not m.deleteForm.confirm.enabled)
+            m.deleteForm.input:SetText('delete')
+            m.deleteForm.confirm.scripts.OnClick(m.deleteForm.confirm);assert(not j.entries[43])
         ''')
 
     def test_lore_export_import_and_capture_remain_available_from_both_views(self):

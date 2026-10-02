@@ -132,11 +132,11 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 if not v.stock or v.stock.state~="unlimited" then
                     lines[#lines+1]="Last observed stock: "..L.StockLabel(v.stock).." • "..date(v.stockAt)..(v.notSeen and " • Not seen on the latest inspection" or "")
                 elseif v.notSeen then lines[#lines+1]="Not seen on the latest inspection" end
-                local price=goodsMoney(v.price)..(v.bundle and " / "..v.bundle or " • Bundle size unknown")
+                local price=goodsMoney(v.price)..(v.bundle==1 and " each" or v.bundle and " / "..v.bundle or " • Bundle size unknown")
                 if v.price and v.price>0 and v.bundle and v.bundle>1 and v.price%v.bundle==0 then
                     price=price.." ("..goodsMoney(v.price/v.bundle).." each)"
                 end
-                lines[#lines+1]="Price: "..price.." • "..date(v.priceAt);prices[#lines]=true
+                lines[#lines+1]="Price: "..price;prices[#lines]=true
                 for _,cost in ipairs(v.costs or {}) do lines[#lines+1]="Last additional quoted cost: "..cost.quantity.." × "..(cost.name or cost.kind.." #"..cost.id).." • "..date(v.costsAt) end
                 if not v.costsKnown then lines[#lines+1]="Additional costs on latest inspection: unknown or partially readable" end
                 -- An unusable (for example, higher-level) item can still be bought.
@@ -304,20 +304,28 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         self.main.directory:Hide();self.panel=p;p:Show();self:UpdateDetailToggles();return p
     end
     function c:RemoveContact()
-        local e=journal:Get(state.selected);if not e then return end
-        local p=self:Panel("remove","Remove contact")
-        if not p.description then
-            p.description=U.ReadArea(p,7,-35,221,330)
-            p.confirm=U.Button(p,"Remove contact",4,-410,250,function()
-                if journal.readOnly then c:Message("Newer Ledger schema is read-only.");return end
-                tracking:Forget(p.contact)
-                local ok,err=journal:Remove(p.contact)
-                if ok then c:ClosePanel();c:Refresh();c:Message("Contact removed. A future interaction can record it again.")
-                else c:Message(err) end
+        local e=journal:Get(state.selected);if not e or journal.readOnly then return end
+        self:ClosePanel()
+        local p=self.panels.remove
+        if not p then
+            p=ns.FieldbookUI.DeletePanel(self.main,shell,"Delete Ledger contact")
+            self.panels.remove=p
+            p:HookScript("OnHide",function(self)
+                if c.panel==self then
+                    c.panel=nil;c.main.directory:Show();c:UpdateDetailToggles()
+                end
             end)
         end
-        p.contact=e.id
-        p.description:SetText("Remove "..e.name.." from the Ledger?\n\nThis deletes this contact’s saved goods, training, locations, notes and imported reports from the active journal.\n\nFuture interactions can record this contact again. This does not blacklist the NPC.",true)
+        p.contact,p.entry=e.id,e
+        self.main.directory:Hide();self.panel=p;self:UpdateDetailToggles()
+        p:Open("Remove "..e.name.." from the Ledger?\n\nThis deletes this contact’s saved goods, training, locations, notes and imported reports from the active journal.\n\nFuture interactions can record this contact again. This does not blacklist the NPC.",function()
+            if journal.readOnly then return nil,"Newer Ledger schema is read-only." end
+            if state.selected~=p.contact or journal:Get(p.contact)~=p.entry then return nil,"Selection changed; nothing deleted." end
+            tracking:Forget(p.contact)
+            local ok,err=journal:Remove(p.contact)
+            if ok then c:ClosePanel();c:Refresh();c:Message("Contact removed. A future interaction can record it again.") end
+            return ok,err
+        end)
     end
     function c:Notes()
         if self.panel and self.panel==self.panels.notes then self:ClosePanel();return end
@@ -591,9 +599,9 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         local p=sightings[state.sighting]
         m.location:SetText(L.Safe((p and p.reported and "REPORTED • " or "")..L.PositionLabel(p)))
         m.dates:SetText(e and ("First encounter: "..date(e.first).." • Last: "..date(e.last).."\nShop: "..date(e.merchantInspection and e.merchantInspection.at).." • Trainer: "..date(e.trainerInspection and e.trainerInspection.at)) or "")
-        local matches=false;for _,row in ipairs(rows) do if row.contact==e then matches=true;break end end
-        m.status:SetText(e and ((e.personal and "Personal" or e.recorded and "Manual" or "Reported only")..(matches and "" or " · filtered")) or "")
-        m.sightings:SetText("Locations ("..#sightings..")");m.sightings:SetEnabled(#sightings>0)
+        local locationCount=0
+        for _,sighting in ipairs(sightings) do if L.Position(sighting) then locationCount=locationCount+1 end end
+        m.sightings:SetText((locationCount==1 and "NPC Location" or "NPC Locations").." ("..locationCount..")");m.sightings:SetEnabled(locationCount>0)
         m.favourite:SetSaved(e and e.favourite,e~=nil);m.favourite:SetText(e and e.favourite and "Saved" or "Favourite");m.favourite:SetEnabled(e~=nil)
         for key,button in pairs(m.detailButtons) do button:SetEnabled(e~=nil) end
         m.detailButtons.goods:SetEnabled(self:HasOfferings(e,"goods"))
@@ -651,7 +659,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         end
         m.empty=U.Label(d,"",49,-285,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
         m.manual=U.Button(d,"Record contact",42,-638,121,function() c:Manual() end)
-        m.remove=U.Button(d,"Remove contact",170,-638,122,function() c:RemoveContact() end)
+        m.remove=U.Button(d,"Delete",174,-672,118,function() c:RemoveContact() end)
         m.portraitFrame=CreateFrame("Frame",nil,m)
         m.portraitFrame:SetPoint("TOPLEFT",342,-54);m.portraitFrame:SetSize(42,42)
         m.portrait=m.portraitFrame:CreateTexture(nil,"ARTWORK")
@@ -671,6 +679,13 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             mask:SetAllPoints(texture);texture:AddMaskTexture(mask)
             return texture
         end
+        -- Low-opacity concentric layers soften the shadow below the portrait.
+        m.portraitShadow={}
+        for i,spec in ipairs({{51,0.04},{48,0.07},{45,0.13}}) do
+            local shadow=portraitCircle(spec[1],0,0,0,-6+i)
+            shadow:ClearAllPoints();shadow:SetPoint("CENTER",m.portraitFrame,"CENTER",1,-2)
+            shadow:SetAlpha(spec[2]);m.portraitShadow[i]=shadow
+        end
         m.portraitRim=portraitCircle(45,0.20,0.12,0.055,-2)
         m.portraitRing=portraitCircle(43,0.67,0.43,0.19,-1)
         m.portraitBacking=portraitCircle(38,0.035,0.025,0.015,0)
@@ -681,21 +696,38 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.portraitResolver:SetSize(1,1);m.portraitResolver:SetPoint("TOPLEFT");m.portraitResolver:SetAlpha(0)
         m.portraitResolver:EnableMouse(false)
         m.portraitResolver:SetScript("OnModelLoaded",function() c:ResolvePortrait() end)
-        m.name=U.Label(m,"",392,-59,376,"GameFontNormalLarge");m.name:SetWordWrap(false)
+        m.name=U.Label(m,"",392,-55,376,"GameFontNormalLarge");m.name:SetWordWrap(false)
+        m.name:SetShadowColor(0,0,0,0.85);m.name:SetShadowOffset(1,-1)
+        local titlePath,titleSize,titleFlags=m.name:GetFont()
+        if titlePath and titleSize then m.name:SetFont(titlePath,titleSize+2,titleFlags) end
         m.favourite=U.SavedButton(m,"Favourite",812,-55,110,function() journal:Favourite(state.selected) end)
+        m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.favourite,"TOPLEFT",-8,0)
         m.sublabel=U.Label(m,"",392,-85,385,"GameFontHighlight");m.sublabel:SetWordWrap(false)
-        m.status=U.Label(m,"",785,-86,137,"GameFontHighlightSmall")
         m.services=U.Label(m,"",392,-108,530,"GameFontHighlightSmall");m.services:SetWordWrap(false)
         m.location=U.Label(m,"",342,-128,580,"GameFontHighlightSmall");m.location:SetWordWrap(true)
         m.dates=U.Label(m,"",342,-158,580,"GameFontDisableSmall");m.dates:SetWordWrap(false)
-        m.sightings=U.MenuButton(m,"Locations",342,-174,287,function(self)
+        m.sightings=U.MenuButton(m,"NPC Locations",342,-174,287,function(self)
             local e=journal:Get(state.selected);if not e then return end
             c:Menu(self,function(_,root)
                 root:SetScrollMode(400)
-                for i,p in ipairs(journal:Locations(e)) do local index=i;root:CreateButton((p.reported and "Reported: " or "Personal: ")..L.PositionLabel(p).." • "..date(p.last),function() c:Sighting(index) end) end
+                for i,p in ipairs(journal:Locations(e)) do
+                    -- Keep the original sighting index shared with map pins.
+                    -- Zone-only observations remain evidence, not selectable locations.
+                    if L.Position(p) then
+                        local index=i
+                        root:CreateButton((p.reported and "Reported: " or "Personal: ")..L.PositionLabel(p).." • "..date(p.last),function() c:Sighting(index) end)
+                    end
+                end
             end)
         end)
         m.link=U.Button(m,"Link identity",635,-174,287,function() c:Identity() end)
+        m.link:SetScript("OnEnter",function(self)
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText("Link identity")
+            GameTooltip:AddLine("Combine two Ledger entries that you recognize as the same NPC. Choose the matching contact and confirm to merge their observations, goods, training and notes. Reported information stays marked as reported. Contacts sharing a name may be different NPCs.",1,1,1,true)
+            GameTooltip:Show()
+        end)
+        m.link:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         m.map=ns.CreateLedgerMap(m,journal,function() return state.selected,state.sighting end,function(index) c:Sighting(index) end)
         m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
         m.detailButtons={}

@@ -1,5 +1,15 @@
 local _, ns = ...
 local L=ns.Ledger
+local flightTitles={ ["flight master"]=true,["gryphon master"]=true,["wyvern master"]=true,
+    ["hippogryph master"]=true,["bat handler"]=true,["wind rider master"]=true,["dragonhawk master"]=true }
+local function contactIcon(journal,entry)
+    -- Taxi interactions record the transport role, including localized NPCs.
+    -- The displayed title also identifies existing sightings before interaction.
+    if journal:Roles(entry).transport or flightTitles[string.lower(journal:Sublabel(entry))] then
+        return "Interface\\Minimap\\Tracking\\FlightMaster"
+    end
+    return "Interface\\Icons\\INV_Misc_Coin_01"
+end
 -- Remembered merchant locations only. No map position is invented for contacts
 -- whose sightings have a zone name but no recorded coordinates.
 function ns.CreateLedgerWorldPins(journal)
@@ -50,7 +60,6 @@ function ns.CreateLedgerWorldPins(journal)
             if not pin then
                 pin=CreateFrame("Frame",nil,canvas);pin:SetSize(14,14);pin:EnableMouse(true)
                 pin.icon=pin:CreateTexture(nil,"ARTWORK");pin.icon:SetAllPoints()
-                pin.icon:SetTexture("Interface\\Icons\\INV_Misc_Coin_01")
                 pin:SetScript("OnEnter",function(self)
                     if not self.row or not GameTooltip then return end
                     local p=self.row.point
@@ -64,6 +73,7 @@ function ns.CreateLedgerWorldPins(journal)
                 pin:SetScript("OnLeave",leave);pin:SetScript("OnHide",leave);self.pins[i]=pin
             end
             local row=rows[i];pin.row=row;pin:SetParent(canvas)
+            pin.icon:SetTexture(contactIcon(journal,row.entry))
             pin:SetFrameLevel(number(level,0,65535) and level or canvas:GetFrameLevel()+10)
             pin:SetScale(1/scale);pin:ClearAllPoints()
             pin:SetPoint("CENTER",canvas,"TOPLEFT",row.point.x/10000*width*scale,-row.point.y/10000*height*scale)
@@ -139,7 +149,7 @@ function ns.CreateLedgerMap(parent,journal,getSelection,onSighting)
         end
         for _,pin in ipairs(self.pins or {}) do if pin.group and pin:IsShown() then
             local point=pin.group[1].point
-            pin.icon:SetTexture("Interface\\Icons\\INV_Misc_Coin_01")
+            pin.icon:SetTexture(contactIcon(journal,point.contact))
             pin.icon:SetVertexColor(point.reported and 0.55 or 1,point.reported and 0.7 or 1,1)
             pin:SetScript("OnEnter",function(self)
                 if not GameTooltip then return end

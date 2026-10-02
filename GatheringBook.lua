@@ -4,8 +4,76 @@ local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or b
 -- Keep gathering camera settings independent of the Bestiary. A camera distance
 -- of 1.25 / 0.40 gives approximately 40% of the original apparent model size.
 local function applyModelZoom(model)
+    if model.isMineralViewer then return end
     model:SetPortraitZoom(0)
     model:SetCamDistanceScale(3.125)
+end
+
+-- Mineral assets have different placement origins (including below-ground
+-- origins). Use their render bounds, never a resource-name offset table.
+local function createMineralViewer(parent,onReady)
+    local scene=CreateFrame("ModelScene",nil,parent)
+    scene.isMineralViewer=true
+    local actor=scene:CreateActor()
+    scene.actor=actor
+    actor:SetUseCenterForOrigin(true,true,true)
+    actor:SetPreferModelCollisionBounds(false)
+    actor:SetPosition(0,0,0)
+    scene:SetCameraFieldOfView(math.rad(30))
+    scene:SetCameraOrientationByAxisVectors(-1,0,0,0,1,0,0,0,1)
+    scene:SetLightType(0) -- Directional.
+    scene:SetLightAmbientColor(0.75,0.75,0.75)
+    scene:SetLightDiffuseColor(0.8,0.8,0.8)
+    scene:SetLightDirection(-1,-1,-1)
+    scene:SetLightVisible(true)
+    local pending,elapsed
+    function scene:ClearModel()
+        pending=nil;actor:ClearModel();actor:Hide()
+    end
+    function scene:SetModel(fileID)
+        pending=fileID;elapsed=0;actor:Hide()
+        if not actor:SetModelByFileID(fileID) then
+            pending=nil;error("Mineral model unavailable")
+        end
+    end
+    function scene:SetRotation(angle) actor:SetYaw(angle) end
+    function scene:UpdateFraming(dt)
+        if not pending then return end
+        elapsed=elapsed+(dt or 0)
+        if actor:IsLoaded() and actor:GetModelFileID()==pending then
+            local x0,y0,z0,x1,y1,z1=actor:GetActiveBoundingBox()
+            -- Clients expose either two Vector3 values or six scalar values.
+            if not (issecretvalue and (issecretvalue(x0) or issecretvalue(y0)))
+                and type(x0)=="table" and type(y0)=="table"
+                and type(x0.GetXYZ)=="function" and type(y0.GetXYZ)=="function" then
+                local bottom,top=x0,y0
+                x0,y0,z0=bottom:GetXYZ();x1,y1,z1=top:GetXYZ()
+            end
+            local valid=true
+            local values={x0,y0,z0,x1,y1,z1}
+            for i=1,6 do
+                local value=values[i]
+                if (issecretvalue and issecretvalue(value)) or type(value)~="number"
+                    or value~=value or math.abs(value)>100000 then valid=false;break end
+            end
+            if valid and x0 and y0 and z0 and x1 and y1 and z1
+                and x1>=x0 and y1>=y0 and z1>z0 then
+                local dx,dy,dz=x1-x0,y1-y0,z1-z0
+                -- A bounding sphere keeps every yaw inside the same framing.
+                local radius=math.sqrt(dx*dx+dy*dy+dz*dz)/2
+                local aspect=self:GetWidth()/math.max(1,self:GetHeight())
+                local halfFov=math.atan(math.tan(math.rad(15))*math.min(1,aspect)*0.70)
+                local distance=radius/math.sin(halfFov)
+                self:SetCameraPosition(distance,0,0)
+                self:SetCameraNearClip(math.max(0.001,(distance-radius)*0.5))
+                self:SetCameraFarClip(distance+radius*2)
+                actor:Show();pending=nil;onReady(true)
+                return
+            end
+        end
+        if elapsed>=5 then pending=nil;actor:Hide();onReady(false) end
+    end
+    return scene
 end
 
 -- Selection borders and clipped hover names mirror the Bestiary. Kept local to
@@ -143,7 +211,10 @@ function ns.CreateGatheringBook(journal,shell)
     local offset=0
     local PAGE_SIZE=16
     local locationFilters,drafts={},{}
-    local locations=ns.CreateGatheringLocationsWindow(journal,function() return shell:GetFrame() end)
+    local locations=ns.CreateGatheringLocationsWindow(journal,function()
+        if not book then shell:EnsureSection("gathering") end
+        return book
+    end)
     controller.locations=locations
     local refresh,refreshLocationFilter
     local function choose(id)
@@ -169,6 +240,9 @@ function ns.CreateGatheringBook(journal,shell)
     refresh=function(reloadModel)
         if not book then return end
         book.revision=journal.revision
+        for key,control in pairs(book.mapOptions) do
+            control:SetChecked(journal:ShowNodesOn(key))
+        end
         local rows=currentRows()
         for kind,control in pairs(book.typeButtons) do control:SetSelected(kind==(category or "all")) end
         book.locationsButton:SetSelected(next(locationFilters)~=nil or book.locationFrame:IsShown())
@@ -197,10 +271,13 @@ function ns.CreateGatheringBook(journal,shell)
             or next(journal.entries) and "No matching entries.\nTry clearing your filters."
             or "No herbs or minerals recorded yet.")
         local entry=selected and journal.entries[selected]
+        book.deleteButton:SetEnabled(entry~=nil and not journal.readOnly)
+        if book.deleteForm:IsShown() and book.deleteForm.entry~=entry then book.deleteForm:Hide() end
         book.title:SetText(entry and (entry.name.." • "..ns.GatheringKinds[entry.kind].title) or "Gatherer's Compendium")
         book.locations:SetEnabled(entry~=nil);book.details:SetShown(entry~=nil);book.empty:SetShown(entry==nil)
         if not entry then
             book.modelFileID=nil;book.model:ClearModel();book.model:Hide()
+            book.mineralModel:ClearModel();book.mineralModel:Hide()
             return
         end
         local modelFileID=entry.modelFileID or ns.GatheringModel(entry.kind,entry.name)
@@ -211,15 +288,18 @@ function ns.CreateGatheringBook(journal,shell)
             and (reloadModel or book.modelEntry~=selected or book.modelFileID~=modelFileID) then
             book.modelEntry=selected;book.modelFileID=modelFileID
             book.model:ClearModel();book.model:Hide();book.modelRotation=0
+            book.mineralModel:ClearModel();book.mineralModel:Hide()
+            local model=entry.kind=="mineral" and book.mineralModel or book.model
+            book.activeModel=model
             book.modelCaption:SetText("Model unavailable")
             if modelFileID then
                 book.modelCaption:SetText("Loading model…")
-                local ok=pcall(book.model.SetModel,book.model,modelFileID)
+                local ok=pcall(model.SetModel,model,modelFileID)
                 if ok then
-                    book.model:Show()
-                    applyModelZoom(book.model)
+                    model:Show()
+                    applyModelZoom(model)
                 else book.modelCaption:SetText("Model unavailable") end
-                book.model:SetRotation(0)
+                model:SetRotation(0)
             end
         end
         book.stats:SetText("Interactions: "..entry.interactions.."\nCompleted gathers: "..entry.completed)
@@ -406,9 +486,21 @@ function ns.CreateGatheringBook(journal,shell)
         book.noMatches=label(book,"",145,-122,146,"GameFontHighlightSmall");book.noMatches:SetSpacing(4)
         book.previous=button(book,"Previous",135,-596,84,function() cycle(-1) end)
         book.next=button(book,"Next",229,-596,86,function() cycle(1) end)
-        book.indexCount=label(book,"",135,-660,180,"GameFontHighlightSmall");book.indexCount:SetTextColor(0.55,0.58,0.58)
+        local deleteForm=ui.DeletePanel(book,shell,"Delete gathering entry",true);book.deleteForm=deleteForm
+        book.deleteButton=button(book,"Delete",174,-672,118,function()
+            local id=selected;local entry=id and journal.entries[id]
+            if not entry or journal.readOnly then return end
+            deleteForm.id,deleteForm.entry=id,entry
+            deleteForm:Open("Permanently delete "..entry.name.."?\n\nIts observations, locations, loot and notes will be removed. This cannot be undone.\n\nFuture observations may record it again.",function()
+                if selected~=id or journal.entries[id]~=entry then return nil,"Selection changed; nothing deleted." end
+                if journal:DeleteEntry(id) then drafts[id]=nil;selected=nil;locations:Hide();refresh();return true end
+                return nil,"Could not delete this entry."
+            end)
+        end)
+        book.indexCount=label(book,"",135,-638,180,"GameFontHighlightSmall");book.indexCount:SetTextColor(0.55,0.58,0.58)
         book.title=label(book,"Gatherer's Compendium",362,-55,474,"GameFontNormalLarge")
         book.title:SetTextColor(1,0.82,0.14);book.title:SetWordWrap(false)
+        book.title:SetShadowColor(0,0,0,0.85);book.title:SetShadowOffset(1,-1)
         local path,size,flags=book.title:GetFont()
         if path and size then book.title:SetFont(path,size+2,flags) end
         book.locations=button(book,"Locations",854,-52,82,function() locations:Toggle(selected) end)
@@ -431,9 +523,15 @@ function ns.CreateGatheringBook(journal,shell)
         applyModelZoom(book.model);book.model:EnableMouse(true)
         book.modelCaption=label(book.modelBorder,"",8,-76,191,"GameFontHighlightSmall")
         book.modelCaption:SetJustifyH("CENTER")
+        book.mineralModel=createMineralViewer(detail,function(ready)
+            book.modelCaption:SetText(ready and "" or "Model unavailable")
+        end)
+        book.mineralModel:SetFrameLevel(book.modelBorder:GetFrameLevel()+1)
+        book.mineralModel:SetPoint("TOPLEFT",366,-111);book.mineralModel:SetSize(203,164)
+        book.mineralModel:Hide();book.mineralModel:EnableMouse(true)
         book.model:SetScript("OnModelLoaded",function(self)
             -- Ignore late callbacks belonging to the previously selected entry.
-            if book.modelFileID and self:GetModelFileID()==book.modelFileID then
+            if book.activeModel==self and book.modelFileID and self:GetModelFileID()==book.modelFileID then
                 applyModelZoom(self)
                 book.modelCaption:SetText("")
             end
@@ -445,9 +543,11 @@ function ns.CreateGatheringBook(journal,shell)
                 return x/(UIParent:GetEffectiveScale() or 1)
             end
         end
-        book.model:SetScript("OnMouseDown",function() rotating=true;lastCursorX=cursorX() end)
-        book.model:SetScript("OnMouseUp",function() rotating=false;lastCursorX=nil end)
-        book.model:SetScript("OnUpdate",function(self)
+        for _,viewer in ipairs({book.model,book.mineralModel}) do
+        viewer:SetScript("OnMouseDown",function() rotating=true;lastCursorX=cursorX() end)
+        viewer:SetScript("OnMouseUp",function() rotating=false;lastCursorX=nil end)
+        viewer:SetScript("OnUpdate",function(self,dt)
+            if self.isMineralViewer then self:UpdateFraming(dt) end
             if not rotating then return end
             local x=cursorX()
             if x and lastCursorX then
@@ -456,7 +556,8 @@ function ns.CreateGatheringBook(journal,shell)
             end
             lastCursorX=x
         end)
-        book.model:SetScript("OnHide",function() rotating=false;lastCursorX=nil end)
+        viewer:SetScript("OnHide",function() rotating=false;lastCursorX=nil end)
+        end
         book.stats=label(detail,"",362,-302,216);book.stats:SetSpacing(6)
         book.history=label(detail,"",590,-302,334,"GameFontHighlightSmall");book.history:SetSpacing(6)
         label(detail,"Locations",590,-109,334,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
@@ -471,7 +572,8 @@ function ns.CreateGatheringBook(journal,shell)
         label(detail,"Field notes",362,-391,270,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         local noteBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
         noteBorder:SetPoint("TOPLEFT",362,-421);noteBorder:SetSize(270,185)
-        noteBorder:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12})
+        noteBorder:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,
+            insets={left=2,right=2,top=2,bottom=2}})
         noteBorder:SetBackdropColor(0.05,0.04,0.025,0.6);noteBorder:SetBackdropBorderColor(0.45,0.30,0.13,1)
         book.noteScroll=CreateFrame("ScrollFrame",nil,noteBorder,"UIPanelScrollFrameTemplate")
         book.noteScroll:SetPoint("TOPLEFT",8,-8);book.noteScroll:SetSize(230,169)
@@ -507,7 +609,8 @@ function ns.CreateGatheringBook(journal,shell)
         label(detail,"Observed loot",646,-391,270,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         local lootBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
         lootBorder:SetPoint("TOPLEFT",646,-421);lootBorder:SetSize(270,185)
-        lootBorder:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12})
+        lootBorder:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,
+            insets={left=2,right=2,top=2,bottom=2}})
         lootBorder:SetBackdropColor(0.05,0.04,0.025,0.6);lootBorder:SetBackdropBorderColor(0.45,0.30,0.13,1)
         book.lootScroll=CreateFrame("ScrollFrame",nil,lootBorder,"UIPanelScrollFrameTemplate")
         book.lootScroll:SetPoint("TOPLEFT",8,-8);book.lootScroll:SetSize(230,169)
@@ -528,7 +631,6 @@ function ns.CreateGatheringBook(journal,shell)
             end)
             book.mapOptions[key]=control
         end
-        label(book,"Hover to record zones. Interact to record approximate coordinates.",362,-681,554,"GameFontHighlightSmall")
         local filter=CreateFrame("Frame","AzerothFieldbookGatheringLocationFilter",UIParent,"BackdropTemplate")
         filter:SetSize(320,378);filter:SetPoint("TOPRIGHT",book,"TOPLEFT",-6,0)
         filter:SetFrameStrata("FULLSCREEN_DIALOG");filter:SetClampedToScreen(true);filter.afbAnchorRule="filters"
@@ -587,7 +689,7 @@ function ns.CreateGatheringBook(journal,shell)
         if ns.WindowFocus then ns.WindowFocus:Register(filter) end
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]=filter:GetName() end
         book:SetScript("OnHide",function()
-            dismiss:Hide();filter:Hide();locations:Hide();book.search:ClearFocus();book.note:ClearFocus()
+            dismiss:Hide();filter:Hide();locations:Hide();deleteForm:Hide();book.search:ClearFocus();book.note:ClearFocus()
             for _,row in ipairs(book.rows) do row:StopNameScroll() end
         end)
         local elapsed=0

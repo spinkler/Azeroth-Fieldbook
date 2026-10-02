@@ -1,14 +1,16 @@
-# Azeroth Fieldbook 0.19.2 (Beta)
+# Azeroth Fieldbook 0.20.0 (Release)
 
-Version 0.19.2 refines the Beta's map controls: one brightness preference across
-Fieldbook maps, aligned grey coordinate/brightness rows and a compact Legacy
-Fill checkbox that clears Map Layers. It also standardizes Share buttons,
-removes the Compendium's A–Z index, adds gathering discovery chat messages and
-optional behaviour traits in creature tooltips, and hardens native map filter
-callbacks. Whole-Fieldbook backup and recovery remains available through
-**Options → Whole-Fieldbook backups** or `/fieldbook backups`. This is a Beta;
-native acceptance of the map filter correction, new controls and traced
-sub-zone outlines remains pending.
+Version 0.20.0 brings consistent deletion confirmations, in-window gathering
+maps, geometry-based mineral previews and clearer journal headers and controls.
+It also refines Ledger location and price displays, adds a first-use map-filter
+hint, and enables behaviour tooltip traits by default while preserving opt-outs.
+Whole-Fieldbook backup and recovery remains available through
+**Options → Whole-Fieldbook backups** or `/fieldbook backups`.
+
+This is the recommended Release-channel build of a pre-1.0 project. Remaining
+native acceptance work includes full mineral-catalog framing, tutorial placement,
+traced sub-zone outlines and the level-cap-gated Beast Lore milestone. Release
+channel availability does not mean those checks are complete.
 
 Saved-data protections cover initialization, Lore consolidation and
 report validation boundaries. An unsupported or malformed main save disables
@@ -167,12 +169,10 @@ Use **Sources / spots** on a caught item to find where you caught it before.
 - Hovering a recognizable fishing-pool world tooltip adds its type to the current
   zone, without a coordinate pin or catch association. Localized Fishing requirements
   are recognized; English school/pool/shoal and wreckage names also have a fallback.
-  Select a pool type and **Remove pool** to hide it and suppress automatic re-addition.
-  Use **Show: removed**, select the type, then **Restore pool** to bring it back.
-  Removal preserves notes and catch history.
-  In **Waters**, select an incorrect pool sighting and use **Remove sighting**;
-  **Show: removed** offers **Restore sighting**. Other sightings and the pool
-  type remain. Removed automatic sightings stay suppressed in that zone.
+  **Delete** beside **Share** hides the selected entry in Waters, Pool Types or
+  Catches, preserving notes and catch history. A new observation can rediscover
+  it immediately; deletion never blacklists it. **Show: removed** and **Restore**
+  also let you bring an entry back manually. Other entries remain unchanged.
 - **Remember spot** and **Pool sighting** record deliberate, named observations
   at your approximate player position. A sighting reveals no pool contents.
   Map pins remember past observations; they do not promise a live pool.
@@ -235,9 +235,8 @@ sub-zone crossings and encountered weather are observed automatically.
   estimates regions from your crossings and interior observations, with a unique colour for each area
   on the map. New colours maximise their minimum perceptual distance from those
   already assigned, retaining existing colours as the visible map updates.
-  **Display selected sub-zones on main map**, above **Toggle Automatic Mapping**,
-  enables those layers on Blizzard's main map. It defaults off and
-  reuses the cached, time-budgeted renderer. The main map's **Filters** dropdown
+  The main map overlay defaults off and reuses the cached, time-budgeted renderer.
+  Enable its layers through the main map's **Filters** dropdown, which
   has an **Azeroth Fieldbook** group with independent **Points**, **Labels**,
   **Zones**, **Merchants** and **Nodes** checkboxes. Its sub-zone layers initially
   follow the Atlas selections; changing a main-map filter saves separate choices.
@@ -246,6 +245,8 @@ sub-zone crossings and encountered weather are observed automatically.
   location per merchant on the selected map, preferring personal sightings over
   reports; unlocated contacts are omitted. Merchant pins default off and tooltips
   identify reported evidence. These filters never change automatic recording.
+  A gold tutorial callout points to Filters the first time the world map opens,
+  once per account after this tutorial is introduced.
   The experimental default fill traces inward through supporting samples instead
   of spanning every inward bend. It retains every observed location, but remains
   an estimate: sparse samples can still bridge unknown space. **Legacy fill**,
@@ -705,7 +706,7 @@ recipients receive normal unverified Rumours, not automatic confirmation.
 
 Under **Options → Tooltips and cast IDs**, enable **Show behaviour traits in
 creature tooltips** to display checked Behaviour traits on creature tooltips,
-even without displayed abilities or kill counts. This separate option is off
+even without displayed abilities or kill counts. This separate option is on
 by default and excludes Disposition, tameability and unverified Rumours.
 
 **Hostile** and **Neutral** use Blizzard's tooltip red/yellow reaction colours

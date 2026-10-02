@@ -140,7 +140,6 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.subzones:SetChecked(state.showSubzones==true)
         m.subzoneLabels:SetChecked(state.showSubzoneLabels==true)
         m.subzonePoints:SetChecked(state.showSubzonePoints==true)
-        m.worldSubzones:SetChecked(state.showSubzonesOnWorldMap==true)
         m.legacySubzones:SetChecked(state.subzoneFillMethod=="convex")
         c.worldSubzones:Refresh()
         m.hideZoneAreas:SetChecked(state.hideZoneNameSubzones==true)
@@ -171,6 +170,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.details:SetText(table.concat(detail,"\n"))
         m.reveal:SetShown(e~=nil and not journal:Layer(e.category))
         for _,b in ipairs(m.entryButtons) do b:SetEnabled(e~=nil) end
+        m.deleteButton:SetEnabled(e~=nil and not journal.readOnly)
         m.route:SetEnabled(e~=nil and e.category=="route")
     end
     local function build(content)
@@ -207,6 +207,18 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         U.Button(m,"Add Discovery",342,-58,140,function() c:OpenEditor(nil,false,A.CurrentLocation()) end)
         U.Button(m,"Expeditions",488,-58,116,function() c:Expeditions() end)
         m.shareButton=U.ShareButton(m,function() c:Report() end)
+        m.deleteButton=U.Button(m,"Delete",174,-672,118,function()
+            local id=state.selected;local e=journal:Get(id)
+            if c.activePage~=m or not e or journal.readOnly then return end
+            local record=journal.records[id]
+            m.deleteForm=m.deleteForm or ns.FieldbookUI.DeletePanel(m,shell,"Delete Atlas entry")
+            m.deleteForm:Open("Delete "..A.Safe(e.name).."?\n\nThis cannot be undone. Related entries and source-section records are preserved.\n\nLinks in routes, expeditions and report drafts remain unresolved.",function()
+                if state.selected~=id or journal.records[id]~=record then return nil,"Selection changed; nothing deleted." end
+                local ok=journal:Delete(id)
+                if ok then state.selected=nil;c:Refresh() end
+                return ok,"Could not delete this entry."
+            end)
+        end)
         U.Button(m,"Current Zone",794,-58,128,function()
             local location=A.CurrentLocation();c:SetZone(location.mapID,location.zone);c:Message(location.mapID and "Showing your current zone." or "Current map unavailable; you can still record notes.")
         end)
@@ -235,13 +247,6 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             end)
         end)
         U.Tip(m.layerMenu,"Choose which discovery markers appear on the map. Check several layers or use Show all / Hide all. The discovery index and sub-zone controls are unchanged.")
-        m.worldSubzones=U.Check(m,"Display selected sub-zones on main map",342,-120,280,function(on)
-            if not journal.readOnly then state.showSubzonesOnWorldMap=on end
-            c.worldSubzones:Refresh()
-        end)
-        m.worldSubzones:SetChecked(state.showSubzonesOnWorldMap==true)
-        m.worldSubzones:SetEnabled(not journal.readOnly)
-        U.Tip(m.worldSubzones,"Enable sub-zones on Blizzard's main map. Choose Points, Labels and Zones independently in that map's Filters dropdown. Until first changed there, the layers follow the Atlas selections. Off by default; does not change automatic mapping.")
         m.automaticMapping=U.Check(m,"Toggle Automatic Mapping",342,-146,280,function(on)
             if not journal.readOnly then state.automaticMapping=on;journal.subzones:Reset() end
         end)
@@ -354,7 +359,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             "|cffffd1004. Routes and passages|r\nChoose the Route / Passage category, then Save & route stops. Add recorded places or named waypoints; use Up, Down and Remove to arrange them. Stops can span zones. Map lines connect recorded stops, not guaranteed safe paths.\n\n"..
             "|cffffd1005. Expeditions and connections|r\nUse Expeditions for longer journals and Linked notes to attach them to a discovery. Connections links known Atlas discoveries or records in other supported Fieldbook sections. Removing a link leaves the source record intact.\n\n"..
             "|cffffd1006. Field reports|r\nShare saves a field-report draft for a zone or selected discoveries. Choose what to include, add private notes or expedition excerpts only if wanted, then use Preview report. This page provides drafts and previews only; it cannot send or import reports.\n\n"..
-            "|cffffd1007. Self-discovered sub-zones|r\nAutomatic mapping starts on and records area crossings and survey points as you travel, even with the Atlas closed. Toggle Automatic Mapping pauses it. Automatic recording pauses in The Great Sea, on flight paths and while flying.\n\nBind Record Atlas survey point in the game's keybinding settings to add a point where you stand, including with automatic mapping off. You need a readable position and enough distance from existing samples. Cleanup is paused while traced fill is enabled to preserve its supporting points. Legacy fill restores the original convex outline; its cleanup can permanently remove interior samples.\n\nShading, Points and Labels control the display. Display selected sub-zones on main map enables the overlay. The main map Filters dropdown has independent Points, Labels and Zones choices, plus Merchants and Nodes. Shading estimates an area from your samples; it is not an exact border survey. Hover the map to inspect the evidence. Sub-zone samples do not add discovery entries or enter field reports.\n\n"..
+            "|cffffd1007. Self-discovered sub-zones|r\nAutomatic mapping starts on and records area crossings and survey points as you travel, even with the Atlas closed. Toggle Automatic Mapping pauses it. Automatic recording pauses in The Great Sea, on flight paths and while flying.\n\nBind Record Atlas survey point in the game's keybinding settings to add a point where you stand, including with automatic mapping off. You need a readable position and enough distance from existing samples. Cleanup is paused while traced fill is enabled to preserve its supporting points. Legacy fill restores the original convex outline; its cleanup can permanently remove interior samples.\n\nShading, Points and Labels control the Atlas display. Use the world map Filters dropdown to enable Points, Labels and Zones independently on the main map, alongside Merchants and Nodes. Shading estimates an area from your samples; it is not an exact border survey. Hover the map to inspect the evidence. Sub-zone samples do not add discovery entries or enter field reports.\n\n"..
             "|cffffd1008. Your journal|r\nAtlas records and browsing settings follow Account-wide tracking in Options. It starts on; turn it off to use this character's separate journal after /reload. Bestiary resets, backups and sharing do not include Atlas records.",
         frameName="AzerothFieldbookAtlasSection",build=build,onOpen=function()
             if c.main then c.main.map:Invalidate() end;c:Refresh()

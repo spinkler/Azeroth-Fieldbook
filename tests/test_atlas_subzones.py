@@ -277,7 +277,8 @@ class SubzoneTests(unittest.TestCase):
             local control=c.worldSubzones
             control:Refresh();assert(not control.overlay,'Disabled overlay allocates no drawing widgets')
             j.state.showSubzones=true;j.state.showSubzoneLabels=true;j.state.showSubzonePoints=true
-            m.worldSubzones:SetChecked(true);click(m.worldSubzones);settle()
+            assert(m.worldSubzones==nil,'World map filters replace the redundant Atlas checkbox')
+            j.state.showSubzonesOnWorldMap=true;control:Refresh();settle() -- Existing saved preference.
             local overlay=assert(control.overlay)
             local function clickThrough()
                 assert(not overlay:IsMouseClickEnabled() and not overlay:IsMouseMotionEnabled() and not overlay.mouseWheel,
@@ -307,7 +308,7 @@ class SubzoneTests(unittest.TestCase):
             WorldMapFrame:Show();WorldMapFrame.scripts.OnShow(WorldMapFrame);settle()
             assert(overlay:IsShown() and #overlay.subzoneModel.rows>0)
             clickThrough()
-            m.worldSubzones:SetChecked(false);click(m.worldSubzones);settle()
+            j.state.showSubzonesOnWorldMap=false;control:Refresh();settle()
             assert(not overlay:IsShown() and not overlay.subzonePending)
             assert(j.state.automaticMapping~=false,'Display toggle does not change collection')
         ''')

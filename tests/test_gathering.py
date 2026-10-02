@@ -541,25 +541,25 @@ class GatheringUITests(unittest.TestCase):
 
     def test_model_loads_after_page_is_visible_and_reloads_on_tab_or_book_return(self):
         self.lua.execute('''
-            gather('Copper Vein','copper',2575)
+            gather('Peacebloom','peace')
             shell:EnsureSection('gathering');local book=gathering.frame
             assert(not book:IsShown() and not book.model.modelLoads,'building a hidden section must not load its model')
             shell:ShowSection('gathering')
-            assert(book.model.modelLoads==1 and book.model.requestedModel==219514)
+            assert(book.model.modelLoads==1 and book.model.requestedModel==219481)
             assert(book.model:GetFrameLevel()>book.modelBorder:GetFrameLevel())
-            book.model.loadedModel=219514;book.model.scripts.OnModelLoaded(book.model)
-            book.note:SetText('Keep my draft');book.search:SetText('Copper')
+            book.model.loadedModel=219481;book.model.scripts.OnModelLoaded(book.model)
+            book.note:SetText('Keep my draft');book.search:SetText('Peace')
             shell:ShowSection('atlas');book.model:ClearModel() -- Native render state lost while hidden.
             local loads=book.model.modelLoads
             gathering:Refresh();assert(book.model.modelLoads==loads)
             shell:ShowSection('gathering')
-            assert(book.model.modelLoads==loads+1 and book.model.requestedModel==219514 and book.model:IsShown())
-            assert(book.note:GetText()=='Keep my draft' and book.search:GetText()=='Copper')
+            assert(book.model.modelLoads==loads+1 and book.model.requestedModel==219481 and book.model:IsShown())
+            assert(book.note:GetText()=='Keep my draft' and book.search:GetText()=='Peace')
             assert(book.model.cameraDistance==3.125)
             shell:Hide();book.model:ClearModel();gathering:Refresh()
             assert(book.model.modelLoads==loads+1,'hidden refresh must not reload')
             shell:Toggle()
-            assert(book.model.modelLoads==loads+2 and book.model.requestedModel==219514)
+            assert(book.model.modelLoads==loads+2 and book.model.requestedModel==219481)
             local reopened=book.model.modelLoads;gathering:Refresh()
             assert(book.model.modelLoads==reopened,'ordinary updates must not continually reload models')
         ''')
@@ -575,6 +575,68 @@ class GatheringUITests(unittest.TestCase):
             assert(book.modelCaption:GetText()=='Model unavailable')
             book.model.SetModel=load;shell:ShowSection('atlas');shell:ShowSection('gathering')
             assert(book.title:GetText()=='Peacebloom • Herb' and book.model.requestedModel==219481 and book.model:IsShown())
+        ''')
+
+    def test_mineral_framing_is_origin_independent_and_fits_rotation(self):
+        self.lua.execute('''
+            gather('Copper Vein','copper',2575)
+            shell:EnsureSection('gathering');local book=gathering.frame
+            local scene=book.mineralModel;local actor=scene.actor
+            assert(not actor.requestedModel,'Do not load beneath a hidden book')
+            shell:ShowSection('gathering')
+            assert(actor.requestedModel==219514 and not book.model:IsShown())
+            assert(actor.centered[1] and actor.centered[2] and actor.centered[3] and not actor.collisionBounds)
+            local distance
+            for _,offset in ipairs({-100,-7,0,5,100}) do
+                scene:ClearModel();scene:SetModel(219514)
+                actor.loadedModel=219514
+                actor.bounds={-2,-3,offset,2,3,offset+4}
+                scene:UpdateFraming(.1)
+                assert(actor:IsShown() and book.modelCaption:GetText()=='')
+                local d=scene.cameraPosition[1]
+                assert(not distance or math.abs(distance-d)<1e-10,'Origin must not change framing')
+                distance=d
+                -- Project each centered corner over a complete turn. The
+                -- perspective silhouette must stay inside the viewport.
+                for angle=0,360,5 do
+                    local a=math.rad(angle)
+                    for _,x in ipairs({-2,2}) do for _,y in ipairs({-3,3}) do for _,z in ipairs({-2,2}) do
+                        local depth=d-(x*math.cos(a)-y*math.sin(a))
+                        local horizontal=x*math.sin(a)+y*math.cos(a)
+                        assert(depth>scene.nearClip and depth<scene.farClip)
+                        assert(math.abs(z/depth)<math.tan(math.rad(15)))
+                        assert(math.abs(horizontal/depth)<math.tan(math.rad(15))*203/164)
+                    end end end
+                end
+            end
+            cursorX=100;GetCursorPosition=function() return cursorX,0 end
+            scene.scripts.OnMouseDown();cursorX=120;scene.scripts.OnUpdate(scene,.1)
+            assert(actor.yaw>0);scene.scripts.OnMouseUp()
+            shell:Hide();shell:Toggle();assert(actor.requestedModel==219514)
+            assert(not actor:IsShown(),'Wait for fresh geometry on reopening')
+        ''')
+
+    def test_mineral_bounds_vectors_invalid_data_and_stale_loads(self):
+        self.lua.execute('''
+            gather('Copper Vein','copper',2575);gather('Dark Iron Deposit','dark',2575)
+            shell:ShowSection('gathering');local book=gathering.frame
+            local scene=book.mineralModel;local actor=scene.actor
+            book.rows[2].scripts.OnClick(book.rows[2])
+            assert(actor.requestedModel==189103)
+            actor.loadedModel=219514;actor.bounds={-2,-2,-2,2,2,2}
+            scene:UpdateFraming(.1);assert(not actor:IsShown(),'Ignore stale Copper completion')
+            actor.loadedModel=189103
+            actor.bounds={{GetXYZ=function() return -2,-2,-8 end},{GetXYZ=function() return 2,2,-4 end}}
+            scene:UpdateFraming(.1);assert(actor:IsShown())
+            for _,bounds in ipairs({{}, {0,0,0,0,0,0}, {0,0,0,1,1,math.huge},
+                {secret,0,0,1,1,1}, {0,0,0,1,1,0/0}, {2,0,0,1,1,1}}) do
+                scene:ClearModel();scene:SetModel(189103);actor.loadedModel=189103;actor.bounds=bounds
+                scene:UpdateFraming(5)
+                assert(not actor:IsShown() and book.modelCaption:GetText()=='Model unavailable')
+            end
+            actor.SetModelByFileID=function() return false end
+            shell:Hide();shell:Toggle()
+            assert(not scene:IsShown() and book.modelCaption:GetText()=='Model unavailable')
         ''')
 
     def test_hover_locations_and_object_previews_match_bestiary_panel_and_rotate(self):
@@ -598,8 +660,8 @@ class GatheringUITests(unittest.TestCase):
             book.model.scripts.OnMouseUp();local rotation=book.model.rotation
             cursorX=140;book.model.scripts.OnUpdate(book.model);assert(book.model.rotation==rotation)
             hover('Copper Vein','Requires Mining');discover();gathering:Refresh()
-            book.rows[1].scripts.OnClick(book.rows[1]);assert(book.model.requestedModel==219514)
-            assert(book.model.cameraDistance==3.125,'mineral selection must retain gathering zoom')
+            book.rows[1].scripts.OnClick(book.rows[1]);assert(book.mineralModel.actor.requestedModel==219514)
+            assert(not book.model:IsShown() and book.mineralModel:IsShown())
             book.model.loadedModel=219481;book.model.scripts.OnModelLoaded(book.model)
             assert(book.modelCaption:GetText()=='Loading model…','stale load must not clear the caption')
             hover('Unknown herb');discover();gathering:Refresh()
@@ -709,6 +771,31 @@ class GatheringUITests(unittest.TestCase):
             end
             local revision=journal.revision;px=0.8;map.scripts.OnUpdate(map,1)
             assert(journal.revision==revision and count(points())==3)
+        ''')
+
+    def test_locations_overlay_stays_in_right_pane_and_follows_selection(self):
+        self.lua.execute('''
+            gather('Copper Vein','copper',2575);gather('Silverleaf','silver')
+            shell:ShowSection('gathering');local book=gathering.frame
+            book.locations.scripts.OnClick();local overlay=gathering.locations:GetFrame()
+            assert(overlay.parent==book and overlay:GetScale()==1)
+            assert(overlay.point[1]=='TOPLEFT' and overlay.point[2]==book)
+            assert(overlay.point[4]==342 and overlay.point[5]==-78)
+            assert(342+overlay:GetWidth()==936 and 78+overlay:GetHeight()==714)
+            for _,object in ipairs(objects) do
+                assert(object.parent~=overlay or object.template~='UIPanelCloseButton')
+            end
+            assert(overlay:GetFrameLevel()>book.details:GetFrameLevel())
+            assert(not overlay.scripts.OnDragStart and not overlay.afbAnchorRule)
+            assert(book.title.point[3]==-55 and book.locations.point[3]==-52)
+            assert(overlay.map:GetWidth()<=overlay:GetWidth()-36)
+            assert(overlay.map:GetHeight()<=372)
+            book.rows[2].scripts.OnClick(book.rows[2])
+            assert(overlay:IsShown() and overlay.creature:GetText()=='Silverleaf')
+            assert(book.title:GetText()=='Silverleaf • Herb')
+            book.locations.scripts.OnClick();assert(not overlay:IsShown())
+            book.locations.scripts.OnClick();assert(overlay:IsShown())
+            shell:ShowSection('atlas');assert(not overlay:IsShown())
         ''')
 
     def test_field_notes_focus_save_clear_and_reload_independently_per_resource(self):

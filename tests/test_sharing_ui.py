@@ -533,12 +533,13 @@ do
     eq(block:GetHeight(),bottom+14,'Points block includes both sections and bottom padding')
 end
 ns.ShowDebugReport('Position test')
+assert(main.deleteForm.parent==main,'Delete warning inherits the journal page scale and visibility')
 local windows={window,main.help,main.options,main.locationFrame,main.rankFrame,
     AzerothFieldbookBestiaryDamageNotes,
     notes,rumours,composer,receiver,AzerothFieldbookDebugReport}
 for _,frame in ipairs({window,main.help,main.options,main.locationFrame,main.rankFrame,
     main.notesForm,
-    main.effectPicker,main.damageForm,main.deleteForm,notes,rumours,composer,receiver,AzerothFieldbookDebugReport}) do
+    main.effectPicker,main.damageForm,notes,rumours,composer,receiver,AzerothFieldbookDebugReport}) do
     assert(frame.parent==UIParent and frame.strata=='MEDIUM' and frame.toplevel,
         'each independent window must be able to raise above every other addon window')
     frame.scripts.OnMouseDown(frame); eq(focusedWindow,frame)

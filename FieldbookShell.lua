@@ -85,6 +85,61 @@ local function shareButton(parent,action)
 end
 ns.FieldbookUI = {Label=label, Button=button, ShareButton=shareButton, MenuButton=menuButton, Close=cornerClose, Edit=edit, StyleMenuRow=styleMenuRow}
 
+-- Entry deletion follows the Ledger's left-page warning/action/back layout.
+function ns.FieldbookUI.DeletePanel(parent,shell,title,typed)
+    local p=CreateFrame("Frame",nil,parent,"BackdropTemplate")
+    p:SetPoint("TOPLEFT",38,-90);p:SetSize(260,570)
+    p:SetFrameLevel(parent:GetFrameLevel()+30);p:EnableMouse(true)
+    p:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=20})
+    local paper=p:CreateTexture(nil,"BACKGROUND");paper:SetPoint("TOPLEFT",5,-5);paper:SetPoint("BOTTOMRIGHT",-5,5)
+    paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga");paper:SetDesaturated(true)
+    shell:AddBackgroundLayer(paper,0.17,0.17,0.17,true)
+    p.title=label(p,title,14,-18,232,"GameFontNormalSmall")
+    p.title:SetTextColor(1,0.82,0.14)
+    local scroll=CreateFrame("ScrollFrame",nil,p,"UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT",14,-52);scroll:SetSize(210,286)
+    local body=CreateFrame("Frame",nil,scroll);body:SetSize(210,286);scroll:SetScrollChild(body)
+    if scroll.ScrollBar then ns.StyleScrollBarTrack(scroll.ScrollBar,0.4) end
+    ns.AutoHideScrollBar(scroll,function() return body:GetHeight() end)
+    p.description=label(body,"",0,0,210,"GameFontHighlightSmall")
+    p.description:SetWordWrap(true);p.description:SetSpacing(3)
+    local function describe(text)
+        p.description:SetText(text);body:SetHeight(math.max(286,p.description:GetStringHeight()+12))
+        scroll:SetVerticalScroll(0);scroll:UpdateScrollChildRect();scroll:RefreshScrollBar()
+    end
+    local function accept()
+        if not p:IsVisible() or not p.action or (typed and p.input:GetText()~="delete") then return end
+        local ok,err=p.action()
+        if ok then p:Hide()
+        else
+            p.action=nil;p.confirm:SetEnabled(false)
+            describe(err or "Could not delete this entry. Cancel to return to the journal.")
+        end
+    end
+    if typed then
+        label(p,"Type delete to confirm.",14,-354,232,"GameFontHighlightSmall")
+        p.input=edit(p,19,-380,222,20)
+        p.input:SetScript("OnEscapePressed",function() p:Hide() end)
+        p.input:SetScript("OnEnterPressed",accept)
+        p.input:SetScript("OnTextChanged",function(self) p.confirm:SetEnabled(p.action~=nil and self:GetText()=="delete") end)
+    end
+    p.confirm=button(p,"Delete entry",14,-420,232,accept)
+    p.cancel=button(p,"Cancel",14,-528,232,function() p:Hide() end)
+    p:SetScript("OnHide",function(self)
+        self.action=nil
+        if self.input then self.input:ClearFocus();self.input:SetText("") end
+    end)
+    parent:HookScript("OnHide",function() p:Hide() end)
+    function p:Open(description,action)
+        describe(description);self.action=action
+        self.confirm:SetEnabled(not typed)
+        if self.input then self.input:SetText("") end
+        self:Show()
+        if self.input then self.input:SetFocus() end
+    end
+    p:Hide();return p
+end
+
 function ns.CreateFieldbookShell(settings)
     settings=settings or {}
     local shell={sections={}, order={}}

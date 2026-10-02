@@ -13,16 +13,6 @@ local function latestReceipt(report)
         (r.receivedFrom and "Received from (your record): "..r.receivedFrom or "Actual sender not recorded.")..
         "\nSender claim: "..nonempty(r.sender,"unknown").." (not authenticated)\nExported: "..dateText(r.created)
 end
-local function captureStatus(c,value)
-    if not c.main then return end
-    local full=type(value)=='table' and (value.message or value.reason or value.status) or value
-    if type(full)~='string' then full='Capture waits for a supported readable interaction.' end
-    c.main.fullCaptureStatus=full
-    local short=full:find('Archiving',1,true) and 'Archiving…' or full:find('Complete archive',1,true) and 'Complete archive'
-        or full:find('interrupted',1,true) and 'Capture interrupted' or full:find('unavailable',1,true) and 'Capture unavailable'
-        or full:find('Partial',1,true) and 'Partial archive' or 'Capture status (hover)'
-    c.main.captureStatus:SetText(short)
-end
 local function provenance(p,report)
     local lines={natureNames[p.nature] or "Preserved passage"}
     if report then
@@ -211,6 +201,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         m.filters:SetText("Filters"..(filters>0 and " ("..filters..")" or ""))
         m.sort:SetText(state.sort=="newest" and "Recently added" or state.sort=="updated" and "Recently updated" or "Sort: Title")
         local e=journal:Get(state.selected);m.name:SetText(e and L.Safe(journal:Title(e)) or "Your personal archive")
+        m.deleteButton:SetEnabled(e~=nil and not journal.readOnly)
         for _,control in ipairs({m.edit,m.revisit,m.related,m.more,m.sourceMenu,m.locationMenu,m.addLocation,m.place}) do control:SetEnabled(e~=nil and not journal.readOnly) end
         -- Reading and reference navigation remain available for a future-schema archive.
         m.sourceMenu:SetEnabled(e~=nil);m.related:SetEnabled(e~=nil);m.locationMenu:SetEnabled(e~=nil)
@@ -242,8 +233,6 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             m.mapZone:SetText(state.mapID and "Map "..state.mapID or "Choose map")
             m.map:Render();m.place:SetText(m.map.placing and "Cancel placement" or "Place landmark on map")
         end
-        local status=tracking and tracking.GetStatus and tracking:GetStatus()
-        captureStatus(self,status)
         if journal.readOnly then self:Message("Unsupported Lore save: read-only view. Original saved data is untouched.")
         elseif journal.invalid>0 then self:Message(journal.invalid.." malformed saved entries are preserved but excluded from this view.") end
     end
@@ -333,9 +322,15 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
                 root:CreateButton("Import report",function() if c.reportUI then c.reportUI:OpenImport() end end)
             end)
         end)
-        m.name=U.Label(m,"",342,-63,566,"GameFontNormalLarge");m.name:SetWordWrap(false)
-        m.entry=U.Button(m,"Entry",342,-99,92,function() c:SetView("entry") end);U.StyleSelection(m.entry)
-        m.locationView=U.Button(m,"Location",443,-99,104,function() c:SetView("location") end);U.StyleSelection(m.locationView)
+        m.name=U.Label(m,"",342,-55,566,"GameFontNormalLarge");m.name:SetWordWrap(false)
+        m.name:SetShadowColor(0,0,0,0.85);m.name:SetShadowOffset(1,-1)
+        local titlePath,titleSize,titleFlags=m.name:GetFont()
+        if titlePath and titleSize then m.name:SetFont(titlePath,titleSize+2,titleFlags) end
+        m.entry=U.Button(m,"Entry",734,-52,92,function() c:SetView("entry") end);U.StyleSelection(m.entry)
+        m.locationView=U.Button(m,"Location",832,-52,104,function() c:SetView("location") end);U.StyleSelection(m.locationView)
+        m.locationView:ClearAllPoints();m.locationView:SetPoint("TOPRIGHT",m,"TOPRIGHT",-24,-52)
+        m.entry:ClearAllPoints();m.entry:SetPoint("RIGHT",m.locationView,"LEFT",-6,0)
+        m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.entry,"TOPLEFT",-8,-3)
         m.edit=U.Button(m,"Edit",566,-99,76,function() c:Edit(nil,state.selected) end)
         m.revisit=U.Button(m,"Revisit: No",652,-99,128,function() local e=journal:Get(state.selected);if e then journal:Update(e.id,{revisit=not e.revisit});c:Refresh() end end)
         m.related=U.Button(m,"Related",790,-99,120,function() c:Relationships() end)
@@ -344,19 +339,19 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
                 root:CreateButton("Add passage / transcription",function() c:Passage() end)
                 root:CreateButton("Remove manual annotation",function() c:RemovePassage() end)
                 root:CreateButton("Add location",function() c:Location() end)
-                root:CreateDivider();root:CreateButton("Delete entry…",function()
-                    local e=journal:Get(state.selected);if e then local id=e.id
-                        c:Confirm("Delete archive entry", "Delete “"..journal:Title(e).."” and its preserved text, personal notes and reports?\n\nOther entries and linked evidence remain. This cannot be undone. You can archive this source again later.",function() return journal:Delete(id) end)
-                    end
-                end)
             end)
         end)
-        m.captureStatus=U.Label(m,"",704,-140,207,"GameFontHighlightSmall");m.captureStatus:SetWordWrap(false);m.captureStatus:SetHeight(20)
-        m.statusHover=CreateFrame('Frame',nil,m);m.statusHover:SetPoint('TOPLEFT',704,-137);m.statusHover:SetSize(207,24)
-        m.statusHover:SetScript('OnEnter',function(self)
-            if GameTooltip then GameTooltip:SetOwner(self,'ANCHOR_LEFT');GameTooltip:SetText('Lore capture');GameTooltip:AddLine(L.Safe(m.fullCaptureStatus or ''),1,1,1,true);GameTooltip:Show() end
+        m.deleteButton=U.Button(m,"Delete",174,-672,118,function()
+            local e=journal:Get(state.selected);if not m:IsVisible() or not e or journal.readOnly then return end
+            local id=e.id
+            m.deleteForm=m.deleteForm or ns.FieldbookUI.DeletePanel(m,shell,"Delete archive entry")
+            m.deleteForm:Open("Delete “"..journal:Title(e).."” and its preserved text, personal notes and reports?\n\nOther entries and linked evidence remain. This cannot be undone. You can archive this source again later.",function()
+                if state.selected~=id or journal:Get(id)~=e then return nil,"Selection changed; nothing deleted." end
+                local ok,err=journal:Delete(id)
+                if ok then c:Refresh() end
+                return ok,err
+            end)
         end)
-        m.statusHover:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         m.sourceMenu=U.MenuButton(m,"Preserved sources & notes",342,-175,392,function(button)
             local e=journal:Get(state.selected);if not e then return end
             c:Menu(button,function(_,root) root:SetScrollMode(420);for _,row in ipairs(c:Sources(e)) do root:CreateButton(L.Safe(row.label),function() c:Page(0,row.id) end) end end)
@@ -417,13 +412,6 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             c.refreshQueued=true
             local function refresh() c.refreshQueued=false;if shell.active=="lore" and shell:GetFrame():IsShown() then c:Refresh() end end
             if C_Timer and type(C_Timer.After)=="function" then C_Timer.After(0.1,refresh) else refresh() end
-        end
-    end
-    if tracking then
-        local previousStatus=tracking.onStatus
-        tracking.onStatus=function(message)
-            if previousStatus then previousStatus(message) end
-            if c.main and shell.active=="lore" then captureStatus(c,message) end
         end
     end
     return c

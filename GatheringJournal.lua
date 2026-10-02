@@ -270,6 +270,10 @@ function ns.CreateGatheringJournal(saved,getBrightness)
         if not entry or not public(text) or type(text)~="string" or #text>4000 then return false end
         entry.note=text;self:Changed();return true
     end
+    function journal:DeleteEntry(id)
+        if self.readOnly or not self.entries[id] then return false end
+        self.entries[id]=nil;self:Changed();return true
+    end
     function journal:GetBackgroundBrightness() return getBrightness and getBrightness() or 1 end
     function journal:GetLocationMapBrightness()
         if ns.MapBrightness and ns.MapBrightness.saved then return ns.MapBrightness:Get() end

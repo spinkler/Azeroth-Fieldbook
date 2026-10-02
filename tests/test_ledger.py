@@ -347,6 +347,27 @@ class LedgerTests(unittest.TestCase):
             assert(m.location:GetText():find('coordinates not recorded for this sighting',1,true))
         ''')
 
+    def test_location_menu_counts_only_coordinates_and_keeps_original_indices(self):
+        self.lua.execute('''
+            local e=visit();shell:ShowSection('merchants');c:Select(e.id);local m=c.main
+            now=now+10;fire('UPDATE_MOUSEOVER_UNIT');flush()
+            local sightings=j:Locations(e)
+            assert(#sightings==2 and not L.Position(sightings[1]) and L.Position(sightings[2]))
+            assert(m.sightings:GetText()=='NPC Location (1)' and m.sightings.enabled)
+            local buttons={}
+            function c:Menu(button,build)
+                local root={SetScrollMode=function() end}
+                function root:CreateButton(label,callback) buttons[#buttons+1]={label,callback} end
+                build(button,root)
+            end
+            m.sightings.scripts.OnClick(m.sightings)
+            assert(#buttons==1 and not buttons[1][1]:find('coordinates not recorded',1,true))
+            buttons[1][2]();assert(c.state.sighting==2)
+            assert(#j:Locations(e)==2,'Do not delete zone-only evidence')
+            local unknown=j:New('Unlocated NPC');c:Select(unknown.id)
+            assert(m.sightings:GetText()=='NPC Locations (0)' and not m.sightings.enabled)
+        ''')
+
     def test_visible_items_without_buying_and_per_vendor_stock(self):
         self.lua.execute('''
             local a=visit(42,'ABC',{item(1001,2,100)})
@@ -898,7 +919,7 @@ class LedgerUITests(unittest.TestCase):
             local e=visit();flush();c:Select(e.id);assert(c.state.detail=='goods')
             now=now+1;px=0.8;visit();flush();c:Sighting(2);local key=c.state.sightingKey
             now=now+1;px=0.5;visit();flush();assert(c.state.sightingKey==key and c.state.sighting==3)
-            m.search:SetText('not found');assert(m.status:GetText():find('filtered',1,true));c:Reset()
+            m.search:SetText('not found');assert(m.status==nil and c.state.selected==e.id);c:Reset()
             vendorNPC=50;spawn='DEF';fire('BANKFRAME_OPENED');flush();local bank=j:Get(saved.aliases[UnitGUID('npc')]);c:Select(bank.id)
             assert(c.state.detail=='services' and not m.details.text:GetText():find('No goods',1,true))
             trainer={{name='Sword lesson',status='available',rank='',category='',price=10}}

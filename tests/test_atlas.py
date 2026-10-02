@@ -353,7 +353,8 @@ class AtlasUITests(unittest.TestCase):
             m.map.scripts.OnMouseUp(m.map,'LeftButton')
             assert(not m.map.placing and c.activePage==p and p.location.x:GetText()=='50.00')
             assert(p:Save()==id and j:Get(id).x==5000)
-            click(p.delete);click(c.pages.picker.rows[1]);assert(not j:Get(id))
+            assert(not p.delete:IsShown());c:Show(m);c:Select(id)
+            click(m.deleteButton);click(m.deleteForm.confirm);assert(not j:Get(id))
             local loose=j:Save({name='Unpositioned synthetic note',category='other',notes='Find it later'})
             c:Select(loose);assert(j.state.all and m.rows[1].id==loose)
         ''')
@@ -373,6 +374,9 @@ class AtlasUITests(unittest.TestCase):
             c:Connections(a,false,true);click(c.pages.picker.rows[1]);assert(#j:Get(a).references==1)
             click(c.pages.picker.rows[1].secondary);assert(c.pages.picker.message:GetText():find('Synthetic herb'))
             click(c.pages.picker.rows[1]);assert(#j:Get(a).references==0 and source.entries['herb:synthetic herb'])
+            c:OpenEditor(note,true);local editor=c.editor;click(editor.delete)
+            click(editor.deleteForm.cancel);assert(j:Get(note,true))
+            click(editor.delete);click(editor.deleteForm.confirm);assert(not j:Get(note,true) and j:Get(a))
         ''')
 
     def test_report_selection_excerpt_preview_and_persisted_draft(self):

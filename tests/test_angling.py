@@ -183,8 +183,8 @@ class AnglingDataTests(unittest.TestCase):
             saved.hoverKeys[A.Key(hover.poolID,hover.waterID)]=hover.id
             j=ns.CreateAnglingJournal(saved);now=now+1;check()
             assert(j:SetSightingRemoved(final.id,true))
-            assert(not j:ObservePool(input,p) and A.Count(saved.spots)==1)
-            assert(j:SetSightingRemoved(final.id,false));check()
+            assert(j:ObservePool(input,p).id==final.id)
+            check();assert(not j:Get(final.id).removed and A.Count(saved.spots)==1)
             assert(final.x==p.x and final.y==p.y and not final.hover,
                 'Hovering must not replace the deliberately recorded position or its provenance')
         ''')
@@ -257,21 +257,22 @@ class AnglingCaptureTests(unittest.TestCase):
             assert(#j:List('pools')==2 and total()==0)
         ''')
 
-    def test_remove_individual_sighting_suppresses_only_its_zone(self):
+    def test_removed_sighting_is_rediscovered_in_its_zone(self):
         self.lua.execute('''
             hoverPool('Synthetic School');local pool=j:List('pools')[1]
             local sighting=j:Links(pool,'locations')[1]
             assert(j:SetSightingRemoved(sighting.id,true))
             assert(#j:List('pools')==1 and #j:List('pools',{mapID=101})==0)
             assert(#j:List('waters',{status='removed'})==1 and #j:Links(pool,'locations')==0)
-            local snapshotBefore=snapshot(saved);now=now+10;hoverPool('Synthetic School')
-            assert(snapshotBefore==snapshot(saved),'Removed zone sighting must not be touched or re-added')
-            mapID=102;hoverPool('Synthetic School');assert(#j:List('pools',{mapID=102})==1)
-            assert(A.Count(saved.spots)==2 and #j:Links(pool,'locations')==1)
-            local r=reportFor(pool.id);assert(#r.records==3 and #r.facts==0)
-            assert(not R.Build(j,sighting.id,'personal'))
             local reloaded=ns.CreateAnglingJournal(saved);assert(reloaded:Get(sighting.id).removed)
-            assert(j:SetSightingRemoved(sighting.id,false));assert(#j:List('pools',{mapID=101})==1)
+            assert(reloaded:ObservePool({name='Synthetic School'},A.CurrentLocation()).id==sighting.id)
+            assert(not sighting.removed and #j:Links(pool,'locations')==1)
+            now=now+10;hoverPool('Synthetic School')
+            mapID=102;hoverPool('Synthetic School');assert(#j:List('pools',{mapID=102})==1)
+            assert(A.Count(saved.spots)==2 and #j:Links(pool,'locations')==2)
+            local r=reportFor(pool.id);assert(#r.records==5 and #r.facts==0)
+            assert(R.Build(j,sighting.id,'personal'))
+            assert(#j:List('pools',{mapID=101})==1)
         ''')
 
     def test_removed_sighting_keeps_catches_but_is_not_shared_or_pinned(self):
@@ -302,19 +303,35 @@ class AnglingCaptureTests(unittest.TestCase):
             hoverPool('English Pool');assert(#j:List('pools')==1)
         ''')
 
-    def test_remove_restore_pools_suppresses_hover_and_preserves_history(self):
+    def test_deleted_pool_is_rediscovered_without_losing_history(self):
         self.lua.execute('''
             hoverPool('Synthetic School');local pool=j:List('pools')[1]
             assert(t:Assign('pool',pool.id));catch('before-remove')
             local history=snapshot(saved.history);local totals=snapshot(saved.aggregates)
             assert(j:SetPoolRemoved(pool.id,true));assert(not t:Assignment())
             assert(#j:List('pools')==0 and #j:List('pools',{status='removed'})==1)
-            now=now+10;hoverPool('Synthetic School');mapID=102;hoverPool('Synthetic School')
-            assert(A.Count(saved.spots)==1 and #j:List('pools')==0)
-            assert(history==snapshot(saved.history) and totals==snapshot(saved.aggregates))
             local reloaded=ns.CreateAnglingJournal(saved);assert(#reloaded:List('pools')==0)
-            assert(reloaded:SetPoolRemoved(pool.id,false));assert(#reloaded:List('pools')==1)
+            assert(reloaded:ObservePool({name='Synthetic School'},A.CurrentLocation()))
+            assert(not pool.removed and #j:List('pools')==1)
+            now=now+10;hoverPool('Synthetic School');mapID=102;hoverPool('Synthetic School')
+            assert(A.Count(saved.spots)==2 and #j:List('pools')==1)
+            assert(history==snapshot(saved.history) and totals==snapshot(saved.aggregates))
+            reloaded=ns.CreateAnglingJournal(saved);assert(#reloaded:List('pools')==1)
             assert(j:Summary(pool).events==1)
+        ''')
+
+    def test_deleted_water_and_catch_types_return_on_new_catch(self):
+        self.lua.execute('''
+            local fact=observe('first');local water=j:Get(fact.waterID);local fish=j:List('catches')[1]
+            assert(j:SetEntryRemoved(water.id,true));assert(j:SetEntryRemoved(fish.id,true))
+            assert(#j:List('waters')==0 and #j:List('catches')==0)
+            observe('second')
+            assert(not water.removed and not fish.removed)
+            assert(#j:List('waters')==1 and #j:List('catches')==1 and total()==2)
+            assert(j:Summary(fish).items[fish.id].quantity==6)
+            assert(#saved.history==2 and j:Summary(fish).events==2)
+            assert(j:SetEntryRemoved(fish.id,true));j=ns.CreateAnglingJournal(saved)
+            observe('third');assert(not j:Get(fish.id).removed and total()==3)
         ''')
 
     def test_capture_hidden_autoloot_duplicates_and_non_fish_items(self):
@@ -702,12 +719,12 @@ class AnglingUITests(unittest.TestCase):
     def test_sighting_remove_restore_action_is_available_in_waters(self):
         self.lua.execute('''
             local e=spot('Incorrect sighting','School');c:Select(e.id)
-            assert(m.removeSighting:IsShown() and m.removeSighting:GetText()=='Remove sighting')
-            m.removeSighting.scripts.OnClick(m.removeSighting);assert(e.removed and not m.removeSighting:IsShown())
+            assert(m.deleteButton:IsShown() and m.deleteButton:GetText()=='Delete')
+            click(m.deleteButton);assert(not e.removed);click(m.deleteForm.confirm);assert(e.removed and not m.deleteButton.enabled)
             for i=1,4 do m.status.scripts.OnClick(m.status) end
             assert(c:State().status=='removed' and m.rows[1].id==e.id)
-            m.rows[1].scripts.OnClick(m.rows[1]);assert(m.removeSighting:GetText()=='Restore sighting')
-            m.removeSighting.scripts.OnClick(m.removeSighting);assert(not e.removed)
+            m.rows[1].scripts.OnClick(m.rows[1]);assert(m.merge:GetText()=='Restore')
+            click(m.merge);assert(not e.removed)
             c:SetView('pools');assert(#j:List('pools')==1)
         ''')
 
@@ -724,8 +741,8 @@ class AnglingUITests(unittest.TestCase):
             assert(text:find('Ctrl+Right Click',1,true))
             pin.scripts.OnClick(pin,'RightButton');assert(e.removed and not pin:IsShown())
             assert(j:SetSightingRemoved(e.id,false));c:Select(e.id)
-            assert(m.removeSighting:GetText()=='Remove spot')
-            click(m.removeSighting);assert(e.removed)
+            assert(m.deleteButton:GetText()=='Delete')
+            click(m.deleteButton);assert(not e.removed);click(m.deleteForm.confirm);assert(e.removed)
             local fact=observe('position');local water=j:Get(fact.waterID);c:Select(water.id)
             pin=m.map.pins[1];assert(pin:IsShown() and pin.group[1].point.transient)
             local before=snapshot(saved.aggregates)
@@ -849,11 +866,11 @@ class AnglingUITests(unittest.TestCase):
         self.lua.execute('''
             GameTooltip:Show();hoverPool('Synthetic School');assert(GameTooltip:IsShown())
             local pool=j:List('pools')[1];assert(j:Edit(pool.id,pool.name,'Keep this note',true))
-            c:Select(pool.id);assert(m.merge:GetText()=='Remove pool')
-            m.merge.scripts.OnClick(m.merge);assert(#j:List('pools')==0 and pool.note=='Keep this note')
+            c:Select(pool.id);assert(m.deleteButton.enabled)
+            click(m.deleteButton);assert(not pool.removed);click(m.deleteForm.confirm);assert(#j:List('pools')==0 and pool.note=='Keep this note')
             for i=1,4 do m.status.scripts.OnClick(m.status) end
             assert(c:State().status=='removed' and m.rows[1].id==pool.id)
-            m.rows[1].scripts.OnClick(m.rows[1]);assert(m.merge:GetText()=='Restore pool')
+            m.rows[1].scripts.OnClick(m.rows[1]);assert(m.merge:GetText()=='Restore')
             m.merge.scripts.OnClick(m.merge);assert(#j:List('pools')==1 and pool.favourite and pool.note=='Keep this note')
         ''')
 

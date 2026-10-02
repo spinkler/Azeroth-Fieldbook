@@ -219,7 +219,7 @@ class LoreUITests(unittest.TestCase):
             for _,db in ipairs({{schema=999,entries={untouched={raw='Preserve me'}}},{schema=1,entries={broken={title='Malformed'}}}}) do
                 local before=snapshot(db);local other=ns.CreateLoreJournal(db)
                 local host=ns.CreateFieldbookShell();local book=ns.CreateLoreBook(other,t,host);host:ShowSection('lore')
-                local text=book.main.message:GetText()..' '..book.main.empty:GetText()..' '..book.main.captureStatus:GetText()
+                local text=book.main.message:GetText()..' '..book.main.empty:GetText()
                 assert(text:lower():find('preserv',1,true),'Missing visible saved-data preservation notice')
                 if db.schema==999 then assert(snapshot(db)==before and other.readOnly) end
             end
@@ -231,8 +231,8 @@ class LoreUITests(unittest.TestCase):
             c:Select(e.id);c:RemovePassage();local panel=c.panels.removePassage
             local choices=openMenu(panel.choose);choices.children[1].action();assert(#e.passages==1)
             click(panel.confirm);assert(#e.passages==0 and e.pages[1])
-            local menu=openMenu(m.more);choose(menu,'Delete entry…');assert(j:Get(e.id))
-            click(c.panels.confirm.accept);assert(not j:Get(e.id))
+            click(m.deleteButton);assert(j:Get(e.id))
+            click(m.deleteForm.confirm);assert(not j:Get(e.id))
         ''')
 
     def test_readonly_reference_adapter_and_all_scale_inheritance(self):

@@ -22,7 +22,7 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
     local zones,tiles,exploration,dots={},{},{},{}
     local menuOffset=0
     local displayedMapID
-    local WIDTH,HEIGHT=640,426
+    local WIDTH,HEIGHT=558,372
     local palettes={herb={0.3,1,0.35},mineral={1,0.78,0.18}}
     local function colour(texture,alpha)
         local entry=journal.entries[selected]
@@ -201,7 +201,7 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
         frame.creature:SetText(entry and (journal:GetName(selected) or "Resource") or "Select a herb or mineral.")
         frame.zoneName:SetText(chosen and chosen.name or "No zones recorded")
         frame.zoneName:SetShown(#zones<=1)
-        frame.zoneButton:SetShown(#zones>1);frame.zoneButton:SetText((chosen and chosen.name or "Select zone").."  v")
+        frame.zoneButton:SetShown(#zones>1);frame.zoneButton:SetText(chosen and chosen.name or "Select zone")
         frame.menu:Hide();renderMenu()
         local available=drawMap(chosen and chosen.mapID)
         displayedMapID=available and chosen.mapID or nil
@@ -220,25 +220,22 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
     end
     local function build()
         if frame then return end
-        frame=CreateFrame("Frame","AzerothFieldbookGatheringLocations",UIParent,"BackdropTemplate")
-        frame.afbPreferBookEdge=true;frame.afbAnchorRule="right";frame.afbAlignBookTop=true
-        frame:SetSize(676,614);frame:SetFrameStrata("DIALOG");frame:SetClampedToScreen(true)
-        local book=getBook and getBook()
-        if book then frame:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0) else frame:SetPoint("CENTER") end
-        frame:SetScale(math.min(1,(UIParent:GetWidth()-30)/(676*1.5),(UIParent:GetHeight()-30)/(614*1.5)))
-        frame:SetMovable(true);frame:EnableMouse(true);frame:RegisterForDrag("LeftButton")
-        frame:SetScript("OnDragStart",frame.StartMoving);frame:SetScript("OnDragStop",frame.StopMovingOrSizing)
+        local book=getBook()
+        frame=CreateFrame("Frame","AzerothFieldbookGatheringLocations",book,"BackdropTemplate")
+        frame:SetPoint("TOPLEFT",book,"TOPLEFT",342,-78);frame:SetSize(594,636)
+        frame:SetFrameLevel(book:GetFrameLevel()+30);frame:EnableMouse(true)
         frame:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=20})
         frame.paper=frame:CreateTexture(nil,"BACKGROUND")
         frame.paper:SetPoint("TOPLEFT",6,-6);frame.paper:SetPoint("BOTTOMRIGHT",-6,6)
         frame.paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         frame.paper:SetDesaturated(true)
-        label(frame,"Locations",18,-16,600,"GameFontNormalLarge")
-        frame.creature=label(frame,"",18,-40,640,"GameFontNormal")
+        label(frame,"Locations",18,-16,520,"GameFontNormalLarge")
+        frame.creature=label(frame,"",18,-40,558,"GameFontNormal")
         frame.creature:SetWordWrap(false)
-        frame.zoneName=label(frame,"",18,-66,640,"GameFontHighlight")
-        frame.zoneButton=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(frame.zoneButton) end
-        frame.zoneButton:SetSize(420,24);frame.zoneButton:SetPoint("TOPLEFT",16,-60)
+        frame.zoneName=label(frame,"",18,-66,558,"GameFontHighlight")
+        frame.zoneButton=ns.FieldbookUI.MenuButton(frame,"Select zone",16,-60,420,function()
+            renderMenu();frame.menu:SetShown(not frame.menu:IsShown())
+        end)
         frame.map=CreateFrame("Frame",nil,frame)
         frame.map:SetPoint("TOP",frame,"TOP",0,-92);frame.map:SetSize(WIDTH,HEIGHT)
         frame.playerCoordinates=label(frame.map,"Player coordinates unavailable",0,0,250)
@@ -252,18 +249,16 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
         frame.playerArrow:SetSize(18,18)
         frame.playerArrow:SetTexture("Interface\\Minimap\\MinimapArrow")
         frame.playerArrow:Hide()
-        frame.empty=label(frame.map,"",0,0,596,"GameFontHighlight")
+        frame.empty=label(frame.map,"",0,0,534,"GameFontHighlight")
         frame.empty:ClearAllPoints();frame.empty:SetPoint("CENTER",frame.map,"CENTER",0,0)
         frame.empty:SetJustifyH("CENTER");frame.empty:SetHeight(60)
-        frame.status=label(frame,"",18,-524,640)
-        frame.legend=label(frame,"",18,-545,640);frame.legend:SetTextColor(0.45,0.45,0.45);frame.legend:SetHeight(15)
+        frame.status=label(frame,"",18,-476,558);frame.status:SetHeight(36);frame.status:SetWordWrap(true)
+        frame.legend=label(frame,"",18,-522,558);frame.legend:SetTextColor(0.45,0.45,0.45);frame.legend:SetHeight(36);frame.legend:SetWordWrap(true)
         frame.brightness=ns.MapBrightness:Attach(frame.map,function() return journal:GetLocationMapBrightness() end,
             function(value) journal:SetLocationMapBrightness(value) end,applyBrightness)
         frame.brightnessValue=frame.brightness.valueLabel
-        frame.trackingMode=label(frame,"Tracking: Interactions",458,-571,200)
+        frame.trackingMode=label(frame,"Tracking: Interactions",376,-582,200)
         frame.trackingMode:SetTextColor(1,0.82,0.14)
-        local close=CreateFrame("Button",nil,frame,"UIPanelCloseButton")
-        close:SetPoint("TOPRIGHT",-3,-3);close:SetScript("OnClick",function() frame:Hide() end)
         frame.menu=CreateFrame("Frame",nil,frame,"BackdropTemplate")
         frame.menu:SetPoint("TOPLEFT",frame.zoneButton,"BOTTOMLEFT",0,0);frame.menu:SetSize(420,226)
         frame.menu:SetFrameLevel(frame:GetFrameLevel()+20);frame.menu:EnableMouse(true)
@@ -286,10 +281,9 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
             frame.menu[spec[1]]=b
         end
         frame.menu:Hide()
-        frame.zoneButton:SetScript("OnClick",function() renderMenu();frame.menu:SetShown(not frame.menu:IsShown()) end)
         frame:SetScript("OnShow",function() if controller.visibilityCallback then controller.visibilityCallback(true) end end)
         frame:SetScript("OnHide",function()
-            frame:StopMovingOrSizing();frame.menu:Hide();tipLeave()
+            frame.menu:Hide();tipLeave()
             if controller.visibilityCallback then controller.visibilityCallback(false) end
         end)
         local elapsed,playerElapsed=0,0
@@ -300,9 +294,8 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
         end)
         frame:RegisterEvent("MAP_EXPLORATION_UPDATED")
         frame:SetScript("OnEvent",function() render(true) end)
-        if ns.WindowFocus then ns.WindowFocus:Register(frame) end
-        if ns.UIScale then ns.UIScale:Register(frame,"AzerothFieldbookGatheringLocations") end
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookGatheringLocations" end
+        book:HookScript("OnHide",function() frame:Hide() end)
         frame:Hide()
     end
     function controller:SetResource(id)

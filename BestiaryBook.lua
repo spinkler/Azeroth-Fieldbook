@@ -115,6 +115,7 @@ local function addNameScroller(row,heading)
     text:SetShadowColor(0.05,0.05,0.05)
     text:SetShadowOffset(1,-1)
     if heading then
+        text:SetShadowColor(0,0,0,0.85);text:SetShadowOffset(1,-1)
         viewport:ClearAllPoints();viewport:SetAllPoints(row)
         text:ClearAllPoints();text:SetPoint("TOPLEFT",0,0)
         text:SetFontObject(textFont("GameFontNormalLarge"))
@@ -960,40 +961,19 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         button(book, "Previous", 135, -596, 84, function() cycleEntry(-1) end)
         button(book, "Next", 229, -596, 86, function() cycleEntry(1) end)
-        local deleteForm = CreateFrame("Frame", "AzerothFieldbookDeleteCreature", UIParent, "BackdropTemplate")
-        book.deleteForm = deleteForm
-        deleteForm:SetSize(440,210); deleteForm:SetPoint("CENTER",book,"CENTER")
-        deleteForm:SetFrameStrata("FULLSCREEN_DIALOG"); deleteForm:EnableMouse(true)
-        deleteForm:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
-        deleteForm:SetBackdropColor(0.10,0.08,0.05,1)
-        label(deleteForm,"Delete creature entry",22,-20,396,"GameFontNormalLarge")
-        deleteForm.description=label(deleteForm,"",22,-50,396)
-        label(deleteForm,"Type delete and press Enter to confirm.",22,-113,396)
-        deleteForm.input=edit(deleteForm,28,-142,240,20)
-        button(deleteForm,"Cancel",295,-141,115,function() deleteForm:Hide() end)
-        deleteForm.input:SetScript("OnEscapePressed",function() deleteForm:Hide() end)
-        deleteForm.input:SetScript("OnEnterPressed",function(self)
-            local id, entry = deleteForm.id, deleteForm.entry
-            if not deleteForm:IsShown() or self:GetText() ~= "delete" then return end
-            if selected ~= id or journal.entries[id] ~= entry then deleteForm:Hide(); return end
-            if journal:DeleteEntry(id) then
-                deleteForm:Hide()
-                choose(nil)
-                message("Creature entry deleted. Future encounters may record it again.")
-            end
-        end)
-        deleteForm:SetScript("OnHide",function(self)
-            self.id, self.entry = nil, nil
-            self.input:ClearFocus(); self.input:SetText("")
-        end)
-        deleteForm:Hide()
-        table.insert(UISpecialFrames,"AzerothFieldbookDeleteCreature")
+        local deleteForm=ui.DeletePanel(book,shell,"Delete creature entry",true)
+        book.deleteForm=deleteForm
         book.deleteButton=button(book,"Delete",174,-672,118,function()
-            local entry = selected and journal.entries[selected]
+            local id=selected;local entry=id and journal.entries[id]
             if not entry then return end
-            deleteForm.id, deleteForm.entry = selected, entry
-            deleteForm.description:SetText("Permanently delete " .. (basicInfo(selected).name or ("Encountered creature #" .. selected)) .. "?\nIts records and rumours will be removed. Earned credit and spending remain.")
-            deleteForm.input:SetText(""); deleteForm:Show(); deleteForm.input:SetFocus()
+            deleteForm.id,deleteForm.entry=id,entry
+            deleteForm:Open("Permanently delete "..(basicInfo(id).name or ("Encountered creature #"..id)).."?\n\nIts observations, abilities, notes, damage records and rumours will be removed. This cannot be undone. Earned credit and spending remain.\n\nFuture encounters may record it again.",function()
+                if selected~=id or journal.entries[id]~=entry then return nil,"Selection changed; nothing deleted." end
+                if journal:DeleteEntry(id) then
+                    choose(nil);message("Creature entry deleted. Future encounters may record it again.");return true
+                end
+                return nil,"Could not delete this entry."
+            end)
         end)
         book.shareButton = ui.ShareButton(book, function()
             if sharingWindow then sharingWindow:Open(selected) end
@@ -1041,6 +1021,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         book.title = label(book, "", 362, -55, 264, "GameFontNormalLarge")
         book.title:SetTextColor(1,0.82,0.14)
+        book.title:SetShadowColor(0,0,0,0.85);book.title:SetShadowOffset(1,-1)
         book.title:SetWordWrap(false)
         book.creatureNotesButton=button(book,"Notes",806,-52,58,function()
             if creatureNotes then creatureNotes:Toggle(selected) end
@@ -1588,10 +1569,16 @@ local ink = { 0.75, 0.8, 0.8 }
 
         local observationPickers = {}
         local function createObservationPicker(globalName,title,description)
-            local picker=CreateFrame("Frame",globalName,detail)
+            local picker=CreateFrame("Frame",globalName,detail,"BackdropTemplate")
             picker:SetPoint("TOPLEFT",detail,"TOPLEFT",352,-315)
             picker:SetSize(583,390)
             picker:EnableMouse(true)
+            picker:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=20})
+            picker.paper=picker:CreateTexture(nil,"BACKGROUND")
+            picker.paper:SetPoint("TOPLEFT",6,-6);picker.paper:SetPoint("BOTTOMRIGHT",-6,6)
+            picker.paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+            picker.paper:SetDesaturated(true)
+            addBackgroundLayer(picker.paper,0.17,0.17,0.17,true)
             observationPickers[#observationPickers+1]=picker
             picker:SetScript("OnShow",function(self)
                 for _,other in ipairs(observationPickers) do
@@ -1602,11 +1589,8 @@ local ink = { 0.75, 0.8, 0.8 }
                 effectPicker:Hide()
                 if GameTooltip then GameTooltip:Hide() end
             end)
-            local divider=picker:CreateTexture(nil,"ARTWORK")
-            divider:SetColorTexture(0.35,0.20,0.08,0.42)
-            divider:SetPoint("TOPLEFT"); divider:SetSize(574,3)
-            label(picker,title,0,-10,500,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
-            label(picker,description,0,-42,550,"GameFontHighlightSmall")
+            label(picker,title,18,-16,500,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+            label(picker,description,18,-42,547,"GameFontHighlightSmall")
             picker:SetScript("OnHide",function()
                 for _,other in ipairs(observationPickers) do
                     if other:IsShown() then return end
@@ -2077,14 +2061,14 @@ local ink = { 0.75, 0.8, 0.8 }
         local bookScale=shell:GetBaseScale()
         -- Independent roots can move in front of or behind the book. Preserve
         -- the scale formerly inherited by its child dialogs and their anchors.
-        for _, window in ipairs({deleteForm,effectPicker,form,notesForm,beastLore}) do window:SetScale(bookScale) end
+        for _, window in ipairs({effectPicker,form,notesForm,beastLore}) do window:SetScale(bookScale) end
         if ns.UIScale then
-            for _, window in ipairs({locationFrame,rankFrame,deleteForm,effectPicker,form,notesForm,beastLore}) do
+            for _, window in ipairs({locationFrame,rankFrame,effectPicker,form,notesForm,beastLore}) do
                 window.afbPreferBookEdge=true
                 ns.UIScale:Register(window)
             end
         end
-        if ns.WindowFocus then ns.WindowFocus:Register(deleteForm); ns.WindowFocus:Register(beastLore) end
+        if ns.WindowFocus then ns.WindowFocus:Register(beastLore) end
         for _, window in ipairs({form,effectPicker}) do
             window.afbAnchorRule="right"
         end

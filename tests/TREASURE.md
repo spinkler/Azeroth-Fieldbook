@@ -110,7 +110,10 @@ The bounded lifecycle is:
   taking maximum observed quantities instead of adding duplicate quantities.
   Later encounters can be separate even at identical coordinates.
 - Removing a correlated inspection suppresses its repeated signals for the
-  remainder of that recent interaction. Capacity exhaustion omits new automatic
+  remainder of the currently open loot window. Closing that window clears the
+  suppression; reopening the same item immediately can rediscover it. Deleting
+  an encounter after the window closes also allows immediate rediscovery.
+  Capacity exhaustion omits new automatic
   captures with a status explanation instead of evicting context and recounting.
 - Close/reload/world-entry clears transient active context. A stale open loot
   window across reload does not itself generate a new inspection.

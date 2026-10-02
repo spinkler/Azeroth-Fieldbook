@@ -44,3 +44,48 @@ function ns.RegisterWorldMapLayer(name,selected,set,enabled,refresh)
 end
 loader:RegisterEvent("ADDON_LOADED");loader:SetScript("OnEvent",attach)
 attach()
+
+-- Wait for the map's first visible frame, including a lazily loaded WorldMap.
+-- The account flag is written only after the native gold HelpTip is displayed.
+local tutorial=CreateFrame("Frame");tutorial:Hide()
+local tutorialMap
+local tutorialText="Click the drop down list for Azeroth Fieldbook filters"
+local function hideTutorial()
+    if HelpTip and tutorialMap then HelpTip:Hide(tutorialMap,tutorialText) end
+end
+local function queueTutorial() tutorial:Show() end
+local function attachTutorial()
+    local map=WorldMapFrame
+    if not map or tutorialMap==map then return end
+    tutorialMap=map
+    map:HookScript("OnShow",queueTutorial)
+    map:HookScript("OnHide",function() tutorial:Hide();hideTutorial() end)
+    if map:IsShown() then queueTutorial() end
+end
+tutorial:SetScript("OnUpdate",function(self)
+    self:Hide()
+    local account=AzerothFieldbookAccountDB
+    if not registered or not next(layers) or type(account)~="table" or account.worldMapFiltersTutorialSeen
+        or not tutorialMap or not tutorialMap:IsShown() or not HelpTip then return end
+    -- Blizzard stores the unnamed tracking dropdown among its overlay frames.
+    local anchor
+    for _,frame in ipairs(tutorialMap.overlayFrames or {}) do
+        if type(frame.worldMapFilters)=="table" and type(frame.GetWorldMapFilters)=="function" then
+            anchor=frame;break
+        end
+    end
+    if not anchor or not anchor:IsShown() then return end
+    local shown=HelpTip:Show(tutorialMap,{
+        text=tutorialText,textColor=NORMAL_FONT_COLOR,
+        buttonStyle=HelpTip.ButtonStyle.Close,targetPoint=HelpTip.Point.LeftEdgeCenter,
+        autoEdgeFlipping=true,autoHideWhenTargetHides=true,
+    },anchor)
+    if shown then
+        account.worldMapFiltersTutorialSeen=true
+        anchor:HookScript("OnMouseDown",hideTutorial)
+        self:UnregisterEvent("ADDON_LOADED");self:UnregisterEvent("PLAYER_LOGIN")
+    end
+end)
+tutorial:RegisterEvent("ADDON_LOADED");tutorial:RegisterEvent("PLAYER_LOGIN")
+tutorial:SetScript("OnEvent",attachTutorial)
+attachTutorial()

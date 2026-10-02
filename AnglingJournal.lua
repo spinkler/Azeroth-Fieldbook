@@ -193,6 +193,7 @@ function ns.CreateAnglingJournal(saved)
             store[id]=e;keys[key]=id
         elseif kind=="item" and method and A.Name(input.name) then e.name=A.Name(input.name) end
         if kind=="item" and method and A.Integer(input.icon,1,2147483647) then e.icon=input.icon end
+        if method and e.removed then e.removed=nil;self:Changed() end
         if method and not e.origin then e.origin=newOrigin(db,e.id,method,A.Player()) end
         touch(e,stamp,method)
         return e
@@ -208,6 +209,7 @@ function ns.CreateAnglingJournal(saved)
         -- implicit update; duplicate corrections are an explicit merge action.
         local id=input.id;local e=id and db.spots[id]
         if not e then id=self:ID("spot");e={id=id,kind="spot",claims={},note="",favourite=false};db.spots[id]=e end
+        e.removed=nil
         e.name,e.waterID,e.poolID=name,water.id,pool and pool.id
         for _,key in ipairs({"mapID","zone","subzone","x","y","precision"}) do e[key]=p[key] end
         if input.precision=="approximate" and A.Position(p) then e.precision="approximate" end
@@ -219,15 +221,12 @@ function ns.CreateAnglingJournal(saved)
     end
     function j:ObservePool(input,location)
         if self.readOnly or not A.Name(input.name) then return end
-        local key=poolIdentity(input);local existing=key and db.pools[db.poolKeys[key]]
-        if not key or (existing and existing.removed) then return end
+        local key=poolIdentity(input)
+        if not key then return end
         local p=A.Location(location)
         if not p.mapID or p.zone=="Unknown waters" then return end
         -- A world hover proves the zone, never the object's coordinates.
         p.x,p.y,p.precision,p.subzone=nil,nil,"unknown",""
-        local waterID=db.waterKeys[A.WaterKey(p)]
-        local prior=existing and waterID and db.spots[db.hoverKeys[A.Key(existing.id,waterID)]]
-        if prior and prior.removed then return end
         local stamp=A.Now();local pool=self:Ensure("pool",input,"observed",stamp)
         local water=self:Ensure("water",p,"observed",stamp)
         local hoverKey=A.Key(pool.id,water.id);local id=db.hoverKeys[hoverKey]
@@ -238,6 +237,11 @@ function ns.CreateAnglingJournal(saved)
                 note="",favourite=false,claims={},hover=true}
             db.spots[id]=e;db.hoverKeys[hoverKey]=id
             self:Log("Discovery","Pool type seen: "..pool.name.." — "..p.zone..". Exact position unknown.")
+        end
+        if e.removed then
+            e.removed=nil
+            self:Log("Discovery","Pool sighting rediscovered: "..e.name.." — "..p.zone..".")
+            self:Changed()
         end
         if not e.origin then e.origin=newOrigin(db,e.id,"observed",A.Player()) end
         local previous=e.last;touch(e,stamp,"observed")
@@ -258,6 +262,16 @@ function ns.CreateAnglingJournal(saved)
         if (e.removed==true)==(removed==true) then return true end
         e.removed=removed==true or nil
         self:Log("Correction",(e.removed and "Removed " or "Restored ")..(e.poolID and "sighting: " or "spot: ")..e.name.." — "..e.zone..". Catch history retained.")
+        self:Changed();return true
+    end
+    function j:SetEntryRemoved(id,removed)
+        local e=self:Get(id)
+        if self.readOnly or not e then return nil,"Record unavailable or read-only." end
+        if e.kind=="pool" then return self:SetPoolRemoved(id,removed) end
+        if e.kind=="spot" then return self:SetSightingRemoved(id,removed) end
+        if (e.removed==true)==(removed==true) then return true end
+        e.removed=removed==true or nil
+        self:Log("Correction",(e.removed and "Removed " or "Restored ")..e.name..". Catch history retained.")
         self:Changed();return true
     end
     function j:HideWaterPosition(id)

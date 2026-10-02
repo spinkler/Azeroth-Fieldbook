@@ -250,7 +250,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     options.behaviourTooltips:SetScript("OnEnter",function(self)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Behaviour traits in creature tooltips")
-        GameTooltip:AddLine("Show checked Behaviour traits such as Melee, Patrols and Flees at low health. Disposition and unverified Rumours are excluded. Off by default.",1,1,1,true)
+        GameTooltip:AddLine("Show checked Behaviour traits such as Melee, Patrols and Flees at low health. Disposition and unverified Rumours are excluded. On by default.",1,1,1,true)
         GameTooltip:Show()
     end)
     options.behaviourTooltips:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)

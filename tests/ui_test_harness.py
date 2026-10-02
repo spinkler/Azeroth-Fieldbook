@@ -127,6 +127,9 @@ def new_ui_client(modules=()):
     function methods:Hide() self.shown=false; if self.scripts.OnHide then self.scripts.OnHide(self) end end
     function methods:SetShown(v) self.shown=v end
     function methods:IsShown() return self.shown end
+    function methods:IsVisible()
+        return self.shown and (not self.parent or self.parent:IsVisible())
+    end
     function methods:SetEnabled(v) self.enabled=v end
     function methods:SetChecked(v) self.checked=v end
     function methods:GetChecked() return self.checked end
@@ -150,6 +153,23 @@ def new_ui_client(modules=()):
             if k:match('^%u') then return function() end end
         end})
         objects[#objects+1]=f; if name then _G[name]=f end
+        if kind=='ModelScene' then
+            function f:CreateActor()
+                local actor=CreateFrame('Actor',nil,self)
+                function actor:SetModelByFileID(id) self.requestedModel=id;return true end
+                function actor:GetModelFileID() return self.loadedModel end
+                function actor:IsLoaded() return self.loadedModel~=nil end
+                function actor:ClearModel() self.loadedModel=nil;self.requestedModel=nil end
+                function actor:SetUseCenterForOrigin(x,y,z) self.centered={x,y,z} end
+                function actor:SetPreferModelCollisionBounds(value) self.collisionBounds=value end
+                function actor:GetActiveBoundingBox() return unpack(self.bounds or {}) end
+                function actor:SetYaw(value) self.yaw=value end
+                return actor
+            end
+            function f:SetCameraPosition(x,y,z) self.cameraPosition={x,y,z} end
+            function f:SetCameraNearClip(value) self.nearClip=value end
+            function f:SetCameraFarClip(value) self.farClip=value end
+        end
         if template=='LargeSideTabButtonTemplate' then
             -- Native template contract from Forever 1.60.1. Art is validated
             -- separately; this host only exercises callbacks and selection.

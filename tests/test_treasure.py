@@ -192,7 +192,14 @@ class TreasureCaptureTests(unittest.TestCase):
             local e=carried();openitem();local id=t.active.id
             assert(j:Remove(id,true));assert(not t.active and #j:History(e.id)==1)
             openitem();fire('LOOT_SLOT_CHANGED',1);assert(#j:History(e.id)==1)
-            now=now+121;fire('BAG_UPDATE_DELAYED');flush();openitem();assert(#j:History(e.id)==2)
+            fire('LOOT_CLOSED');openitem();assert(#j:History(e.id)==2)
+        ''')
+
+    def test_deleted_closed_inspection_can_be_rediscovered_immediately(self):
+        self.lua.execute('''
+            local e=carried();openitem();local id=t.active.id;fire('LOOT_CLOSED')
+            assert(j:Remove(id,true));assert(#j:History(e.id)==1)
+            openitem();assert(t.active.id~=id and #j:History(e.id)==2)
         ''')
 
     def test_transient_correlation_capacity_omits_rather_than_recounts(self):
@@ -399,11 +406,12 @@ class TreasureUITests(unittest.TestCase):
     def test_map_toolbar_gaps_and_empty_fallback_do_not_record_data(self):
         self.lua.execute('''
             local previous
-            for _,button in ipairs({m.mapZone,m.scope,m.edit,m.remove,m.expand}) do
+            for _,button in ipairs({m.mapZone,m.scope,m.edit}) do
                 assert(button.point[3]==-174)
                 if previous then assert(button.point[2]-(previous.point[2]+previous:GetWidth())==6) end
                 previous=button
             end
+            assert(m.remove:GetText()=='Delete' and m.remove.point[2]==174 and m.remove.point[3]==-672)
             local before=snapshot(j.db);mapID=102;c:Refresh()
             assert(m.map.available and m.map.emptyShade:IsShown())
             assert(snapshot(j.db)==before)

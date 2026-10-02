@@ -3,6 +3,7 @@ import unittest
 from ui_test_harness import new_ui_client
 from ledger_test_harness import new_ledger
 from test_gathering import client
+from atlas_test_harness import new_atlas
 
 
 MENU = r'''
@@ -40,6 +41,99 @@ MENU = r'''
 
 
 class WorldMapLayerTests(unittest.TestCase):
+    def test_atlas_map_filters_work_without_removed_checkbox_and_preserve_legacy_choices(self):
+        lua=new_atlas(ui=True)
+        lua.execute(MENU)
+        lua.execute(r'''
+            assert(m.worldSubzones==nil)
+            j.state.showSubzones=true;j.state.showSubzonePoints=true
+            j.state.showSubzonesOnWorldMap=false
+            ns.AtlasSubzones.CreateWorldOverlay(j);modifier(nil,root)
+            assert(not entries.Zones.selected() and not entries.Points.selected())
+            entries.Zones.toggle()
+            assert(entries.Zones.selected() and not entries.Points.selected())
+            entries.Labels.toggle();entries.Zones.toggle()
+            assert(entries.Labels.selected() and not entries.Zones.selected())
+            assert(j.state.showSubzones and j.state.showSubzonePoints,'Atlas choices stay independent')
+            ns.AtlasSubzones.CreateWorldOverlay(j);modifier(nil,root)
+            assert(entries.Labels.selected() and not entries.Zones.selected())
+        ''')
+
+    def test_tutorial_waits_for_first_map_open_and_does_not_repeat(self):
+        lua=new_ui_client()
+        lua.execute(MENU)
+        lua.execute(r'''
+            AzerothFieldbookAccountDB={}
+            ns.RegisterWorldMapLayer('Nodes',function() return false end,function() end)
+            local shows,hides=0,0
+            HelpTip={ButtonStyle={Close=2},Point={LeftEdgeCenter=7}}
+            function HelpTip:Show(parent,info,anchor)
+                assert(parent==WorldMapFrame and anchor==filter)
+                assert(info.text=='Click the drop down list for Azeroth Fieldbook filters')
+                assert(info.targetPoint==7 and info.autoHideWhenTargetHides)
+                shows=shows+1;return true
+            end
+            function HelpTip:Hide() hides=hides+1 end
+            WorldMapFrame=CreateFrame('Frame');WorldMapFrame:Hide()
+            filter=CreateFrame('DropdownButton',nil,WorldMapFrame)
+            filter.worldMapFilters={};function filter:GetWorldMapFilters() return self.worldMapFilters end
+            WorldMapFrame.overlayFrames={filter}
+            for _,frame in ipairs(objects) do
+                if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'ADDON_LOADED','Blizzard_WorldMap') end
+            end
+            nextFrame();assert(shows==0 and not AzerothFieldbookAccountDB.worldMapFiltersTutorialSeen)
+            WorldMapFrame:Show();WorldMapFrame.scripts.OnShow(WorldMapFrame);nextFrame()
+            assert(shows==1 and AzerothFieldbookAccountDB.worldMapFiltersTutorialSeen)
+            filter.scripts.OnMouseDown(filter);assert(hides==1)
+            WorldMapFrame:Hide();WorldMapFrame:Show();WorldMapFrame.scripts.OnShow(WorldMapFrame);nextFrame();assert(shows==1)
+        ''')
+        # Reload the module with the same saved account preference.
+        from ui_test_harness import ROOT
+        lua.execute((ROOT/'WorldMapLayers.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
+        lua.execute("HelpTip.Show=function() error('Tutorial repeated after reload') end; ns.RegisterWorldMapLayer('Nodes',function() return false end,function() end);nextFrame()")
+
+    def test_suppressed_tutorial_does_not_consume_first_display(self):
+        lua=new_ui_client()
+        lua.execute(MENU)
+        lua.execute(r'''
+            AzerothFieldbookAccountDB={}
+            ns.RegisterWorldMapLayer('Nodes',function() return false end,function() end)
+            WorldMapFrame=CreateFrame('Frame');WorldMapFrame:Hide()
+            local filter=CreateFrame('DropdownButton',nil,WorldMapFrame)
+            filter.worldMapFilters={};function filter:GetWorldMapFilters() return self.worldMapFilters end
+            WorldMapFrame.overlayFrames={filter}
+            local allowed=false
+            HelpTip={ButtonStyle={Close=2},Point={LeftEdgeCenter=7},Hide=function() end,
+                Show=function() return allowed end}
+            for _,frame in ipairs(objects) do
+                if frame.scripts.OnEvent then frame.scripts.OnEvent(frame,'PLAYER_LOGIN') end
+            end
+            WorldMapFrame:Show();WorldMapFrame.scripts.OnShow(WorldMapFrame);nextFrame();assert(not AzerothFieldbookAccountDB.worldMapFiltersTutorialSeen)
+            allowed=true;WorldMapFrame:Hide();WorldMapFrame:Show();WorldMapFrame.scripts.OnShow(WorldMapFrame);nextFrame()
+            assert(AzerothFieldbookAccountDB.worldMapFiltersTutorialSeen)
+        ''')
+
+    def test_nodes_filter_updates_compendium_checkbox_visible_and_after_reopening(self):
+        lua=client(ui=True)
+        lua.execute(MENU)
+        lua.execute(r'''
+            ns.CreateGatheringMapPins(journal)
+            shell:ShowSection('gathering');local book=gathering.frame
+            modifier(nil,root)
+            local checkbox=book.mapOptions.worldMap
+            assert(not checkbox:GetChecked())
+            for _,on in ipairs({true,false}) do
+                entries.Nodes.toggle()
+                book.scripts.OnUpdate(book,0.25)
+                assert(checkbox:GetChecked()==on)
+                assert(not book.mapOptions.minimap:GetChecked())
+            end
+            shell:Hide();entries.Nodes.toggle();shell:ShowSection('gathering')
+            assert(checkbox:GetChecked())
+            checkbox:SetChecked(false);checkbox.scripts.OnClick(checkbox)
+            assert(not entries.Nodes.selected())
+        ''')
+
     def test_menu_can_load_after_layers_without_duplicate_hooks(self):
         lua=new_ui_client()
         lua.execute("ns.RegisterWorldMapLayer('Points',function() return true end,function() end)")

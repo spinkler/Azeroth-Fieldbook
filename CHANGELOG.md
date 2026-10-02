@@ -1,5 +1,95 @@
 # Changelog
 
+## v0.20.0 - 2026-10-02
+
+Release-channel update covering the complete batch since published v0.19.2-beta
+and previous-push baseline `5908c66705f56b13fd00f1c619626479961e14e5`.
+Native acceptance remains pending for the full mineral catalog, map-filter
+callout placement and traced sub-zone outlines. The level-cap-gated Beast Lore
+milestone remains a requirement for 1.0.
+
+- Default behaviour traits in creature tooltips to on, preserving saved opt-outs.
+
+- Give Bestiary Offenses, Defenses and Behaviour overlays dark parchment
+  backgrounds and dialog borders matching the other in-window overlays.
+
+- Replace the Compendium location dropdown's text arrow with the shared dropdown
+  artwork and its drop shadow.
+
+- Add consistent subtle drop shadows to right-pane entry headers, including
+  the Bestiary's scrolling title, without changing their placement or type size.
+
+- Embed gathering Locations in a dark right-pane overlay beneath the node title
+  and Locations button. Keep the resource list accessible and preserve zone
+  selection, interaction markers, coordinates, brightness and map explanations.
+  Cover the Basic info heading fully and use the Locations toggle without a
+  separate close button.
+
+- Remove the repeated timestamp from Known Goods price lines, retaining First
+  and Last seen dates below each offering. Show single-item prices as "X each"
+  instead of "X / 1".
+
+- Add a gentle drop shadow behind the Merchant's Ledger NPC portrait.
+
+- Inset the Compendium's Field notes and Observed loot backgrounds by two pixels
+  on each side so they no longer protrude at the border corners.
+
+- Remove the redundant Ledger source label beneath Favourite and the Chronicle
+  Capture status header/tooltip. Keep contact-list provenance, entry capture
+  details and active capture progress feedback.
+
+- Match Chronicle titles and Ledger NPC names to the Bestiary/Compendium's
+  larger gold type and header height. Align the Chronicle title and Ledger
+  portrait with the left edge of their location controls, keeping NPC text
+  beside its portrait and header buttons clear.
+
+- Move Chronicle's Entry and Location view buttons into the top-right header,
+  matching the other journals and reserving title space beside them.
+
+- Use the Flight Master tracking icon for Ledger flight-master map pins,
+  recognizing recorded taxi service and flight-master titles.
+
+- Exclude coordinate-free Ledger sightings from the NPC Locations dropdown and
+  its count, retaining their zone observations in the journal.
+
+- Remove the gathering-window recording hint, retaining its Help guidance.
+  Label Ledger locations as NPC Location or NPC Locations, explain Link identity
+  on hover, and use the shared dark delete dialog for Ledger contacts.
+
+- Center Compendium mineral previews on their model bounds and fit the camera
+  from geometry, keeping rotation within the viewer without per-node offsets.
+  Preserve the existing herb presentation.
+- Remove the redundant Atlas main-map sub-zone checkbox; use the world map's
+  Points, Labels and Zones filters, preserving saved choices.
+- Show a gold tutorial callout at the world map filter dropdown on its first
+  opening, once per account after the callout is introduced.
+
+- Keep the Compendium's map checkboxes synchronized when the world map's Nodes
+  filter changes, including changes made while the Compendium is closed.
+
+- Give Almanac, Lore and Atlas entry deletion a Ledger-style warning panel with
+  explicit Delete and Cancel buttons. Use the same layout for Bestiary and
+  Gatherer’s Compendium, preserving permanent-loss warnings and requiring the
+  exact word **delete** before confirmation is enabled.
+
+- Standardize entry deletion as **Delete** at the same footer position beside
+  **Share**: move Atlas deletion out of its discovery editor, Ledger contact
+  removal out of its record row, Lore deletion out of Sources / manage, and
+  Treasure encounter removal out of its map toolbar. Add confirmed deletion
+  to the Gatherer's Compendium. Keep journal scope and require confirmation before deletion.
+- Add the same **Delete** button to Almanac Waters, Pool Types and Catches.
+  Disable it without a displayed selection and reject selections from another
+  view. Retain catch history and offer restoration through **Show: removed**.
+- Deletion never prevents rediscovery: re-hovering Almanac pools/sightings and
+  observing waters or catch types makes them visible again. Reopening a Treasure
+  container can immediately record a new encounter after deletion; duplicate
+  events from the old open window stay ignored. Ledger contacts reappear on the next interaction.
+
+- Expand regression coverage for deletion scope, confirmation and rediscovery,
+  map-filter synchronization and the first-use tutorial, mineral geometry,
+  embedded location maps, Ledger displays and the new tooltip default. Update
+  UI mocks for embedded dialogs and document deletion and restoration behavior.
+
 ## v0.19.2-beta - 2026-10-01
 
 This Beta covers the complete batch since the published v0.19.1-beta and

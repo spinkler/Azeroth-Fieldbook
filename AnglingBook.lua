@@ -37,6 +37,12 @@ function ns.CreateAnglingBook(journal,tracking,shell)
     local state=journal.state
     state.view=(state.view=="pools" or state.view=="catches") and state.view or "waters"
     function c:State() return journal:View(state.view) end
+    function c:SelectedEntry()
+        local e=journal:Get(self:State().selected)
+        if not e then return end
+        local view=e.kind=="pool" and "pools" or e.kind=="item" and "catches" or "waters"
+        if view==state.view then return e end
+    end
     function c:Filters()
         local s=self:State();local f=A.Copy(s)
         f.mapID=nil -- map browsing and the index's zone filter are independent
@@ -185,17 +191,15 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         m.knowledge:SetText("Knowledge: "..s.knowledge);m.source:SetText("Source: "..(A.SourceLabels[s.source] or "all"))
         m.status:SetText(s.status=="fished" and "With recorded catches" or s.status=="unfished" and "No catches recorded" or "Show: "..s.status)
         for key,b in pairs(m.views) do b:SetEnabled(key~=state.view) end
-        local e=journal:Get(s.selected)
+        local e=self:SelectedEntry()
         if not tracking.observingHover then m.map:Render(s.mapID,s.selected) end
         m.zone:SetText(A.Safe(s.mapZone or "Choose zone"));m.session:SetText(A.Safe(tracking:SessionText()))
         m.heading:SetText(e and A.Safe(e.name) or "Your fishing field notes")
         m.details:SetText(table.concat(self:Details(e),"\n"))
         for _,b in ipairs(m.entryButtons) do b:SetEnabled(e~=nil) end
-        m.merge:SetEnabled(e~=nil and ((e.kind=="spot" and not e.removed) or e.kind=="pool") and not journal.readOnly)
-        m.merge:SetText(e and e.kind=="pool" and (e.removed and "Restore pool" or "Remove pool") or "Merge spot")
-        m.removeSighting:SetShown(e~=nil and e.kind=="spot")
-        m.removeSighting:SetEnabled(not journal.readOnly)
-        m.removeSighting:SetText(e and e.removed and (e.poolID and "Restore sighting" or "Restore spot") or (e and e.poolID and "Remove sighting" or "Remove spot"))
+        m.deleteButton:SetEnabled(e~=nil and not e.removed and not journal.readOnly)
+        m.merge:SetEnabled(e~=nil and (e.removed or e.kind=="spot") and not journal.readOnly)
+        m.merge:SetText(e and e.removed and "Restore" or "Merge spot")
         m.favourite:SetText(e and e.favourite and "Unfavourite" or "Favourite")
         m.assign:SetEnabled(e~=nil and not e.removed and (e.kind=="pool" or e.kind=="spot") and not journal.readOnly)
         m.assign:SetText(e and e.kind=="spot" and not e.poolID and "Use selected spot" or "Assign selected pool")
@@ -357,10 +361,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         m.scope=U.Button(m,"",42,-157,250,function() local s=c:State();s.currentZone=not s.currentZone;s.offset=0;c:Refresh() end)
         m.knowledge=U.Button(m,"",42,-186,250,filter("knowledge",{"all","personal","reported"}))
         m.source=U.Button(m,"",42,-215,250,filter("source",{"all","pool","open","unclassified"}))
-        m.status=U.Button(m,"",42,-244,250,function()
-            filter("status",state.view~="catches" and {"all","fished","unfished","favourites","removed"}
-                or {"all","fished","unfished","favourites"})()
-        end)
+        m.status=U.Button(m,"",42,-244,250,filter("status",{"all","fished","unfished","favourites","removed"}))
         m.count=U.Label(m,"",42,-277,250,"GameFontHighlightSmall");m.rows={}
         for i=1,PAGE_SIZE do
             local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-300-(i-1)*30);row:SetSize(250,29)
@@ -382,6 +383,24 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         m.sighting=U.Button(m,"Pool sighting",493,-58,136,function() c:OpenForm("sighting") end)
         m.manual=U.Button(m,"Record catch",794,-91,128,function() c:OpenForm("catch") end)
         m.reports=U.ShareButton(m,function() c:OpenReports() end)
+        m.deleteButton=U.Button(m,"Delete",174,-672,118,function()
+            local e=c:SelectedEntry()
+            if not m:IsVisible() or c.activePanel or not e or e.removed or journal.readOnly then return end
+            local view=state.view
+            m.deleteForm=m.deleteForm or ns.FieldbookUI.DeletePanel(m,shell,"Delete fishing entry")
+            m.deleteForm:Open("Delete "..A.Safe(e.name).." from this page?\n\nCatch history is preserved. Restore this entry through Show: removed.\n\nNew observations can record it again.",function()
+                if journal.readOnly or state.view~=view or c:SelectedEntry()~=e or e.removed then
+                    return nil,"Selection changed or journal unavailable; nothing deleted."
+                end
+                local ok,err=journal:SetEntryRemoved(e.id,true)
+                if ok then
+                    c:State().selected=nil
+                    if e.kind~="item" then tracking:ClearSource("Fishing record deleted; session source cleared.") end
+                end
+                c:Message(ok and "Entry deleted from this page. Restore with Show: removed; catch history is preserved." or err)
+                c:Refresh();return ok,err
+            end)
+        end)
         m.zone=U.ZoneMenu(m,342,-91,306,function()
             local ids={c:State().mapID};for _,water in pairs(journal.db.waters) do if water.mapID then ids[#ids+1]=water.mapID end end;return ids
         end,function(id,name)
@@ -404,6 +423,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         -- renderer uses 578*.99 by 302*1.25*.99, aspect fits and crops edge tiles.
         m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
         m.heading=U.Label(m,"",342,-587,580,"GameFontNormalSmall");m.heading:SetWordWrap(false)
+        m.heading:SetShadowColor(0,0,0,0.85);m.heading:SetShadowOffset(1,-1)
         m.details=U.ReadArea(m,342,-606,555,64)
         m.details:HookScript("OnVerticalScroll",function(self,value) c:State().detailScroll=value or self:GetVerticalScroll() end)
         m.locations=U.Button(m,"Sources / spots",342,-680,126,function() c:OpenLinks("locations") end)
@@ -413,23 +433,12 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             local e=journal:Get(c:State().selected);if e then journal:Edit(e.id,e.name,e.note,not e.favourite);c:Refresh() end
         end)
         m.merge=U.Button(m,"Merge spot",792,-680,130,function()
-            local e=journal:Get(c:State().selected)
-            if e and e.kind=="pool" then
-                local removed=not e.removed;c:State().selected=nil
-                if removed then tracking:ClearSource("Pool removed; session source cleared.") end
-                local ok,err=journal:SetPoolRemoved(e.id,removed)
-                c:Message(ok and (removed and "Pool removed from the list; automatic re-addition suppressed. Restore with Show: removed. Catch history is preserved."
-                    or "Pool restored.") or err);c:Refresh()
-            else c:OpenLinks("merge") end
-        end)
-        m.removeSighting=U.Button(m,"Remove sighting",42,-680,250,function()
-            local e=journal:Get(c:State().selected)
-            if not e or e.kind~="spot" then return end
-            local removed=not e.removed;c:State().selected=nil
-            if removed then tracking:ClearSource("Sighting removed; session source cleared.") end
-            local ok,err=journal:SetSightingRemoved(e.id,removed)
-            c:Message(ok and (removed and "Sighting removed. Restore it with Show: removed; catch history is preserved." or "Sighting restored.") or err)
-            c:Refresh()
+            local e=c:SelectedEntry();if not e or journal.readOnly then return end
+            if e.removed then
+                local ok,err=journal:SetEntryRemoved(e.id,false)
+                if ok then c:State().selected=nil end
+                c:Message(ok and "Fishing record restored." or err);c:Refresh()
+            elseif e.kind=="spot" then c:OpenLinks("merge") end
         end)
         m.entryButtons={m.locations,m.catches,m.notes,m.favourite}
         m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall");m.message:SetWordWrap(false)
@@ -447,7 +456,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
     shell:RegisterSection("angling",{title="Angler’s Almanac",icon="Interface\\Icons\\Trade_Fishing",frameName="AzerothFieldbookAnglingSection",build=build,
         help=A.VISION.."\n\n|cffffd100Waters, Pool Types, Catches|r\nBrowse fishing places under Waters, known pools under Pool Types, or items under Catches. Search names, zones and notes, and click the filter buttons to narrow the list. Sources / spots shows where a selected catch was recorded; map pins select remembered places.\n\n"..
             "|cffffd100Fishing observations|r\nCollected, readable fishing loot records automatically, even with the Almanac closed. Catches with no assigned source stay unclassified. Assign selected pool and Assign open water label future catches with your chosen session source; that choice is your assertion, not automatic identification. Movement, zone changes, other casts or a long pause clear the assignment.\n\n"..
-            "|cffffd100Pool discovery and removal|r\nHover a recognizable pool tooltip to record a zone sighting. This adds no coordinates and does not assign catches to that pool. Use Pool sighting if the tooltip is not recognized. Remove pool hides a mistaken pool type and stops automatic rediscovery; choose Show: removed and Restore pool to bring it back. Catch history is retained.\n\n"..
+            "|cffffd100Discovery and deletion|r\nHover a recognizable pool tooltip to record a zone sighting. This adds no coordinates and does not assign catches to that pool. Use Pool sighting if the tooltip is not recognized. Delete beside Share hides the selected entry on the current page. A new observation can rediscover it immediately; deletion never blacklists a record. Choose Show: removed, select the entry and use Restore to bring it back manually. Catch history is retained for all deleted entries.\n\n"..
             "|cffffd100Remembering and correcting|r\nRemember spot and Pool sighting save your approximate player position, not the exact pool location. Notes / edit saves notes and can rename remembered spots. Merge spot combines duplicate spots in the same waters and pool type, preserving their notes and history.\n\n"..
             "|cffffd100Fallback and skill|r\nUse Record catch only for a catch missing from automatic history. It adds a player-recorded catch event; do not enter the same catch twice. Item quantities and catch-event counts are different. Recorded skill successes show what worked on that occasion, not a minimum skill requirement.\n\n"..
             "|cffffd100Event log|r\nEvent log in the title bar shows catches, fishing failures, discoveries and corrections. Clear log, then Confirm clear, removes the log without deleting fishing knowledge.\n\n"..

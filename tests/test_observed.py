@@ -381,7 +381,7 @@ entry.rumours={{kind='behaviour',value='Summons'}}
 AzerothFieldbookDB.showKillCountTooltips=false
 entry.abilities['Observed trap'].showInTooltip=false
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(#GameTooltip.lines==0,'behaviour tooltip option defaults off')
+check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Behaviour: Flees at low health, Melee, Patrols','behaviour tooltip option defaults on')
 AzerothFieldbookDB.showBehaviourTooltips=true
 GameTooltip.lines={};tooltipHook(GameTooltip)
 check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Behaviour: Flees at low health, Melee, Patrols',

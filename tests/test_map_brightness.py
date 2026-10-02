@@ -41,7 +41,7 @@ class MapBrightnessTests(unittest.TestCase):
                 point={x=1000,y=1000,seenAt=now,approximate=true}})
             local revision=bj.revision
             local bw=ns.CreateCreatureLocationsWindow(bj);bw:Open(42)
-            local gw=ns.CreateGatheringLocationsWindow(gj);gw:Open('missing')
+            local gw=ns.CreateGatheringLocationsWindow(gj,function() return m end);gw:Open('missing')
             local b,g=bw:GetFrame(),gw:GetFrame()
             local function empty() end
             local angling=ns.CreateAnglingMap(m,ns.CreateAnglingJournal({}),empty,function() return {} end)

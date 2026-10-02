@@ -642,7 +642,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if ns.SpellIDWindow then ns.SpellIDWindow:ApplySettings() end
     end
     function journal:GetKillCountTooltips() return db.showKillCountTooltips~=false end
-    function journal:GetBehaviourTooltips() return db.showBehaviourTooltips==true end
+    function journal:GetBehaviourTooltips() return db.showBehaviourTooltips~=false end
     function journal:SetBehaviourTooltips(enabled)
         db.showBehaviourTooltips=enabled==true
         self:Touch()

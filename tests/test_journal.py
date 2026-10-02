@@ -222,6 +222,11 @@ function methods:Show() self.shown=true end
 function methods:Hide() self.shown=false; if self.scripts.OnHide then self.scripts.OnHide(self) end end
 function methods:SetShown(v) if v then self:Show() else self:Hide() end end
 function methods:IsShown() return self.shown end
+function methods:IsVisible()
+    local frame=self
+    while frame do if not frame:IsShown() then return false end;frame=frame.parent end
+    return true
+end
 function methods:SetEnabled(v) self.enabled=v end
 local function noop() end
 local function object(kind,parent)
@@ -235,6 +240,11 @@ function methods:CreateFontString() return object('FontString',self) end
 function methods:GetName() return self.name end
 function CreateFrame(kind,name,parent,template)
     local o=object(kind,parent)
+    if template=='UIPanelScrollFrameTemplate' then
+        o.ScrollBar=object('Slider',o)
+        o.ScrollBar.ScrollUpButton=object('Button',o.ScrollBar)
+        o.ScrollBar.ScrollDownButton=object('Button',o.ScrollBar)
+    end
     if template=='LargeSideTabButtonTemplate' then
         o.Icon=object('Texture',o)
         o:SetSize(64,59)
@@ -277,7 +287,7 @@ end
 controller=ns.CreateBestiaryBook(journal)
 controller:Toggle()
 check(AzerothFieldbookBestiarySection:IsShown(),'book opens')
-check(#UISpecialFrames==13 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration')
+check(#UISpecialFrames==12 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration; embedded delete panel follows its parent')
 check(controller:OpenAtUnit('mouseover'),'mouseover binding opens the observed NPC page')
 for _,o in ipairs(objects) do check(o.text~='Your note','empty manual field note stays visually empty') end
 local function click(text)
@@ -413,7 +423,7 @@ check(abilities:IsShown(),'toggling the active panel off restores the default vi
 check(click('Lock this entry'),'entry can be locked again')
 local options=AzerothFieldbookOptions
 options.scripts.OnShow(options)
-check(not journal:GetBehaviourTooltips(),'behaviour tooltip setting defaults off')
+check(journal:GetBehaviourTooltips(),'behaviour tooltip setting defaults on')
 options.behaviourTooltips.GetChecked=function() return true end
 options.behaviourTooltips.scripts.OnClick(options.behaviourTooltips)
 check(db.showBehaviourTooltips and journal:GetBehaviourTooltips(),'behaviour tooltip checkbox saves opt-in')
@@ -422,6 +432,7 @@ check(reloaded:GetBehaviourTooltips(),'behaviour tooltip opt-in survives a new j
 options.behaviourTooltips.GetChecked=function() return false end
 options.behaviourTooltips.scripts.OnClick(options.behaviourTooltips)
 check(not journal:GetBehaviourTooltips(),'behaviour tooltip checkbox disables display')
+check(not ns.CreateBestiaryJournal(db,identify):GetBehaviourTooltips(),'saved behaviour tooltip opt-out survives reload')
 check(journal:GetAccountWideTracking() and not journal:IsTrackingChangePending(),'account-wide tracking defaults on')
 options.accountWideTracking.GetChecked=function() return false end
 options.accountWideTracking.scripts.OnClick(options.accountWideTracking)
@@ -555,7 +566,7 @@ check(not damageBook.damageScrollBar:IsShown(),'scrollbar hides again when conte
 journal.entries[42].damage=savedDamage; controller:Refresh()
 
 check(click('Delete'),'delete button opens confirmation')
-local deletion=AzerothFieldbookDeleteCreature
+local deletion=AzerothFieldbookBestiarySection.deleteForm
 check(deletion:IsShown() and deletion.id==42,'confirmation identifies selected creature')
 deletion.input:SetText('DELETE'); deletion.input.scripts.OnEnterPressed(deletion.input)
 check(journal.entries[42],'incorrect confirmation preserves entry')
@@ -573,6 +584,7 @@ check(journal.entries[43] and not AzerothFieldbookBestiarySection.deleteButton.e
 check(notes.count.text=='0/10','deleted creature notes cleared from window')
 local reloaded=ns.CreateBestiaryJournal(db,function() return nil end)
 check(not reloaded.entries[42],'deleted entry does not return through legacy migration')
+check(reloaded:Ensure(42,false,'Rediscovered creature')~=nil and reloaded.entries[42],'deletion allows immediate rediscovery')
 local ranksDB={bestiary={entries={},creatures={}}}
 local ranksJournal=ns.CreateBestiaryJournal(ranksDB,function() return nil end)
 for i, rank in ipairs({'Elite','Rare','Rare Elite','World Boss'}) do

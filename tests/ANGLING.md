@@ -14,6 +14,14 @@ rendering or the actual order/readability of events during live fishing.
 
 ## Scope and ownership
 
+Each browse view has a **Delete** button at `(174, -672)`, beside **Share**.
+It acts only on the entry displayed in that view and is disabled without one,
+for removed entries, or for a read-only journal. Deletion hides waters, spots,
+pool types or catch types without rewriting catch aggregates or history.
+Select **Show: removed** and use **Restore** to show an entry again.
+Deletion never suppresses rediscovery: a fresh pool hover reveals its type and
+zone sighting again, and new fishing observations reveal waters and catch types.
+
 | File | Responsibility |
 | --- | --- |
 | `AnglingJournal.lua` | Character schema, identities, observations, durable aggregates, bounded history, queries and spot correction |
@@ -162,14 +170,12 @@ checked on show and at most five times per second while visible. Fresh cursor
 data is still required; missing processing info additionally requires world-only
 mouse focus. Hidden tooltips do no work, and no hidden world scan is added.
 
-**Remove pool** hides a selected type and its automatic zone sightings, suppressing
-future hover additions across reloads. **Show: removed** exposes the reversible
-**Restore pool** action. Notes, catch history, reports and manually remembered
-spots remain intact; assignments to removed types are cleared/rejected.
-From v0.13.5, **Remove sighting** independently hides a selected pool sighting in
-Waters, with **Show: removed / Restore sighting** available there. Automatic
-zone sightings are suppressed per type/zone across reloads. Other zones and the
-pool identity survive. Removed sightings are excluded from pins, location links,
+**Delete** hides the selected type or sighting, and **Show: removed / Restore**
+offers manual restoration. A fresh world hover rediscovers the pool type and
+its sighting in that zone immediately, including after reload. Notes, catch
+history, reports and manually remembered spots remain intact; assignments to
+deleted types are cleared/rejected until rediscovered or restored.
+Other zones and the pool identity survive. Removed sightings are excluded from pins, location links,
 and outgoing reports; catch facts tied to an incorrect sighting stay in local
 history but are omitted from reports until it is restored, preserving forwarded
 provenance rather than rewriting the source claim. Historical reverse lookup
@@ -341,7 +347,7 @@ Remaining in-game checks — **all unperformed**:
 - [ ] Hover a name-only school using the native world tooltip without Lua
   processor callbacks. Verify a Pool zone sighting appears with no coordinates.
 - [ ] Remove an individual sighting in Waters; verify other zones/type/history
-  remain, its pin/report inclusion disappears, re-hover is suppressed, and restore works.
+  remain, its pin/report inclusion disappears, re-hover rediscovers it, and restore works.
 - [ ] Check item icons and native tooltips in both catch lists, including uncached
   items, name-only manual entries, long names and panel reuse for source links.
 
@@ -355,8 +361,9 @@ is evidence of the old failure, not live verification of the v0.13.4 fix.
 - [ ] Hover named pools and localized Fishing requirement tooltips. Verify the
   type appears in the current-zone list without a pin or catch attribution;
   unrelated objects, bobbers, inventory items and unit tooltips add nothing.
-- [ ] Remove a pool type, hover again, reload, then restore through Show: removed.
-  Check automatic suppression, preserved notes/history and report behaviour.
+- [ ] Delete a pool type, hover again, and verify immediate rediscovery. Delete
+  again, reload, then hover to rediscover it or restore through Show: removed.
+  Check preserved notes/history and report behaviour.
 
 - [ ] First login with a new/empty journal; open Almanac before Atlas. Verify
   background acquisition before any Fieldbook page is opened.
