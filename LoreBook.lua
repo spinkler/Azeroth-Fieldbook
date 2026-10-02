@@ -49,7 +49,7 @@ local function sourceReader(parent)
         header:SetText(L.Safe(metadata or ""));header:SetShown(hasSource)
         local top=hasSource and header:GetStringHeight()+20 or 0
         text:ClearAllPoints();text:SetPoint("TOPLEFT",0,-top)
-        if path and type(size)=="number" then text:SetFont(path,size+(hasSource and 2 or 0),flags) end
+        if path and type(size)=="number" then text:SetFont(path,size+(hasSource and 4 or 0),flags) end
         if hasSource then text:SetTextColor(1,1,1) else text:SetTextColor(0.75,0.8,0.8) end
         text:SetText(L.Safe(hasSource and lore or content))
         body:SetHeight(math.max(height,top+text:GetStringHeight()+12))
@@ -178,7 +178,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         if not self.main then return end
         local m=self.main;self:Remember()
         local rows=journal:List(state);self.rows=rows
-        state.offset=math.max(0,math.min(state.offset,math.floor(math.max(0,#rows-1)/7)*7))
+        state.offset=math.max(0,math.min(state.offset,math.floor(math.max(0,#rows-1)/9)*9))
         for i,row in ipairs(m.rows) do
             local e=rows[state.offset+i];row.id=e and e.id;row:SetShown(e~=nil)
             if e then
@@ -195,11 +195,9 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             "Your archive begins empty.\n\nOpen supported readable lore to preserve it, or record a writing, landmark, person or mystery.")
         local usage=journal:StorageStatus();m.capacity:SetText(usage)
         m.count:SetText(#rows.." entries"..(state.zone and " • "..L.Safe(tostring(state.zone)) or ""))
-        m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+7<#rows)
-        m.kind:SetText(state.kind and L.kinds[state.kind] or "All entry kinds")
-        local filters=0;for _,key in ipairs({"zone","origin","revisit","status","completeness"}) do if state[key] then filters=filters+1 end end
-        m.filters:SetText("Filters"..(filters>0 and " ("..filters..")" or ""))
-        m.sort:SetText(state.sort=="newest" and "Recently added" or state.sort=="updated" and "Recently updated" or "Sort: Title")
+        m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+9<#rows)
+        local filters=0;for _,key in ipairs({"kind","zone","origin","revisit","status","completeness"}) do if state[key] then filters=filters+1 end end
+        m.filters:SetSelected(filters>0)
         local e=journal:Get(state.selected);m.name:SetText(e and L.AutomaticLabel(journal:Title(e),L.IsAutomatic(e)) or "Your personal archive")
         m.deleteButton:SetEnabled(e~=nil and not journal.readOnly)
         for _,control in ipairs({m.edit,m.revisit,m.related,m.more,m.sourceMenu,m.locationMenu,m.addLocation,m.place}) do control:SetEnabled(e~=nil and not journal.readOnly) end
@@ -241,53 +239,79 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         c.frame=content;local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Lorekeeper's Chronicle")
-        m.search=U.Search(m,47,-124,240,200);m.search:SetText(state.query)
+        m.search=U.Search(m,47,-92,188,200);m.search:SetText(state.query)
         m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
-        m.kind=U.MenuButton(m,"All entry kinds",42,-161,250,function(button)
+        m.filters=ns.FieldbookUI.FilterButton(m,244,-92,function(button)
+            m.search:ClearFocus()
             c:Menu(button,function(_,root)
-                root:CreateButton("All entry kinds",function() state.kind=nil;c:Filter() end)
-                for _,kind in ipairs({"writing","landmark","person","mystery"}) do root:CreateButton(L.kinds[kind],function() state.kind=kind;state.completeness=nil;state.status=nil;c:Filter() end) end
-            end)
-        end)
-        m.filters=U.MenuButton(m,"Filters",42,-195,120,function(button)
-            c:Menu(button,function(_,root)
+                -- Each submenu owns one state key; other groups retain their selection.
+                local function checkbox(parent,label,key,value)
+                    local item=parent:CreateCheckbox(label,function() return state[key]==value end,function()
+                        state[key]=value;c:Filter()
+                    end)
+                    item:SetResponse(MenuResponse.Refresh)
+                    return item
+                end
+                local kinds=root:CreateButton("Entry Kinds")
+                checkbox(kinds,"All entry kinds","kind",nil)
+                for _,kind in ipairs({"writing","landmark","person","mystery"}) do checkbox(kinds,L.kinds[kind],"kind",kind) end
+                root:CreateDivider();root:CreateTitle("Filters")
                 local zones=root:CreateButton("Zone / location");zones:SetScrollMode(420)
-                zones:CreateButton("All recorded zones",function() state.zone=nil;c:Filter() end)
+                checkbox(zones,"All recorded zones","zone",nil)
                 local all={};for _,e in pairs(journal.entries) do
                     for _,p in ipairs(e.locations) do if p.zone~="" then all[p.zone]=true end end
                     for _,r in ipairs(e.reports or {}) do for _,p in ipairs(r.locations or {}) do if p.zone and p.zone~="" then all[p.zone]=true end end end
                 end
                 local names={};for name in pairs(all) do names[#names+1]=name end;table.sort(names)
-                for _,name in ipairs(names) do zones:CreateButton(L.Safe(name),function() state.zone=name;c:Filter() end) end
+                for _,name in ipairs(names) do checkbox(zones,L.Safe(name),"zone",name) end
                 local origin=root:CreateButton("Origin")
                 for _,row in ipairs({{"","Any origin"},{"captured","Captured in your interaction"},{"manual","Manually recorded"},{"reported","Received reports"}}) do
-                    origin:CreateButton(row[2],function() state.origin=row[1]~="" and row[1] or nil;c:Filter() end)
+                    checkbox(origin,row[2],"origin",row[1]~="" and row[1] or nil)
                 end
-                root:CreateButton(state.revisit and "Show all revisit states" or "Only revisit / follow up",function() state.revisit=not state.revisit or nil;c:Filter() end)
-                if not state.kind or state.kind=="writing" then
-                    local complete=root:CreateButton("Writing completeness")
-                    complete:CreateButton("Any",function() state.completeness=nil;c:Filter() end)
-                    for _,key in ipairs({"complete","partial","interrupted","unsupported"}) do complete:CreateButton(statusNames[key],function() state.completeness=key;state.kind="writing";c:Filter() end) end
-                end
-                if not state.kind or state.kind=="mystery" then
-                    local status=root:CreateButton("Mystery status")
-                    status:CreateButton("Any",function() state.status=nil;c:Filter() end)
-                    for _,key in ipairs({"open","investigating","resolved"}) do status:CreateButton(mysteryNames[key],function() state.status=key;state.kind="mystery";c:Filter() end) end
+                local revisit=root:CreateCheckbox("Only revisit / follow up",function() return state.revisit==true end,function() state.revisit=not state.revisit or nil;c:Filter() end)
+                revisit:SetResponse(MenuResponse.Refresh)
+                local complete=root:CreateButton("Writing completeness")
+                checkbox(complete,"Any","completeness",nil)
+                for _,key in ipairs({"complete","partial","interrupted","unsupported"}) do checkbox(complete,statusNames[key],"completeness",key) end
+                local status=root:CreateButton("Mystery status")
+                checkbox(status,"Any","status",nil)
+                for _,key in ipairs({"open","investigating","resolved"}) do checkbox(status,mysteryNames[key],"status",key) end
+                root:CreateDivider()
+                local clear=root:CreateButton("Clear",function() c:ResetFilters() end)
+                clear:SetResponse(MenuResponse.Refresh)
+            end)
+        end)
+        U.StyleSelection(m.filters)
+        m.sort=U.Button(m,"",270,-92,22,function(button)
+            m.search:ClearFocus()
+            c:Menu(button,function(_,root)
+                root:CreateTitle("Sort by")
+                for _,choice in ipairs({{"","Title"},{"newest","Recently added"},{"updated","Recently updated"}}) do
+                    root:CreateButton((state.sort or "")==choice[1] and choice[2].." (selected)" or choice[2],function() state.sort=choice[1]~="" and choice[1] or nil;c:Filter() end)
                 end
             end)
         end)
-        m.reset=U.Button(m,"Clear",173,-195,119,function() c:ResetFilters() end)
-        m.sort=U.Button(m,"Sort: Title",42,-229,250,function() state.sort=state.sort==nil and "newest" or state.sort=="newest" and "updated" or nil;c:Filter() end)
+        m.sort:SetSize(22,22)
+        for row=0,4 do
+            local stroke=m.sort:CreateTexture(nil,"OVERLAY")
+            stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,2-row);stroke:SetColorTexture(1,0.82,0.14,1)
+        end
+        for _,item in ipairs({{m.filters,"Filter entries"},{m.sort,"Sort"}}) do
+            item[1]:SetScript("OnEnter",function(self)
+                if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(item[2]);GameTooltip:Show() end
+            end)
+            item[1]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        end
         m.rows={}
-        for i=1,7 do
-            local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-269-(i-1)*44);row:SetSize(250,43)
+        for i=1,9 do
+            local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-173-(i-1)*44);row:SetSize(250,43)
             ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",3,-5);row.icon:SetSize(20,20)
             row.name=U.Label(row,"",29,-3,214,"GameFontHighlightSmall");row.name:SetWordWrap(false)
             row.context=U.Label(row,"",29,-24,215,"GameFontDisableSmall");row.context:SetWordWrap(false)
             row:SetScript("OnClick",function(self) if self.id then c:Select(self.id) end end);m.rows[i]=row
         end
-        m.empty=U.Label(m,"",46,-280,242,"GameFontHighlight");m.empty:SetWordWrap(true)
+        m.empty=U.Label(m,"",46,-184,242,"GameFontHighlight");m.empty:SetWordWrap(true)
         m.capacity=U.Label(m,"",42,-701,250,"GameFontDisableSmall")
         m.capacity:SetWordWrap(false)
         m.capacityHover=CreateFrame('Frame',nil,m);m.capacityHover:SetPoint('TOPLEFT',42,-699);m.capacityHover:SetSize(250,20)
@@ -300,8 +324,8 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         end)
         m.capacityHover:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         m.count=U.Label(m,"",42,-582,250,"GameFontHighlightSmall")
-        m.previous=U.Button(m,"Previous",42,-604,120,function() state.offset=math.max(0,state.offset-7);c:Refresh() end)
-        m.next=U.Button(m,"Next",173,-604,119,function() state.offset=state.offset+7;c:Refresh() end)
+        m.previous=U.Button(m,"Previous",42,-604,120,function() state.offset=math.max(0,state.offset-9);c:Refresh() end)
+        m.next=U.Button(m,"Next",173,-604,119,function() state.offset=state.offset+9;c:Refresh() end)
         m.new=U.MenuButton(m,"Record…",42,-638,120,function(button)
             c:Menu(button,function(_,root)
                 for _,row in ipairs({{"writing","Transcribe writing"},{"landmark","Record Landmark"},{"person","Manual person"},{"mystery","Create Mystery"}}) do root:CreateButton(row[2],function() c:Edit(row[1]) end) end
@@ -322,15 +346,15 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
                 root:CreateButton("Import report",function() if c.reportUI then c.reportUI:OpenImport() end end)
             end)
         end)
-        m.name=U.Label(m,"",342,-55,566,"GameFontNormalLarge");m.name:SetWordWrap(false)
+        m.name=U.Label(m,"",342,-60,566,"GameFontNormalLarge");m.name:SetWordWrap(false)
         m.name:SetShadowColor(0,0,0,0.85);m.name:SetShadowOffset(1,-1)
         local titlePath,titleSize,titleFlags=m.name:GetFont()
         if titlePath and titleSize then m.name:SetFont(titlePath,titleSize+2,titleFlags) end
-        m.entry=U.Button(m,"Entry",734,-52,92,function() c:SetView("entry") end);U.StyleSelection(m.entry)
-        m.locationView=U.Button(m,"Location",832,-52,104,function() c:SetView("location") end);U.StyleSelection(m.locationView)
-        m.locationView:ClearAllPoints();m.locationView:SetPoint("TOPRIGHT",m,"TOPRIGHT",-24,-52)
+        m.entry=U.Button(m,"Entry",734,-60,92,function() c:SetView("entry") end);U.StyleSelection(m.entry)
+        m.locationView=U.Button(m,"Location",832,-60,104,function() c:SetView("location") end);U.StyleSelection(m.locationView)
+        m.locationView:ClearAllPoints();m.locationView:SetPoint("TOPRIGHT",m,"TOPRIGHT",-24,-60)
         m.entry:ClearAllPoints();m.entry:SetPoint("RIGHT",m.locationView,"LEFT",-6,0)
-        m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.entry,"TOPLEFT",-8,-3)
+        m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.entry,"TOPLEFT",-8,0)
         m.edit=U.Button(m,"Edit",566,-99,76,function() c:Edit(nil,state.selected) end)
         m.revisit=U.Button(m,"Revisit: No",652,-99,128,function() local e=journal:Get(state.selected);if e then journal:Update(e.id,{revisit=not e.revisit});c:Refresh() end end)
         m.related=U.Button(m,"Related",790,-99,120,function() c:Relationships() end)

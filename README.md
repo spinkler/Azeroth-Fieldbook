@@ -1,12 +1,9 @@
-# Azeroth Fieldbook 0.21.0 (Release)
+# Azeroth Fieldbook 0.22.0 (Release)
 
-Version 0.21.0 adds opt-in Atlas entrance discovery, player Loss of Control
-observations and manual attribution, plus consistent search controls and journal
-layout refinements. Entrance evidence and player-confirmed categories stay separate.
-The 0.20.0 release brought consistent deletion confirmations, in-window gathering
-maps, geometry-based mineral previews and clearer journal headers and controls.
-It also refines Ledger location and price displays, adds a first-use map-filter
-hint, and enables behaviour tooltip traits by default while preserving opt-outs.
+Version 0.22.0 extends spell-ID portraits with manual ability assignment and
+Ctrl+Click navigation to the captured creature. Chronicle, Ledger, Almanac and
+Treasure now group filters into compact menus, with matching sort controls where
+available, alongside clearer journal headings and layout refinements.
 Whole-Fieldbook backup and recovery remains available through
 **Options → Whole-Fieldbook backups** or `/fieldbook backups`.
 
@@ -1109,21 +1106,33 @@ an NPC. If an effect is missed, `/fieldbook debug` reports the latest aura scan
 path and access errors, the last player aura-event result and whether Disarm
 6713 is blacklisted. Capture it while the effect is still active when possible.
 
+Small clickable portraits identify eligible creatures captured with each row:
+
+- **Enemy cast** (including channels) and **Enemy instant cast** show the caster.
+- **Buff on target** shows the creature carrying the buff. The tooltip explains
+  that another unit may have cast it and retains the caster's name when readable.
+- **Debuff on you** shows its eligible NPC source when available; otherwise it
+  shows your captured target with an explicit unverified-caster explanation.
+- Unattributed **Loss of Control on you** shows your captured target as before.
+
+Hover to review the captured creature, then click to manually confirm the spell
+for it in the Bestiary. A successful click shows **Saved:** and a green rim.
+**Ctrl+Click** a portrait to open that captured creature's Bestiary entry without
+assigning the spell. This also works on saved rows and restricted spell IDs.
+Each portrait stays with its own observation when targets change. This works in
+combat and with automatic recording disabled, respects entry locks and preserves
+existing notes and spell records without granting automatic [A] evidence. A **?**
+keeps the named choice available if its portrait cannot be rendered. Creatures
+must pass the Bestiary's normal identity and eligibility checks. Restricted spell
+IDs may still be displayed by the cast/aura rows, but cannot be saved by clicking;
+the tooltip explains that the displayed ID must be entered manually instead.
+
 **Loss of Control on you** is an independent row in that window, with the spell
 ID, available name, effect label and verified creature name when attribution
 succeeds. Like the other window rows, it has no redundant [A]. Every Blizzard
 LOC type is eligible, including Disarm, school interrupts and future types.
 When a source cannot be safely identified, chat supplies the effect and Spell ID
-for manual entry. When you had an eligible NPC targeted at detection, a small
-round portrait appears beside the row, with its captured name and readable level.
-Hover to review the unverified target; click the portrait to assign the spell to
-that creature in the Bestiary. Switching targets does not change this choice.
-A successful click shows **Saved:** and a green portrait rim. This is a manual
-confirmation, works in combat and with automatic recording disabled, and respects
-the creature's entry lock. Existing notes and spell records are preserved; the
-click does not grant automatic [A] evidence. If the portrait cannot be rendered,
-a **?** keeps the same named choice available. Nothing is assigned from your
-current target alone. A missing
+for manual entry. Nothing is assigned from your current target alone. A missing
 or restricted aura does not discard a readable LOC spell ID; a restricted spell
 ID itself is skipped until Blizzard permits reading it. Duplicate events for one
 application are suppressed. The observer runs on events, independently of the

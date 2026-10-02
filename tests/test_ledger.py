@@ -175,9 +175,9 @@ class LedgerTests(unittest.TestCase):
             assert(check.texture==table.concat({'Interface','Buttons','UI-CheckBox-Check'},string.char(92)))
             local point=snapshot(box.point);local label=snapshot(b:GetFontString().points)
             assert(not check:IsShown() and b:GetText()=='Favourite')
-            b.scripts.OnClick();flush();assert(check:IsShown() and b:GetText()=='Saved')
+            b.scripts.OnClick();flush();assert(check:IsShown() and b:GetText()=='Favourite')
             assert(snapshot(box.point)==point and snapshot(b:GetFontString().points)==label)
-            b.scripts.OnClick();flush();assert(not check:IsShown() and snapshot(box.point)==point)
+            b.scripts.OnClick();flush();assert(not check:IsShown() and b:GetText()=='Favourite' and snapshot(box.point)==point)
         ''')
 
     def test_remove_contact_requires_confirmation(self):
@@ -775,6 +775,27 @@ class LedgerTests(unittest.TestCase):
 class LedgerUITests(unittest.TestCase):
     def setUp(self):
         self.lua = new_ledger(ui=True)
+        self.lua.execute('''
+        MenuResponse={Refresh=2}
+        function openMenu(button)
+            local function node()
+                local n={children={}}
+                function n:CreateButton(label,fn) local child=node();child.label=label;child.action=fn;self.children[#self.children+1]=child;return child end
+                function n:CreateCheckbox(label,selected,fn) local child=self:CreateButton(label,fn);child.selected=selected;return child end
+                function n:SetResponse(response) self.response=response end
+                function n:CreateDivider() end
+                function n:CreateTitle(label) self.title=label end
+                function n:SetScrollMode() end
+                return n
+            end
+            MenuUtil={CreateContextMenu=function(_,build) menu=node();build(nil,menu) end}
+            click(button);return menu
+        end
+        function choose(menu,label)
+            for _,item in ipairs(menu.children) do if item.label==label then if item.action then item.action() end;return item end end
+            error('Menu missing '..label)
+        end
+    ''')
 
     def test_training_requires_personal_or_reported_lessons(self):
         self.lua.execute('''
@@ -826,7 +847,7 @@ class LedgerUITests(unittest.TestCase):
             m.search:SetText('synthetic goods');assert(c.rows[1].match and m.rows[1].reason:GetText():find('Offers:',1,true))
             click(m.rows[1]);assert(c.state.detail=='goods' and c.state.focus)
             m.search:SetText('not in journal');assert(m.empty:GetText():find('No matching',1,true))
-            click(m.reset);assert(c.state.query=='' and #c.rows==1 and c.state.selected==e.id)
+            choose(openMenu(m.filters),'Clear');assert(c.state.query=='' and #c.rows==1 and c.state.selected==e.id)
         ''')
 
     def test_map_geometry_exact_independent_state_and_tooltip(self):
@@ -883,8 +904,8 @@ class LedgerUITests(unittest.TestCase):
             for i=1,20 do now=now+1;name=string.format('Contact %02d',i);visit(i,'ABC') end
             flush();c.state.contactScroll=780;c:Refresh();local first=m.rows[1].id
             fire('MERCHANT_UPDATE');flush();assert(c.state.offset==12 and m.rows[1].id==first)
-            click(m.sort);assert(c.state.offset==0 and m.rows[1].name:GetText()=='Contact 20')
-            click(m.rows[1]);click(m.favourite);flush();m.favourites:SetChecked(true);m.favourites.scripts.OnClick(m.favourites)
+            choose(openMenu(m.sort),'Last encounter');assert(c.state.offset==0 and m.rows[1].name:GetText()=='Contact 20')
+            click(m.rows[1]);click(m.favourite);flush();local item=choose(openMenu(m.filters),'Favourites');assert(item.selected() and item.response==MenuResponse.Refresh)
             assert(#c.rows==1)
         ''')
 

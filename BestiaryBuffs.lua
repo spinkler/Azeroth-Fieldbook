@@ -41,13 +41,12 @@ function ns.InstallBestiaryBuffs(journal, identify)
         if source == "" then source = nil end
         return spellID, name, source
     end
-    local function record(id, name, spellID, kind)
+    local function record(id, name, spellID, kind, manual)
         local entry = journal.entries[id]
         if not entry then return false, "entry unavailable" end
         local creatureName = journal:GetCreatureName(id)
         if not creatureName then return false, "creature name unavailable" end
         local playerEffect = kind == "player Loss of Control"
-        local manual = kind == "manual Loss of Control"
         local observedID = playerEffect or manual
         if manual and entry.confirmed then return false, "Unlock this creature before changing its abilities." end
         local ability = entry.abilities[name]
@@ -110,11 +109,65 @@ function ns.InstallBestiaryBuffs(journal, identify)
     end
     -- An explicit portrait click supplies the creature association. The spell ID
     -- was already observed publicly; resolving a link in combat is unnecessary.
-    function journal:AssignObservedLossOfControl(id, spellID)
+    local assignmentKinds = {cast=true, buff=true, debuff=true, ["Loss of Control"]=true}
+    function journal:AssignObservedAbility(id, spellID, kind)
         if ns.InitializationBlocked then return false, "The Bestiary is not available yet." end
         if not number(id) or not number(spellID) then return false, "effect identity unreadable or invalid" end
+        if not public(kind) or not assignmentKinds[kind] then return false, "observation kind unavailable" end
         local name = spellName(C_Spell and read(C_Spell.GetSpellName, spellID)) or ("Spell ID " .. spellID)
-        return record(id, name, spellID, "manual Loss of Control")
+        return record(id, name, spellID, "manual " .. kind, true)
+    end
+    function journal:CaptureSpellAssignment(unit, spellID, kind, say, canAssign)
+        if ns.InitializationBlocked or not public(unit) or type(unit) ~= "string" then return end
+        if not public(kind) or not assignmentKinds[kind] then return end
+        local guid = read(UnitGUID, unit)
+        if type(guid) ~= "string" or guid == "" then return end
+        local id = identify(unit, false, guid)
+        if not number(id) then return end
+        local name = read(UnitName, unit)
+        local level = read(type(UnitEffectiveLevel) == "function" and UnitEffectiveLevel or UnitLevel, unit)
+        if type(name) ~= "string" or #name > 100 or name:find("[|%c]") then return end
+        name = name:match("^%s*(.-)%s*$")
+        if name == "" or name == UNKNOWN or name == UNKNOWNOBJECT or read(UnitGUID, unit) ~= guid then return end
+        local entries, entry = self.entries, self.entries[id]
+        local candidate = {id=id, guid=guid, unit=unit, name=name, level=number(level) and level or nil}
+        -- A target/buff recipient is a manual choice, never automatic source
+        -- evidence. Retain only the public ID; native display can still relay secrets.
+        local observedID = number(spellID) and spellID or nil
+        local function available()
+            if ns.InitializationBlocked or canAssign and not canAssign()
+                or self.entries ~= entries or entry and self.entries[id] ~= entry then
+                say("This observation is no longer available after the Bestiary changed.")
+                return false
+            end
+            return true
+        end
+        candidate.open = function(openEntry)
+            if not available() then return false end
+            if not self.entries[id] then self:Ensure(id, false, name) end
+            entry = self.entries[id]
+            if not entry then return false end
+            return openEntry(id)
+        end
+        candidate.assign = function()
+            if not available() then return false end
+            if not observedID then
+                say("This spell ID is restricted. Enter the displayed ID manually in the Bestiary.")
+                return false
+            end
+            local current = self.entries[id]
+            if current and current.confirmed then
+                say("Unlock " .. name .. " in the Bestiary before assigning this ability.")
+                return false
+            end
+            if not current then self:Ensure(id, false, name) end
+            entry = self.entries[id]
+            local _, result, saved = self:AssignObservedAbility(id, observedID, kind)
+            if saved then say("Ability assigned: Spell ID " .. observedID .. " — " .. name .. ".")
+            else say("Ability assignment failed: " .. result .. ".") end
+            return saved == true
+        end
+        return candidate
     end
     function journal:ReportBuffs(say)
         say("Automatic ability recording: " .. (self:GetAutoRecordAbilities() and "ON" or "OFF"))

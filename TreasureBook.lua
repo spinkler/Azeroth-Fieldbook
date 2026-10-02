@@ -156,7 +156,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         if top then for i,row in ipairs(rows) do if row.entry.id==top.entry.id then state.offset=i-1;break end end end
         state.offset=math.min(state.offset,math.max(0,#rows-1))
         m.count:SetText(#rows.." / "..total.." container kinds")
-        m.empty:SetShown(#rows==0);m.empty:SetText(total==0 and "Your Treasure Journal begins empty.\n\nRecord a find, or carry an openable container. All locations describe past encounters." or "No entries match these filters.\nReset filters to browse all known finds.")
+        m.empty:SetShown(#rows==0);m.empty:SetText(total==0 and "Your Treasure Journal begins empty.\n\nRecord a find, or carry an openable container. All locations describe past encounters." or "No entries match these filters.\nUse Filters > Clear to browse all known finds.")
         for i,row in ipairs(m.rows) do
             local found=rows[state.offset+i];row:SetShown(found~=nil);row.id=found and found.entry.id
             if found then
@@ -167,8 +167,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             end
         end
         m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+PAGE<#rows)
-        m.category:SetText(categories[state.category] or "All categories");m.zone:SetText(state.zone=="@current" and "Current zone" or state.zone or "All locations")
-        m.knowledge:SetText(knowledge[state.knowledge] or "All sources");m.sort:SetText("Sort: "..(state.sort or "name"));m.bookmarks:SetChecked(state.bookmarks==true)
+        m.filters:SetSelected(state.category~=nil or state.zone~=nil or state.knowledge~=nil or state.bookmarks==true)
         local e=journal:Get(state.selected);local s=e and journal:Summary(e)
         m.name:SetText(e and T.Safe(journal:Title(e)) or "Treasure Journal")
         m.summary:SetText(e and ((e.form=="world" and "World find" or "Portable container").." • "..e.category.." • "..s.knowledge) or "A personal guide to temporary discoveries")
@@ -192,38 +191,64 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Treasure Journal")
         m.directory=CreateFrame("Frame",nil,m);m.directory:SetAllPoints();local d=m.directory
-        m.search=U.Search(d,48,-92,240,200);m.search:SetText(state.query)
+        m.search=U.Search(d,47,-92,188,200);m.search:SetText(state.query)
         m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
-        m.category=U.MenuButton(d,"All categories",42,-121,121,function(self)
-            c:Menu(self,function(_,root)
-                root:CreateButton("All categories",function() state.category=nil;c:Filter() end)
-                for _,id in ipairs({"world","portable","salvage"}) do root:CreateButton(categories[id],function() state.category=id;c:Filter() end) end
+        m.filters=ns.FieldbookUI.FilterButton(d,244,-92,function(button)
+            m.search:ClearFocus()
+            c:Menu(button,function(_,root)
+                local function checkbox(parent,label,key,value)
+                    local item=parent:CreateCheckbox(label,function() return state[key]==value end,function()
+                        state[key]=value;c:Filter()
+                    end)
+                    item:SetResponse(MenuResponse.Refresh)
+                end
+                local category=root:CreateButton("Categories")
+                checkbox(category,"All categories","category",nil)
+                for _,id in ipairs({"world","portable","salvage"}) do checkbox(category,categories[id],"category",id) end
+                root:CreateDivider();root:CreateTitle("Filters")
+                local zones=root:CreateButton("Zone / location");zones:SetScrollMode(400)
+                checkbox(zones,"All locations","zone",nil)
+                checkbox(zones,"Current zone","zone","@current")
+                local seen={};for _,p in ipairs(journal:Zones()) do local name=p.zone
+                    if name~="" and not seen[name] then seen[name]=true;checkbox(zones,T.Safe(name),"zone",name) end
+                end
+                local sources=root:CreateButton("Source / knowledge")
+                checkbox(sources,"All sources / knowledge","knowledge",nil)
+                for _,id in ipairs({"personal","reported","missing","contents"}) do checkbox(sources,knowledge[id],"knowledge",id) end
+                local bookmarks=root:CreateCheckbox("Look for again",function() return state.bookmarks==true end,function()
+                    state.bookmarks=not state.bookmarks;c:Filter()
+                end)
+                bookmarks:SetResponse(MenuResponse.Refresh)
+                root:CreateDivider()
+                local clear=root:CreateButton("Clear",function() c:ResetFilters() end)
+                clear:SetResponse(MenuResponse.Refresh)
             end)
         end)
-        m.zone=U.MenuButton(d,"All locations",170,-121,122,function(self)
-            c:Menu(self,function(_,root)
-                root:SetScrollMode(400);root:CreateButton("All locations",function() state.zone=nil;c:Filter() end)
-                root:CreateButton("Current zone",function() state.zone="@current";c:Filter() end)
-                local seen={};for _,p in ipairs(journal:Zones()) do local name=p.zone;if name~="" and not seen[name] then
-                    seen[name]=true;root:CreateButton(T.Safe(name),function() state.zone=name;c:Filter() end)
-                end end
+        U.StyleSelection(m.filters)
+        m.sort=U.Button(d,"",270,-92,22,function(button)
+            m.search:ClearFocus()
+            c:Menu(button,function(_,root)
+                root:CreateTitle("Sort by")
+                for _,choice in ipairs({{"name","Name"},{"location","Location"},{"recent","Most recent"}}) do
+                    root:CreateButton((state.sort or "name")==choice[1] and choice[2].." (selected)" or choice[2],function() state.sort=choice[1]~="" and choice[1] or nil;c:Filter() end)
+                end
             end)
         end)
-        m.knowledge=U.MenuButton(d,"All sources",42,-150,121,function(self)
-            c:Menu(self,function(_,root)
-                root:CreateButton("All sources / knowledge",function() state.knowledge=nil;c:Filter() end)
-                for _,id in ipairs({"personal","reported","missing","contents"}) do root:CreateButton(knowledge[id],function() state.knowledge=id;c:Filter() end) end
+        m.sort:SetSize(22,22)
+        for row=0,4 do
+            local stroke=m.sort:CreateTexture(nil,"OVERLAY")
+            stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,2-row);stroke:SetColorTexture(1,0.82,0.14,1)
+        end
+        for _,item in ipairs({{m.filters,"Filter finds"},{m.sort,"Sort"}}) do
+            item[1]:SetScript("OnEnter",function(self)
+                if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(item[2]);GameTooltip:Show() end
             end)
-        end)
-        m.sort=U.MenuButton(d,"Sort: name",170,-150,122,function(self)
-            c:Menu(self,function(_,root) for _,id in ipairs({"name","location","recent"}) do root:CreateButton(id,function() state.sort=id;c:Filter() end) end end)
-        end)
-        m.bookmarks=U.Check(d,"Look for again",42,-179,195,function(on) state.bookmarks=on;c:Filter() end)
-        m.reset=U.Button(d,"Reset filters",42,-208,121,function() c:ResetFilters() end)
-        m.notes=U.Button(d,"Kind notes",170,-208,122,function() c:Notes() end)
-        m.count=U.Label(d,"",42,-241,250,"GameFontHighlightSmall");m.rows={}
+            item[1]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        end
+        m.notes=U.Button(d,"Kind notes",170,-121,122,function() c:Notes() end)
+        m.count=U.Label(d,"",42,-155,250,"GameFontHighlightSmall");m.rows={}
         for i=1,PAGE do
-            local row=CreateFrame("Button",nil,d,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-263-(i-1)*47);row:SetSize(250,46)
+            local row=CreateFrame("Button",nil,d,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-177-(i-1)*47);row:SetSize(250,46)
             ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",2,-2);row.icon:SetSize(19,19)
             row.name=U.Label(row,"",25,-2,223,"GameFontHighlightSmall")
@@ -240,13 +265,13 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             end)
             row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end);m.rows[i]=row
         end
-        m.empty=U.Label(d,"",49,-289,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
+        m.empty=U.Label(d,"",49,-203,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
         m.previous=U.Button(d,"Previous",42,-604,121,function() state.offset=math.max(0,state.offset-PAGE);c:Refresh() end)
         m.next=U.Button(d,"Next",170,-604,122,function() state.offset=state.offset+PAGE;c:Refresh() end)
         m.manual=U.Button(d,"Record a find",42,-638,250,function() c:Manual() end)
-        m.name=U.Label(m,"",342,-59,426,"GameFontNormalLarge");m.name:SetWordWrap(false)
+        m.name=U.Label(m,"",342,-60,426,"GameFontNormalLarge");m.name:SetWordWrap(false)
         m.name:SetShadowColor(0,0,0,0.85);m.name:SetShadowOffset(1,-1)
-        m.bookmark=U.SavedButton(m,"Look for again",782,-55,140,function() journal:Bookmark(state.selected) end)
+        m.bookmark=U.SavedButton(m,"Look for again",782,-60,140,function() journal:Bookmark(state.selected) end)
         m.summary=U.Label(m,"",342,-89,580,"GameFontHighlightSmall");m.summary:SetWordWrap(false)
         m.counts=U.Label(m,"",342,-112,580,"GameFontDisableSmall");m.counts:SetWordWrap(false)
         m.focus=U.Label(m,"",342,-135,420,"GameFontHighlightSmall");m.focus:SetWordWrap(false)

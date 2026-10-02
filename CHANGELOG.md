@@ -1,5 +1,58 @@
 # Changelog
 
+## v0.22.0 - 2026-10-03
+
+Release-channel update covering all changes since v0.21.0 and previous-push
+baseline 3f1f0ff1b47c06872793b7fa90492b71c1bcf7e8.
+
+- Consolidate Treasure Journal filters and Clear into a highlighted funnel beside
+  search, with a matching Sort menu. Filter groups stay independent and checkbox
+  menus remain open; Kind notes remains a separate action.
+
+- Place Ledger’s Known Goods and Observed Training buttons side by side beneath
+  Favourite, keep Favourite’s label fixed when toggled, and move
+  notes up into the vacated row with a taller reading area.
+
+- Consolidate Angler’s Almanac zone, knowledge, source and show filters into a
+  funnel beside search, with independent checked selections, persistent menus,
+  an active-filter highlight and Clear for the current tab.
+
+- Align Chronicle’s search, filter and sort controls with Merchant’s Ledger and
+  increase its main lore source text by two points.
+
+- Consolidate Merchant’s Ledger filters and Clear into a highlighted funnel menu
+  beside search, with a matching Sort button and a taller contact list. Filter
+  selections stay independent and checkbox menus remain open.
+
+- Move the Bestiary’s summary and behaviour rows down eight pixels for more
+  space below the heading, keeping the portrait and other panels in place.
+
+- Match the main horizontal dividers to the vertical pane dividers’ brown colour
+  and 35% opacity.
+
+- Align the top row of each journal’s right pane with its left-pane heading.
+
+- Keep Chronicle filter menus open while choosing checkboxes, with independent,
+  exclusive selections in each submenu. Center all journal pane titles and enlarge
+  them by four points, with yellow text and black drop shadows.
+
+- Consolidate Chronicle entry kinds, filters and Clear under a square funnel button
+  beside search, with a matching arrow menu for sorting and nine entries per page.
+
+- Ctrl+Click any spell-ID portrait to open its captured creature in the Bestiary,
+  including saved observations and restricted spell IDs, without assigning an ability.
+
+- Extend clickable creature portraits to Enemy cast (including channels), Enemy
+  instant cast, Buff on target and Debuff on you in the spell-ID window. Each
+  portrait keeps its captured creature when targets change and manually assigns
+  readable spell IDs to the Bestiary. Buff portraits identify the recipient;
+  debuffs use their eligible source or an explicitly unverified target. Restricted
+  IDs remain display-only, with an explanation in the portrait tooltip. Preserve
+  existing notes, entry locks, reset guards and the Loss of Control workflow.
+
+- Update help and verification documentation for spell portraits, and regression
+  coverage for portrait attribution, navigation, toggles and journal menus.
+
 ## v0.21.0 - 2026-10-03
 
 Release-channel update covering all changes since v0.20.0 and previous-push

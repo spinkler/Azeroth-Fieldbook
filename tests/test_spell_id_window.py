@@ -458,7 +458,7 @@ lua.execute(r'''
 -- The portrait is a frozen rendering of the captured target, with a deliberate
 -- assignment callback. It remains usable when dragging the window is locked.
 local settings={spellIDWindowLocked=true};ns.SpellIDWindow:Initialize(settings)
-local loc,portrait=frames[7],frames[8]
+local loc,portrait=frames[7],frames[12]
 targetGUID='Creature-0-1-2-3-43-target'
 function UnitGUID() return targetGUID end
 local renders,assignments=0,0
@@ -483,6 +483,10 @@ assert(GameTooltip.lines[1]=='Creature B' and GameTooltip.lines[2]:find('unverif
 portrait.scripts.OnClick(portrait,'LeftButton')
 assert(assignments==1 and loc.strings[6].text=='Saved:' and GameTooltip.lines[2]:find('Assigned',1,true))
 portrait.scripts.OnClick(portrait,'LeftButton');assert(assignments==1)
+local opened
+ns.SpellIDWindow:SetCreatureOpener(function(candidate) opened=candidate.id end)
+ctrlDown=true;portrait.scripts.OnClick(portrait,'LeftButton');ctrlDown=false
+assert(opened==43 and assignments==1,'Ctrl+Click also opens saved LOC rows')
 -- An authoritative source later removes the target action and restores width.
 ns.SpellIDWindow:ObserveLossOfControl(6713,'Disarm','DISARM','Creature A','portrait:1')
 assert(not portrait.shown and loc.strings[6].text=='Cast by:' and loc.strings[4].width==310)
@@ -511,3 +515,95 @@ candidate.assign=function() assignments=assignments+1;return true end
 portrait.scripts.OnClick(portrait,'LeftButton');assert(assignments==2 and loc.strings[6].text=='Saved:')
 ''')
 print('PASS: frozen target portraits, explicit assignment, lifecycle and layout')
+
+lua.execute(r'''
+-- Every observation route uses its own captured creature, including a buff
+-- recipient that differs from its caster and a debuff source off target.
+local settings={spellIDWindowIndefinite=true};ns.SpellIDWindow:Initialize(settings)
+casting,channel=false,false;auras={player={},target={}}
+C_UnitAuras={GetAuraDataByIndex=function(unit,index) return auras[unit][index] end}
+local targets={target={id=43,name='Creature B',guid='Creature-0-1-2-3-43-B'},
+    nameplate1={id=42,name='Creature A',guid='Creature-0-1-2-3-42-A'}}
+function UnitGUID(unit) return targets[unit] and targets[unit].guid end
+function UnitName(unit) return targets[unit] and targets[unit].name end
+function SetPortraitTexture(texture,unit) texture.image=UnitGUID(unit) end
+local assignments={}
+local opened={}
+ns.SpellIDWindow:SetCreatureOpener(function(candidate) opened[#opened+1]=candidate.id end)
+ns.SpellIDWindow:SetAssignmentCapture(function(unit,spellID,kind)
+    local target=targets[unit];if not target then return end
+    local capturedID=target.id
+    return {id=target.id,name=target.name,guid=target.guid,unit=unit,level=14,assign=function()
+        if issecretvalue(spellID) then return false end
+        assignments[#assignments+1]={id=capturedID,spellID=spellID,kind=kind};return true
+    end}
+end)
+local cast,instant,debuff,buff=frames[3],frames[4],frames[5],frames[6]
+local castPortrait,instantPortrait,debuffPortrait,buffPortrait=frames[8],frames[9],frames[10],frames[11]
+casting,castID=true,456
+fire('UNIT_SPELLCAST_START','target')
+assert(castPortrait.shown and cast.strings[6].text=='Cast by:' and cast.strings[7].text=='Creature B')
+casting=false
+auras.target={{auraInstanceID=71,spellId=12544,name='Frost Armor',sourceUnit='nameplate1'}}
+fire('UNIT_AURA','target',{})
+assert(buffPortrait.shown and buff.strings[6].text=='Target:' and buff.strings[7].text=='Creature B')
+buffPortrait.scripts.OnEnter(buffPortrait)
+assert(GameTooltip.lines[1]=='Creature B' and GameTooltip.lines[2]:find('Another unit',1,true))
+assert(GameTooltip.lines[3]=='Cast by: Creature A')
+auras.player={{auraInstanceID=72,spellId=6713,name='Disarm',sourceUnit='nameplate1'}}
+fire('UNIT_AURA','player',{})
+assert(debuffPortrait.shown and debuff.strings[7].text=='Creature A')
+assert(debuffPortrait.texture.image==targets.nameplate1.guid)
+targets.target=targets.nameplate1;auras.target={};fire('PLAYER_TARGET_CHANGED')
+assert(castPortrait.texture.image:find('43-B',1,true) and buffPortrait.texture.image:find('43-B',1,true))
+ctrlDown=true
+for _,portrait in ipairs({castPortrait,buffPortrait,debuffPortrait}) do portrait.scripts.OnClick(portrait,'LeftButton') end
+ctrlDown=false
+assert(opened[1]==43 and opened[2]==43 and opened[3]==42 and #assignments==0)
+castPortrait.scripts.OnClick(castPortrait,'LeftButton')
+buffPortrait.scripts.OnClick(buffPortrait,'LeftButton')
+debuffPortrait.scripts.OnClick(debuffPortrait,'LeftButton')
+assert(assignments[1].id==43 and assignments[1].spellID==456 and assignments[1].kind=='cast')
+assert(assignments[2].id==43 and assignments[2].spellID==12544 and assignments[2].kind=='buff')
+assert(assignments[3].id==42 and assignments[3].spellID==6713 and assignments[3].kind=='debuff')
+castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(#assignments==3)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',secret,99,81)
+assert(instantPortrait.shown and instant.strings[7].text=='Creature A')
+instantPortrait.scripts.OnClick(instantPortrait,'LeftButton')
+assert(assignments[4].id==42 and assignments[4].spellID==99)
+ctrlDown=true;instantPortrait.scripts.OnClick(instantPortrait,'LeftButton');ctrlDown=false
+assert(opened[4]==42 and #assignments==4)
+channel,castID=true,567;fire('UNIT_SPELLCAST_CHANNEL_START','target');channel=false
+castPortrait.scripts.OnEnter(castPortrait);assert(GameTooltip.lines[2]:find('channeling',1,true))
+castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(assignments[5].spellID==567)
+auras.player={{auraInstanceID=73,spellId=777,name='Unattributed'}}
+fire('UNIT_AURA','player',{})
+debuffPortrait.scripts.OnEnter(debuffPortrait)
+assert(GameTooltip.lines[2]:find('unverified',1,true) and debuff.strings[6].text=='Target:')
+-- Secret IDs render but never enter a tooltip concatenation or assignment.
+casting,castID=true,secret;fire('UNIT_SPELLCAST_START','target');casting=false
+assert(castPortrait.shown and rawequal(cast.strings[2].text,secret))
+castPortrait.scripts.OnEnter(castPortrait)
+assert(GameTooltip.lines[3]:find('restricted',1,true))
+assert(GameTooltip.lines[#GameTooltip.lines]:find('Ctrl+Click',1,true))
+ctrlDown=true;castPortrait.scripts.OnClick(castPortrait,'LeftButton');ctrlDown=false
+assert(opened[5]==42 and #assignments==5,'restricted IDs still allow navigation')
+castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(#assignments==5 and cast.strings[6].text=='Cast by:')
+-- Retargeting during aura/cast reads cannot associate the old spell with a new NPC.
+local normalCast=UnitCastingInfo
+UnitCastingInfo=function() targets.target={id=44,name='Creature C',guid='Creature-0-1-2-3-44-C'};return 'Cast',nil,nil,nil,nil,nil,nil,nil,456,82 end
+fire('UNIT_SPELLCAST_START','target');assert(not castPortrait.shown)
+UnitCastingInfo=normalCast
+local normalAura=C_UnitAuras.GetAuraDataByIndex
+C_UnitAuras.GetAuraDataByIndex=function(unit,index)
+    if unit=='target' and index==1 then targets.target=targets.nameplate1;return {spellId=888,auraInstanceID=74,name='Buff'} end
+end
+fire('UNIT_AURA','target',{});assert(not buffPortrait.shown)
+C_UnitAuras.GetAuraDataByIndex=normalAura
+-- All row portraits follow expiry, dismissal, hiding and blacklist settings.
+instantPortrait.scripts.OnClick(instantPortrait,'RightButton');assert(not instantPortrait.shown)
+ns.SpellIDWindow:AddBlacklist(777);assert(not debuffPortrait.shown)
+settings.displaySpellIDWindow=false;ns.SpellIDWindow:ApplySettings()
+for i=8,12 do assert(not frames[i].shown) end
+''')
+print('PASS: cast/channel/instant/buff/debuff portraits, secret IDs and capture races')

@@ -56,37 +56,6 @@ function ns.CreateLossOfControlObserver(journal, identify, say)
         if not integer(id, 1) then return nil, nil, nil, "source excluded: " .. (reason or "invalid NPC") end
         return unit, guid, id, "sourceUnit=" .. text(unit) .. "; NPC=" .. id
     end
-    local function targetSnapshot(spellID)
-        local guid = read(UnitGUID, "target")
-        if not text(guid) then return end
-        local id = identify("target", false, guid)
-        if not integer(id, 1) then return end
-        local name = text(read(UnitName, "target"))
-        local level = read(type(UnitEffectiveLevel) == "function" and UnitEffectiveLevel or UnitLevel, "target")
-        if not name or #name > 100 or read(UnitGUID, "target") ~= guid then return end
-        local entries, entry = journal.entries, journal.entries[id]
-        local candidate = { id=id, guid=guid, name=name, level=integer(level, 1) and level or nil }
-        -- Read-only until the user clicks. Neither a target nor its combat state
-        -- proves the source, and subsequent target changes must not retarget this.
-        candidate.assign = function()
-            if ns.InitializationBlocked or journal.entries ~= entries or entry and journal.entries[id] ~= entry then
-                say("This observation is no longer available after the Bestiary changed.")
-                return false
-            end
-            local current = journal.entries[id]
-            if current and current.confirmed then
-                say("Unlock " .. name .. " in the Bestiary before assigning this ability.")
-                return false
-            end
-            if not current then journal:Ensure(id, false, name) end
-            entry = journal.entries[id]
-            local _, result, saved = journal:AssignObservedLossOfControl(id, spellID)
-            if saved then say("Ability assigned: Spell ID " .. spellID .. " — " .. name .. ".")
-            else say("Ability assignment failed: " .. result .. ".") end
-            return saved == true
-        end
-        return candidate
-    end
     local function additions(updates)
         local result = {}
         if not accessible(updates) then return result end
@@ -129,7 +98,8 @@ function ns.CreateLossOfControlObserver(journal, identify, say)
         if state and state.absentAt and at - state.absentAt > 2 then state = nil end
         if not state then
             sequence = sequence + 1
-            state = { token = "loc:" .. sequence, candidate = targetSnapshot(spellID) }
+            state = { token = "loc:" .. sequence,
+                candidate = journal:CaptureSpellAssignment("target", spellID, "Loss of Control", say) }
             seen[key] = state
         end
         state.at, state.absentAt, state.active = at, nil, true

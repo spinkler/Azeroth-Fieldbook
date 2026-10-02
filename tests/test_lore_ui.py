@@ -29,10 +29,13 @@ def new_lore_ui():
             e.pages[3]={number=3,raw='Automatically retrieved third page',origin='captured',nature='source',method='automatic',personallyViewed=false,source='Synthetic inscription',at=now}
             e.firstPage=1;e.lastPage=3;j:Changed(e);return e
         end
+        MenuResponse={Refresh=2}
         function openMenu(button)
             local function node()
                 local n={children={}}
                 function n:CreateButton(label,fn) local child=node();child.label=label;child.action=fn;self.children[#self.children+1]=child;return child end
+                function n:CreateCheckbox(label,selected,fn) local child=self:CreateButton(label,fn);child.selected=selected;return child end
+                function n:SetResponse(response) self.response=response end
                 function n:CreateDivider() end
                 function n:CreateTitle(label) self.title=label end
                 function n:SetScrollMode() end
@@ -141,14 +144,34 @@ class LoreUITests(unittest.TestCase):
     def test_filter_controls_search_sort_revisit_and_position(self):
         self.lua.execute('''
             for i=1,20 do now=now+1;j:Create('person',{title=string.format('Person %02d',i),notes='Needle '..i}) end
-            flush();click(m.next);assert(c.state.offset==7);local first=m.rows[1].id
-            j:Changed();flush();assert(c.state.offset==7 and m.rows[1].id==first)
+            flush();click(m.next);assert(c.state.offset==9);local first=m.rows[1].id
+            j:Changed();flush();assert(c.state.offset==9 and m.rows[1].id==first)
             m.search:SetText('Needle 18');assert(#c.rows==1 and c.rows[1].title=='Person 18')
             click(m.rows[1]);click(m.revisit);choose(openMenu(m.filters),'Only revisit / follow up');assert(#c.rows==1)
-            click(m.reset);assert(c.state.query=='' and #c.rows==20 and c.state.selected)
-            click(m.sort);assert(m.rows[1].name:GetText()=='Person 20')
-            local kind=openMenu(m.kind);choose(kind,'Mysteries');assert(#c.rows==0)
+            choose(openMenu(m.filters),'Clear');assert(c.state.query=='' and #c.rows==20 and c.state.selected)
+            choose(openMenu(m.sort),'Recently added');assert(m.rows[1].name:GetText()=='Person 20')
+            local filters=openMenu(m.filters);local kind=filters.children[1];choose(kind,'Mysteries');assert(#c.rows==0)
         ''')
+
+    def test_filter_submenus_have_independent_exclusive_checks_and_stay_open(self):
+        self.lua.execute("""
+            local root=openMenu(m.filters)
+            local kinds=choose(root,'Entry Kinds');local origin=choose(root,'Origin')
+            local all=choose(kinds,'All entry kinds');assert(all.selected())
+            local people=choose(kinds,'People');assert(people.selected() and not all.selected())
+            local manual=choose(origin,'Manually recorded')
+            assert(manual.selected() and people.selected())
+            local writings=choose(kinds,'Writings');assert(writings.selected() and not people.selected() and manual.selected())
+            local complete=choose(root,'Writing completeness')
+            local partial=choose(complete,'Partial archive');assert(partial.selected() and manual.selected())
+            choose(kinds,'People');assert(partial.selected() and c.state.completeness=='partial')
+            for _,group in ipairs({kinds,origin,complete,choose(root,'Mystery status'),choose(root,'Zone / location')}) do
+                for _,item in ipairs(group.children) do assert(item.selected and item.response==MenuResponse.Refresh) end
+            end
+            local revisit=choose(root,'Only revisit / follow up');assert(revisit.selected() and revisit.response==MenuResponse.Refresh)
+            local clear=choose(root,'Clear');assert(clear.response==MenuResponse.Refresh)
+            assert(all.selected() and not manual.selected() and not partial.selected() and not revisit.selected())
+        """)
 
     def test_exact_atlas_geometry_map_meanings_and_manual_placement(self):
         self.lua.execute('''

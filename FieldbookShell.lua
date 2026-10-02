@@ -23,8 +23,11 @@ local function label(parent, text, x, y, width, size)
     return font
 end
 local function sectionTitle(parent,text)
-    local title=label(parent,text,42,-60,260,"GameFontNormalLarge")
-    title:SetTextColor(1,0.82,0.14);title:SetWordWrap(false)
+    local title=label(parent,text,37,-60,260,"GameFontNormalLarge")
+    title:SetTextColor(1,0.82,0.14);title:SetWordWrap(false);title:SetJustifyH("CENTER")
+    title:SetShadowOffset(1,-1);title:SetShadowColor(0,0,0,1)
+    local path,size=title:GetFont()
+    if path and type(size)=="number" then title:SetFont(path,size+4,"") end
     return title
 end
 local function button(parent, text, x, y, width, action)

@@ -34,7 +34,8 @@ def client(account=False):
         C_Spell={GetSpellName=function(id)
             assert(not issecretvalue(id));if id==12345 then return 'Disarming Smash' end
         end}
-        ns.SpellIDWindow={Initialize=function() end,ObserveLossOfControl=function(_,id,name,effect,caster,token,candidate)
+        ns.SpellIDWindow={Initialize=function() end,SetAssignmentCapture=function(_,callback) captureAssignment=callback end,
+            ObserveLossOfControl=function(_,id,name,effect,caster,token,candidate)
             displayed[#displayed+1]={id=id,name=name,effect=effect,caster=caster,token=token,candidate=candidate};return true
         end}
         function effect(kind,id,aura)

@@ -4,6 +4,8 @@ local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or b
 local window = {}
 ns.SpellIDWindow = window
 local db, panel, background
+local captureAssignment
+local openCreature
 local customPosition = false
 local rows, seen = {}, { player = {}, target = {} }
 local castBars = {}
@@ -137,9 +139,15 @@ local function portraitTooltip(row)
     if row.assignmentSaved then
         GameTooltip:AddLine("Assigned to this creature in the Bestiary.", 0.5, 1, 0.5, true)
     else
-        GameTooltip:AddLine("Your target when this effect was detected. The caster is unverified.", 1, 0.82, 0.4, true)
-        GameTooltip:AddLine("Click to assign Spell ID " .. row.rawID .. " to this creature in the Bestiary.", 1, 1, 1, true)
+        GameTooltip:AddLine(row.candidate.description or "Your target when this effect was detected. The caster is unverified.", 1, 0.82, 0.4, true)
+        if row.candidate.casterName then GameTooltip:AddLine("Cast by: " .. row.candidate.casterName, 0.7, 0.7, 0.7, true) end
+        if validID(row.rawID) then
+            GameTooltip:AddLine("Click to assign Spell ID " .. row.rawID .. " to this creature in the Bestiary.", 1, 1, 1, true)
+        else
+            GameTooltip:AddLine("This spell ID is restricted. Enter the displayed ID manually in the Bestiary.", 1, 0.82, 0.4, true)
+        end
     end
+    GameTooltip:AddLine("Ctrl+Click: open this creature in the Bestiary.", 0.7, 0.7, 0.7, true)
     GameTooltip:Show()
 end
 local function createPortrait(row)
@@ -176,8 +184,10 @@ local function createPortrait(row)
     button:SetScript("OnClick", function(_, mouseButton)
         if mouseButton == "RightButton" or IsShiftKeyDown() then
             row.body:GetScript("OnMouseUp")(row.body, mouseButton)
-        elseif mouseButton == "LeftButton" and row.observed and row.candidate and not row.assignmentSaved and not ns.InitializationBlocked then
-            if row.candidate.assign() then
+        elseif mouseButton == "LeftButton" and row.observed and row.candidate and not ns.InitializationBlocked then
+            if IsControlKeyDown and IsControlKeyDown() then
+                if openCreature then openCreature(row.candidate) end
+            elseif not row.assignmentSaved and row.candidate.assign() then
                 row.assignmentSaved=true
                 row.casterLabel:SetText("Saved:")
                 row.portraitRing:SetColorTexture(0.35, 0.75, 0.35, 1)
@@ -192,17 +202,18 @@ local function showCandidate(row, candidate)
     row.name:SetSize(candidate and 260 or 310, 14)
     row.effect:SetSize(candidate and 106 or 156, 14)
     row.caster:SetSize(candidate and 205 or 255, 14)
-    row.casterLabel:SetText(candidate and "Target:" or "Cast by:")
+    row.casterLabel:SetText(candidate and (candidate.label or "Target:") or "Cast by:")
     if not candidate then return end
     row.candidate=candidate
     row.portraitRing:SetColorTexture(0.67, 0.43, 0.19, 1)
     row.portraitUnknown:Show()
     -- Render once while the token still matches the captured identity. Never
     -- refresh this texture on target changes or inspect native portrait pixels.
-    local guid = read(UnitGUID, "target")
+    local unit = candidate.unit or "target"
+    local guid = read(UnitGUID, unit)
     if public(guid) and guid == candidate.guid and type(SetPortraitTexture) == "function" then
-        local ok = pcall(SetPortraitTexture, row.portrait, "target")
-        local after = read(UnitGUID, "target")
+        local ok = pcall(SetPortraitTexture, row.portrait, unit)
+        local after = read(UnitGUID, unit)
         if ok and public(after) and after == candidate.guid then row.portraitUnknown:Hide()
         else row.portrait:SetTexture(nil) end
     end
@@ -279,9 +290,9 @@ local function setup()
                 db.displaySpellIDWindow=false;window:ApplySettings()
             end
         end)
-        if index == 5 then createPortrait(row) end
         clear(row)
     end
+    for _, row in ipairs(rows) do createPortrait(row) end
     local elapsed = 0
     panel:SetScript("OnUpdate", function(_, delta)
         if ns.InitializationBlocked then return end
@@ -298,7 +309,22 @@ local function setup()
     end)
     if ns.WindowFocus then ns.WindowFocus:Register(panel, "LOW") end
 end
-local function present(index, id, name, effect, caster, token)
+function window:SetAssignmentCapture(callback)
+    captureAssignment = callback
+end
+function window:SetCreatureOpener(callback)
+    openCreature = callback
+end
+local function candidateFor(unit, spellID, kind, expectedGUID, description, label)
+    if not captureAssignment or not public(unit) or type(unit) ~= "string" or unit == "" then return end
+    if not public(expectedGUID) then return end
+    if unit == "target" and (type(expectedGUID) ~= "string" or expectedGUID == "") then return end
+    local candidate = captureAssignment(unit, spellID, kind)
+    if not candidate or expectedGUID and candidate.guid ~= expectedGUID then return end
+    candidate.description, candidate.label = description, label
+    return candidate
+end
+local function present(index, id, name, effect, caster, token, candidate)
     if public(id) and (type(id) ~= "number" or id <= 0) then return end
     if window:IsBlacklisted(id) then return false,"suppressed" end
     local row = rows[index]
@@ -309,6 +335,7 @@ local function present(index, id, name, effect, caster, token)
     -- Never concatenate, compare, measure or read back these potentially secret fields.
     pcall(row.name.SetText, row.name, name)
     pcall(row.effect.SetText, row.effect, effect)
+    caster = candidate and candidate.name or caster
     row.hasCaster=not public(caster) or (type(caster)=="string" and caster~="" and caster~="Unknown")
     row.casterLabel:SetShown(row.hasCaster);row.caster:SetShown(row.hasCaster)
     if row.hasCaster then
@@ -316,6 +343,7 @@ local function present(index, id, name, effect, caster, token)
         if not shown then row.hasCaster=false;row.casterLabel:Hide();row.caster:Hide() end
     end
     row.rawID=id;row.token=token
+    showCandidate(row, candidate)
     row.observed = GetTime()
     row.body:Show()
     layout()
@@ -327,8 +355,7 @@ end
 function window:ObserveLossOfControl(id, name, effect, caster, token, candidate)
     if not db or db.displaySpellIDWindow == false or ns.InitializationBlocked then return false end
     if not validID(id) then return false end
-    local shown, reason = present(5, id, name or "Name unavailable", effect, candidate and candidate.name or caster, token)
-    if shown then showCandidate(rows[5], candidate) end
+    local shown, reason = present(5, id, name or "Name unavailable", effect, caster, token, candidate)
     return shown or reason == "suppressed"
 end
 local function scanAuras(unit, updates)
@@ -338,6 +365,7 @@ local function scanAuras(unit, updates)
         return
     end
     local C_UnitAuras = C_UnitAuras or {}
+    local targetGUID = read(UnitGUID, "target")
     local updated = {}
     if accessibleTable(updates) and accessibleTable(updates.updatedAuraInstanceIDs) then
         for _, id in ipairs(updates.updatedAuraInstanceIDs) do
@@ -386,7 +414,22 @@ local function scanAuras(unit, updates)
             local source=read(function() return aura.sourceUnit end)
             local caster
             if public(source) and type(source)=="string" and source~="" then caster=read(UnitName,source) end
-            local shown,reason=present(unit == "player" and 3 or 4, spellID, name, effect,caster,"aura:"..unit..":"..key)
+            local candidate
+            if unit == "target" then
+                candidate=candidateFor("target", spellID, "buff", targetGUID,
+                    "This buff was observed on this creature. Another unit may have cast it.", "Target:")
+                if candidate and public(caster) and type(caster) == "string" and caster ~= "" then candidate.casterName=caster end
+            else
+                local sourceGUID
+                if public(source) and source == "target" then sourceGUID=targetGUID end
+                candidate=candidateFor(source, spellID, "debuff", sourceGUID,
+                    "This creature was identified as the source of the debuff on you.", "Cast by:")
+                if not candidate then
+                    candidate=candidateFor("target", spellID, "debuff", targetGUID,
+                        "Your target when this debuff was detected. The caster is unverified.", "Target:")
+                end
+            end
+            local shown,reason=present(unit == "player" and 3 or 4, spellID, name, effect,caster,"aura:"..unit..":"..key,candidate)
             if shown then
                 displayed = displayed + 1
             elseif reason=="suppressed" then unchanged=unchanged+1
@@ -470,13 +513,15 @@ end
 
 local function observeCast()
     if not enemyTarget() then return end
+    local guid = read(UnitGUID, "target")
     local ok, name, _, _, _, _, _, _, _, id, bar = pcall(UnitCastingInfo, "target")
     if ok and (not public(name) or name ~= nil) then
         if public(bar) and type(bar) == "number" and not castBars[bar] then
             castBars[bar] = true; castBarOrder[#castBarOrder + 1] = bar
             if #castBarOrder > 32 then castBars[table.remove(castBarOrder, 1)] = nil end
         end
-        present(1, id, name,nil,read(UnitName,"target"),validID(bar) and ("cast:"..bar) or nil)
+        local candidate=candidateFor("target", id, "cast", guid, "This creature was observed casting the spell.", "Cast by:")
+        present(1, id, name,nil,read(UnitName,"target"),validID(bar) and ("cast:"..bar) or nil,candidate)
         return true
     end
     local channelOK, channelName, _, _, _, _, _, _, channelID, _, _, channelBar = pcall(UnitChannelInfo, "target")
@@ -485,7 +530,8 @@ local function observeCast()
             castBars[channelBar] = true; castBarOrder[#castBarOrder + 1] = channelBar
             if #castBarOrder > 32 then castBars[table.remove(castBarOrder, 1)] = nil end
         end
-        present(1, channelID, channelName,nil,read(UnitName,"target"),validID(channelBar) and ("cast:"..channelBar) or nil)
+        local candidate=candidateFor("target", channelID, "cast", guid, "This creature was observed channeling the spell.", "Cast by:")
+        present(1, channelID, channelName,nil,read(UnitName,"target"),validID(channelBar) and ("cast:"..channelBar) or nil,candidate)
         return true
     end
 end
@@ -508,13 +554,15 @@ events:SetScript("OnEvent", function(_, event, unit, second, id, bar)
         elseif targetUnit(unit) then scanAuras("target", second) end
     elseif targetUnit(unit) and enemyTarget() then
         if event == "UNIT_SPELLCAST_SUCCEEDED" then
+            local guid = read(UnitGUID, "target")
             if public(bar) and type(bar) == "number" and castBars[bar] then return end
             if observeCast() then return end -- Channels may report success as they begin.
             local info = C_Spell and read(C_Spell.GetSpellInfo, id)
             local instant = readableTable(info) and public(info.castTime) and info.castTime == 0
             local name = C_Spell and read(C_Spell.GetSpellName, id)
             -- Unclassified successes remain casts; SENT alone never proves an instant succeeded.
-            present(instant and 2 or 1, id, name, instant and nil or "Succeeded",read(UnitName,"target"),validID(bar) and ("cast:"..bar) or nil)
+            local candidate=candidateFor("target", id, "cast", guid, "This creature was observed casting the spell.", "Cast by:")
+            present(instant and 2 or 1, id, name, instant and nil or "Succeeded",read(UnitName,"target"),validID(bar) and ("cast:"..bar) or nil,candidate)
         else observeCast() end
     end
 end)

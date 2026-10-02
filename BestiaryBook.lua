@@ -1146,21 +1146,21 @@ local ink = { 0.75, 0.8, 0.8 }
             tab:Hide()
             book.letterButtons[i]=tab
         end
-        book.title = label(book, "", 342, -55, 284, "GameFontNormalLarge")
+        book.title = label(book, "", 342, -60, 284, "GameFontNormalLarge")
         book.title:SetTextColor(1,0.82,0.14)
         book.title:SetShadowColor(0,0,0,0.85);book.title:SetShadowOffset(1,-1)
         book.title:SetWordWrap(false)
-        book.creatureNotesButton=button(book,"Notes",806,-52,58,function()
+        book.creatureNotesButton=button(book,"Notes",806,-60,58,function()
             if creatureNotes then creatureNotes:Toggle(selected) end
         end)
         book.creatureNotesButton:ClearAllPoints()
-        book.creatureNotesButton:SetPoint("TOPRIGHT",book,"TOPRIGHT",-24,-52)
-        book.creatureLocationsButton=button(book,"Locations",710,-52,82,function()
+        book.creatureNotesButton:SetPoint("TOPRIGHT",book,"TOPRIGHT",-24,-60)
+        book.creatureLocationsButton=button(book,"Locations",710,-60,82,function()
             if creatureLocations then creatureLocations:Toggle(selected) end
         end)
         book.creatureLocationsButton:ClearAllPoints()
         book.creatureLocationsButton:SetPoint("RIGHT",book.creatureNotesButton,"LEFT",-6,0)
-        book.rumoursButton=button(book,"Rumours",710,-52,76,function()
+        book.rumoursButton=button(book,"Rumours",710,-60,76,function()
             if rumoursWindow then rumoursWindow:Toggle(selected) end
         end)
         book.rumoursButton:ClearAllPoints()
@@ -1172,7 +1172,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.killCount:SetWidth(0) -- Fit the text so the adjacent reward keeps a 3px gap.
         book.killStar=createKillReward(book)
         book.killStar:SetPoint("RIGHT",book.killCount,"LEFT",-3,0)
-        book.title:SetPoint("TOPRIGHT",book.killStar,"LEFT",-8,9)
+        book.title:SetPoint("TOPRIGHT",book.killStar,"LEFT",-8,12)
         local titlePath, titleSize, titleFlags = book.title:GetFont()
         if titlePath and titleSize then book.title:SetFont(titlePath, titleSize + 2, titleFlags) end
         book.titleHover=CreateFrame("Frame",nil,book)
@@ -1183,7 +1183,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.titleHover:SetMouseClickEnabled(false)
         book.titleHover:SetMouseMotionEnabled(true)
         book.summaryArea=CreateFrame("Frame",nil,book)
-        book.summaryArea:SetPoint("TOPLEFT",342,-84); book.summaryArea:SetSize(594,45)
+        book.summaryArea:SetPoint("TOPLEFT",342,-92); book.summaryArea:SetSize(594,45)
         book.summaryArea:SetHyperlinksEnabled(true)
         book.summaryArea:SetScript("OnHyperlinkEnter",function(self,link)
             local index=type(link)=="string" and tonumber(link:match("^afbzone:(%d+)$"))
@@ -1463,7 +1463,7 @@ local ink = { 0.75, 0.8, 0.8 }
         abilityPanel:SetAllPoints(detail)
         book.abilityPanel=abilityPanel
         local abilityDivider = abilityPanel:CreateTexture(nil, "ARTWORK")
-        abilityDivider:SetColorTexture(0.35,0.20,0.08,0.42)
+        abilityDivider:SetColorTexture(0.25,0.13,0.055,0.35)
         abilityDivider:SetPoint("TOPLEFT",342,-315); abilityDivider:SetSize(584,3)
         local abilitiesHeading = label(abilityPanel, "Recorded abilities", 342, -325, 232, "GameFontNormalLarge")
         abilitiesHeading:SetTextColor(1.00, 0.82, 0.14)

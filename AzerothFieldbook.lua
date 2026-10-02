@@ -89,7 +89,7 @@ end
 
 local function watchedEnemy(unit, explicit, sourceGUID)
     if not publicString(unit) then return nil, "Unit token unavailable/restricted." end
-    -- Only the player-effect observer supplies an exact, public aura-source GUID.
+    -- Effect sources and manual portrait snapshots supply an exact, public GUID.
     -- Keep ordinary target/mouseover discovery limits unchanged.
     local effectSource = publicString(sourceGUID)
     -- Deliberately exclude focus, bosses, group targets and background nameplates.
@@ -525,10 +525,23 @@ local function initializeImpl()
     if ns.UIScale then ns.UIScale:Initialize(db) end
     if ns.TextSize then ns.TextSize:Initialize() end
     if ns.CastIDs then ns.CastIDs:Initialize(db) end
-    if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
     if journal then
         if journal.SetAutomaticRecordCallback then journal:SetAutomaticRecordCallback(say) end
+        if ns.SpellIDWindow and ns.SpellIDWindow.SetAssignmentCapture then
+            ns.SpellIDWindow:SetAssignmentCapture(function(unit, spellID, kind)
+                if afterWipeHold or not journal.CaptureSpellAssignment then return end
+                return journal:CaptureSpellAssignment(unit, spellID, kind, say, function() return not afterWipeHold end)
+            end)
+        end
+        if ns.SpellIDWindow and ns.SpellIDWindow.SetCreatureOpener then
+            ns.SpellIDWindow:SetCreatureOpener(function(candidate)
+                if ns.InitializationBlocked or afterWipeHold or not book then return false end
+                return candidate.open(function(id)
+                    return book:GetShell():ShowSection("bestiary", {creatureID=id})
+                end)
+            end)
+        end
         if ns.CreateLossOfControlObserver then lossOfControl = ns.CreateLossOfControlObserver(journal, watchedEnemy, say) end
         journal:SetPointsRecordedCallback(function(entry, amount, reason, observation)
             local killTitles = { ["first kill"] = "First kill!", ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
@@ -546,6 +559,7 @@ local function initializeImpl()
             announceBestiary(entry,"New observed location",nil,observation,false,journal:GetCreatureAnnouncement())
         end)
     end
+    if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
     if journal and ns.InitializeSharing then ns.InitializeSharing(journal) end
     if journal and ns.StartBestiaryLoot then ns.StartBestiaryLoot(journal) end
     if journal and ns.CreateFieldbookShell then

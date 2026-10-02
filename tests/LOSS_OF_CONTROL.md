@@ -30,8 +30,9 @@ is involved. Expired effects with no remaining public API evidence cannot be
 reconstructed. The operator's live test on 2026-10-02 confirmed the independent
 LOC row displays Disarm **6713**, type **DISARM**, aura instance **27**. Exact aura
 access failed with an API error, so the record correctly remained unattributed;
-ADDED=1, UPDATE=2 and player UNIT_AURA=4 were received. Automatic source recording
-and the new portrait interaction still need live acceptance. No WoW UI was controlled.
+ADDED=1, UPDATE=2 and player UNIT_AURA=4 were received. On 2026-10-03 the operator
+confirmed that the LOC portrait interaction works well. Automatic aura-source
+recording still needs live acceptance. No WoW UI was controlled.
 
 ## Architecture and exact attribution
 
@@ -74,6 +75,10 @@ Notes and its raw ID list are unchanged. Saved Bestiary abilities display the
 existing cyan [A], with player-effect attribution explained in their tooltip.
 
 ## Manual target portraits
+
+The shared capture and manual assignment methods now live in `BestiaryBuffs.lua`.
+`LossOfControl.lua` and the other spell-window rows use the same guarded path;
+see [SPELL_PORTRAITS.md](SPELL_PORTRAITS.md) for the extended row semantics and checks.
 
 When an effect is first detected, a read-only snapshot uses the existing eligible
 NPC identity path for `target`: public GUID, NPC ID, name and optional effective

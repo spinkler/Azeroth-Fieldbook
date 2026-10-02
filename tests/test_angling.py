@@ -670,6 +670,27 @@ class AnglingReportTests(unittest.TestCase):
 class AnglingUITests(unittest.TestCase):
     def setUp(self):
         self.lua = new_angling(ui=True)
+        self.lua.execute('''
+        MenuResponse={Refresh=2}
+        function openMenu(button)
+            local function node()
+                local n={children={}}
+                function n:CreateButton(label,fn) local child=node();child.label=label;child.action=fn;self.children[#self.children+1]=child;return child end
+                function n:CreateCheckbox(label,selected,fn) local child=self:CreateButton(label,fn);child.selected=selected;return child end
+                function n:SetResponse(response) self.response=response end
+                function n:CreateDivider() end
+                function n:CreateTitle(label) self.title=label end
+                function n:SetScrollMode() end
+                return n
+            end
+            MenuUtil={CreateContextMenu=function(_,build) menu=node();build(nil,menu) end}
+            click(button);return menu
+        end
+        function choose(menu,label)
+            for _,item in ipairs(menu.children) do if item.label==label then if item.action then item.action() end;return item end end
+            error('Menu missing '..label)
+        end
+    ''')
 
     def test_event_log_page_navigation_live_updates_and_clear(self):
         self.lua.execute('''
@@ -721,7 +742,7 @@ class AnglingUITests(unittest.TestCase):
             local e=spot('Incorrect sighting','School');c:Select(e.id)
             assert(m.deleteButton:IsShown() and m.deleteButton:GetText()=='Delete')
             click(m.deleteButton);assert(not e.removed);click(m.deleteForm.confirm);assert(e.removed and not m.deleteButton.enabled)
-            for i=1,4 do m.status.scripts.OnClick(m.status) end
+            choose(choose(openMenu(m.filters),'Show'),'Removed')
             assert(c:State().status=='removed' and m.rows[1].id==e.id)
             m.rows[1].scripts.OnClick(m.rows[1]);assert(m.merge:GetText()=='Restore')
             click(m.merge);assert(not e.removed)
@@ -868,7 +889,7 @@ class AnglingUITests(unittest.TestCase):
             local pool=j:List('pools')[1];assert(j:Edit(pool.id,pool.name,'Keep this note',true))
             c:Select(pool.id);assert(m.deleteButton.enabled)
             click(m.deleteButton);assert(not pool.removed);click(m.deleteForm.confirm);assert(#j:List('pools')==0 and pool.note=='Keep this note')
-            for i=1,4 do m.status.scripts.OnClick(m.status) end
+            choose(choose(openMenu(m.filters),'Show'),'Removed')
             assert(c:State().status=='removed' and m.rows[1].id==pool.id)
             m.rows[1].scripts.OnClick(m.rows[1]);assert(m.merge:GetText()=='Restore')
             m.merge.scripts.OnClick(m.merge);assert(#j:List('pools')==1 and pool.favourite and pool.note=='Keep this note')

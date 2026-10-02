@@ -560,7 +560,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.updatingList=true;m.listBody:SetHeight(math.max(listHeight,fullHeight));m.contactList:SetVerticalScroll(scroll)
         m.contactList:UpdateScrollChildRect();m.contactList:RefreshScrollBar();m.updatingList=nil
         m.count:SetText(#rows.." / "..total.." contacts")
-        m.empty:SetText(total==0 and "Your Ledger begins empty.\n\nMeet a service provider and open its interface, record a contact manually, or import a labelled report." or "No matching contacts.\nReset filters to show your known directory.")
+        m.empty:SetText(total==0 and "Your Ledger begins empty.\n\nMeet a service provider and open its interface, record a contact manually, or import a labelled report." or "No matching contacts.\nUse Filters > Clear to show your known directory.")
         m.empty:SetShown(#rows==0)
         local rowTop=tops[state.offset+1] or 0
         for i,row in ipairs(m.rows) do
@@ -581,11 +581,8 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 row:SetSelected(e.id==state.selected);row:Show()
             end
         end
-        m.roles:SetText(next(state.roles) and "Roles ("..L.Count(state.roles)..")" or "All roles")
-        m.zone:SetText(L.Safe(state.subzone or state.zone or "All zones"))
-        m.knowledge:SetText(({personal="Personal",reported="Reported only"})[state.knowledge] or "All contacts")
-        m.sort:SetText(state.sort=="recent" and "Last encounter" or "Sort: name")
-        m.favourites:SetChecked(state.favourites==true);m.recipes:SetChecked(state.recipes==true)
+        m.filters:SetSelected(next(state.roles)~=nil or state.zone~=nil or state.subzone~=nil
+            or state.knowledge~=nil or state.favourites==true or state.recipes==true)
         local e=journal:Get(state.selected)
         if not e and rows[1] then
             state.selected=rows[1].contact.id;state.sighting=1;state.sightingKey=nil;e=rows[1].contact;if m.rows[1].id==e.id then m.rows[1]:SetSelected(true) end
@@ -598,7 +595,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.sublabel:SetText(L.Safe(sublabel));m.sublabel:SetShown(sublabel~="")
         local lineOffset=sublabel=="" and 23 or 0
         for key,y in pairs({services=-108,location=-128,dates=-158}) do
-            m[key]:ClearAllPoints();m[key]:SetPoint("TOPLEFT",key=="services" and 392 or 342,y+lineOffset)
+            m[key]:ClearAllPoints();m[key]:SetPoint("TOPLEFT",key=="services" and 392 or 342,y+(key=="location" and math.min(lineOffset,8) or lineOffset))
         end
         m.services:SetText(e and L.Safe(journal:RoleText(e)) or "")
         local sightings=e and journal:Locations(e) or {};state.sighting=1
@@ -626,7 +623,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         local locationCount=0
         for _,sighting in ipairs(sightings) do if L.Position(sighting) then locationCount=locationCount+1 end end
         m.sightings:SetText((locationCount==1 and "NPC Location" or "NPC Locations").." ("..locationCount..")");m.sightings:SetEnabled(locationCount>0)
-        m.favourite:SetSaved(e and e.favourite,e~=nil);m.favourite:SetText(e and e.favourite and "Saved" or "Favourite");m.favourite:SetEnabled(e~=nil)
+        m.favourite:SetSaved(e and e.favourite,e~=nil);m.favourite:SetEnabled(e~=nil)
         for key,button in pairs(m.detailButtons) do button:SetEnabled(e~=nil) end
         m.detailButtons.goods:SetEnabled(self:HasOfferings(e,"goods"))
         m.detailButtons.training:SetEnabled(self:HasOfferings(e,"training"))
@@ -639,34 +636,70 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Merchant’s Ledger")
         m.directory=CreateFrame("Frame",nil,m);m.directory:SetAllPoints();local d=m.directory
-        m.search=U.Search(d,48,-92,240,200);m.search:SetText(state.query)
+        m.search=U.Search(d,47,-92,188,200);m.search:SetText(state.query)
         m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
-        m.roles=U.MenuButton(d,"All roles",42,-121,121,function(self)
-            c:Menu(self,function(_,root)
-                root:CreateButton("All roles",function() state.roles={};c:Filter() end)
-                for _,role in ipairs(L.roleOrder) do local k=role;root:CreateCheckbox(L.roles[k],function() return state.roles[k]==true end,function() state.roles[k]=not state.roles[k] or nil;c:Filter() end) end
+        m.filters=ns.FieldbookUI.FilterButton(d,244,-92,function(button)
+            m.search:ClearFocus()
+            c:Menu(button,function(_,root)
+                local function checkbox(parent,label,checked,action)
+                    local item=parent:CreateCheckbox(label,checked,function() action();c:Filter() end)
+                    item:SetResponse(MenuResponse.Refresh)
+                end
+                local roles=root:CreateButton("Roles")
+                checkbox(roles,"All roles",function() return next(state.roles)==nil end,function() state.roles={} end)
+                for _,role in ipairs(L.roleOrder) do local k=role
+                    checkbox(roles,L.roles[k],function() return state.roles[k]==true end,function() state.roles[k]=not state.roles[k] or nil end)
+                end
+                root:CreateDivider();root:CreateTitle("Filters")
+                local locations=root:CreateButton("Zone / location");locations:SetScrollMode(400)
+                checkbox(locations,"All zones",function() return state.zone==nil and state.subzone==nil end,function() state.zone=nil;state.subzone=nil end)
+                local zones=journal:Zones();for _,zone in ipairs(sortedKeys(zones)) do
+                    local name=zone;local sub=locations:CreateButton(L.Safe(name));sub:SetScrollMode(400)
+                    checkbox(sub,"All of "..L.Safe(name),function() return state.zone==name and state.subzone==nil end,function() state.zone=name;state.subzone=nil end)
+                    for _,s in ipairs(sortedKeys(zones[name])) do local subzone=s
+                        checkbox(sub,L.Safe(s),function() return state.zone==name and state.subzone==subzone end,function() state.zone=name;state.subzone=subzone end)
+                    end
+                end
+                local knowledge=root:CreateButton("Contact source")
+                for _,choice in ipairs({{"","All contacts"},{"personal","Personal"},{"reported","Reported only"}}) do
+                    local value=choice[1]~="" and choice[1] or nil
+                    checkbox(knowledge,choice[2],function() return state.knowledge==value end,function() state.knowledge=value end)
+                end
+                for _,choice in ipairs({{"favourites","Favourites"},{"recipes","Recipes"}}) do local key=choice[1]
+                    checkbox(root,choice[2],function() return state[key]==true end,function() state[key]=not state[key] or nil end)
+                end
+                root:CreateDivider()
+                local clear=root:CreateButton("Clear",function() c:Reset() end)
+                clear:SetResponse(MenuResponse.Refresh)
             end)
         end)
-        m.zone=U.MenuButton(d,"All zones",170,-121,122,function(self)
-            c:Menu(self,function(_,root)
-                root:SetScrollMode(400);root:CreateButton("All zones",function() state.zone=nil;state.subzone=nil;c:Filter() end)
-                local zones=journal:Zones();for _,zone in ipairs(sortedKeys(zones)) do
-                    local name=zone;local sub=root:CreateButton(name);sub:CreateButton("All of "..name,function() state.zone=name;state.subzone=nil;c:Filter() end)
-                    for _,s in ipairs(sortedKeys(zones[name])) do local subzone=s;sub:CreateButton(s,function() state.zone=name;state.subzone=subzone;c:Filter() end) end
+        U.StyleSelection(m.filters)
+        m.sort=U.Button(d,"",270,-92,22,function(button)
+            m.search:ClearFocus()
+            c:Menu(button,function(_,root)
+                root:CreateTitle("Sort by")
+                for _,choice in ipairs({{"name","Name"},{"recent","Last encounter"}}) do
+                    root:CreateButton((state.sort or "name")==choice[1] and choice[2].." (selected)" or choice[2],function() state.sort=choice[1]~="" and choice[1] or nil;c:Filter() end)
                 end
             end)
         end)
-        m.knowledge=U.Button(d,"All contacts",42,-150,121,function() state.knowledge=state.knowledge==nil and "personal" or state.knowledge=="personal" and "reported" or nil;c:Filter() end)
-        m.sort=U.Button(d,"Sort: name",170,-150,122,function() state.sort=state.sort=="recent" and "name" or "recent";c:Filter() end)
-        m.favourites=U.Check(d,"Favourites",42,-177,98,function(on) state.favourites=on;c:Filter() end)
-        m.recipes=U.Check(d,"Recipes",170,-177,90,function(on) state.recipes=on;c:Filter() end)
-        m.reset=U.Button(d,"Reset filters",42,-206,121,function() c:Reset() end)
+        m.sort:SetSize(22,22)
+        for row=0,4 do
+            local stroke=m.sort:CreateTexture(nil,"OVERLAY")
+            stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,2-row);stroke:SetColorTexture(1,0.82,0.14,1)
+        end
+        for _,item in ipairs({{m.filters,"Filter contacts"},{m.sort,"Sort"}}) do
+            item[1]:SetScript("OnEnter",function(self)
+                if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(item[2]);GameTooltip:Show() end
+            end)
+            item[1]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        end
         m.reports=U.ShareButton(d,function() c:Reports() end)
-        m.count=U.Label(d,"",42,-238,250,"GameFontHighlightSmall");m.rows={}
+        m.count=U.Label(d,"",42,-126,250,"GameFontHighlightSmall");m.rows={}
         m.contactsBackground=d:CreateTexture(nil,"BACKGROUND")
-        m.contactsBackground:SetPoint("TOPLEFT",38,-254);m.contactsBackground:SetSize(258,378)
+        m.contactsBackground:SetPoint("TOPLEFT",38,-142);m.contactsBackground:SetSize(258,490)
         m.contactsBackground:SetColorTexture(0,0,0,0.12)
-        m.contactList,m.listBody=U.Scroll(d,42,-258,228,374)
+        m.contactList,m.listBody=U.Scroll(d,42,-146,228,486)
         m.contactList:HookScript("OnVerticalScroll",function(self,value)
             if not m.updatingList then state.contactScroll=value or self:GetVerticalScroll();c:Refresh() end
         end)
@@ -681,11 +714,11 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             for _,k in ipairs({"name","sublabel","zone","roles","reason"}) do row[k]:SetWordWrap(false) end
             row:SetScript("OnClick",function(self) c:Select(self.id,self.match) end);m.rows[i]=row
         end
-        m.empty=U.Label(d,"",49,-285,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
+        m.empty=U.Label(d,"",49,-173,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
         m.manual=U.Button(d,"Record contact",174,-638,118,function() c:Manual() end)
         m.remove=U.Button(d,"Delete",174,-672,118,function() c:RemoveContact() end)
         m.portraitFrame=CreateFrame("Frame",nil,m)
-        m.portraitFrame:SetPoint("TOPLEFT",342,-54);m.portraitFrame:SetSize(42,42)
+        m.portraitFrame:SetPoint("TOPLEFT",342,-60);m.portraitFrame:SetSize(42,42)
         m.portrait=m.portraitFrame:CreateTexture(nil,"ARTWORK")
         m.portrait:SetPoint("CENTER");m.portrait:SetSize(38,38)
         if type(m.portraitFrame.CreateMaskTexture)=="function" and type(m.portrait.AddMaskTexture)=="function" then
@@ -720,14 +753,13 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.portraitResolver:SetSize(1,1);m.portraitResolver:SetPoint("TOPLEFT");m.portraitResolver:SetAlpha(0)
         m.portraitResolver:EnableMouse(false)
         m.portraitResolver:SetScript("OnModelLoaded",function() c:ResolvePortrait() end)
-        m.name=U.Label(m,"",392,-55,376,"GameFontNormalLarge");m.name:SetWordWrap(false)
+        m.name=U.Label(m,"",392,-60,376,"GameFontNormalLarge");m.name:SetWordWrap(false)
         m.name:SetShadowColor(0,0,0,0.85);m.name:SetShadowOffset(1,-1)
         local titlePath,titleSize,titleFlags=m.name:GetFont()
         if titlePath and titleSize then m.name:SetFont(titlePath,titleSize+2,titleFlags) end
-        m.favourite=U.SavedButton(m,"Favourite",812,-55,110,function() journal:Favourite(state.selected) end)
-        m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.favourite,"TOPLEFT",-8,0)
-        m.sublabel=U.Label(m,"",392,-85,385,"GameFontHighlight");m.sublabel:SetWordWrap(false)
-        m.services=U.Label(m,"",392,-108,530,"GameFontHighlightSmall");m.services:SetWordWrap(false)
+        m.favourite=U.SavedButton(m,"Favourite",812,-60,110,function() journal:Favourite(state.selected) end)
+        m.sublabel=U.Label(m,"",392,-85,254,"GameFontHighlight");m.sublabel:SetWordWrap(false)
+        m.services=U.Label(m,"",392,-108,254,"GameFontHighlightSmall");m.services:SetWordWrap(false)
         m.location=U.Label(m,"",342,-128,580,"GameFontHighlightSmall");m.location:SetWordWrap(true)
         m.dates=U.Label(m,"",342,-158,580,"GameFontDisableSmall");m.dates:SetWordWrap(false)
         m.sightings=U.MenuButton(m,"NPC Locations",342,-174,287,function(self)
@@ -755,15 +787,16 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.map=ns.CreateLedgerMap(m,journal,function() return state.selected,state.sighting end,function(index) c:Sighting(index) end)
         m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
         m.detailButtons={}
-        for i,v in ipairs({{"goods","Known Goods"},{"training","Observed Training"},{"services","Edit"}}) do
-            local key=v[1];local button=U.Button(m,v[2],342+(i-1)*195,-588,190,function()
+        for _,v in ipairs({{"goods","Known Goods",654,116},{"training","Observed Training",776,146},{"services","Edit",42,121}}) do
+            local key=v[1];local button=U.Button(m,v[2],v[3],-89,v[4],function()
                 if key=="services" then c:Notes() else c:Catalogue(key) end
             end)
             if key=="services" then button:SetParent(d);button:ClearAllPoints();button:SetPoint("TOPLEFT",42,-638);button:SetWidth(121) end
             m.detailButtons[key]=button
             U.StyleSelection(button)
         end
-        m.details=U.ReadArea(m,342,-621,555,80)
+        m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.favourite,"TOPLEFT",-8,0)
+        m.details=U.ReadArea(m,342,-588,555,113)
         m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall");m.message:SetWordWrap(false)
         content:SetScript("OnHide",function()
             state.detailScroll=m.details:GetVerticalScroll();m.map:SuspendPlayer();m.search:ClearFocus()
@@ -774,7 +807,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         if journal.readOnly then c:Message("Newer Ledger schema: read-only; saved data is untouched.") end
     end
     shell:RegisterSection("merchants",{title="Merchant’s Ledger",icon="Interface\\Icons\\INV_Misc_Coin_01",frameName="AzerothFieldbookLedgerSection",build=build,
-        help=L.VISION.."\n\n|cffffd100Directory|r\nFind remembered merchants, trainers and services by name, goods, training, zone or notes. Use role, location and recipe filters to narrow the directory; Reset filters shows the full directory again. Record contact adds a contact manually.\n\n"..
+        help=L.VISION.."\n\n|cffffd100Directory|r\nFind remembered merchants, trainers and services by name, goods, training, zone or notes. Use role, location and recipe filters to narrow the directory; Filters > Clear shows the full directory again. Record contact adds a contact manually.\n\n"..
             "|cffffd100Observation|r\nOpen a merchant or trainer to record readable offerings without buying. Supported service interactions also record contacts; recognizable class-trainer titles can reveal a trainer before you open its services.\n\nGoods, prices and stock describe past inspections, not live availability. A partial or filtered view may miss offerings. Something absent from the latest inspection is not proof it is no longer sold.\n\n"..
             "|cffffd100Locations and identity|r\nLocations shows remembered encounters. Encountered near means your approximate position during an interaction, not the NPC's exact position. Distant targeting does not add your position as the contact's location.\n\nContacts with the same name may be different individuals. Use Link identity only when you recognize two entries as the same contact; their goods and history are combined after confirmation.\n\n"..
             "|cffffd100Access notes and details|r\nUse Edit for entrances, floors, personal notes or a manual role annotation. Known Goods and Observed Training open offering lists; click the same button again or Back to contacts to return to the directory.\n\n"..

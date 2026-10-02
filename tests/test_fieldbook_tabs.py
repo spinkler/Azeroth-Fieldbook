@@ -338,7 +338,7 @@ class FieldbookTabsTests(unittest.TestCase):
                 shell:ShowSection(id)
                 local page=sections[id] and sections[id].main or shell.sections[id].frame
                 local title=page.pageTitle
-                assert(title and title.point[1]=='TOPLEFT' and title.point[2]==42 and title.point[3]==-60,id)
+                assert(title and title.point[1]=='TOPLEFT' and title.point[2]==37 and title.point[3]==-60,id)
                 assert(title:GetText()==shell.sections[id].definition.title,id)
             end
             local b=shell.sections.bestiary.frame
