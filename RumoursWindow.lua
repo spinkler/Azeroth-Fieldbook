@@ -1,7 +1,7 @@
 local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 
-function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
+function ns.CreateRumoursWindow(journal,onChanged,getAnchors,getOverlay)
     local frame,selected,entry,revision,nameRevision
     local minWidth,maxWidth=260,420
     local textInset=64 -- Two 24px buttons, a 6px gap, then 10px before the text.
@@ -57,7 +57,7 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
             width=math.max(width,measure(data.text,"GameFontHighlightSmall")
                 +(data.claim and textInset or 0)+contentMargins)
         end
-        width=math.min(maxWidth,math.ceil(width))
+        width=frame.overlay and frame.overlay:GetWidth() or math.min(maxWidth,math.ceil(width))
         local contentWidth=width-contentMargins
         frame:SetWidth(width)
         frame.title:SetWidth(width-60)
@@ -121,8 +121,10 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
             row.claim,row.shared=data.claim,data.shared
             row:SetWidth(contentWidth)
             row.text:SetWidth(contentWidth-(data.claim and textInset or 0)); row.text:SetText(data.text)
-            local padding=index>1 and 12 or 0
-            row.text:ClearAllPoints(); row.text:SetPoint("TOPLEFT",data.claim and textInset or 0,-padding)
+            local empty=frame.overlay and not data.claim and not data.shared
+            row.text:SetTextColor(empty and 0.55 or 1,empty and 0.58 or 1,empty and 0.58 or 1)
+            local padding=index>1 and 12 or (empty and 3 or 0)
+            row.text:ClearAllPoints(); row.text:SetPoint("TOPLEFT",data.claim and textInset or (empty and 3 or 0),-padding)
             row.verify:ClearAllPoints(); row.verify:SetPoint("TOPLEFT",0,-padding-1)
             row.remove:ClearAllPoints(); row.remove:SetPoint("TOPLEFT",30,-padding-1)
             row.divider:SetShown(index>1)
@@ -157,8 +159,13 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
             and type(parentScale)=="number" and parentScale>0 then
             areaHeight=math.min(areaHeight,math.max(40,(screenHeight-30)*parentScale/scale-areaY-footer))
         end
-        frame:SetHeight(areaY+areaHeight+footer)
-        frame.area:ClearAllPoints(); frame.area:SetPoint("TOPLEFT",18,-areaY)
+        if frame.overlay then
+            areaY=30
+            footer=hasMessage and (frame.message:GetStringHeight()+12) or 8
+            areaHeight=math.max(24,frame.overlay:GetHeight()-areaY-footer)
+            frame:SetHeight(frame.overlay:GetHeight())
+        else frame:SetHeight(areaY+areaHeight+footer) end
+        frame.area:ClearAllPoints(); frame.area:SetPoint("TOPLEFT",frame.overlay and 13 or 18,-areaY)
         frame.area:SetHeight(areaHeight)
         frame.body:SetHeight(y)
         frame.area:SetVerticalScroll(math.min(frame.area:GetVerticalScroll(),math.max(0,y-areaHeight)))
@@ -171,7 +178,13 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
     end
     local function build()
         if frame then return end
-        frame=CreateFrame("Frame","AzerothFieldbookRumours",UIParent,"BackdropTemplate")
+        local overlay=getOverlay and getOverlay()
+        frame=CreateFrame("Frame","AzerothFieldbookRumours",overlay or UIParent,"BackdropTemplate")
+        frame.overlay=overlay
+        if overlay then
+            frame:SetPoint("TOPLEFT",overlay,"TOPLEFT",0,0);frame:SetSize(overlay:GetWidth(),overlay:GetHeight())
+            frame:SetFrameLevel(overlay:GetFrameLevel()+20);frame:EnableMouse(true)
+        else
         frame.afbPreferBookEdge=true
         frame:SetSize(maxWidth,500)
         local book=getAnchors and getAnchors()
@@ -189,6 +202,7 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
         end
         frame:SetMovable(true); frame:EnableMouse(true); frame:RegisterForDrag("LeftButton")
         frame:SetScript("OnDragStart",frame.StartMoving); frame:SetScript("OnDragStop",frame.StopMovingOrSizing)
+        end
         frame:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=20})
         frame.paper=frame:CreateTexture(nil,"BACKGROUND")
         frame.paper:SetPoint("TOPLEFT",6,-6); frame.paper:SetPoint("BOTTOMRIGHT",-6,6)
@@ -206,8 +220,20 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
         frame.body=CreateFrame("Frame",nil,frame.area)
         frame.body:SetSize(maxWidth-contentMargins,300); frame.area:SetScrollChild(frame.body)
         ns.StyleWindowScrollBar(frame.area,frame)
-        ns.AutoHideScrollBar(frame.area)
+        ns.AutoHideScrollBar(frame.area,overlay and function() return frame.body:GetHeight() end or nil)
         frame.message=label(frame,"",18,-449,maxWidth-36)
+        if overlay then
+            -- Reuse the loot/damage panel's backdrop instead of stacking another skin.
+            frame:SetBackdrop(nil);frame.paper:Hide()
+            frame.title:ClearAllPoints();frame.title:SetPoint("TOPLEFT",13,-9)
+            frame.title:SetFontObject(textFont("GameFontHighlight"));frame.title:SetTextColor(1,0.82,0.14)
+            frame.creature:Hide();frame.instructions:Hide();frame.closeButton:Hide()
+            local bar=frame.area.ScrollBar
+            if bar and type(bar)~="function" then
+                bar:ClearAllPoints();bar:SetPoint("TOPRIGHT",frame,"TOPRIGHT",-6,-22)
+                bar:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-6,22)
+            end
+        end
         frame.rows={}
         frame:SetScript("OnHide",function()
             frame:StopMovingOrSizing(); hideTip()
@@ -221,7 +247,7 @@ function ns.CreateRumoursWindow(journal,onChanged,getAnchors)
         frame:HookScript("OnShow",function() if controller.visibilityCallback then controller.visibilityCallback(true) end end)
         frame:HookScript("OnHide",function() if controller.visibilityCallback then controller.visibilityCallback(false) end end)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookRumours" end
-        if ns.UIScale then ns.UIScale:Register(frame,"AzerothFieldbookRumours") end
+        if ns.UIScale and not overlay then ns.UIScale:Register(frame,"AzerothFieldbookRumours") end
         frame:Hide()
     end
     function controller:SetCreature(id)

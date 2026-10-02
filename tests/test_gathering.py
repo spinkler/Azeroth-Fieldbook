@@ -155,6 +155,25 @@ class GatheringTrackingTests(unittest.TestCase):
             assert(reloaded.entries[e.id].loot[765].maxQuantity==3)
         ''')
 
+    def test_locations_scrollbar_only_appears_for_overflow(self):
+        lua=client(ui=True)
+        lua.execute("""
+            journal:Discover('mineral','Copper Vein',100,'Elwynn')
+            shell:ShowSection('gathering');local book=gathering.frame
+            local scroll=book.zoneScroll
+            scroll.GetVerticalScrollRange=function() return 999 end
+            scroll:RefreshScrollBar()
+            assert(not scroll.ScrollBar:IsShown() and not scroll.mouseWheel)
+            scroll.ScrollBar:Show();scroll.ScrollBar.scripts.OnShow(scroll.ScrollBar)
+            assert(not scroll.ScrollBar:IsShown(),'Template cannot restore an unnecessary bar')
+            book.zoneChild:SetHeight(196);scroll:RefreshScrollBar()
+            assert(scroll.ScrollBar:IsShown() and scroll.mouseWheel)
+            scroll:SetVerticalScroll(32)
+            book.zoneChild:SetHeight(164);scroll:RefreshScrollBar()
+            assert(not scroll.ScrollBar:IsShown() and not scroll.mouseWheel)
+            assert(scroll:GetVerticalScroll()==0)
+        """)
+
     def test_observed_loot_panel_and_note_layout(self):
         lua=client(ui=True)
         lua.execute(r'''
@@ -163,12 +182,27 @@ class GatheringTrackingTests(unittest.TestCase):
             ITEM_QUALITY_COLORS={[2]={r=.1,g=1,b=.1}}
             function GetItemInfo() return 'Silverleaf',nil,2,nil,nil,nil,nil,nil,nil,123 end
             shell:ShowSection('gathering');local book=gathering.frame
-            assert(book.note:GetWidth()==222 and book.lootScroll:GetWidth()==230)
+            assert(book.note:GetWidth()==242 and book.lootScroll:GetWidth()==230)
             assert(book.lootRows[1].itemID==765 and book.lootRows[1].name:GetText()=='Silverleaf')
             assert(book.lootRows[1].name.textColor[1]==.1)
             book.lootRows[1].scripts.OnEnter(book.lootRows[1])
             assert(GameTooltip:IsOwned(book.lootRows[1]))
             assert(not book.noLoot:IsShown())
+            local scroll=book.lootScroll
+            -- Stale template ranges must not show controls for fitting content.
+            scroll.GetVerticalScrollRange=function() return 999 end
+            scroll:RefreshScrollBar()
+            assert(not scroll.ScrollBar:IsShown() and not scroll.mouseWheel)
+            scroll.ScrollBar:Show()
+            scroll.ScrollBar.scripts.OnShow(scroll.ScrollBar)
+            assert(not scroll.ScrollBar:IsShown(),'Template must not restore a needless bar')
+            book.lootChild:SetHeight(186);scroll:RefreshScrollBar()
+            assert(scroll.ScrollBar:IsShown() and scroll.mouseWheel)
+            scroll:SetVerticalScroll(17)
+            book.lootChild:SetHeight(169);scroll:RefreshScrollBar()
+            assert(not scroll.ScrollBar:IsShown() and not scroll.mouseWheel)
+            assert(scroll:GetVerticalScroll()==0,'Shrinking content resets the offset')
+
         ''')
 
     def test_ten_yard_node_cleanup_and_capture(self):
@@ -643,9 +677,9 @@ class GatheringUITests(unittest.TestCase):
         self.lua.execute('''
             hover('Peacebloom');discover();shell:ShowSection('gathering')
             local book=gathering.frame
-            assert(book.model:GetWidth()==203 and book.model:GetHeight()==164)
-            assert(book.modelBorder:GetWidth()==207 and book.modelBorder:GetHeight()==168)
-            assert(book.model.point[2]==366 and book.model.point[3]==-111)
+            assert(book.model:GetWidth()==223 and book.model:GetHeight()==164)
+            assert(book.modelBorder:GetWidth()==227 and book.modelBorder:GetHeight()==168)
+            assert(book.model.point[2]==346 and book.model.point[3]==-135)
             assert(book.model.requestedModel==219481 and book.model:IsShown())
             assert(book.model.cameraDistance==3.125)
             assert(book.zoneRows[1]:GetText()=='Elwynn  •  0 mapped positions')
@@ -670,17 +704,42 @@ class GatheringUITests(unittest.TestCase):
             assert(book.modelCaption:GetText()=='Model unavailable')
         ''')
 
+    def test_shared_panes_and_dropdown_filters(self):
+        self.lua.execute("""
+            hover('Peacebloom');discover();shell:ShowSection('gathering')
+            local b=gathering.frame
+            assert(b.spine.point[2]==306 and b.rows[1].point[2]==42 and b.rows[1]:GetWidth()==236)
+            assert(b.resourceScrollBar.point[2]==282)
+            assert(b.title.points[1][4]==342 and b.modelBorder.point[2]+b.modelBorder:GetWidth()==571)
+            assert(b.noteScroll.parent.point[2]+b.noteScroll.parent:GetWidth()==632)
+            assert(b.lootScroll.parent.point[2]==646)
+            for _,control in pairs(b.typeButtons) do assert(control.parent==b.listFilterMenu) end
+            assert(b.locationsButton.parent==b.listFilterMenu and b.clearFilters.parent==b.listFilterMenu)
+            b.listFilterButton.scripts.OnClick();assert(b.listFilterMenu:IsShown())
+            b.typeButtons.herb.scripts.OnClick();assert(b.typeButtons.herb.afbSelected and b.listFilterMenu:IsShown())
+            b.locationsButton.scripts.OnEnter();assert(b.locationFrame:IsShown() and b.locationFrame.parent==b.listFilterMenu)
+            function b.locationFrame:IsMouseOver() return true end
+            b.listFilterMenu.scripts.OnEvent(b.listFilterMenu,'GLOBAL_MOUSE_DOWN')
+            assert(b.listFilterMenu:IsShown())
+            function b.locationFrame:IsMouseOver() return false end
+            b.listFilterMenu.scripts.OnEvent(b.listFilterMenu,'GLOBAL_MOUSE_DOWN')
+            assert(not b.listFilterMenu:IsShown() and not b.locationFrame:IsShown())
+            b.listFilterButton.scripts.OnClick();b.clearFilters.scripts.OnClick()
+            assert(b.typeButtons.all.afbSelected and b.search:GetText()=='')
+            shell:Hide();assert(not b.listFilterMenu:IsShown())
+        """)
+
     def test_lazy_empty_page_opens_without_discovery_and_has_bestiary_dimensions(self):
         self.lua.execute('''
             assert(not shell:GetFrame() and not gathering.frame)
             shell:ShowSection('gathering');local book=gathering.frame
             assert(book:GetWidth()==960 and book:GetHeight()==740 and #book.rows==16)
             assert(book.parent==shell:GetFrame() and book:GetScale()==1)
-            assert(book.rows[1]:GetWidth()==162 and book.rows[1]:GetHeight()==28)
-            assert(book.rows[1].point[2]==135 and book.rows[1].point[3]==-110)
+            assert(book.rows[1]:GetWidth()==236 and book.rows[1]:GetHeight()==26)
+            assert(book.rows[1].point[2]==42 and book.rows[1].point[3]==-140)
             assert(book.rows[16].point[3]==-560)
-            assert(book.search:GetWidth()==146 and book.search.point[2]==145 and book.search.point[3]==-78)
-            assert(book.resourceScrollBar:GetHeight()==446 and book.resourceScrollBar:GetWidth()==14)
+            assert(book.search:GetWidth()==168 and book.search.point[2]==70 and book.search.point[3]==-110)
+            assert(book.resourceScrollBar:GetHeight()==416 and book.resourceScrollBar:GetWidth()==14)
             assert(book.empty:IsShown() and not book.details:IsShown() and not book.locations.enabled)
             assert(not book.previous.enabled and not book.next.enabled and count(journal.entries)==0)
             assert(positionReads==0,'opening the journal never samples locations')
@@ -739,7 +798,6 @@ class GatheringUITests(unittest.TestCase):
             book.locations.scripts.OnClick();local map=gathering.locations:GetFrame()
             assert(map.creature:GetText()=='Copper Vein' and map.zoneName:GetText()=='Westfall')
             assert(map.status:GetText():find('1 interaction positions',1,true))
-            assert(map.trackingMode:GetText()=='Tracking: Interactions')
             map.brightness.scripts.OnValueChanged(map.brightness,0.85);assert(journal:GetLocationMapBrightness()==0.85)
             local revision=journal.revision
             px=0.9;map.scripts.OnUpdate(map,1)
@@ -780,14 +838,18 @@ class GatheringUITests(unittest.TestCase):
             book.locations.scripts.OnClick();local overlay=gathering.locations:GetFrame()
             assert(overlay.parent==book and overlay:GetScale()==1)
             assert(overlay.point[1]=='TOPLEFT' and overlay.point[2]==book)
-            assert(overlay.point[4]==342 and overlay.point[5]==-78)
-            assert(342+overlay:GetWidth()==936 and 78+overlay:GetHeight()==714)
+            assert(overlay.point[4]==333 and overlay.point[5]==-78)
+            assert(333+overlay:GetWidth()==936 and 78+overlay:GetHeight()==714)
+            assert(overlay.point[4]-309==960-overlay.point[4]-overlay:GetWidth())
             for _,object in ipairs(objects) do
                 assert(object.parent~=overlay or object.template~='UIPanelCloseButton')
             end
             assert(overlay:GetFrameLevel()>book.details:GetFrameLevel())
             assert(not overlay.scripts.OnDragStart and not overlay.afbAnchorRule)
-            assert(book.title.point[3]==-55 and book.locations.point[3]==-52)
+            assert(book.title.points[1][1]=='TOPLEFT' and book.title.points[1][4]==342)
+            assert(book.title.points[1][5]==book.locations.point[3])
+            assert(book.title.point[1]=='BOTTOMRIGHT' and book.title.point[2]==book.locations)
+            assert(book.title.point[3]=='BOTTOMLEFT' and book.title.point[4]==-18 and book.title.point[5]==0)
             assert(overlay.map:GetWidth()<=overlay:GetWidth()-36)
             assert(overlay.map:GetHeight()<=372)
             book.rows[2].scripts.OnClick(book.rows[2])
@@ -861,7 +923,7 @@ class GatheringUITests(unittest.TestCase):
             local journal=bootGathering.journal
             AzerothFieldbookDB.creatureAnnouncements=true
             journal:Discover('mineral','Copper Vein',42,'Elwynn',{mapID=37,name='Elwynn'})
-            assert(#messages==1 and messages[1]=='|cff80d0ffAFB:|r |cffffd100[New node type]|r Herbs & Minerals: Copper Vein |cff999999(Mineral • Elwynn)|r')
+            assert(#messages==1 and messages[1]=="|cff80d0ffAFB:|r |cffffd100[New node type]|r Gatherer's Compendium: Copper Vein |cff999999(Mineral • Elwynn)|r")
             journal:Discover('mineral','Copper Vein',43,'Elwynn',{mapID=37,name='Elwynn'})
             assert(#messages==1,'repeat hover stays quiet')
             journal:Discover('mineral','Copper Vein',44,'Westfall',{mapID=52,name='Westfall'})

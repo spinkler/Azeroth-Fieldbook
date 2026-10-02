@@ -3,11 +3,11 @@ local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or b
 
 function ns.CreateCreatureLocationsWindow(journal,getBook)
     local controller={}
-    local frame,selected,zoneKey,revision,visibleKey
+    local frame,selected,zoneKey,revision,visibleKey,currentZone
     local zones,tiles,exploration,fills,dots,glows={},{},{},{},{},{}
     local menuOffset=0
     local displayedMapID
-    local WIDTH,HEIGHT=640,426
+    local WIDTH,HEIGHT=558,372
     local palettes={
         kills={fill={0.9,0.18,1},border={1,0.55,1}},
         observations={fill={0.05,0.8,1},border={0.45,1,1}},
@@ -199,7 +199,8 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
                     dot.texture=dot:CreateTexture(nil,"OVERLAY")
                     dot.texture:SetPoint("TOPLEFT",2,-2);dot.texture:SetPoint("BOTTOMRIGHT",-2,2)
                     dot:EnableMouse(true)
-                    dot:SetScript("OnEnter",function(self)
+                    dot:SetScript("OnMouseUp",function(_,button) frame.map:Navigate(button) end)
+                dot:SetScript("OnEnter",function(self)
                         if GameTooltip then
                             GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
                             GameTooltip:SetText(mode()=="observations" and "Observation location"
@@ -232,6 +233,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
     render=function(force)
         if not frame or not frame:IsShown() then return end
         local entry=selected and journal.entries[selected]
+        if not entry then currentZone=nil end
         local signature=tostring(selected)..":"..tostring(zoneKey)..":"..mode()
         if not force and revision==journal.revision and visibleKey==signature then return end
         revision=journal.revision
@@ -241,6 +243,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         zones=ns.CreatureLocations.Zones(entry,mode())
         local chosen
         for _,zone in ipairs(zones) do if key(zone)==zoneKey then chosen=zone;break end end
+        if not chosen and currentZone and key(currentZone)==zoneKey then chosen=currentZone end
         if not chosen then
             local current=ns.CreatureLocations.CurrentMap()
             for _,zone in ipairs(zones) do if current and zone.mapID==current.mapID then chosen=zone;break end end
@@ -250,11 +253,12 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         visibleKey=tostring(selected)..":"..tostring(zoneKey)..":"..mode()
         frame.creature:SetText(entry and (journal:GetCreatureName(selected) or "Creature") or "Select a creature in the Bestiary.")
         frame.zoneName:SetText(chosen and chosen.name or "No zones recorded")
-        frame.zoneName:SetShown(#zones<=1)
-        frame.zoneButton:SetShown(#zones>1);frame.zoneButton:SetText((chosen and chosen.name or "Select zone").."  v")
+        frame.zoneName:Hide()
+        frame.zoneButton:Show();frame.zoneButton:SetEnabled(#zones>0);frame.zoneButton:SetText((chosen and chosen.name or "Select zone"))
         frame.menu:Hide();renderMenu()
         local available=drawMap(chosen and chosen.mapID)
         displayedMapID=available and chosen.mapID or nil
+        frame.map.regionHighlight:Hide()
         updatePlayer()
         hide(fills);hide(dots);hide(glows)
         local count,approx,triangles=0,0,0
@@ -278,27 +282,34 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
     end
     local function build()
         if frame then return end
-        frame=CreateFrame("Frame","AzerothFieldbookCreatureLocations",UIParent,"BackdropTemplate")
-        frame.afbPreferBookEdge=true;frame.afbAnchorRule="right";frame.afbAlignBookTop=true
-        frame:SetSize(676,614);frame:SetFrameStrata("DIALOG");frame:SetClampedToScreen(true)
-        local book=getBook and getBook()
-        if book then frame:SetPoint("TOPLEFT",book,"TOPRIGHT",6,0) else frame:SetPoint("CENTER") end
-        frame:SetScale(math.min(1,(UIParent:GetWidth()-30)/(676*1.5),(UIParent:GetHeight()-30)/(614*1.5)))
-        frame:SetMovable(true);frame:EnableMouse(true);frame:RegisterForDrag("LeftButton")
-        frame:SetScript("OnDragStart",frame.StartMoving);frame:SetScript("OnDragStop",frame.StopMovingOrSizing)
+        local book=getBook and getBook() or UIParent
+        frame=CreateFrame("Frame","AzerothFieldbookCreatureLocations",book,"BackdropTemplate")
+        -- Keep 24px between the panel and either the divider edge (309) or book edge (960).
+        frame:SetPoint("TOPLEFT",book,"TOPLEFT",333,-78);frame:SetSize(603,636)
+        frame:SetFrameLevel(book:GetFrameLevel()+30);frame:EnableMouse(true)
         frame:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=20})
         frame.paper=frame:CreateTexture(nil,"BACKGROUND")
         frame.paper:SetPoint("TOPLEFT",6,-6);frame.paper:SetPoint("BOTTOMRIGHT",-6,6)
         frame.paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
         frame.paper:SetDesaturated(true)
-        label(frame,"Locations",18,-16,600,"GameFontNormalLarge")
-        frame.creature=label(frame,"",18,-40,640,"GameFontNormal")
+        label(frame,"Locations",18,-16,520,"GameFontNormalLarge")
+        frame.creature=label(frame,"",18,-40,558,"GameFontNormal")
         frame.creature:SetWordWrap(false)
-        frame.zoneName=label(frame,"",18,-66,640,"GameFontHighlight")
-        frame.zoneButton=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(frame.zoneButton) end
-        frame.zoneButton:SetSize(420,24);frame.zoneButton:SetPoint("TOPLEFT",16,-60)
+        frame.zoneName=label(frame,"",18,-66,558,"GameFontHighlight")
+        frame.zoneButton=ns.FieldbookUI.MenuButton(frame,"Select zone",16,-60,420,function()
+            renderMenu();frame.menu:SetShown(not frame.menu:IsShown())
+        end)
+        frame.currentZone=ns.FieldbookUI.Button(frame,"Current Zone",444,-60,132,function()
+            local current=ns.CreatureLocations.CurrentMap()
+            if not current then return end
+            currentZone=current;zoneKey=key(current);render(true)
+        end)
         frame.map=CreateFrame("Frame",nil,frame)
         frame.map:SetPoint("TOP",frame,"TOP",0,-92);frame.map:SetSize(WIDTH,HEIGHT)
+        ns.CreatureLocations.InstallMapNavigation(frame.map,function() return displayedMapID end,function(id,name)
+            currentZone={mapID=id,name=name};zoneKey=key(currentZone);render(true)
+        end)
+
         frame.playerCoordinates=label(frame.map,"Player coordinates unavailable",0,0,250)
         frame.playerCoordinates:ClearAllPoints()
         frame.playerCoordinates:SetPoint("BOTTOMLEFT",frame.map,"BOTTOMLEFT",8,29)
@@ -313,13 +324,13 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         frame.empty=label(frame.map,"",0,0,596,"GameFontHighlight")
         frame.empty:ClearAllPoints();frame.empty:SetPoint("CENTER",frame.map,"CENTER",0,0)
         frame.empty:SetJustifyH("CENTER");frame.empty:SetHeight(60)
-        frame.status=label(frame,"",18,-524,640)
-        frame.legend=label(frame,"",18,-545,640);frame.legend:SetTextColor(0.45,0.45,0.45);frame.legend:SetHeight(15)
+        frame.status=label(frame,"",18,-476,558);frame.status:SetHeight(36);frame.status:SetWordWrap(true)
+        frame.legend=label(frame,"",18,-522,558);frame.legend:SetTextColor(0.45,0.45,0.45);frame.legend:SetHeight(36);frame.legend:SetWordWrap(true)
         frame.brightness=ns.MapBrightness:Attach(frame.map,function() return journal:GetLocationMapBrightness() end,
             function(value) journal:SetLocationMapBrightness(value) end,applyBrightness)
         frame.brightnessValue=frame.brightness.valueLabel
         frame.trackingMode=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(frame.trackingMode) end
-        frame.trackingMode:SetPoint("TOPLEFT",458,-565);frame.trackingMode:SetSize(200,24)
+        frame.trackingMode:SetPoint("TOPLEFT",376,-582);frame.trackingMode:SetSize(200,24)
         frame.trackingMode:SetScript("OnClick",function()
             tipLeave()
             journal:SetLocationTrackingMode(mode()=="kills" and "observations" or "kills")
@@ -335,8 +346,6 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         end)
         frame.trackingMode:SetScript("OnLeave",tipLeave)
         frame.trackingMode:SetScript("OnHide",tipLeave)
-        local close=CreateFrame("Button",nil,frame,"UIPanelCloseButton")
-        close:SetPoint("TOPRIGHT",-3,-3);close:SetScript("OnClick",function() frame:Hide() end)
         frame.menu=CreateFrame("Frame",nil,frame,"BackdropTemplate")
         frame.menu:SetPoint("TOPLEFT",frame.zoneButton,"BOTTOMLEFT",0,0);frame.menu:SetSize(420,226)
         frame.menu:SetFrameLevel(frame:GetFrameLevel()+20);frame.menu:EnableMouse(true)
@@ -362,7 +371,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         frame.zoneButton:SetScript("OnClick",function() renderMenu();frame.menu:SetShown(not frame.menu:IsShown()) end)
         frame:SetScript("OnShow",function() if controller.visibilityCallback then controller.visibilityCallback(true) end end)
         frame:SetScript("OnHide",function()
-            frame:StopMovingOrSizing();frame.menu:Hide();tipLeave()
+            frame.menu:Hide();tipLeave()
             if controller.visibilityCallback then controller.visibilityCallback(false) end
         end)
         local elapsed,playerElapsed=0,0
@@ -373,13 +382,26 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         end)
         frame:RegisterEvent("MAP_EXPLORATION_UPDATED")
         frame:SetScript("OnEvent",function() render(true) end)
-        if ns.WindowFocus then ns.WindowFocus:Register(frame) end
-        if ns.UIScale then ns.UIScale:Register(frame,"AzerothFieldbookCreatureLocations") end
+        book:HookScript("OnHide",function() frame:Hide() end)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookCreatureLocations" end
         frame:Hide()
     end
+    local function defaultTrackingMode(id)
+        local entry=journal.entries[id]
+        local function hasPositions(field)
+            for _,map in pairs(entry and entry[field] or {}) do
+                if map.points and next(map.points) then return true end
+            end
+            return false
+        end
+        journal:SetLocationTrackingMode(not hasPositions("killLocations") and hasPositions("observationLocations")
+            and "observations" or "kills")
+    end
     function controller:SetCreature(id)
-        if selected~=id then zoneKey=nil;menuOffset=0 end
+        if selected~=id then
+            zoneKey=nil;menuOffset=0
+            defaultTrackingMode(id)
+        end
         selected=id;render()
     end
     function controller:Refresh() render() end
@@ -387,7 +409,7 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
     function controller:Hide() if frame then frame:Hide() end end
     function controller:IsShown() return frame and frame:IsShown() or false end
     function controller:Open(id)
-        build();self:SetCreature(id);frame:Show();render(true)
+        build();defaultTrackingMode(id);self:SetCreature(id);frame:Show();render(true)
         frame:Raise()
     end
     function controller:Toggle(id) if self:IsShown() then self:Hide() else self:Open(id) end end

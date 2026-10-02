@@ -37,6 +37,9 @@ function B:Attach(map,getValue,setValue,apply)
         local t=panel:CreateFontString(nil,"OVERLAY",font)
         t:SetPoint("TOPLEFT",x,-4);t:SetWidth(width);t:SetJustifyH("LEFT")
         t:SetWordWrap(false);t:SetTextColor(0.55,0.57,0.57);t:SetText(text)
+        local path,size=t:GetFont()
+        t:SetFont(path,size,"OUTLINE")
+        t:SetShadowColor(0,0,0,1);t:SetShadowOffset(1,-1)
         return t
     end
     label("Brightness",0,72)

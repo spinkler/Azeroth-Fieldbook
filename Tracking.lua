@@ -176,8 +176,8 @@ function ns.ReportTrackingTransition(settings, say)
     local enabled = settings.accountWideTracking ~= false
     local changed = type(settings.accountTrackingActive) == "boolean" and settings.accountTrackingActive ~= enabled
     local imported, deferred = {}, {}
-    for _,section in ipairs({{"bestiary","Bestiary"},{"gathering","Herbs & Minerals"},{"atlas","Atlas"},
-        {"angling","Almanac"},{"ledger","Ledger"},{"treasure","Treasure"},{"lore","Lore"}}) do
+    for _,section in ipairs({{"bestiary","Bestiary"},{"gathering","Gatherer's Compendium"},{"atlas","Traveller’s Atlas"},
+        {"angling","Angler’s Almanac"},{"ledger","Merchant’s Ledger"},{"treasure","Treasure Journal"},{"lore","Lorekeeper's Chronicle"}}) do
         local result = trackingResult and trackingResult[section[1]]
         if result == "imported" then imported[#imported+1] = section[2]
         elseif result == "deferred" then deferred[#deferred+1] = section[2] end

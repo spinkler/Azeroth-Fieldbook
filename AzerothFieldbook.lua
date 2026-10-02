@@ -17,7 +17,7 @@ local applySpellIDTooltipPreference = ns.ApplySpellIDTooltipPreference or functi
 end
 local db, trackingDB
 local encounters
-local journal, book, fieldbook, ledgerBook, gatheringBook
+local journal, book, fieldbook, ledgerBook, gatheringBook, lossOfControl
 local wipeDeadline = 0
 local afterWipeHold = false
 local skipped = 0
@@ -84,14 +84,17 @@ local function npcID(unit)
     if not publicString(guid) then return nil, "UnitGUID: " .. valueState(guid) .. "; cannot identify NPC." end
     -- Creature only: never players, pets, or vehicles. Match exact creature ID.
     local id = tonumber(guid:match("^Creature%-%d+%-%d+%-%d+%-%d+%-(%d+)%-"))
-    return id, id and "NPC identity readable." or "Not a Creature GUID."
+    return id, id and "NPC identity readable." or "Not a Creature GUID.", guid
 end
 
-local function watchedEnemy(unit, explicit)
+local function watchedEnemy(unit, explicit, sourceGUID)
     if not publicString(unit) then return nil, "Unit token unavailable/restricted." end
+    -- Only the player-effect observer supplies an exact, public aura-source GUID.
+    -- Keep ordinary target/mouseover discovery limits unchanged.
+    local effectSource = publicString(sourceGUID)
     -- Deliberately exclude focus, bosses, group targets and background nameplates.
-    if unit ~= "target" and unit ~= "mouseover" then return nil, "Not target/mouseover." end
-    if unit == "mouseover" and not explicit then
+    if not effectSource and unit ~= "target" and unit ~= "mouseover" then return nil, "Not target/mouseover." end
+    if not effectSource and unit == "mouseover" and not explicit then
         -- Taxi flights do not necessarily report IsFlying. Explicit targets
         -- remain observable from either kind of flight.
         for _, flight in ipairs({{UnitOnTaxi, "player"}, {IsFlying}}) do
@@ -113,7 +116,14 @@ local function watchedEnemy(unit, explicit)
     end
     ok, reason = booleanCheck("UnitCanAttack", UnitCanAttack, true, "player", unit)
     if not ok then return nil, reason end
-    return npcID(unit)
+    local id, identityReason, identityGUID = npcID(unit)
+    if effectSource then
+        local success, guid = pcall(UnitGUID, unit)
+        if identityGUID ~= sourceGUID or not success or not publicString(guid) or guid ~= sourceGUID then
+            return nil, "Aura source identity changed/unavailable."
+        end
+    end
+    return id, identityReason
 end
 
 local function say(message)
@@ -519,6 +529,7 @@ local function initializeImpl()
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
     if journal then
         if journal.SetAutomaticRecordCallback then journal:SetAutomaticRecordCallback(say) end
+        if ns.CreateLossOfControlObserver then lossOfControl = ns.CreateLossOfControlObserver(journal, watchedEnemy, say) end
         journal:SetPointsRecordedCallback(function(entry, amount, reason, observation)
             local killTitles = { ["first kill"] = "First kill!", ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
             local discoveryTitles = { location = "New observed location" }
@@ -551,7 +562,7 @@ local function initializeImpl()
             if not journal:GetCreatureAnnouncement() then return end
             local details=ns.GatheringKinds[entry.kind].title
             if location then details=details .. " • " .. location end
-            say("|cffffd100[" .. title .. "]|r Herbs & Minerals: " .. entry.name
+            say("|cffffd100[" .. title .. "]|r " .. fieldbook.sections.gathering.definition.title .. ": " .. entry.name
                 .. " |cff999999(" .. details .. ")|r")
         end
     end
@@ -648,6 +659,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         return
     end
     if not db then return end
+    if lossOfControl and not afterWipeHold then lossOfControl:Event(event, ...) end
     if journal and not afterWipeHold and journal.BeastLoreEvent then
         journal:BeastLoreEvent(event,unit,castGUID,spellID,sentSpellID)
     end
@@ -737,7 +749,7 @@ end
 -- Standalone GUID events in Forever 69977 (not combat-log subevents). Missing
 -- registration can fail; a watched alive-to-dead transition can still count
 -- with readable tag eligibility. PARTY_KILL is optional (pets may not emit it).
-for _, event in ipairs({ "PARTY_KILL", "UNIT_DIED", "MODIFIER_STATE_CHANGED", "SPELL_TEXT_UPDATE" }) do
+for _, event in ipairs({ "PARTY_KILL", "UNIT_DIED", "MODIFIER_STATE_CHANGED", "SPELL_TEXT_UPDATE", "LOSS_OF_CONTROL_ADDED", "LOSS_OF_CONTROL_UPDATE" }) do
     pcall(frame.RegisterEvent, frame, event)
 end
 
@@ -820,6 +832,7 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
             section("Cast ID display", ns.CastIDs, "Report")
             section("Spell ID window", ns.SpellIDWindow, "Report")
             section("Automatic abilities", journal, "ReportBuffs")
+            section("Player Loss of Control", lossOfControl, "Report")
             section("Automatic behaviours", journal, "ReportBehaviours")
             if ns.KillDiagnostics then
                 say("Kill evidence recorder: " .. (ns.KillDiagnostics.enabled and "ON" or "OFF")

@@ -271,40 +271,27 @@ class AtlasUITests(unittest.TestCase):
 
     def test_layer_menu_checkboxes_preserve_independent_filters_and_records(self):
         self.lua.execute('''
-            local checks,actions={},{}
-            local root={}
-            function root:CreateCheckbox(text,selected,toggle,id)
-                checks[id]={text=text,selected=selected,toggle=toggle}
-            end
-            function root:CreateDivider() end
-            function root:CreateButton(text,action) actions[text]=action end
-            MenuResponse={Refresh='keep-open'}
-            MenuUtil={CreateContextMenu=function(owner,generate)
-                assert(owner==m.layerMenu);checks={};generate(owner,root)
-            end}
             local id=j:Save(fixture());c:Select(id)
             local before=snapshot(j.records)
             j.state.showSubzones=true;j.state.showSubzonePoints=true
-            click(m.layerMenu)
-            local count=0;for _ in pairs(checks) do count=count+1 end
-            assert(count==#A.categories)
-            for _,category in ipairs(A.categories) do
-                local check=checks[category.id]
-                assert(check.text==category.label and check.selected(category.id))
-            end
-            assert(checks.cave.toggle('cave')==MenuResponse.Refresh)
+            click(m.layerMenu);assert(m.layerPanel:IsShown())
+            m.layerPanel.scripts.OnShow()
+            local checks={};for _,check in ipairs(m.layerPanel.checks) do checks[check.layerID]=check end
+            assert(#m.layerPanel.checks==#A.categories+1 and not checks.entrance:GetChecked())
+            checks.cave:SetChecked(false);click(checks.cave)
             assert(not j:Layer('cave') and j:Layer('route') and m.reveal:IsShown())
-            assert(#j:List('',nil,true)==1 and snapshot(j.records)==before)
-            click(m.layerMenu);assert(not checks.cave.selected('cave'),'Reopening must show saved checkbox states')
-            assert(actions['Hide all']()==MenuResponse.Refresh)
-            for _,category in ipairs(A.categories) do assert(not checks[category.id].selected(category.id)) end
-            assert(j.state.showSubzones and j.state.showSubzonePoints,'Marker filters must not change sub-zone settings')
-            click(m.reveal);assert(j:Layer('cave') and not j:Layer('route'))
-            local reload=ns.CreateAtlasJournal(saved)
-            assert(reload:Layer('cave') and not reload:Layer('route'),'Layer preferences persist')
-            assert(actions['Show all']()==MenuResponse.Refresh)
-            for _,category in ipairs(A.categories) do assert(checks[category.id].selected(category.id)) end
             assert(snapshot(j.records)==before)
+            click(m.layerMenu);assert(not m.layerPanel:IsShown(),'Second click closes the menu')
+            click(m.layerMenu);m.layerPanel.scripts.OnShow();assert(not checks.cave:GetChecked())
+            m.iconSize.scripts.OnValueChanged(m.iconSize,32)
+            assert(j.state.iconSize==32 and snapshot(j.records)==before)
+            click(m.reveal);assert(j:Layer('cave'))
+            assert(m.map.pins[1]:GetWidth()==36,'Selected pins preserve their size emphasis')
+            local reload=ns.CreateAtlasJournal(saved)
+            assert(reload.state.iconSize==32 and reload:Layer('cave'))
+            assert(j.state.showSubzones and j.state.showSubzonePoints)
+            m.iconSize.scripts.OnValueChanged(m.iconSize,6)
+            assert(j.state.iconSize==6 and m.map.pins[1]:GetWidth()==10)
         ''')
 
     def test_native_shell_size_state_and_page_owned_lifetime(self):

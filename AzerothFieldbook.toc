@@ -2,7 +2,7 @@
 ## Title: Azeroth Fieldbook
 ## Notes: A personal monster journal for World of Warcraft.
 ## Author: Spinkler
-## Version: 0.20.0
+## Version: 0.21.0
 ## X-Curse-Project-ID: 1708795
 ## SavedVariablesPerCharacter: AzerothFieldbookDB, AzerothFieldbookGatheringDB, AzerothFieldbookAtlasDB, AzerothFieldbookAnglingDB, AzerothFieldbookLedgerDB, AzerothFieldbookTreasureDB, AzerothFieldbookLoreDB
 ## SavedVariables: AzerothFieldbookAccountDB, AzerothFieldbookBackupDB
@@ -20,6 +20,7 @@ BeastLore.lua
 PlayerNames.lua
 BestiaryBackups.lua
 BestiaryBuffs.lua
+LossOfControl.lua
 DetectedAbilities.lua
 CreatureLocations.lua
 LocationGeometry.lua
@@ -42,6 +43,10 @@ GatheringMapPins.lua
 GatheringBook.lua
 AtlasJournal.lua
 AtlasSubzones.lua
+AtlasEnvironment.lua
+AtlasEntranceTypes.lua
+AtlasEntrances.lua
+AtlasEntranceTracking.lua
 AtlasReferences.lua
 AtlasReports.lua
 AtlasUI.lua

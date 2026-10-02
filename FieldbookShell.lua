@@ -22,6 +22,11 @@ local function label(parent, text, x, y, width, size)
     font:SetText(text)
     return font
 end
+local function sectionTitle(parent,text)
+    local title=label(parent,text,42,-60,260,"GameFontNormalLarge")
+    title:SetTextColor(1,0.82,0.14);title:SetWordWrap(false)
+    return title
+end
 local function button(parent, text, x, y, width, action)
     local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(b) end
     b:SetSize(width, 24)
@@ -30,8 +35,7 @@ local function button(parent, text, x, y, width, action)
     b:SetScript("OnClick", action)
     return b
 end
-local function menuButton(parent,text,x,y,width,action)
-    local control=button(parent,text,x,y,width,action)
+local function styleMenuArrow(control)
     control.arrowShadow=control:CreateTexture(nil,"OVERLAY",nil,-1)
     control.arrowShadow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
     control.arrowShadow:SetPoint("RIGHT",-11,-1);control.arrowShadow:SetSize(10,12)
@@ -45,6 +49,33 @@ local function menuButton(parent,text,x,y,width,action)
         label:SetJustifyH("CENTER");label:SetWordWrap(false)
     end
     return control
+end
+local function menuButton(parent,text,x,y,width,action)
+    return styleMenuArrow(button(parent,text,x,y,width,action))
+end
+local function filterButton(parent,x,y,action)
+    local control=button(parent,"",x,y,22,action);control:SetSize(22,22)
+    for shadow=1,0,-1 do
+        for row=0,10 do
+            local width=row<6 and (12-row*1.6) or 3
+            local line=control:CreateTexture(nil,"OVERLAY",nil,shadow==1 and -1 or 0)
+            line:SetPoint("CENTER",control,"CENTER",shadow,5-row-shadow);line:SetSize(width,1)
+            if shadow==1 then line:SetColorTexture(0,0,0,0.9) else line:SetColorTexture(1,0.82,0.14,1) end
+        end
+    end
+    return control
+end
+local function dismissOnOutsideClick(menu,control,submenus)
+    -- Observe clicks without swallowing the action on the control underneath.
+    menu:RegisterEvent("GLOBAL_MOUSE_DOWN")
+    menu:HookScript("OnEvent",function(self,event)
+        if event~="GLOBAL_MOUSE_DOWN" or not self:IsShown() then return end
+        if self:IsMouseOver() or control:IsMouseOver() then return end
+        for _,submenu in pairs(submenus or {}) do
+            if submenu:IsShown() and submenu:IsMouseOver() then return end
+        end
+        self:Hide()
+    end)
 end
 local function cornerClose(parent)
     local close=CreateFrame("Button",nil,parent,"UIPanelCloseButton")
@@ -61,6 +92,24 @@ local function edit(parent, x, y, width, limit)
     e:SetMaxLetters(limit)
     e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     e:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    return e
+end
+
+-- Search text scrolls natively inside a reserved clear-button gutter.
+local function search(parent,x,y,width,limit)
+    local e=edit(parent,x,y,width,limit)
+    e:SetTextInsets(0,22,0,0)
+    local clear=CreateFrame("Button",nil,e)
+    clear:SetSize(18,18);clear:SetPoint("RIGHT",e,"RIGHT",-2,0)
+    local glyph=clear:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
+    glyph:SetPoint("CENTER");glyph:SetText("×");glyph:SetTextColor(0.95,0.15,0.12)
+    clear:SetScript("OnEnter",function() glyph:SetTextColor(1,0.4,0.3) end)
+    clear:SetScript("OnLeave",function() glyph:SetTextColor(0.95,0.15,0.12) end)
+    clear:SetScript("OnClick",function() e:SetText("");e:SetFocus() end)
+    local placeholder=label(e,"Search",0,-5,width-22,"GameFontHighlightSmall")
+    placeholder:SetTextColor(0.55,0.55,0.55);placeholder:SetWordWrap(false)
+    e:HookScript("OnTextChanged",function(self) placeholder:SetShown(self:GetText()=="") end)
+    e.clearButton=clear;e.placeholder=placeholder
     return e
 end
 
@@ -83,7 +132,7 @@ end
 local function shareButton(parent,action)
     return button(parent,"Share",42,-672,120,action)
 end
-ns.FieldbookUI = {Label=label, Button=button, ShareButton=shareButton, MenuButton=menuButton, Close=cornerClose, Edit=edit, StyleMenuRow=styleMenuRow}
+ns.FieldbookUI = {Label=label, SectionTitle=sectionTitle, Button=button, ShareButton=shareButton, MenuButton=menuButton, FilterButton=filterButton, DismissOnOutsideClick=dismissOnOutsideClick, StyleMenuArrow=styleMenuArrow, Close=cornerClose, Edit=edit, Search=search, StyleMenuRow=styleMenuRow}
 
 -- Entry deletion follows the Ledger's left-page warning/action/back layout.
 function ns.FieldbookUI.DeletePanel(parent,shell,title,typed)

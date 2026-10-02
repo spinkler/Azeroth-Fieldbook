@@ -333,7 +333,7 @@ function S.Attach(j)
         if spatial(index,row,false,true,15) then return false,"An Atlas point is already within 15 yards." end
         if not record(row,index) then return false,"Atlas point could not be recorded; the map may be full." end
         if self.onChange then self.onChange(id) end
-        return true,"Atlas point recorded: "..A.Safe(name).."."
+        return true,"Traveller’s Atlas point recorded: "..A.Safe(name).."."
     end
     function s:Observe(deferred)
         if j.readOnly or j.state.automaticMapping==false then self:Reset();return end

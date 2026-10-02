@@ -178,7 +178,7 @@ function L.InstallEditors(c)
         local e=j:Get(state.selected);if not e then return end
         local p=self:Panel("links","Related entries — references keep their own records")
         if not p.search then
-            p.search=U.Field(p,"Search your known entries",24,-56,804,200)
+            p.search=U.Search(p,29,-77,794,200)
             p.reason=U.Field(p,"Connection (optional): mentions the same emblem, conflicting account…",24,-119,804,500)
             p.mode=U.Button(p,"Show linked only",24,-184,220,function() p.linked=not p.linked;p.offset=0;p:Render() end)
             p.rows={};p.inputs={p.search,p.reason}

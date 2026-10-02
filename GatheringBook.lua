@@ -80,11 +80,11 @@ end
 -- this section so its implementation cannot change any other page's controls.
 local function addNameScroller(row,heading)
     local viewport=CreateFrame("ScrollFrame",nil,row)
-    viewport:SetPoint("TOPLEFT",17,0);viewport:SetSize(140,28);viewport:EnableMouse(false)
+    viewport:SetPoint("TOPLEFT",28,0);viewport:SetSize(140,28);viewport:EnableMouse(false)
     local body=CreateFrame("Frame",nil,viewport)
     body:SetSize(140,28);body:EnableMouse(false);viewport:SetScrollChild(body)
     local text=body:CreateFontString(nil,"OVERLAY",textFont("GameFontHighlight"))
-    text:SetPoint("TOPLEFT",0,-8);text:SetJustifyH("LEFT");text:SetWordWrap(false)
+    text:SetPoint("TOPLEFT",0,-6);text:SetJustifyH("LEFT");text:SetWordWrap(false)
     text:SetShadowColor(0.05,0.05,0.05)
     if heading then
         viewport:ClearAllPoints();viewport:SetAllPoints(row)
@@ -246,6 +246,7 @@ function ns.CreateGatheringBook(journal,shell)
         local rows=currentRows()
         for kind,control in pairs(book.typeButtons) do control:SetSelected(kind==(category or "all")) end
         book.locationsButton:SetSelected(next(locationFilters)~=nil or book.locationFrame:IsShown())
+        book.listFilterButton:SetSelected(book.listFilterMenu:IsShown() or category~=nil or next(locationFilters)~=nil)
         if not selected or not journal.entries[selected] then selected=rows[1] and rows[1].id end
         offset=math.max(0,math.min(offset,math.max(0,#rows-PAGE_SIZE)))
         book.updatingScroll=true
@@ -364,7 +365,7 @@ function ns.CreateGatheringBook(journal,shell)
         end
         for i=#zones+1,#book.zoneRows do book.zoneRows[i]:Hide() end
         book.noZones:SetShown(#zones==0)
-        book.zoneChild:SetHeight(math.max(140,#zones*28))
+        book.zoneChild:SetHeight(math.max(164,#zones*28))
         if book.noteID~=selected then
             book.note:ClearFocus()
             book.noteID=selected;book.loadingNote=true
@@ -378,41 +379,48 @@ function ns.CreateGatheringBook(journal,shell)
     end
     local function build(content)
         book=content;controller.frame=book
+        book.pageTitle=ui.SectionTitle(book,"Gatherer's Compendium")
         local spine=book:CreateTexture(nil,"ARTWORK")
         spine:SetColorTexture(0.25,0.13,0.055,0.35)
-        spine:SetPoint("TOPLEFT",324,-53);spine:SetSize(3,661)
-        book.entryCount=label(book,"",135,-55,180,"GameFontHighlightSmall")
+        spine:SetPoint("TOPLEFT",306,-53);book.spine=spine;spine:SetSize(3,661)
+        book.entryCount=label(book,"",70,-88,222,"GameFontHighlightSmall")
+        local filterMenu=CreateFrame("Frame",nil,book,"BackdropTemplate");book.listFilterMenu=filterMenu
+        filterMenu:SetSize(190,154);filterMenu:SetFrameLevel(book:GetFrameLevel()+40);filterMenu:EnableMouse(true)
+        filterMenu:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,insets={left=2,right=2,top=2,bottom=2}})
+        filterMenu:SetBackdropColor(0.055,0.04,0.022,1)
+        book.listFilterButton=ui.FilterButton(book,244,-110,function()
+            book.search:ClearFocus();book.sortMenu:Hide()
+            filterMenu:SetShown(not filterMenu:IsShown());refresh()
+        end)
+        styleSelection(book.listFilterButton,nil,true)
+        book.listFilterButton:SetScript("OnEnter",function(self)
+            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Filter resources");GameTooltip:Show() end
+        end)
+        book.listFilterButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        filterMenu:SetPoint("TOPLEFT",book.listFilterButton,"BOTTOMLEFT",0,0)
+        filterMenu:Hide()
         book.typeButtons={}
         for i,spec in ipairs({{"all","All"},{"herb","Herbs"},{"mineral","Minerals"}}) do
             local kind=spec[1]
-            local control=button(book,spec[2],42,-110-(i-1)*28,88,function()
+            local control=button(filterMenu,spec[2],10,-10-(i-1)*27,170,function()
                 if kind=="all" or category==kind then category=nil else category=kind end
                 offset=0;refresh()
             end)
             styleSelection(control);book.typeButtons[kind]=control
         end
-        book.locationsButton=button(book,"Locations",42,-479,88,function()
-            refreshLocationFilter();book.locationFrame:SetShown(not book.locationFrame:IsShown());refresh()
+        book.locationsButton=ui.MenuButton(filterMenu,"Locations",10,-91,170,function()
+            refreshLocationFilter();book.locationFrame:Show();refresh()
         end)
         styleSelection(book.locationsButton,true)
-        book.clearFilters=button(book,"Clear filters",42,-511,88,function()
+        book.clearFilters=button(filterMenu,"Clear filters",10,-118,170,function()
             category=nil;offset=0
             for zone in pairs(locationFilters) do locationFilters[zone]=nil end
             book.search:SetText("");refreshLocationFilter();refresh()
         end)
-        book.search=edit(book,145,-78,146,100);book.search:SetTextInsets(0,22,0,0)
-        book.searchClear=CreateFrame("Button",nil,book.search)
-        book.searchClear:SetSize(18,18);book.searchClear:SetPoint("RIGHT",book.search,"RIGHT",-2,0)
-        local glyph=book.searchClear:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
-        glyph:SetPoint("CENTER");glyph:SetText("×");glyph:SetTextColor(0.95,0.15,0.12)
-        book.searchClear:SetScript("OnEnter",function() glyph:SetTextColor(1,0.4,0.3) end)
-        book.searchClear:SetScript("OnLeave",function() glyph:SetTextColor(0.95,0.15,0.12) end)
-        book.searchClear:SetScript("OnClick",function() book.search:SetText("");book.search:SetFocus() end)
-        book.searchPlaceholder=label(book.search,"Search",0,-5,124,"GameFontHighlightSmall")
-        book.searchPlaceholder:SetTextColor(0.55,0.55,0.55)
-        book.search:SetScript("OnTextChanged",function(self)
-            book.searchPlaceholder:SetShown(self:GetText()=="");offset=0;refresh()
-        end)
+        book.search=ui.Search(book,70,-110,168,100)
+        book.searchClear=book.search.clearButton
+        book.searchPlaceholder=book.search.placeholder
+        book.search:SetScript("OnTextChanged",function() offset=0;refresh() end)
         local dismiss=CreateFrame("Button","AzerothFieldbookGatheringSortMenu",UIParent)
         dismiss:SetAllPoints(UIParent);dismiss:SetFrameStrata("FULLSCREEN_DIALOG");dismiss:SetToplevel(true)
         dismiss:SetScript("OnShow",function(self) self:SetScale(shell:GetFrame():GetScale());self:Raise() end)
@@ -449,8 +457,8 @@ function ns.CreateGatheringBook(journal,shell)
             control:SetFrameStrata("FULLSCREEN_DIALOG");styleSelection(control)
             book.sortChoices[#book.sortChoices+1]={control=control,descending=descending}
         end
-        book.sortButton=button(book,"",297,-78,22,function()
-            book.search:ClearFocus();refreshSort();dismiss:SetShown(not dismiss:IsShown())
+        book.sortButton=button(book,"",270,-110,22,function()
+            filterMenu:Hide();book.search:ClearFocus();refreshSort();dismiss:SetShown(not dismiss:IsShown())
         end)
         book.sortButton:SetSize(22,22)
         for i=0,4 do
@@ -465,7 +473,7 @@ function ns.CreateGatheringBook(journal,shell)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookGatheringSortMenu" end
         book.rows={}
         book.resourceScrollBar=CreateFrame("Slider",nil,book,"UIPanelScrollBarTemplate")
-        book.resourceScrollBar:SetPoint("TOPLEFT",301,-126);book.resourceScrollBar:SetSize(14,446)
+        book.resourceScrollBar:SetPoint("TOPLEFT",282,-156);book.resourceScrollBar:SetSize(14,416)
         ns.StyleScrollBarTrack(book.resourceScrollBar,0.3)
         book.resourceScrollBar:SetMinMaxValues(0,0);book.resourceScrollBar:SetValueStep(1)
         book.resourceScrollBar:SetObeyStepOnDrag(true)
@@ -477,15 +485,15 @@ function ns.CreateGatheringBook(journal,shell)
         book.resourceScrollBar:EnableMouseWheel(true);book.resourceScrollBar:SetScript("OnMouseWheel",wheel)
         for i=1,PAGE_SIZE do
             local row=CreateFrame("Button",nil,book,"BackdropTemplate")
-            row:SetPoint("TOPLEFT",135,-110-(i-1)*30);row:SetSize(162,28)
+            row:SetPoint("TOPLEFT",42,-140-(i-1)*28);row:SetSize(236,26)
             ns.FieldbookUI.StyleMenuRow(row)
-            row.text=label(row,"",17,-8,140);row.text:SetWordWrap(false);addNameScroller(row)
+            row.text=label(row,"",28,-6,203);row.text:SetWordWrap(false);addNameScroller(row)
             row:SetScript("OnClick",function(self) if self.id then choose(self.id) end end)
             row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",wheel);book.rows[i]=row
         end
-        book.noMatches=label(book,"",145,-122,146,"GameFontHighlightSmall");book.noMatches:SetSpacing(4)
-        book.previous=button(book,"Previous",135,-596,84,function() cycle(-1) end)
-        book.next=button(book,"Next",229,-596,86,function() cycle(1) end)
+        book.noMatches=label(book,"",52,-152,226,"GameFontHighlightSmall");book.noMatches:SetSpacing(4)
+        book.previous=button(book,"Previous",42,-604,118,function() cycle(-1) end)
+        book.next=button(book,"Next",174,-604,118,function() cycle(1) end)
         local deleteForm=ui.DeletePanel(book,shell,"Delete gathering entry",true);book.deleteForm=deleteForm
         book.deleteButton=button(book,"Delete",174,-672,118,function()
             local id=selected;local entry=id and journal.entries[id]
@@ -497,37 +505,43 @@ function ns.CreateGatheringBook(journal,shell)
                 return nil,"Could not delete this entry."
             end)
         end)
-        book.indexCount=label(book,"",135,-638,180,"GameFontHighlightSmall");book.indexCount:SetTextColor(0.55,0.58,0.58)
-        book.title=label(book,"Gatherer's Compendium",362,-55,474,"GameFontNormalLarge")
+        book.indexCount=label(book,"",42,-638,250,"GameFontHighlightSmall");book.indexCount:SetTextColor(0.55,0.58,0.58)
+        book.title=label(book,"Gatherer's Compendium",342,-55,494,"GameFontNormalLarge")
         book.title:SetTextColor(1,0.82,0.14);book.title:SetWordWrap(false)
         book.title:SetShadowColor(0,0,0,0.85);book.title:SetShadowOffset(1,-1)
         local path,size,flags=book.title:GetFont()
         if path and size then book.title:SetFont(path,size+2,flags) end
         book.locations=button(book,"Locations",854,-52,82,function() locations:Toggle(selected) end)
+        book.title:ClearAllPoints()
+        book.title:SetPoint("TOPLEFT",book,"TOPLEFT",342,-52)
+        book.title:SetPoint("BOTTOMRIGHT",book.locations,"BOTTOMLEFT",-18,0)
+        book.title:SetJustifyV("MIDDLE")
+
         styleSelection(book.locations,true)
         locations:SetVisibilityCallback(function(shown) book.locations:SetSelected(shown) end)
-        book.empty=label(book,"Mouse over a herb or mineral to discover it and its zone, even without the profession.\n\nInteract with it to record coordinates. Each entry keeps your interactions, completed gathers and field notes.",362,-115,538)
+        book.empty=label(book,"Mouse over a herb or mineral to discover it and its zone, even without the profession.\n\nInteract with it to record coordinates. Each entry keeps your interactions, completed gathers and field notes.",342,-115,558)
         book.empty:SetSpacing(6)
         book.details=CreateFrame("Frame",nil,book);book.details:SetAllPoints(book)
         local detail=book.details
-        label(detail,"Basic info",362,-86,562,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        book.basicHeading=label(detail,"Basic info",342,-109,236,"GameFontNormalLarge")
+        book.basicHeading:SetTextColor(1,0.82,0.14)
         book.modelBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
-        book.modelBorder:SetPoint("TOPLEFT",364,-109);book.modelBorder:SetSize(207,168)
+        book.modelBorder:SetPoint("TOPLEFT",344,-133);book.modelBorder:SetSize(227,168)
         book.modelBorder:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8,insets={left=2,right=2,top=2,bottom=2}})
         book.modelBorder:SetBackdropColor(0.045,0.032,0.018,0.88)
         book.modelBorder:SetBackdropBorderColor(0.37,0.25,0.11,0.90)
         book.model=CreateFrame("PlayerModel",nil,detail)
         book.model:SetFrameLevel(book.modelBorder:GetFrameLevel()+1)
-        book.model:SetPoint("TOPLEFT",366,-111);book.model:SetSize(203,164)
+        book.model:SetPoint("TOPLEFT",346,-135);book.model:SetSize(223,164)
         applyModelZoom(book.model);book.model:EnableMouse(true)
-        book.modelCaption=label(book.modelBorder,"",8,-76,191,"GameFontHighlightSmall")
+        book.modelCaption=label(book.modelBorder,"",8,-76,211,"GameFontHighlightSmall")
         book.modelCaption:SetJustifyH("CENTER")
         book.mineralModel=createMineralViewer(detail,function(ready)
             book.modelCaption:SetText(ready and "" or "Model unavailable")
         end)
         book.mineralModel:SetFrameLevel(book.modelBorder:GetFrameLevel()+1)
-        book.mineralModel:SetPoint("TOPLEFT",366,-111);book.mineralModel:SetSize(203,164)
+        book.mineralModel:SetPoint("TOPLEFT",346,-135);book.mineralModel:SetSize(223,164)
         book.mineralModel:Hide();book.mineralModel:EnableMouse(true)
         book.model:SetScript("OnModelLoaded",function(self)
             -- Ignore late callbacks belonging to the previously selected entry.
@@ -558,29 +572,31 @@ function ns.CreateGatheringBook(journal,shell)
         end)
         viewer:SetScript("OnHide",function() rotating=false;lastCursorX=nil end)
         end
-        book.stats=label(detail,"",362,-302,216);book.stats:SetSpacing(6)
-        book.history=label(detail,"",590,-302,334,"GameFontHighlightSmall");book.history:SetSpacing(6)
-        label(detail,"Locations",590,-109,334,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        book.stats=label(detail,"",342,-326,236);book.stats:SetSpacing(6)
+        book.history=label(detail,"",590,-326,334,"GameFontHighlightSmall");book.history:SetSpacing(6)
+        book.locationsHeading=label(detail,"Locations",590,-109,334,"GameFontNormalLarge")
+        book.locationsHeading:SetTextColor(1,0.82,0.14)
         book.zoneScroll=CreateFrame("ScrollFrame",nil,detail,"UIPanelScrollFrameTemplate")
-        book.zoneScroll:SetPoint("TOPLEFT",590,-134);book.zoneScroll:SetSize(312,140)
-        book.zoneChild=CreateFrame("Frame",nil,book.zoneScroll);book.zoneChild:SetSize(304,140)
-        book.zoneScroll:SetScrollChild(book.zoneChild);ns.AutoHideScrollBar(book.zoneScroll)
+        book.zoneScroll:SetPoint("TOPLEFT",590,-134);book.zoneScroll:SetSize(312,164)
+        book.zoneChild=CreateFrame("Frame",nil,book.zoneScroll);book.zoneChild:SetSize(304,164)
+        book.zoneScroll:SetScrollChild(book.zoneChild)
+        ns.AutoHideScrollBar(book.zoneScroll,function() return book.zoneChild:GetHeight() end)
         book.zoneRows={};book.noZones=label(book.zoneChild,"Mouse over this herb or mineral to record its zone.",0,-6,296,"GameFontHighlightSmall")
         local divider=detail:CreateTexture(nil,"ARTWORK")
         divider:SetColorTexture(0.35,0.20,0.08,0.42)
-        divider:SetPoint("TOPLEFT",362,-367);divider:SetSize(554,3)
-        label(detail,"Field notes",362,-391,270,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        divider:SetPoint("TOPLEFT",342,-391);divider:SetSize(574,3)
+        label(detail,"Field notes",342,-415,290,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         local noteBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
-        noteBorder:SetPoint("TOPLEFT",362,-421);noteBorder:SetSize(270,185)
+        noteBorder:SetPoint("TOPLEFT",342,-445);noteBorder:SetSize(290,185)
         noteBorder:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,
             insets={left=2,right=2,top=2,bottom=2}})
         noteBorder:SetBackdropColor(0.05,0.04,0.025,0.6);noteBorder:SetBackdropBorderColor(0.45,0.30,0.13,1)
         book.noteScroll=CreateFrame("ScrollFrame",nil,noteBorder,"UIPanelScrollFrameTemplate")
-        book.noteScroll:SetPoint("TOPLEFT",8,-8);book.noteScroll:SetSize(230,169)
+        book.noteScroll:SetPoint("TOPLEFT",8,-8);book.noteScroll:SetSize(250,169)
         book.note=CreateFrame("EditBox",nil,book.noteScroll)
         book.note:SetMultiLine(true);book.note:SetAutoFocus(false);book.note:SetMaxLetters(1000)
         book.note:EnableMouse(true);book.note:EnableKeyboard(true)
-        book.note:SetFontObject(textFont("GameFontHighlight"));book.note:SetSize(222,169)
+        book.note:SetFontObject(textFont("GameFontHighlight"));book.note:SetSize(242,169)
         book.noteScroll:SetScrollChild(book.note);ns.AutoHideScrollBar(book.noteScroll)
         local function focusNotes(_,mouseButton)
             if mouseButton=="LeftButton" and selected and book.noteID==selected then book.note:SetFocus() end
@@ -599,30 +615,31 @@ function ns.CreateGatheringBook(journal,shell)
             book.saveNote:SetEnabled(drafts[selected]~=(journal.entries[selected].note or ""))
             book.noteScroll:UpdateScrollChildRect();book.noteScroll:RefreshScrollBar()
         end)
-        book.saveNote=button(detail,"Save notes",362,-618,108,function()
+        book.saveNote=button(detail,"Save notes",342,-642,108,function()
             local id=book.noteID
             if id and id==selected and journal:SetNote(id,book.note:GetText()) then
                 drafts[id]=nil;book.message:SetText("Notes saved.");book.note:ClearFocus();refresh()
             end
         end)
-        book.message=label(detail,"",482,-624,150,"GameFontHighlightSmall")
-        label(detail,"Observed loot",646,-391,270,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+        book.message=label(detail,"",482,-648,150,"GameFontHighlightSmall")
+        label(detail,"Observed loot",646,-415,270,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
         local lootBorder=CreateFrame("Frame",nil,detail,"BackdropTemplate")
-        lootBorder:SetPoint("TOPLEFT",646,-421);lootBorder:SetSize(270,185)
+        lootBorder:SetPoint("TOPLEFT",646,-445);lootBorder:SetSize(270,185)
         lootBorder:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,
             insets={left=2,right=2,top=2,bottom=2}})
         lootBorder:SetBackdropColor(0.05,0.04,0.025,0.6);lootBorder:SetBackdropBorderColor(0.45,0.30,0.13,1)
         book.lootScroll=CreateFrame("ScrollFrame",nil,lootBorder,"UIPanelScrollFrameTemplate")
         book.lootScroll:SetPoint("TOPLEFT",8,-8);book.lootScroll:SetSize(230,169)
         book.lootChild=CreateFrame("Frame",nil,book.lootScroll);book.lootChild:SetSize(230,169)
-        book.lootScroll:SetScrollChild(book.lootChild);ns.AutoHideScrollBar(book.lootScroll)
+        book.lootScroll:SetScrollChild(book.lootChild)
+        ns.AutoHideScrollBar(book.lootScroll,function() return book.lootChild:GetHeight() end)
         book.lootRows={}
         book.noLoot=label(book.lootChild,"No loot recorded yet.\nGather this node to record its drops.",4,-6,218,"GameFontHighlightSmall")
         book.mapOptions={}
         for i,spec in ipairs({{"worldMap","Show nodes on world map"},{"minimap","Show nodes on minimap"}}) do
             local key=spec[1]
             local control=CreateFrame("CheckButton",nil,book,"UICheckButtonTemplate")
-            control:SetSize(24,24);control:SetPoint("TOPLEFT",362+(i-1)*280,-649)
+            control:SetSize(24,24);control:SetPoint("TOPLEFT",342+(i-1)*300,-673)
             label(control,spec[2],26,-6,250,"GameFontHighlightSmall")
             control:SetChecked(journal:ShowNodesOn(key))
             control:SetScript("OnClick",function(self)
@@ -631,27 +648,20 @@ function ns.CreateGatheringBook(journal,shell)
             end)
             book.mapOptions[key]=control
         end
-        local filter=CreateFrame("Frame","AzerothFieldbookGatheringLocationFilter",UIParent,"BackdropTemplate")
-        filter:SetSize(320,378);filter:SetPoint("TOPRIGHT",book,"TOPLEFT",-6,0)
-        filter:SetFrameStrata("FULLSCREEN_DIALOG");filter:SetClampedToScreen(true);filter.afbAnchorRule="filters"
-        filter:SetMovable(true);filter:EnableMouse(true);filter:RegisterForDrag("LeftButton")
-        filter:SetScript("OnDragStart",filter.StartMoving);filter:SetScript("OnDragStop",filter.StopMovingOrSizing)
-        filter:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
-        local paper=filter:CreateTexture(nil,"BACKGROUND")
-        paper:SetPoint("TOPLEFT",6,-6);paper:SetPoint("BOTTOMRIGHT",-6,6)
-        paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
-        shell:AddBackgroundLayer(paper,0.504,0.504,0.48888)
-        label(filter,"Filter: Locations",28,-28,264,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
-        label(filter,"Show entries in any checked location.",28,-58,264,"GameFontHighlightSmall")
-        ui.Close(filter);filter.closeButton:SetSize(24,24)
+        local filter=CreateFrame("Frame",nil,filterMenu,"BackdropTemplate")
+        filter:SetSize(260,284);filter:SetPoint("TOPLEFT",book.locationsButton,"TOPRIGHT",0,8)
+        filter:SetFrameLevel(filterMenu:GetFrameLevel()+5);filter:EnableMouse(true);filter:SetClampedToScreen(true)
+        filter:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,insets={left=2,right=2,top=2,bottom=2}})
+        filter:SetBackdropColor(0.055,0.04,0.022,1)
+        label(filter,"None checked shows all.",12,-10,236,"GameFontHighlightSmall")
         book.locationFrame=filter
         filter.scroll=CreateFrame("ScrollFrame",nil,filter,"UIPanelScrollFrameTemplate")
-        filter.scroll:SetPoint("TOPLEFT",28,-88);filter.scroll:SetSize(250,212)
-        filter.body=CreateFrame("Frame",nil,filter.scroll);filter.body:SetSize(240,212)
+        filter.scroll:SetPoint("TOPLEFT",10,-32);filter.scroll:SetSize(218,208)
+        filter.body=CreateFrame("Frame",nil,filter.scroll);filter.body:SetSize(218,208)
         filter.scroll:SetScrollChild(filter.body);ns.AutoHideScrollBar(filter.scroll)
-        ns.StyleWindowScrollBar(filter.scroll,filter)
+        if filter.scroll.ScrollBar then ns.StyleScrollBarTrack(filter.scroll.ScrollBar,0.4) end
         filter.rows={}
-        filter.empty=label(filter.body,"No locations recorded yet.",0,0,238,"GameFontHighlightSmall")
+        filter.empty=label(filter.body,"No locations recorded yet.",0,0,214,"GameFontHighlightSmall")
         refreshLocationFilter=function()
             local seen,names={},{}
             for _,entry in pairs(journal.entries) do
@@ -660,36 +670,44 @@ function ns.CreateGatheringBook(journal,shell)
                 end
             end
             table.sort(names)
+            local height=0
             for i,name in ipairs(names) do
                 local row=filter.rows[i]
                 if not row then
                     row=CreateFrame("CheckButton",nil,filter.body,"UICheckButtonTemplate")
                     row:SetSize(24,24);row:SetPoint("TOPLEFT",0,-(i-1)*28)
-                    row.text=label(row,"",28,-5,202,"GameFontHighlightSmall");row.text:SetWordWrap(false)
+                    row.text=label(row,"",28,-5,188,"GameFontHighlightSmall");row.text:SetWordWrap(true)
                     row:SetScript("OnClick",function(self)
                         locationFilters[self.zone]=self:GetChecked() and true or nil;offset=0;refresh()
                     end)
                     filter.rows[i]=row
                 end
                 row.zone=name;row.text:SetText(name);row:SetChecked(locationFilters[name]==true);row:Show()
+                row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-height)
+                height=height+math.max(28,row.text:GetStringHeight()+10)
             end
             for i=#names+1,#filter.rows do filter.rows[i]:Hide() end
-            filter.empty:SetShown(#names==0);filter.body:SetHeight(math.max(212,#names*28))
+            filter.empty:SetShown(#names==0);height=math.max(28,height)
+            local viewport=math.min(208,height)
+            filter.body:SetHeight(height);filter.scroll:SetHeight(viewport);filter:SetHeight(viewport+76)
+            filter.scroll:SetVerticalScroll(math.min(filter.scroll:GetVerticalScroll(),height-viewport))
             filter.scroll:UpdateScrollChildRect();filter.scroll:RefreshScrollBar()
         end
-        button(filter,"Clear all",28,-328,170,function()
+        local clearLocations=button(filter,"Clear all",12,0,236,function()
             for zone in pairs(locationFilters) do locationFilters[zone]=nil end
             offset=0;refreshLocationFilter();refresh()
         end)
+        clearLocations:ClearAllPoints();clearLocations:SetPoint("BOTTOMLEFT",12,10)
         filter:SetScript("OnShow",function() refreshLocationFilter();refresh() end)
-        filter:HookScript("OnHide",function() filter:StopMovingOrSizing();if book.locationFrame then refresh() end end)
+        filter:SetScript("OnHide",function() if book.locationFrame then refresh() end end)
         filter:Hide()
-        if ns.UIScale then ns.UIScale:Register(filter) end
-        if ns.WindowPositions then ns.WindowPositions:Register(filter,filter:GetName()) end
-        if ns.WindowFocus then ns.WindowFocus:Register(filter) end
-        if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]=filter:GetName() end
+        book.locationsButton:SetScript("OnEnter",function() refreshLocationFilter();filter:Show();refresh() end)
+        for _,control in pairs(book.typeButtons) do control:HookScript("OnEnter",function() filter:Hide() end) end
+        book.clearFilters:HookScript("OnEnter",function() filter:Hide() end)
+        filterMenu:SetScript("OnHide",function() filter:Hide();refresh() end)
+        ui.DismissOnOutsideClick(filterMenu,book.listFilterButton,{filter})
         book:SetScript("OnHide",function()
-            dismiss:Hide();filter:Hide();locations:Hide();deleteForm:Hide();book.search:ClearFocus();book.note:ClearFocus()
+            dismiss:Hide();filterMenu:Hide();filter:Hide();locations:Hide();deleteForm:Hide();book.search:ClearFocus();book.note:ClearFocus()
             for _,row in ipairs(book.rows) do row:StopNameScroll() end
         end)
         local elapsed=0

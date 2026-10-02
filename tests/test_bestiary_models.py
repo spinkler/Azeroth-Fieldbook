@@ -83,6 +83,40 @@ class BestiaryModelTests(unittest.TestCase):
             assert(model.height==164 and model.alpha==1 and resizes==2)
         ''')
 
+    def test_live_unit_priority_identity_recheck_and_fallback(self):
+        lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
+            'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
+            'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
+        lua.execute('''
+            local ids={target=42,mouseover=42}
+            j=ns.CreateBestiaryJournal({},function(unit) return ids[unit] end)
+            c=ns.CreateBestiaryBook(j);c:OpenAtUnit('target')
+            local section=AzerothFieldbookBestiarySection
+            local model=section.model;local units={};local fallback=0
+            function model:SetUnit(unit)
+                units[#units+1]=unit
+                if fail then return false end
+                if complete then self.scripts.OnModelLoaded(self) end
+                return true
+            end
+            function model:SetCreature(id) fallback=fallback+1 end
+            complete=true;c:OpenAtUnit('mouseover')
+            assert(units[1]=='mouseover' and fallback==0 and model.alpha==1)
+            complete=false;c:OpenAtUnit('target')
+            assert(section.modelPending)
+            ids.target=43;ids.mouseover=44
+            model.scripts.OnUpdate(model,.5)
+            assert(fallback==1,'changed unit tokens must use creature fallback')
+            ids.target=42;ids.mouseover=42;fail=true;c:OpenAtUnit('target')
+            assert(fallback==2,'failed SetUnit falls back')
+            fail=false;c:OpenAtUnit('target')
+            for i=1,3 do model.scripts.OnUpdate(model,.5) end
+            assert(fallback==3,'stalled live load eventually falls back')
+            j.entries[42].personalEncountered=false;c:Refresh()
+            local count=#units;model.scripts.OnUpdate(model,5)
+            assert(#units==count and not model:IsShown(),'report-only models stay hidden')
+        ''')
+
 
 if __name__ == '__main__':
     unittest.main()

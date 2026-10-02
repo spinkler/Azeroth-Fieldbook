@@ -1,6 +1,6 @@
 local _,ns=...
 local L=ns.Lore
-local titles={bestiary='Bestiary',gathering="Gatherer’s Compendium",atlas='Traveller’s Atlas',
+local titles={bestiary='Bestiary',gathering="Gatherer's Compendium",atlas='Traveller’s Atlas',
     angling='Angler’s Almanac',merchants='Merchant’s Ledger',treasure='Treasure Journal'}
 local function stamp(e)
     if type(e.reference)=='string' then return e.reference end
@@ -75,10 +75,11 @@ function ns.InitializeLore(shell,settings,sources)
     local eventJournal=sources and sources.bestiary
     local kindNames={writing="Writing",landmark="Landmark",person="Person",mystery="Mystery"}
     journal.onRecorded=function(entry)
-        local title=L.Safe(entry.title):gsub("[\r\n]+"," ")
-        local message="Lore recorded: "..title.." ("..(kindNames[entry.kind] or "Lore")..")."
+        local title=entry.title:gsub("[\r\n]+"," ")
+        local automatic=L.IsAutomatic(entry)
+        local message=shell.sections.lore.definition.title.." recorded: "..L.AutomaticLabel(title,automatic).." ("..(kindNames[entry.kind] or "Lore")..")."
         if eventJournal and eventJournal.RecordEvent then
-            eventJournal:RecordEvent(message,{kind="lore-recorded",loreID=entry.id,loreKind=entry.kind,origin=entry.origin})
+            eventJournal:RecordEvent(message,{kind="lore-recorded",loreID=entry.id,loreKind=entry.kind,origin=entry.origin,automatic=automatic})
         end
         if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r "..message) end
     end

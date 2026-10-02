@@ -106,6 +106,7 @@ local function mergeAtlas(target,source,key)
         end
     end
     target.weather=target.weather or {};missing(target.weather,source.weather)
+    if ns.AtlasEntrances then ns.AtlasEntrances.MergeStores(target,source,key) end
     for field,value in pairs(source) do if target[field]==nil then target[field]=copy(value) end end
     return ids
 end
@@ -437,6 +438,7 @@ function ns.SelectSectionStorage(section,personal)
     end
     local account=AzerothFieldbookAccountDB
     local supported=section=="lore" and ns.Lore.SupportsStore or section=="treasure" and ns.Treasure.SupportsStore
+        or section=="atlas" and ns.AtlasEntrances and ns.AtlasEntrances.SupportsStore
     local prior=account.sections and account.sections[section]
     if supported and (not supported(personal) or (prior~=nil and not supported(prior))) then
         if ns.RecordTrackingResult then ns.RecordTrackingResult(section,true) end

@@ -253,7 +253,7 @@ class LocationGeometryTests(unittest.TestCase):
 class LocationsWindowTests(unittest.TestCase):
     def client(self, book=False):
         modules=['CreatureLocations.lua','LocationGeometry.lua','WindowFocus.lua','WindowPositions.lua','UIScale.lua',
-                 'BestiaryJournal.lua','CreatureLocationsWindow.lua']
+                 'BestiaryJournal.lua','CreatureLocationsWindow.lua','FieldbookShell.lua']
         if book: modules+=['Scrollbars.lua','ActionButtons.lua','FieldbookShell.lua','BestiaryPages.lua','BestiaryBook.lua']
         lua=new_ui_client(modules)
         lua.execute(MAP_API)
@@ -286,11 +286,64 @@ class LocationsWindowTests(unittest.TestCase):
         ''')
         return lua
 
+    def test_default_layer_prefers_kill_positions_and_falls_back_to_observations(self):
+        lua=self.client()
+        lua.execute('''
+            e.observationLocations=e.killLocations;e.killLocations={}
+            window:Open(42);local f=window:GetFrame()
+            eq(j:GetLocationTrackingMode(),'observations')
+            assert(f.status.text:find('1 observation positions',1,true))
+            f.trackingMode.scripts.OnClick();window:Refresh()
+            eq(j:GetLocationTrackingMode(),'kills','manual selection survives refresh')
+            window:Hide();window:Open(42)
+            eq(j:GetLocationTrackingMode(),'observations','reopening chooses useful default')
+            ns.CreatureLocations.Record(e,{mapID=37,name='Test zone',point={x=1200,y=1000,seenAt=now}})
+            window:Hide();window:Open(42)
+            eq(j:GetLocationTrackingMode(),'kills','kill positions take precedence')
+            assert(f.status.text:find('1 mapped positions',1,true))
+            local other=j:Ensure(43,false,'Observed creature')
+            other.observationLocations=e.observationLocations
+            window:SetCreature(43);eq(j:GetLocationTrackingMode(),'observations')
+            window:SetCreature(42);eq(j:GetLocationTrackingMode(),'kills')
+            j:Ensure(44,false,'Unmapped creature')
+            window:SetCreature(44);eq(j:GetLocationTrackingMode(),'kills')
+        ''')
+
+    def test_location_map_native_highlight_and_one_level_navigation(self):
+        lua=self.client()
+        lua.execute("""
+            window:Open(42);local f=window:GetFrame();local map=f.map
+            local revision=j.revision
+            local infos={[37]={mapID=37,name='Zone',parentMapID=12},
+                [12]={mapID=12,name='Continent',parentMapID=0},
+                [38]={mapID=38,name='Child',parentMapID=37},
+                [39]={mapID=39,name='Deeper child',parentMapID=38}}
+            C_Map.GetMapInfo=function(id) return infos[id] end
+            C_Map.GetMapInfoAtPosition=function(id,x,y)
+                assert(x==0.5 and y==0.5);return infos[39]
+            end
+            map.GetLeft=function() return 0 end;map.GetTop=function() return map:GetHeight() end
+            map.GetEffectiveScale=function() return 1 end;map.IsMouseOver=function() return true end
+            GetCursorPosition=function() return map:GetWidth()/2,map:GetHeight()/2 end
+            C_Map.GetMapHighlightInfoAtPosition=function() return 123,nil,1,1,.4,.3,.2,.1 end
+            map:UpdateRegionHighlight();assert(map.regionHighlight:IsShown())
+            map:Navigate('LeftButton');eq(f.zoneButton:GetText(),'Child','zoom in only one level')
+            assert(not map.regionHighlight:IsShown())
+            map:Navigate('RightButton');eq(f.zoneButton:GetText(),'Test zone','recorded zone data reused')
+            map:Navigate('RightButton');eq(f.zoneButton:GetText(),'Continent')
+            map:Navigate('RightButton');eq(f.zoneButton:GetText(),'Continent','root stops navigation')
+            eq(j.revision,revision,'browsing never records locations')
+            C_Map.GetMapHighlightInfoAtPosition=function() error('unavailable') end
+            map:UpdateRegionHighlight();assert(not map.regionHighlight:IsShown())
+            C_Map.GetMapInfoAtPosition=function() return {mapID=99,parentMapID=99,name='Cycle'} end
+            map:Navigate('LeftButton');eq(f.zoneButton:GetText(),'Continent')
+        """)
+
     def test_zone_selector_pool_reuse_and_unavailable_map(self):
         lua=self.client()
         lua.execute('''
             window:Open(42);f=window:GetFrame()
-            assert(f:IsShown() and f.zoneName:IsShown() and not f.zoneButton:IsShown())
+            assert(f:IsShown() and not f.zoneName:IsShown() and f.zoneButton:IsShown())
             assert(f.status.text:find('1 approximate',1,true) and not f.empty:IsShown())
             local size=#objects;window:Refresh();window:Open(42);eq(#objects,size,'reuse textures and controls')
             for id=1,10 do ns.CreatureLocations.RememberMap(e,{mapID=id,name='Zone '..id}) end;j:Touch();window:Refresh()
@@ -301,6 +354,7 @@ class LocationsWindowTests(unittest.TestCase):
             assert(not f.menu:IsShown() and f.zoneButton.text:find(row.zone.name,1,true))
             assert(not f.empty:IsShown())
             eq(f.status.text,'No mapped kills. Locations are collected from credited kills.')
+            f.currentZone.scripts.OnClick();assert(f.status.text:find('1 approximate',1,true))
             C_Map.GetMapArtLayers=function() return secret end
             window:Open(42);assert(f.empty:IsShown() and f.empty.text:find('map unavailable',1,true))
             j:DeleteEntry(42);window:Refresh();eq(f.zoneName.text,'No zones recorded')
@@ -343,9 +397,11 @@ class LocationsWindowTests(unittest.TestCase):
             local map=AzerothFieldbookCreatureLocations
             map.scripts.OnShow(map) -- The mock's Show omits native OnShow dispatch.
             assert(map:IsShown() and content.creatureLocationsButton.afbSelected)
-            eq(map.strata,'MEDIUM');assert(map.toplevel and map.clamped)
-            assert(map.afbPreferBookEdge and map.afbAnchorRule=='right' and map.afbAlignBookTop)
-            local base=map:GetScale();ns.UIScale:Set(1.25);eq(map:GetScale(),base*1.25)
+            eq(map:GetWidth(),603);eq(map:GetHeight(),636)
+            eq(map.point[1],'TOPLEFT');eq(map.point[3],'TOPLEFT');eq(map.point[4],333);eq(map.point[5],-78)
+            eq(map.point[4]-309,960-map.point[4]-map:GetWidth(),"balanced panel margins")
+            assert(map.zoneButton.arrow and map.zoneButton.arrowShadow)
+            assert(map.map:GetWidth()<=558 and map.map:GetHeight()<=372)
             content:Hide();assert(not map:IsShown() and not content.creatureLocationsButton.afbSelected)
             content:Show();content.creatureLocationsButton.scripts.OnClick();assert(map:IsShown())
             content.creatureLocationsButton.scripts.OnClick();assert(not map:IsShown())

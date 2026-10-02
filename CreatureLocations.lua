@@ -176,3 +176,74 @@ function locations.Zones(entry,mode)
     end)
     return result
 end
+
+-- Shared native region highlighting and one-level navigation for location panels.
+function locations.InstallMapNavigation(map,getMapID,onNavigate)
+    map:EnableMouse(true)
+    local highlight=map:CreateTexture(nil,"ARTWORK",nil,1)
+    highlight:SetBlendMode("ADD");highlight:Hide();map.regionHighlight=highlight
+    local function enabled()
+        return not ns.IsMapClickNavigationEnabled or ns.IsMapClickNavigationEnabled()
+    end
+    local function cursor()
+        if type(GetCursorPosition)~="function" then return end
+        local ok,x,y=pcall(GetCursorPosition)
+        if not ok or not finite(x,-1000000,1000000) or not finite(y,-1000000,1000000) then return end
+        local scale,left,top=map:GetEffectiveScale(),map:GetLeft(),map:GetTop()
+        local w,h=map:GetWidth(),map:GetHeight()
+        if not finite(scale,0.000001,1000) or not finite(left,-1000000,1000000)
+            or not finite(top,-1000000,1000000) or not finite(w,1,100000) or not finite(h,1,100000) then return end
+        x,y=(x/scale-left)/w,(top-y/scale)/h
+        if finite(x,0,1) and finite(y,0,1) then return x,y end
+    end
+    function map:UpdateRegionHighlight()
+        highlight:Hide()
+        local id=getMapID()
+        if not id or not enabled() or not self:IsMouseOver() or (IsControlKeyDown and IsControlKeyDown()) then return end
+        local x,y=cursor();if not x then return end
+        local fn=C_Map and C_Map.GetMapHighlightInfoAtPosition
+        if type(fn)~="function" then return end
+        local ok,file,atlas,u,v,w,h,left,top=pcall(fn,id,x,y)
+        if not ok or not finite(u,0,1) or not finite(v,0,1) or not finite(w,0.000001,2)
+            or not finite(h,0.000001,2) or not finite(left,-1,2) or not finite(top,-1,2) then return end
+        if name(atlas) then highlight:SetAtlas(atlas)
+        elseif positive(file) then highlight:SetTexture(file,nil,nil,"TRILINEAR") else return end
+        highlight:SetTexCoord(0,u,0,v);highlight:ClearAllPoints()
+        highlight:SetPoint("TOPLEFT",self,"TOPLEFT",left*self:GetWidth(),-top*self:GetHeight())
+        highlight:SetSize(w*self:GetWidth(),h*self:GetHeight());highlight:Show()
+    end
+    function map:Navigate(button)
+        local id=getMapID()
+        if not id or not enabled() or (IsControlKeyDown and IsControlKeyDown()) then return end
+        local target
+        if button=="RightButton" then
+            local info=read(C_Map and C_Map.GetMapInfo,id)
+            if type(info)=="table" and positive(info.parentMapID) then target=read(C_Map.GetMapInfo,info.parentMapID) end
+        elseif button=="LeftButton" then
+            local x,y=cursor();if not x then return end
+            target=read(C_Map and C_Map.GetMapInfoAtPosition,id,x,y)
+            -- Position lookup can return a deeper descendant; stop at the next level.
+            local seen={}
+            for _=1,32 do
+                if type(target)~="table" or not positive(target.mapID) or seen[target.mapID] then target=nil;break end
+                seen[target.mapID]=true
+                if target.parentMapID==id then break end
+                if not positive(target.parentMapID) then target=nil;break end
+                target=read(C_Map and C_Map.GetMapInfo,target.parentMapID)
+            end
+            if type(target)~="table" or target.parentMapID~=id then return end
+        end
+        if type(target)=="table" and positive(target.mapID) and target.mapID~=id and name(target.name) then
+            highlight:Hide();if GameTooltip then GameTooltip:Hide() end
+            onNavigate(target.mapID,target.name)
+        end
+    end
+    map:SetScript("OnMouseUp",function(self,button) self:Navigate(button) end)
+    map:HookScript("OnEnter",function(self) self:UpdateRegionHighlight() end)
+    map:HookScript("OnLeave",function() highlight:Hide() end)
+    map:HookScript("OnHide",function() highlight:Hide() end)
+    local elapsed=0
+    map:HookScript("OnUpdate",function(self,dt)
+        elapsed=elapsed+dt;if elapsed>=0.05 then elapsed=0;self:UpdateRegionHighlight() end
+    end)
+end

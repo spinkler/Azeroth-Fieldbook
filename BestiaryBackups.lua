@@ -113,7 +113,7 @@ local basic=record({name=names,category=names,levelMin=positive,levelMax=positiv
     disposition=enum({Hostile=true,Neutral=true})})
 local progress=record({levels=levels,zones=flags,points=natural,killPoints=natural,initial=boolean,discovered=boolean,killGUIDs=array(names),firstEncounteredAt=timestamp})
 local ability=record({state=enum({pending=true,confirmed=true,rejected=true}),origin=words,note=prose,
-    effects=flags,spellID=positive,showInTooltip=boolean},{"state"})
+    effects=flags,spellID=positive,showInTooltip=boolean,playerLossOfControl=boolean},{"state"})
 local damageNote=record({low=positive,high=positive,playerLevel=positive,creatureLevel=positive,legacy=boolean},{"low","high"})
 local damage=record({low=positive,high=positive,reports=natural,notes=array(damageNote),
     normalLow=positive,normalHigh=positive,normalCount=natural,critLow=positive,critHigh=positive,critCount=natural})

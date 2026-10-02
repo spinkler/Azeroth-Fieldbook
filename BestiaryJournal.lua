@@ -740,6 +740,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not wasNamed and self:GetCreatureName(id) and restoreObservations then restoreObservations(self, id) end
         return entry, discovered
     end
+    function journal:MatchesModelUnit(unit, id)
+        if unit ~= "target" and unit ~= "mouseover" then return false end
+        local ok, candidate = pcall(identify, unit)
+        return ok and number(candidate) and candidate == id
+    end
     function journal:ObserveTameability(unit)
         if unit~="target" and unit~="mouseover" then return end
         local id=identify(unit)
@@ -776,8 +781,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             self:Touch()
         end
     end
-    function journal:Observe(unit, explicit)
-        local id = identify(unit, explicit)
+    function journal:Observe(unit, explicit, sourceGUID)
+        local id = identify(unit, explicit, sourceGUID)
         if not id then return end
         -- Match Blizzard's target-frame level/skull decision. Never fall back
         -- to the raw level when the effective value is hidden or unknown.
@@ -790,6 +795,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             location = clean(location, 200),
         }
         local liveGUID = read(UnitGUID, unit)
+        if sourceGUID and liveGUID ~= sourceGUID then return end
         local locationMap = ns.CreatureLocations and ns.CreatureLocations.CurrentMap()
         if str(liveGUID) and read(UnitIsDead, unit) == false then
             observeInstance(id, liveGUID, now())
@@ -824,6 +830,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         end
         local name = creatureName(read(UnitName, unit))
         if not name then return end
+        if sourceGUID and read(UnitGUID, unit) ~= sourceGUID then return end
         local wasNamed = self.entries[id] and creatureName(self.entries[id].name)
         local wasPersonal = self.entries[id] and self.entries[id].personalEncountered
         local unclassified = not self.entries[id] or self.entries[id].category == "Unclassified"
@@ -1366,6 +1373,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if entry.ignoredAbilities then entry.ignoredAbilities[linkedName] = nil end
         ability.note, ability.effects, ability.origin = note, effects, "Your note"
         ability.spellID = spellID
+        if existing and existing.playerLossOfControl then ability.playerLossOfControl = true end
         if existing and existing.showInTooltip == false then ability.showInTooltip = false end
         entry.abilities[linkedName] = ability
         self:SetAbility(id, linkedName, "confirmed")
@@ -1395,7 +1403,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
                 if enabled==true and valid then savedEffects[valid]=true end
             end
         end
-        entry.abilities[name] = { state = "confirmed", origin = "Your note", note = cleaned, effects = savedEffects, spellID = spellID }
+        local previous = entry.abilities[name]
+        local playerLossOfControl = previous and previous.spellID == spellID and previous.playerLossOfControl or nil
+        entry.abilities[name] = { state = "confirmed", origin = "Your note", note = cleaned, effects = savedEffects, spellID = spellID,
+            playerLossOfControl = playerLossOfControl }
         if self.ResolveRumours then self:ResolveRumours(id,{kind="ability",value=name,spellID=spellID}) end
         self:Touch()
         if self.AcknowledgeDetectedAbility then self:AcknowledgeDetectedAbility(id,spellID) end
@@ -1634,10 +1645,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         end
     end
     local originalObserve=journal.Observe
-    function journal:Observe(unit, explicit)
+    function journal:Observe(unit, explicit, sourceGUID)
         self:ObserveZoneTerritory()
         local guid=read(UnitGUID,unit)
-        local id=originalObserve(self,unit,explicit)
+        local id=originalObserve(self,unit,explicit,sourceGUID)
         if id then self:ObserveDisposition(unit,id,guid) end
         if id and explicit and unit=="target" and ns.CreatureLocations and creatureID(guid)==id then
             local sample=ns.CreatureLocations.Observation()

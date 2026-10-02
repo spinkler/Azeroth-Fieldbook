@@ -1,5 +1,165 @@
 # Changelog
 
+## v0.21.0 - 2026-10-03
+
+Release-channel update covering all changes since v0.20.0 and previous-push
+baseline 2cf30da564cff1d03d94dc9a089291bb6cfdcd7d.
+
+- Hide the Compendium Locations list scrollbar when its rows fit, including
+  after template updates, and reset its scroll offset when the list shrinks.
+
+- Match embedded Rumours to Loot and Damage with the same panel backdrop,
+  gold heading, content margins and muted empty-state text.
+
+- Add Known Goods icon tooltips and show per-item stack prices in parentheses,
+  including fractional copper (for example, 3s / 200 (1.5c ea)).
+
+- Show Bestiary Rumours inside the loot/damage panel, with scrolling and existing
+  verification controls. Toggle Rumours to return or use Show Damage to switch.
+
+- Enable native hover region highlights and one-level left/right-click map
+  navigation in Bestiary and Compendium Locations without recording discoveries.
+
+- Add Current Zone beside the Bestiary and Compendium Locations zone selectors.
+  Show the current map even without recorded positions, without saving discoveries.
+
+- Place Ledger Known Goods names across the full row above their icons. Move
+  Record contact above Delete and put Edit in its former slot. Support multiple
+  manual service selections with checkboxes, preserving observed service evidence.
+
+- Preserve space below the lowered Bestiary entry fields for the detected-ability
+  hint and feedback, extending the book by 16px. Refresh regression expectations
+  for the current list widths, nested filter menus and default map layer.
+
+- Enlarge Ledger Known Goods icons to two rows high below the item name, with
+  price and details beside them; lower item names by 1 point.
+
+- Remove redundant checkboxes from the Atlas editor’s Location type dropdown
+  button and choices.
+
+- Default Lorekeeper’s Chronicle to Entry on startup instead of restoring a
+  previously saved Location view.
+
+- Anchor the Bestiary Sort menu’s top-left to the button’s bottom-left, matching
+  the filter menu.
+
+- Remove the redundant Tracking: Interactions label from Compendium Locations,
+  which has only one tracking mode.
+
+- Move the Bestiary loot filter left when the scrollbar appears, reserving
+  matching heading space and restoring its position when the content fits.
+
+- Hide the Compendium Observed Loot scrollbar whenever its content fits, including
+  after template updates, and reset scrolling when the content shrinks.
+
+- Standardize all journal and picker search boxes with a grey Search placeholder,
+  red clear cross, and native text scrolling that stays clear of the cross.
+
+- Remove Bestiary lock/unlock status messages, lower the right-pane entry fields
+  to align the bottom controls with the left pane, and align list names and the
+  entry count with the search text, keeping review stars outside that margin.
+- Match Gatherer’s Compendium list names, including hover-scrolling text, and
+  its entry count to the search text’s left margin.
+
+- Add a small clickable target portrait beside unattributed Loss of Control
+  observations in the spell-ID window. Capture the target at detection so later
+  target changes cannot redirect the click. Clicking manually confirms the spell
+  for that creature in the Bestiary, preserving notes and respecting entry locks;
+  a tooltip explains the unverified target and a green rim confirms saving.
+
+- Restore Bestiary content and clear overlay button selections when reopening
+  the Fieldbook after closing it with Locations or an observation panel open.
+
+- Vertically centre the Bestiary unlocked/rumours legend between navigation
+  and the bottom action buttons.
+
+- Default Bestiary Locations to observation positions when no kill positions
+  are recorded, preferring kill positions when available. Manual layer switching
+  remains available.
+
+- Lower Bestiary and Compendium Previous/Next buttons by 8px to match Treasure
+  Journal and Lorekeeper’s Chronicle navigation rows.
+
+- Widen the Bestiary and Compendium Locations panels 9px to the left, giving
+  both panels equal 24px margins from the divider edge and the right book edge.
+
+- Raise Bestiary and Compendium list names by 2px, including hover-scrolling
+  text and the Bestiary review marker, to align within the compact rows.
+
+- Align all seven journal titles at the same left-pane coordinates, adding
+  titles to Bestiary and Gatherer's Compendium without losing list rows.
+- Anchor the Bestiary lock beside the creature name. Align the Compendium model
+  with the Bestiary's standard model position, put Basic info and Locations
+  headers on one row, and move the lower details down to preserve spacing. Keep
+  the Compendium node title vertically aligned with the top-row Locations button.
+
+- Consolidate Bestiary and Gatherer's Compendium filters into matching funnel
+  dropdowns, with nested Locations (and Bestiary Ranks) menus. Remove the sidebar
+  filter columns, widen both lists and retain the Bestiary's expandable index.
+- Align both pane dividers with the other journals. Expand left-side detail
+  content inward while retaining right-column positions and overlay boundaries;
+  preserve models, notes, loot, ability controls and filter selections.
+
+- Hide the loot filter when no item drops are recorded, including empty observed
+  corpses. Keep it available when quality filtering hides existing drops.
+- Fix shared map rendering for Angling and other journal adapters without Atlas
+  settings; their markers retain the default size instead of raising a Lua error.
+
+- Open Locations and Ranks as nested slide-out menus within the Bestiary filter
+  menu, with shared selections, Clear all and scrolling for long location lists.
+  Anchor the menu’s top-left to the filter button’s bottom-left. Close creature
+  and loot filter menus on outside clicks while preserving interaction within
+  their menus, buttons and slide-out submenus.
+
+- Refine Atlas map controls: allow 6px icons, inset Map Layers backgrounds by
+  2px, and select discovery types in an anchored dropdown instead of a full page.
+- Keep Bestiary ability confirm/reject controls beneath overlays. Compact the
+  shared funnel icon and colour the seven loot-quality options. Add a
+  shared creature filter menu beside Sort.
+
+- Add a saved Atlas icon-size slider to Map Layers and toggle the menu closed on
+  a second click. Move Edit above Share and use the shared shadowed list arrow
+  for discovery types. Match map brightness labels to coordinate outlines.
+- Match Bestiary Locations to the Compendium's embedded panel, map dimensions,
+  wrapped footer and zone-list styling, retaining kill/observation tracking.
+- Add a square funnel button to Bestiary Loot with quality toggles, an Unknown
+  category for uncached items, and Show all. Filtering preserves recorded drops.
+
+- Observe every player Loss of Control type through Forever's LOC events. Add a
+  dedicated row to the spell-ID window and a deduplicated manual-entry chat
+  notice when attribution is unavailable. Only the matching player's aura and a
+  readable, eligible NPC source can automatically record a Bestiary ability.
+  Retain existing provenance and attach cyan [A] player-effect help to saved
+  abilities; no [A] is added to the transient spell-ID window. Preserve account
+  imports and backups with additive provenance, and add safe debug diagnostics,
+  attribution/security/UI regressions and a Forever 70170 live checklist.
+- Match discovery chat messages, Event log labels and account-tracking notices
+  to their section page titles, including Gatherer's Compendium. Display older
+  Atlas and Chronicle events with their full titles without rewriting saved history.
+- Add opt-in Atlas entrance discovery with independent evidence, explicit zone
+  coordinates, repeated-traversal corroboration and distance-based clustering.
+  Preserve the existing sub-zone mapper and deliberate discovery/report data.
+  Guard loading, teleports, summons, death, spirit release and resurrection.
+- Add Generic Entrances as an independently hidden-by-default map layer. Reuse
+  the category editor for explicit player confirmation of inferred choices.
+- Announce newly discovered Atlas entrances in chat and the shared Event log.
+  Mark automatic Atlas entries and locally captured Lore entries with the
+  Bestiary's cyan [A] tag in chat and journal displays. Repeat observations,
+  rereads and reloads do not repeat new-entry notices; manual and reported
+  entries keep their existing presentation.
+- Remove the unsupported Display Micro Map button and temporary map renderer.
+- Mirror a matching live target/mouseover in the Bestiary model viewer, with
+  the creature-ID model as a fallback when no matching unit is available.
+- Read accessible UNIT_AURA additions directly in the Spell ID tracker, including
+  short-lived player debuffs when a fresh aura scan cannot return them. Accept
+  accessible event containers with restricted contents and fall back to indexed
+  queries when enumerated slots supply no usable aura data. Preserve the last
+  player aura-event diagnostic and report whether Disarm 6713 is blacklisted.
+- Add regression coverage for transitions, coordinate provenance, clustering,
+  classification, storage scopes and sub-zone preservation.
+  Forever API behaviour and native visuals still require the live checklist in
+  `tests/ATLAS_ENTRANCES.md`.
+
 ## v0.20.0 - 2026-10-02
 
 Release-channel update covering the complete batch since published v0.19.2-beta

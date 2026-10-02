@@ -41,7 +41,7 @@ class AccountSummaryTests(unittest.TestCase):
             local personal=literal(AzerothFieldbookDB.bestiary)
             j:SetAccountWideTracking(true);assert(not summary(),'option is pending until reload')
             boot();local text=assert(summary())
-            assert(text:find('One-time import completed for: Bestiary, Herbs & Minerals, Atlas, Almanac, Ledger, Treasure, Lore.',1,true),text)
+            assert(text:find("One-time import completed for: Bestiary, Gatherer's Compendium, Traveller’s Atlas, Angler’s Almanac, Merchant’s Ledger, Treasure Journal, Lorekeeper's Chronicle.",1,true),text)
             assert(text:find('Original character journals retained separately.',1,true))
             assert(text:find('not continuously synchronized',1,true))
             assert(literal(AzerothFieldbookDB.bestiary)==personal)
@@ -85,8 +85,8 @@ class AccountSummaryTests(unittest.TestCase):
                 lua.execute(r'''
                     local original=AzerothFieldbookLoreDB;local before=literal(original)
                     boot();local text=assert(summary())
-                    assert(text:find('One-time import completed for: Bestiary, Herbs & Minerals, Atlas, Almanac, Ledger, Treasure.',1,true))
-                    assert(text:find('Migration deferred for: Lore; saved data preserved.',1,true))
+                    assert(text:find("One-time import completed for: Bestiary, Gatherer's Compendium, Traveller’s Atlas, Angler’s Almanac, Merchant’s Ledger, Treasure Journal.",1,true))
+                    assert(text:find("Migration deferred for: Lorekeeper's Chronicle; saved data preserved.",1,true))
                     assert(AzerothFieldbookLoreDB==original and literal(original)==before)
                     assert(not AzerothFieldbookAccountDB.sections.lore)
                     assert(not AzerothFieldbookAccountDB.sectionImports.lore)
@@ -94,7 +94,7 @@ class AccountSummaryTests(unittest.TestCase):
                     boot();assert(not summary(),'unchanged deferral must not repeat grouped success')
                     assert(literal(original)==before)
                     AzerothFieldbookLoreDB={};boot();text=assert(summary())
-                    assert(text:find('One-time import completed for: Lore.',1,true),text)
+                    assert(text:find("One-time import completed for: Lorekeeper's Chronicle.",1,true),text)
                     boot();assert(not summary())
                 ''')
 
@@ -105,7 +105,7 @@ class AccountSummaryTests(unittest.TestCase):
             boot();assert(not summary(),'legacy saves with completed imports remain quiet')
             AzerothFieldbookAccountDB.sectionImports.lore[AzerothFieldbookDB.accountTrackingKey]=nil
             boot();local text=assert(summary())
-            assert(text:find('One-time import completed for: Lore.',1,true))
+            assert(text:find("One-time import completed for: Lorekeeper's Chronicle.",1,true))
             assert(not text:find('for: Bestiary',1,true))
         ''')
 
@@ -114,8 +114,8 @@ class AccountSummaryTests(unittest.TestCase):
         lua.execute(r'''
             local before=literal(AzerothFieldbookGatheringDB)
             boot();local text=assert(summary())
-            assert(text:find('Migration deferred for: Herbs & Minerals;',1,true),text)
-            assert(not text:find('for: Bestiary, Herbs & Minerals',1,true))
+            assert(text:find("Migration deferred for: Gatherer's Compendium;",1,true),text)
+            assert(not text:find("for: Bestiary, Gatherer's Compendium",1,true))
             assert(table.concat(messages,'\n'):find('newer data schema; account migration deferred',1,true))
             assert(literal(AzerothFieldbookGatheringDB)==before)
             local future={schema=2,marker='Future shared Lore'}
@@ -124,7 +124,7 @@ class AccountSummaryTests(unittest.TestCase):
             local personal=literal(AzerothFieldbookLoreDB)
             AzerothFieldbookDB.accountWideTracking=true;boot();text=assert(summary())
             assert(text:find('Resumed existing account journals',1,true))
-            assert(text:find('Migration deferred for: Herbs & Minerals, Lore;',1,true),text)
+            assert(text:find("Migration deferred for: Gatherer's Compendium, Lorekeeper's Chronicle;",1,true),text)
             assert(AzerothFieldbookAccountDB.sections.lore==future and literal(future)==literal({schema=2,marker='Future shared Lore'}))
             assert(literal(AzerothFieldbookLoreDB)==personal)
         ''')

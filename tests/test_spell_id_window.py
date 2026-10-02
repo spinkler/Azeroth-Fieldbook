@@ -24,10 +24,13 @@ function methods:SetMovable(v) self.movable=v end
 function methods:EnableMouse(value) self.mouseEnabled=value end
 function methods:SetAlpha(value) self.alpha=value end
 function methods:RegisterForDrag() end
+function methods:RegisterForClicks(...) self.clicks={...} end
 function methods:StartMoving() self.moving=true end
 function methods:StopMovingOrSizing() self.moving=false end
 function methods:SetAllPoints() end
 function methods:SetColorTexture(r,g,b,a) self.alpha=a end
+function methods:SetTexture(value) self.image=value end
+function methods:AddMaskTexture(value) self.mask=value end
 function methods:SetJustifyH() end
 function methods:SetPoint(...) self.point={...} end
 function methods:GetPoint() return unpack(self.point) end
@@ -46,6 +49,7 @@ function methods:CreateFontString()
     local f=object(); table.insert(self.strings,f); return f
 end
 function methods:CreateTexture() self.texture=object(); return self.texture end
+function methods:CreateMaskTexture() return object() end
 function CreateFrame(_,name,parent)
     local f=object(); f.parent=parent; frames[#frames+1]=f
     if name then _G[name]=f end
@@ -365,3 +369,145 @@ window:Initialize(db)
 assert(panel.point[1]=='BOTTOMLEFT' and panel.point[5]==-326)
 ''')
 print('PASS: collapsing rows, caster attribution, dismissal, blacklist persistence and anchor migration')
+
+# A short-lived disarm can arrive in UNIT_AURA without a cast or readable scan.
+lua.execute(r'''
+ns.SpellIDWindow:Initialize({})
+auras.player={};C_UnitAuras.GetAuraSlots=nil
+C_UnitAuras.GetAuraDataByIndex=function() error('scan unavailable') end
+local debuff=frames[5]
+local disarm={auraInstanceID=67130,spellId=6713,name='Disarm',isHarmful=true}
+fire('UNIT_AURA','player',{addedAuras={disarm}})
+assert(debuff.shown and debuff.strings[2].text==6713)
+fire('UNIT_AURA','player',{addedAuras={{spellId=123,isHelpful=true,isHarmful=false}}})
+assert(debuff.strings[2].text==6713,'helpful aura must not overwrite disarm')
+fire('UNIT_AURA','player',{addedAuras={{spellId=123,isHarmful=secret}}})
+assert(debuff.strings[2].text==6713,'restricted polarity is not classified')
+ns.SpellIDWindow:AddBlacklist(6713)
+fire('UNIT_AURA','player',{addedAuras={disarm}})
+assert(not debuff.shown,'direct event respects blacklist')
+ns.SpellIDWindow:RemoveBlacklist(6713)
+C_UnitAuras.GetAuraDataByIndex=function(unit,index) return auras[unit][index] end
+auras.player={disarm}
+fire('UNIT_AURA','player',{addedAuras={disarm}})
+local panel=AzerothFieldbookSpellIDWindow
+advance(100);fire('UNIT_AURA','player',{});advance(21)
+assert(not debuff.shown,'later scan must not extend the addition lifetime')
+''')
+
+lua.execute(r'''
+-- Accessible event containers may contain restricted fields. issecrettable
+-- describes their contents, not whether the whole container can be read.
+ns.SpellIDWindow:Initialize({})
+local debuff=frames[5]
+C_UnitAuras.GetAuraSlots=function() error('slot query blocked') end
+C_UnitAuras.GetAuraDataByIndex=function() error('indexed query blocked') end
+local aura={auraInstanceID=secret,spellId=secret,name=secret,isHarmful=true}
+local added={aura};local update={addedAuras=added}
+secretTables[aura]=true;secretTables[added]=true;secretTables[update]=true
+fire('UNIT_AURA','player',update)
+assert(debuff.shown and rawequal(debuff.strings[2].text,secret))
+-- Slot enumeration succeeds but its data fetch returns nil: still try index.
+C_UnitAuras.GetAuraSlots=function() return nil,7 end
+C_UnitAuras.GetAuraDataBySlot=function() return nil end
+C_UnitAuras.GetAuraDataByIndex=function(unit,index)
+    if unit=='player' and index==1 then
+        return {auraInstanceID=67139,spellId=6713,name='Disarm'}
+    end
+end
+fire('UNIT_AURA','player',{})
+assert(debuff.strings[2].text==6713)
+local lines={};ns.SpellIDWindow:Report(function(line) lines[#lines+1]=line end)
+assert(table.concat(lines,'\n'):find('path=index fallback',1,true))
+-- A later empty scan does not erase evidence of the last actual aura event.
+C_UnitAuras.GetAuraSlots=function() return nil end
+fire('PLAYER_REGEN_ENABLED')
+lines={};ns.SpellIDWindow:Report(function(line) lines[#lines+1]=line end)
+assert(table.concat(lines,'\n'):find('last event: path=index fallback',1,true))
+assert(table.concat(lines,'\n'):find('Disarm 6713 blacklisted=false',1,true))
+-- Entirely restricted updates and denied containers must fail safely.
+fire('UNIT_AURA','player',secret)
+forbiddenTables[update]=true
+fire('UNIT_AURA','player',update)
+''')
+
+lua.execute(r'''
+-- LOC has its own row, without a redundant [A]. Ordinary debuffs cannot erase it.
+local settings={};ns.SpellIDWindow:Initialize(settings)
+local loc=frames[7]
+assert(ns.SpellIDWindow:ObserveLossOfControl(12345,'Disarming Smash','Disarm','Creature A','loc:1'))
+assert(loc.shown and loc.strings[2].text==12345 and loc.strings[3].text=='Disarm')
+assert(loc.strings[4].text=='Disarming Smash' and loc.strings[5].text=='Loss of Control on you')
+assert(loc.strings[7].text=='Creature A')
+fire('UNIT_AURA','player',{addedAuras={{auraInstanceID=22,spellId=999,name='Other debuff',isHarmful=true}}})
+assert(loc.shown and loc.strings[2].text==12345)
+loc.scripts.OnMouseUp(loc,'RightButton');assert(not loc.shown)
+assert(ns.SpellIDWindow:ObserveLossOfControl(12345,'Disarming Smash','Disarm',nil,'loc:1'))
+assert(not loc.shown,'same application remains dismissed')
+assert(ns.SpellIDWindow:ObserveLossOfControl(12345,nil,'DISARM',nil,'loc:2'))
+assert(loc.shown and loc.strings[4].text=='Name unavailable' and not loc.strings[7].shown)
+advance(121);assert(not loc.shown)
+ns.SpellIDWindow:AddBlacklist(12345)
+assert(ns.SpellIDWindow:ObserveLossOfControl(12345,nil,'Disarm',nil,'loc:3') and not loc.shown)
+settings.displaySpellIDWindow=false;ns.SpellIDWindow:ApplySettings()
+assert(not ns.SpellIDWindow:ObserveLossOfControl(54321,nil,'SCHOOL_INTERRUPT',nil,'loc:4'))
+assert(not ns.SpellIDWindow:ObserveLossOfControl(secret,nil,nil,nil,'loc:5'))
+''')
+
+lua.execute(r'''
+-- The portrait is a frozen rendering of the captured target, with a deliberate
+-- assignment callback. It remains usable when dragging the window is locked.
+local settings={spellIDWindowLocked=true};ns.SpellIDWindow:Initialize(settings)
+local loc,portrait=frames[7],frames[8]
+targetGUID='Creature-0-1-2-3-43-target'
+function UnitGUID() return targetGUID end
+local renders,assignments=0,0
+function SetPortraitTexture(texture,unit)
+    assert(unit=='target');renders=renders+1;texture.image=targetGUID
+end
+GameTooltip={lines={},SetOwner=function(self,owner) self.owner=owner end,
+    SetText=function(self,value) self.lines={value} end,
+    AddLine=function(self,value) self.lines[#self.lines+1]=value end,
+    Show=function(self) self.shown=true end,Hide=function(self) self.shown=false end}
+local candidate={id=43,guid=targetGUID,name='Creature B',level=14,assign=function()
+    assignments=assignments+1;return true
+end}
+assert(ns.SpellIDWindow:ObserveLossOfControl(6713,'Disarm','DISARM',nil,'portrait:1',candidate))
+assert(portrait.shown and renders==1 and loc.strings[6].text=='Target:' and loc.strings[7].text=='Creature B')
+assert(loc.strings[4].width==260 and loc.strings[3].width==106)
+local frozen=portrait.texture.image
+targetGUID='Creature-0-1-2-3-42-other';fire('PLAYER_TARGET_CHANGED')
+assert(portrait.texture.image==frozen and renders==1)
+portrait.scripts.OnEnter(portrait)
+assert(GameTooltip.lines[1]=='Creature B' and GameTooltip.lines[2]:find('unverified',1,true))
+portrait.scripts.OnClick(portrait,'LeftButton')
+assert(assignments==1 and loc.strings[6].text=='Saved:' and GameTooltip.lines[2]:find('Assigned',1,true))
+portrait.scripts.OnClick(portrait,'LeftButton');assert(assignments==1)
+-- An authoritative source later removes the target action and restores width.
+ns.SpellIDWindow:ObserveLossOfControl(6713,'Disarm','DISARM','Creature A','portrait:1')
+assert(not portrait.shown and loc.strings[6].text=='Cast by:' and loc.strings[4].width==310)
+portrait.scripts.OnClick(portrait,'LeftButton');assert(assignments==1)
+-- A stale token cannot render the newly selected creature as the old target.
+ns.SpellIDWindow:ObserveLossOfControl(6713,'Disarm','DISARM',nil,'portrait:2',candidate)
+assert(portrait.shown and portrait.texture.image==nil and renders==1)
+assert(portrait.strings[1].shown,'unavailable portraits use the question-mark fallback')
+portrait.scripts.OnEnter(portrait);assert(GameTooltip.lines[1]=='Creature B')
+ns.InitializationBlocked=true
+portrait.scripts.OnClick(portrait,'LeftButton');assert(assignments==1)
+ns.InitializationBlocked=nil
+portrait.scripts.OnClick(portrait,'RightButton')
+assert(not portrait.shown and not loc.shown and not GameTooltip.shown)
+portrait.scripts.OnClick(portrait,'LeftButton');assert(assignments==1)
+ns.SpellIDWindow:ObserveLossOfControl(6713,'Disarm','DISARM',nil,'portrait:3',candidate)
+advance(121);assert(not portrait.shown and not loc.shown)
+ns.SpellIDWindow:ObserveLossOfControl(6713,'Disarm','DISARM',nil,'portrait:4',candidate)
+ns.SpellIDWindow:AddBlacklist(6713);assert(not portrait.shown)
+-- Rejected assignments stay available for retry after unlocking the entry.
+ns.SpellIDWindow:RemoveBlacklist(6713)
+candidate.assign=function() return false end
+ns.SpellIDWindow:ObserveLossOfControl(6713,'Disarm','DISARM',nil,'portrait:5',candidate)
+portrait.scripts.OnClick(portrait,'LeftButton');assert(loc.strings[6].text=='Target:')
+candidate.assign=function() assignments=assignments+1;return true end
+portrait.scripts.OnClick(portrait,'LeftButton');assert(assignments==2 and loc.strings[6].text=='Saved:')
+''')
+print('PASS: frozen target portraits, explicit assignment, lifecycle and layout')

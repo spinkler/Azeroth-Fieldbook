@@ -29,6 +29,9 @@ function A.Safe(v)
     local cleaned=v:gsub("|","¦"):gsub("[%z\1-\8\11\12\14-\31\127]","")
     return cleaned
 end
+function A.AutomaticLabel(name,automatic)
+    return A.Safe(name)..(automatic and " |cff80d0ff[A]|r" or "")
+end
 function A.Read(fn,...)
     if type(fn)~="function" then return end
     local ok,v=pcall(fn,...);if ok and A.Public(v) then return v end
@@ -310,5 +313,6 @@ function ns.CreateAtlasJournal(saved)
         return rows
     end
     if ns.AtlasSubzones then ns.AtlasSubzones.Attach(j) end
+    if ns.AtlasEntrances then ns.AtlasEntrances.Attach(j) end
     return j
 end

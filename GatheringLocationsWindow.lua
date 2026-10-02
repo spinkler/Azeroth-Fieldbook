@@ -18,7 +18,7 @@ end
 function ns.CreateGatheringLocationsWindow(journal,getBook)
     -- Keep the Bestiary map presentation, with a single interaction-only layer.
     local controller={}
-    local frame,selected,zoneKey,revision,visibleKey
+    local frame,selected,zoneKey,revision,visibleKey,currentZone
     local zones,tiles,exploration,dots={},{},{},{}
     local menuOffset=0
     local displayedMapID
@@ -150,6 +150,7 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
             if not dot then
                 dot=CreateFrame("Frame",nil,frame.map)
                 ns.StyleGatheringDot(dot)
+                dot:SetScript("OnMouseUp",function(_,button) frame.map:Navigate(button) end)
                 dot:SetScript("OnEnter",function(self)
                     if GameTooltip then
                         GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
@@ -182,6 +183,7 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
     render=function(force)
         if not frame or not frame:IsShown() then return end
         local entry=selected and journal.entries[selected]
+        if not entry then currentZone=nil end
         local signature=tostring(selected)..":"..tostring(zoneKey)
         if not force and revision==journal.revision and visibleKey==signature then return end
         revision=journal.revision
@@ -191,6 +193,7 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
         zones=journal:GetLocationZones(selected)
         local chosen
         for _,zone in ipairs(zones) do if key(zone)==zoneKey then chosen=zone;break end end
+        if not chosen and currentZone and key(currentZone)==zoneKey then chosen=currentZone end
         if not chosen then
             local current=ns.CreatureLocations.CurrentMap()
             for _,zone in ipairs(zones) do if current and zone.mapID==current.mapID then chosen=zone;break end end
@@ -200,11 +203,12 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
         visibleKey=tostring(selected)..":"..tostring(zoneKey)
         frame.creature:SetText(entry and (journal:GetName(selected) or "Resource") or "Select a herb or mineral.")
         frame.zoneName:SetText(chosen and chosen.name or "No zones recorded")
-        frame.zoneName:SetShown(#zones<=1)
-        frame.zoneButton:SetShown(#zones>1);frame.zoneButton:SetText(chosen and chosen.name or "Select zone")
+        frame.zoneName:Hide()
+        frame.zoneButton:Show();frame.zoneButton:SetEnabled(#zones>0);frame.zoneButton:SetText(chosen and chosen.name or "Select zone")
         frame.menu:Hide();renderMenu()
         local available=drawMap(chosen and chosen.mapID)
         displayedMapID=available and chosen.mapID or nil
+        frame.map.regionHighlight:Hide()
         updatePlayer()
         hide(dots)
         local count=available and drawSamples(chosen.data) or 0
@@ -222,7 +226,8 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
         if frame then return end
         local book=getBook()
         frame=CreateFrame("Frame","AzerothFieldbookGatheringLocations",book,"BackdropTemplate")
-        frame:SetPoint("TOPLEFT",book,"TOPLEFT",342,-78);frame:SetSize(594,636)
+        -- Keep 24px between the panel and either the divider edge (309) or book edge (960).
+        frame:SetPoint("TOPLEFT",book,"TOPLEFT",333,-78);frame:SetSize(603,636)
         frame:SetFrameLevel(book:GetFrameLevel()+30);frame:EnableMouse(true)
         frame:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=20})
         frame.paper=frame:CreateTexture(nil,"BACKGROUND")
@@ -236,8 +241,17 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
         frame.zoneButton=ns.FieldbookUI.MenuButton(frame,"Select zone",16,-60,420,function()
             renderMenu();frame.menu:SetShown(not frame.menu:IsShown())
         end)
+        frame.currentZone=ns.FieldbookUI.Button(frame,"Current Zone",444,-60,132,function()
+            local current=ns.CreatureLocations.CurrentMap()
+            if not current then return end
+            currentZone=current;zoneKey=key(current);render(true)
+        end)
         frame.map=CreateFrame("Frame",nil,frame)
         frame.map:SetPoint("TOP",frame,"TOP",0,-92);frame.map:SetSize(WIDTH,HEIGHT)
+        ns.CreatureLocations.InstallMapNavigation(frame.map,function() return displayedMapID end,function(id,name)
+            currentZone={mapID=id,name=name};zoneKey=key(currentZone);render(true)
+        end)
+
         frame.playerCoordinates=label(frame.map,"Player coordinates unavailable",0,0,250)
         frame.playerCoordinates:ClearAllPoints()
         frame.playerCoordinates:SetPoint("BOTTOMLEFT",frame.map,"BOTTOMLEFT",8,29)
@@ -257,8 +271,6 @@ function ns.CreateGatheringLocationsWindow(journal,getBook)
         frame.brightness=ns.MapBrightness:Attach(frame.map,function() return journal:GetLocationMapBrightness() end,
             function(value) journal:SetLocationMapBrightness(value) end,applyBrightness)
         frame.brightnessValue=frame.brightness.valueLabel
-        frame.trackingMode=label(frame,"Tracking: Interactions",376,-582,200)
-        frame.trackingMode:SetTextColor(1,0.82,0.14)
         frame.menu=CreateFrame("Frame",nil,frame,"BackdropTemplate")
         frame.menu:SetPoint("TOPLEFT",frame.zoneButton,"BOTTOMLEFT",0,0);frame.menu:SetSize(420,226)
         frame.menu:SetFrameLevel(frame:GetFrameLevel()+20);frame.menu:EnableMouse(true)

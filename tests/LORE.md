@@ -334,6 +334,24 @@ Live check: capture a readable item with Lore closed, check chat, then open Lore
 and its Event log. Reopen the same item and turn pages; verify no duplicate
 announcement. Save a manual landmark and confirm both messages.
 
+The 0.20.1 follow-up adds the Bestiary's cyan `[A]` suffix (`80d0ff`) to locally
+captured entry titles in the catalogue, selected-entry heading and chat/log notice.
+It derives from the saved entry's `origin = captured`, so existing archives gain
+the badge without a migration or replayed announcements. Renaming and annotations
+retain it. Native text capture initiated through Capture / retry has the same
+capture origin; manual transcription, deliberate People/landmarks/mysteries and
+received records remain untagged. A report's claimed capture method never grants
+the local badge. Page-level displayed/automatically retrieved evidence remains
+separate, and no badge formatting is stored in titles or source text.
+
+Live check: compare an automatically captured writing, an explicitly retried
+native capture, a manual transcription and a received writing. Only the local
+captures should show cyan `[A]`. Rename one and /reload; check that its tag remains
+without another chat notice. Check long titles and supported text/UI scales.
+`test_lore_ui.py` covers the badge and reload behavior; the real-initializer test
+in `test_fieldbook_tabs.py` covers native-reader event delivery while Lore is closed,
+chat/log wording, private-text exclusion, duplicate suppression and manual retry.
+
 Object gossip readers: native GameObject GUIDs with a displayed source name are
 archived as writings on gossip events. Draconic for Dummies also supports a
 missing-GUID title fallback. NPC gossip remains deliberate. Capture preserves

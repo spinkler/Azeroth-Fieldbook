@@ -181,6 +181,7 @@ lua.execute(r'''
 objects={}
 local methods={}
 function methods:SetScript(event,fn) self.scripts[event]=fn end
+function methods:SetParent(parent) self.parent=parent end
 function methods:HookScript(event,fn)
     local previous=self.scripts[event]
     self:SetScript(event,function(self,...)
@@ -287,7 +288,7 @@ end
 controller=ns.CreateBestiaryBook(journal)
 controller:Toggle()
 check(AzerothFieldbookBestiarySection:IsShown(),'book opens')
-check(#UISpecialFrames==12 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration; embedded delete panel follows its parent')
+check(#UISpecialFrames==10 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration; embedded delete panel and filter submenus follow their parents')
 check(controller:OpenAtUnit('mouseover'),'mouseover binding opens the observed NPC page')
 for _,o in ipairs(objects) do check(o.text~='Your note','empty manual field note stays visually empty') end
 local function click(text)
@@ -372,7 +373,7 @@ check(click('Pending'),'review filter')
 check(indexBook.review.afbSelected and indexBook.review.normalFont=='AzerothFieldbookFilterGameFontNormal','pending filter visibly selected')
 check(click('Pending'),'review filter clears using the same label')
 check(not indexBook.review.afbSelected and indexBook.review.normalFont=='AzerothFieldbookFilterGameFontDisable','pending filter returns to grey text')
-check(click('Locations') and AzerothFieldbookBestiaryLocations:IsShown(),'location filter window opens')
+check(click('Locations') and AzerothFieldbookBestiarySection.locationFrame:IsShown(),'location filter window opens')
 for _,control in ipairs({AzerothFieldbookBestiarySection.offenseButton,AzerothFieldbookBestiarySection.defenseButton,
     AzerothFieldbookBestiarySection.behaviourButton,AzerothFieldbookBestiarySection.effectButton,
     AzerothFieldbookBestiarySection.confirmAbilityButton,AzerothFieldbookBestiarySection.manualName}) do
@@ -406,8 +407,7 @@ defense:Show(); defense.scripts.OnShow(defense)
 check(defense:IsShown() and not behaviour:IsShown(),'legacy multiple-window setting cannot stack native views')
 check(not AzerothFieldbookOptions.singleObservationWindow,'obsolete window option is removed')
 -- The buttons toggle closed as well as open. Native OnShow drives sibling exclusion.
-for _,item in ipairs({{'Locations',AzerothFieldbookBestiaryLocations},
-    {'Ranks',AzerothFieldbookBestiaryRanks},{'Offenses',offense},
+for _,item in ipairs({{'Offenses',offense},
     {'Defenses',defense},{'Behaviour',behaviour},
     {'Choose effects',AzerothFieldbookBestiarySection.effectPicker}}) do
     item[2]:Hide()
@@ -538,7 +538,7 @@ for _,sample in ipairs({{9,false,false},{10,true,false},{25,true,false},{50,true
     for _,row in ipairs(abilityBook.rows) do
         if row.id==42 then
             check(row.killReward:IsShown()==sample[2],'index reward matches the kill counter')
-            check(row.text:GetWidth()==(sample[2] and 121 or 140),'name reserves space only for earned rewards')
+            check(row.text:GetWidth()==(sample[2] and 184 or 203),'name reserves space only for earned rewards')
             for _,part in ipairs(row.killReward.crownParts) do check(part:IsShown()==sample[3],'index crown follows the same milestone') end
         end
     end
@@ -686,7 +686,7 @@ check(not savedAwards:GetPointAnnouncements(),'notification option persists')
 savedAwards:SetPointsAwardedCallback(function() error('existing credit must not be reannounced') end)
 savedAwards:SetPointAnnouncements(true); savedAwards:GetTotals(); savedAwards:Observe('target')
 UnitIsDead,UnitGUID,UnitExists,UnitPlayerControlled,UnitIsTapDenied,GetTime=oldDead,oldGUID,oldExists,oldControlled,oldTap,oldTime
-check(click('Ranks') and AzerothFieldbookBestiaryRanks:IsShown(),'rank picker opens')
+check(click('Ranks') and AzerothFieldbookBestiarySection.rankFrame:IsShown(),'rank picker opens')
 journal:Reset(); controller:Refresh()
 check(#journal:List(nil,'',false)==0,'reset clears book')
 ''')

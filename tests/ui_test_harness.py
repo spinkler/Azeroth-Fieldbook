@@ -47,6 +47,9 @@ def new_ui_client(modules=()):
             self:EnableMouse(true) -- WoW mouse scripts implicitly enable mouse input.
         end
     end
+    function methods:SetParent(parent) self.parent=parent end
+    function methods:GetScript(event) return self.scripts[event] end
+    function methods:IsEnabled() return self.enabled~=false end
     function methods:HookScript(event,fn)
         local previous=self.scripts[event]
         self:SetScript(event,function(self,...)

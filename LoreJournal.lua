@@ -3,7 +3,10 @@ local _,ns=...
 local L={SCHEMA=1,MAX_ENTRIES=2000,MAX_PAGES=256,MAX_PAGE_BYTES=131072,MAX_WORK_BYTES=4194304,
     MAX_ARCHIVE_BYTES=33554432,MAX_PASSAGES=256,MAX_LOCATIONS=100,MAX_LINKS=100,MAX_TAGS=32,MAX_REPORTS=32}
 ns.Lore=L
-for _,key in ipairs({'Public','Read','Text','Safe','Number','Integer','Array','Count','Now','Position'}) do L[key]=ns.Atlas[key] end
+for _,key in ipairs({'Public','Read','Text','Safe','AutomaticLabel','Number','Integer','Array','Count','Now','Position'}) do L[key]=ns.Atlas[key] end
+function L.IsAutomatic(entry)
+    return type(entry)=='table' and entry.origin=='captured'
+end
 L.kinds={writing='Writings',landmark='Landmarks',person='People',mystery='Mysteries'}
 local aliases={writings='writing',landmarks='landmark',people='person',mysteries='mystery'}
 local origins={captured=true,manual=true,reported=true}

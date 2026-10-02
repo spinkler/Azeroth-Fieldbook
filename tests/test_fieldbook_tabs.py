@@ -14,6 +14,38 @@ LORE_MODULES = ['LoreJournal.lua', 'LoreSettings.lua', 'LoreTracking.lua', 'Lore
 
 
 class FieldbookTabsTests(unittest.TestCase):
+    def test_background_lore_capture_announces_automatic_tag_once(self):
+        self.lua.execute('''
+            local chat={};DEFAULT_CHAT_FRAME={AddMessage=function(_,message) chat[#chat+1]=message end}
+            journal:SetPointAnnouncements(false);journal:SetCreatureAnnouncement(false)
+            local events=journal:GetEventLog().entries;local before=#events
+            local page,title=1,'Captured book';local words={'First private source page','Second source page'}
+            ItemTextFrame=CreateFrame('Frame');ItemTextFrame:Show()
+            function ItemTextGetItem() return title end
+            function ItemTextGetPage() return page end
+            function ItemTextGetText() return words[page] end
+            function ItemTextHasNextPage() return page<2 end
+            function ItemTextGetCreator() return nil end
+            local t=lore.tracking;t:Event('ITEM_TEXT_BEGIN');t:Event('ITEM_TEXT_READY')
+            assert(not shell:GetFrame() and not lore.main,'Automatic capture never opens the archive')
+            local e=assert(lore.journal:List({kind='writing'})[1])
+            local expected="Lorekeeper's Chronicle recorded: Captured book |cff80d0ff[A]|r (Writing)."
+            assert(#chat==1 and chat[1]=='|cff80d0ffAFB:|r '..expected)
+            assert(#events==before+1 and events[#events].message==expected and events[#events].details.automatic)
+            assert(not chat[1]:find(words[1],1,true),'Chat contains the title, never source text')
+            page=2;t:Event('ITEM_TEXT_BEGIN');t:Event('ITEM_TEXT_READY')
+            t:Event('ITEM_TEXT_CLOSED');page=1;t:Event('ITEM_TEXT_BEGIN');t:Event('ITEM_TEXT_READY')
+            lore.journal:Update(e.id,{notes='Private annotation'});ns.CreateLoreJournal(lore.journal.db)
+            assert(#chat==1 and #events==before+1,'Extra pages, rereads, annotations and reload are silent')
+            t:Event('ITEM_TEXT_CLOSED');settings.autoArchiveLore=false;title='Requested capture'
+            t:Event('ITEM_TEXT_BEGIN');t:Event('ITEM_TEXT_READY');assert(#chat==1)
+            assert(t:CaptureCurrent());assert(#chat==2 and chat[2]:find('|cff80d0ff[A]|r',1,true))
+            assert(lore.journal:Create('writing',{title='Manual transcription'}))
+            assert(lore.journal:Create('writing',{title='Received writing',origin='reported'}))
+            assert(#chat==4 and not chat[3]:find('[A]',1,true) and not chat[4]:find('[A]',1,true))
+            assert(not events[#events].details.automatic)
+        ''')
+
     def test_lore_records_announce_and_persist_in_shared_event_log(self):
         self.lua.execute('''
             local chat={};DEFAULT_CHAT_FRAME={AddMessage=function(_,message) chat[#chat+1]=message end}
@@ -22,16 +54,19 @@ class FieldbookTabsTests(unittest.TestCase):
             local e=assert(lore.journal:Create('landmark',{title='Old tower',notes='Private annotation'}))
             assert(#chat==1 and #entries==before+1)
             local event=entries[#entries]
-            assert(event.message=='Lore recorded: Old tower (Landmark).')
+            assert(event.message=="Lorekeeper's Chronicle recorded: Old tower (Landmark).")
             assert(chat[1]:find(event.message,1,true) and not chat[1]:find('Private annotation',1,true))
             assert(event.timestamp and event.details.kind=='lore-recorded' and event.details.loreID==e.id)
             lore.journal:Update(e.id,{notes='Changed'});assert(#chat==1 and #entries==before+1)
+            local currentMessage=event.message
+            event.message='Lore recorded: Old tower (Landmark).'
             shell:ShowSection('lore');local root=shell:GetFrame()
             assert(root.eventLogButton:IsShown() and root.eventLogButton.enabled)
             root.eventLogButton.scripts.OnClick()
             local page=shell.sections.bestiary.pages.eventLog
             page.scripts.OnShow(page) -- The widget host does not dispatch native OnShow.
-            assert(shell.active=='lore' and page:IsShown() and page.text:GetText():find(event.message,1,true))
+            assert(shell.active=='lore' and page:IsShown() and page.text:GetText():find(currentMessage,1,true))
+            assert(event.message=='Lore recorded: Old tower (Landmark).','Displaying the current section title preserves saved history')
             DEFAULT_CHAT_FRAME=nil
             assert(lore.journal:Create('mystery',{title='Lost inscription'}))
             assert(#entries==before+2 and page.text:GetText():find('Lost inscription',1,true))
@@ -295,6 +330,35 @@ class FieldbookTabsTests(unittest.TestCase):
                 tab.scripts.OnMouseUp(tab,button or 'LeftButton',inside~=false)
             end
         ''')
+
+    def test_shared_page_title_and_compendium_model_alignment(self):
+        self.lua.execute("""
+            local sections={atlas=atlas,angling=angling,merchants=ledger,treasure=treasure,lore=lore}
+            for _,id in ipairs({'bestiary','gathering','atlas','angling','merchants','treasure','lore'}) do
+                shell:ShowSection(id)
+                local page=sections[id] and sections[id].main or shell.sections[id].frame
+                local title=page.pageTitle
+                assert(title and title.point[1]=='TOPLEFT' and title.point[2]==42 and title.point[3]==-60,id)
+                assert(title:GetText()==shell.sections[id].definition.title,id)
+            end
+            local b=shell.sections.bestiary.frame
+            local g=shell.sections.gathering.frame
+            assert(b.confirm.point[2]==b.title and b.confirm.point[3]=='TOPLEFT')
+            assert(b.confirm.point[4]==-29 and b.confirm.point[5]==4,'lock follows the creature name with a 5px gap')
+            assert(g.model.point[2]==b.model.point[2] and g.model.point[3]==b.model.point[3])
+            assert(g.modelBorder.point[2]==b.modelBorder.point[2] and g.modelBorder.point[3]==b.modelBorder.point[3])
+            assert(g.model:GetWidth()==b.model:GetWidth() and g.model:GetHeight()==b.model:GetHeight())
+            assert(g.mineralModel.point[2]==g.model.point[2] and g.mineralModel.point[3]==g.model.point[3])
+            assert(g.basicHeading.point[3]==g.locationsHeading.point[3])
+            assert(-g.stats.point[3]>-g.modelBorder.point[3]+g.modelBorder:GetHeight())
+            assert(g.noteScroll.parent.point[3]==g.lootScroll.parent.point[3])
+            assert(-g.mapOptions.worldMap.point[3]+g.mapOptions.worldMap:GetHeight()<=714)
+            for _,page in ipairs({b,g}) do
+                assert(page.entryCount.point[3]==-88 and page.search.point[3]==-110)
+                assert(#page.rows==16 and page.rows[1].point[3]==-140 and page.rows[16].point[3]==-560)
+                assert(page.rows[16]:GetHeight()==26)
+            end
+        """)
 
     def test_order_default_reuse_selection_and_tooltips(self):
         self.lua.execute('''

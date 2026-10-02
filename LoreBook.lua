@@ -62,7 +62,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
     local state=journal.state
     state.query=type(state.query)=="string" and state.query or ""
     state.offset=L.Integer(state.offset,0,L.MAX_ENTRIES) and state.offset or 0
-    state.view=state.view=="location" and "location" or "entry"
+    state.view="entry"
     state.reading=type(state.reading)=="table" and state.reading or {}
     state.location=L.Integer(state.location,1,L.MAX_LOCATIONS) and state.location or 1
     local c={journal=journal,tracking=tracking,shell=shell,state=state,panels={},references=references or ns.CreateLoreReferences(journal,shell)}
@@ -182,7 +182,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         for i,row in ipairs(m.rows) do
             local e=rows[state.offset+i];row.id=e and e.id;row:SetShown(e~=nil)
             if e then
-                row.name:SetText(L.Safe(journal:Title(e)));row.icon:SetTexture(icons[e.kind]);row:SetSelected(e.id==state.selected)
+                row.name:SetText(L.AutomaticLabel(journal:Title(e),L.IsAutomatic(e)));row.icon:SetTexture(icons[e.kind]);row:SetSelected(e.id==state.selected)
                 local text=L.kinds[e.kind]
                 if e.kind=="writing" then text=text.." • "..(journal:WritingSummary(e).complete and "complete" or "partial") end
                 if e.kind=="mystery" then text=text.." • "..(mysteryNames[e.status] or "Open") end
@@ -200,7 +200,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         local filters=0;for _,key in ipairs({"zone","origin","revisit","status","completeness"}) do if state[key] then filters=filters+1 end end
         m.filters:SetText("Filters"..(filters>0 and " ("..filters..")" or ""))
         m.sort:SetText(state.sort=="newest" and "Recently added" or state.sort=="updated" and "Recently updated" or "Sort: Title")
-        local e=journal:Get(state.selected);m.name:SetText(e and L.Safe(journal:Title(e)) or "Your personal archive")
+        local e=journal:Get(state.selected);m.name:SetText(e and L.AutomaticLabel(journal:Title(e),L.IsAutomatic(e)) or "Your personal archive")
         m.deleteButton:SetEnabled(e~=nil and not journal.readOnly)
         for _,control in ipairs({m.edit,m.revisit,m.related,m.more,m.sourceMenu,m.locationMenu,m.addLocation,m.place}) do control:SetEnabled(e~=nil and not journal.readOnly) end
         -- Reading and reference navigation remain available for a future-schema archive.
@@ -240,8 +240,8 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
     local function build(content)
         c.frame=content;local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
-        U.Label(m,"Lorekeeper's Chronicle",42,-65,250,"GameFontNormalLarge")
-        m.search=U.Field(m,"Search text, notes, names & tags",42,-103,250,200);m.search:SetText(state.query)
+        m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Lorekeeper's Chronicle")
+        m.search=U.Search(m,47,-124,240,200);m.search:SetText(state.query)
         m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
         m.kind=U.MenuButton(m,"All entry kinds",42,-161,250,function(button)
             c:Menu(button,function(_,root)

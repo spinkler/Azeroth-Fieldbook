@@ -338,10 +338,10 @@ eq(main.creatureLocationsButton.point[2],main.creatureNotesButton)
 eq(main.killCount.point[2],main.rumoursButton,'Kills sits immediately left of Rumours')
 main.rumoursButton.scripts.OnClick()
 local rumours=AzerothFieldbookRumours
-assert(rumours.shown and rumours.clamped and notes.shown)
-eq(rumours.point[2],window,'resizing Rumours preserves its shared-window default')
+assert(rumours.shown and rumours.parent==main.damageBorder and notes.shown)
+eq(rumours.point[2],main.damageBorder,'Rumours overlays the loot panel')
 eq(main.offensePicker.point[2],main.detail,'observations belong to the main detail page')
-eq(main.rankFrame.point[2],main,'rank default uses the main window, not a moved location dialog')
+eq(main.rankFrame.point[2],main.filterControls.Ranks.control,'rank submenu anchors to its filter row')
 local escapeRegistered=false
 for _,name in ipairs(UISpecialFrames) do if name=='AzerothFieldbookRumours' then escapeRegistered=true end end
 assert(escapeRegistered,'Escape closes the separate Rumours window')
@@ -358,9 +358,10 @@ eq(notes.notes.text,'Unsaved widget input');assert(notes.notes.focus)
 eq(notes.spellInput:GetText(),'Unsubmitted ID');assert(not notes.notesArea.shown and rumours.shown)
 assert(plain(rumours.rows[1].text.text):find('Reported by Bob Stonewell',1,true))
 assert(plain(rumours.rows[2].text.text):find('Shared basics from Bob Stonewell:',1,true),'attributed basics remain inspectable')
-eq(rumours.area.height,rumours.body.height,'one rumour and its basics fit without empty space')
-local baseScale=rumours:GetScale()/j:GetUIScale()
-j:SetUIScale(1.5);eq(rumours:GetScale(),baseScale*1.5)
+eq(rumours.height,main.damageBorder.height,'Rumours keeps the fixed panel height')
+assert(rumours.area.height<rumours.body.height,'Long rumours scroll inside the panel')
+local baseScale=rumours:GetScale()
+j:SetUIScale(1.5);eq(rumours:GetScale(),baseScale)
 assert(rumours.height*rumours:GetScale()<=UIParent:GetHeight()-30)
 rumours.rows[1].remove.scripts.OnClick();eq(#j:GetRumours(42),0)
 value.transaction='1000000-2-1'
@@ -481,7 +482,7 @@ for _,page in ipairs({main.help,main.options}) do
         and page.closeButton:GetFrameLevel()>page.border:GetFrameLevel(),'border overlaps title bar while close button stays above it')
     eq(page.titleBar.points[1][3],-3,'title bar raised another pixel')
 end
--- Location filters fit their contents and keep at most fifteen rows visible.
+-- Location filters fit their contents and keep at most eight rows visible.
 do
     local frame=main.locationFrame
     local scroll=frame.scroll
@@ -489,30 +490,29 @@ do
     local locations={}
     j.entries={[999]={locations=locations}}
     j.GetBasicInfo=function(self,id) return self.entries[id] end
-    local function refreshLocations() frame.scripts.OnShow(frame) end
+    local function refreshLocations() frame:Refresh();scroll:RefreshScrollBar() end
     refreshLocations()
     assert(frame:GetHeight()<200 and not scroll.ScrollBar.shown,'empty location picker stays compact')
-    for i=1,15 do
+    for i=1,8 do
         locations[string.format('Location %02d',i)]=true
         refreshLocations()
-        eq(scroll:GetHeight(),i*28,'viewport fits every row up to fifteen')
-        eq(frame:GetHeight(),150+i*28,'window follows content height')
+        eq(scroll:GetHeight(),i*26,'viewport fits every row up to eight')
+        eq(frame:GetHeight(),76+i*26,'window follows content height')
         assert(not scroll.ScrollBar.shown and not scroll.mouseWheel,'no scrolling when all rows fit')
     end
-    locations['Location 16']=true;refreshLocations()
-    eq(scroll:GetHeight(),15*28,'sixteenth row does not enlarge the window')
+    locations['Location 09']=true;refreshLocations()
+    eq(scroll:GetHeight(),8*26,'ninth row does not enlarge the window')
     assert(scroll.ScrollBar.shown and scroll.mouseWheel,'overflow enables scrollbar and wheel')
     scroll:SetVerticalScroll(999);refreshLocations()
-    eq(scroll:GetVerticalScroll(),28,'offset is clamped to the overflow')
-    locations['Location 16']=nil;refreshLocations()
+    eq(scroll:GetVerticalScroll(),26,'offset is clamped to the overflow')
+    locations['Location 09']=nil;refreshLocations()
     eq(scroll:GetVerticalScroll(),0,'shrinking below the cap restores the top')
     assert(not scroll.ScrollBar.shown and not scroll.mouseWheel)
     locations[string.rep('A long location ',8)]=true;refreshLocations()
-    assert(scroll:GetHeight()>15*28,'wrapped names keep enough row height for legibility')
+    assert(frame.rows[1].label:GetStringHeight()>16,'wrapped names retain their full text height')
+    eq(scroll:GetHeight(),208,'wrapped names stay inside the capped viewport')
     local bar=scroll.ScrollBar
     assert(bar.trackBackground and bar.trackBorder,'Locations uses the shared parchment scrollbar track')
-    eq(bar.points[1][2],frame.closeButton,'Locations top arrow follows the close button')
-    eq(bar.points[2][2],frame,'Locations scrollbar follows the resized window')
     j.entries,j.GetBasicInfo=entries,getBasic
     refreshLocations()
 end
@@ -534,12 +534,12 @@ do
 end
 ns.ShowDebugReport('Position test')
 assert(main.deleteForm.parent==main,'Delete warning inherits the journal page scale and visibility')
-local windows={window,main.help,main.options,main.locationFrame,main.rankFrame,
+local windows={window,main.help,main.options,
     AzerothFieldbookBestiaryDamageNotes,
-    notes,rumours,composer,receiver,AzerothFieldbookDebugReport}
-for _,frame in ipairs({window,main.help,main.options,main.locationFrame,main.rankFrame,
+    notes,composer,receiver,AzerothFieldbookDebugReport}
+for _,frame in ipairs({window,main.help,main.options,
     main.notesForm,
-    main.effectPicker,main.damageForm,notes,rumours,composer,receiver,AzerothFieldbookDebugReport}) do
+    main.effectPicker,main.damageForm,notes,composer,receiver,AzerothFieldbookDebugReport}) do
     assert(frame.parent==UIParent and frame.strata=='MEDIUM' and frame.toplevel,
         'each independent window must be able to raise above every other addon window')
     frame.scripts.OnMouseDown(frame); eq(focusedWindow,frame)
@@ -634,7 +634,7 @@ local function checkSummaryPanels()
     assert(extra-main.damageBorder.point[3]>=bottom+5,'summary stays above the damage panel')
     eq(main.damageScroll:GetHeight(),75,'expanded summary preserves the damage viewport')
     eq(main.model:GetHeight(),164,'expanded summary preserves the illustration size')
-    eq(main:GetHeight(),740+extra,'the book grows to include its shifted content')
+    eq(main:GetHeight(),756+extra,'the book grows to include its shifted content')
     assert(main.confirm.parent==main,'entry lock stays alongside the creature title')
     assert(main.message.parent==main.detail,'footer status follows the shifted controls')
     assert(main.summaryArea.kind=='Frame' and not main.summaryArea:IsMouseClickEnabled(),
@@ -644,7 +644,7 @@ checkSummaryPanels()
 entry.locations={}
 for i=1,8 do entry.locations['Long observed location '..i..string.rep(' far away',5)]=true end
 book:Refresh();checkSummaryPanels()
-assert(main.summaryArea:GetHeight()>85 and main:GetHeight()>740,
+assert(main.summaryArea:GetHeight()>85 and main:GetHeight()>756,
     'extensive location and trait lists grow the summary and book without scrolling')
 local last=main.summaryCombatRows[2]
 assert(main.summaryArea:GetHeight()>=-last.point[3]+last:GetStringHeight(),'even the final wrapped line fits in the summary')
@@ -653,7 +653,7 @@ book:Refresh();checkSummaryPanels()
 assert(not main.summaryCombatRows[1]:IsShown() and not main.summaryCombatRows[2]:IsShown(),'cleared groups leave no stale text')
 eq(-main.modelBorder.point[3],133,'short summary restores the original panel layout')
 eq(main.damageScroll:GetHeight(),75)
-eq(main:GetHeight(),740,'clearing the expanded summary restores the original book height')
+eq(main:GetHeight(),756,'clearing the expanded summary restores the original book height')
 
 -- Full reset clears in-flight composition as well as saved accounting and positions.
 main.shareButton.scripts.OnClick();assert(composer.shown)
@@ -708,8 +708,8 @@ for _,pair in ipairs({
     {main.rumoursButton,rumours},{main.creatureNotesButton,notes},{main.shareButton,composer},
     {main.damageButton,main.damageForm},{main.offenseButton,main.offensePicker},
     {main.defenseButton,main.defensePicker},{main.behaviourButton,main.behaviourPicker},
-    {main.effectButton,main.effectPicker},{main.locationsButton,main.locationFrame},
-    {main.ranksButton,main.rankFrame},
+    {main.effectButton,main.effectPicker},
+
 }) do
     local control,window=pair[1],pair[2]
     window:Hide()
@@ -737,7 +737,7 @@ do
     local main=AzerothFieldbookBestiarySection
 local window=book:GetShell():GetFrame()
     eq(#main.rows,16);assert(main.creatureScrollBar.shown)
-    eq(-main.rows[16].point[3]+main.rows[16]:GetHeight(),588,'list fills space to eight pixels above navigation')
+    eq(-main.rows[16].point[3]+main.rows[16]:GetHeight(),586,'compact list rows leave space above navigation')
     local width=main.rows[1]:GetWidth()
     local left=main.rows[1].point[2]
     assert(left+width<main.creatureScrollBar.point[2],'scrollbar has a reserved gutter')
@@ -816,7 +816,7 @@ local window=book:GetShell():GetFrame()
     main.rows[1].scripts.OnClick(main.rows[1])
     assert(main.modelUnknown.shown and not main.model.shown,'shared-only portrait is a question mark')
     assert(main.rows[1].unknownMark.shown and not main.rows[1].killReward.shown,'shared-only list entry shows a question mark instead of a reward')
-    eq(main.rows[1].text:GetWidth(),121,'question mark reserves name space')
+    eq(main.rows[1].text:GetWidth(),184,'question mark reserves name space')
     local observationButtons={main.damageButton,main.offenseButton,main.defenseButton,
         main.behaviourButton,main.effectButton,main.confirmAbilityButton}
     for _,control in ipairs(observationButtons) do
@@ -950,7 +950,7 @@ local window=book:GetShell():GetFrame()
     assert(main.beastLoreButton.shown)
     eq(main.damageBorder:GetHeight(),115);eq(main.damageScroll:GetHeight(),75)
     eq(main.modelBorder:GetHeight(),139);eq(main.model:GetHeight(),135)
-    eq(main.beastLoreButton.point[2],364);eq(main.beastLoreButton:GetWidth(),207)
+    eq(main.beastLoreButton.point[2],344);eq(main.beastLoreButton:GetWidth(),227)
     eq(main.damageButton.point[3],-248);eq(main.beastLoreButton.point[3],-133)
     eq(main.damageBorder.point[3],-133);eq(main.damageScroll.point[3],-163)
     eq(main.modelBorder.point[3],-162);eq(main.model.point[3],-164)

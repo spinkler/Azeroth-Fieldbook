@@ -348,12 +348,12 @@ function ns.CreateAnglingBook(journal,tracking,shell)
     local function build(content)
         c.frame=content;local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
-        U.Label(m,"Angler’s Almanac",42,-60,260,"GameFontNormalLarge")
+        m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Angler’s Almanac")
         m.views={}
         for i,view in ipairs({"waters","pools","catches"}) do
             local key=view;m.views[key]=U.Button(m,({waters="Waters",pools="Pool Types",catches="Catches"})[key],42+(i-1)*84,-94,82,function() c:SetView(key) end)
         end
-        m.search=U.Edit(m,48,-126,240,200);m.search:SetText(c:State().query)
+        m.search=U.Search(m,48,-126,240,200);m.search:SetText(c:State().query)
         m.search:SetScript("OnTextChanged",function() if not c.rendering then local s=c:State();s.query=m.search:GetText();s.offset=0;c:Refresh() end end)
         local function filter(key,values)
             return function() local s=c:State();s[key]=cycle(s[key],values);s.offset=0;c:Refresh() end

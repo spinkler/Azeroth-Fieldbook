@@ -53,6 +53,31 @@ class LoreUITests(unittest.TestCase):
     def setUp(self):
         self.lua = new_lore_ui()
 
+    def test_automatic_badges_use_local_capture_origin_and_survive_edits_reload(self):
+        self.lua.execute('''
+            local captured=assert(j:CapturePage({sessionID='book',title='Captured writing'},
+                {number=1,raw='Preserved words',first=true,last=true,personallyViewed=true,method='displayed'}))
+            local manual=writing('Manual writing with captured pages')
+            local reported=assert(j:Create('writing',{title='Received writing',origin='reported'}))
+            local tag='|cff80d0ff[A]|r';c:Select(captured.id)
+            assert(m.name:GetText()=='Captured writing '..tag)
+            local seen={}
+            for _,row in ipairs(m.rows) do if row.id then
+                seen[row.id]=true
+                assert((row.name:GetText():find(tag,1,true)~=nil)==(row.id==captured.id))
+            end end
+            assert(seen[captured.id] and seen[manual.id] and seen[reported.id])
+            c:Select(manual.id);assert(m.name:GetText()=='Manual writing with captured pages')
+            c:Select(reported.id);assert(m.name:GetText()=='Received writing')
+            j:Update(captured.id,{title='Renamed writing',notes='Personal notes'});c:Select(captured.id)
+            assert(m.name:GetText()=='Renamed writing '..tag)
+            local reload=ns.CreateLoreJournal(saved)
+            assert(L.IsAutomatic(reload:Get(captured.id)) and not L.IsAutomatic(reload:Get(manual.id)))
+            assert(not L.IsAutomatic(reload:Get(reported.id)))
+            assert(reload:Get(captured.id).title=='Renamed writing' and reload:Get(captured.id).pages[1].raw=='Preserved words')
+            assert(not captured.title:find('[A]',1,true) and not captured.notes:find('[A]',1,true))
+        ''')
+
     def test_empty_catalogue_reader_and_background_does_not_select(self):
         self.lua.execute('''
             assert(m.empty:GetText():find('begins empty',1,true))

@@ -1,6 +1,6 @@
 local _, ns = ...
 
--- Shared automatic ability storage, plus the outside-combat buff scanner.
+-- Shared ability storage, plus the outside-combat buff scanner.
 -- Cast callers provide direct evidence from a watched NPC, including in combat.
 -- The ID window can display secrets; its text is never recording evidence.
 function ns.InstallBestiaryBuffs(journal, identify)
@@ -46,31 +46,51 @@ function ns.InstallBestiaryBuffs(journal, identify)
         if not entry then return false, "entry unavailable" end
         local creatureName = journal:GetCreatureName(id)
         if not creatureName then return false, "creature name unavailable" end
+        local playerEffect = kind == "player Loss of Control"
+        local manual = kind == "manual Loss of Control"
+        local observedID = playerEffect or manual
+        if manual and entry.confirmed then return false, "Unlock this creature before changing its abilities." end
         local ability = entry.abilities[name]
-        if ability and ability.spellID and ability.spellID ~= spellID then return false, "conflicting spell ID" end
         -- Spell IDs deduplicate an existing record even if its name was edited.
         for knownName, known in pairs(entry.abilities) do
             if known.spellID == spellID then
-                if known.state == "confirmed" then return false, "already confirmed: spell ID " .. spellID end
-                if not ability then name, ability = knownName, known end
+                if known.state == "confirmed" and not playerEffect then return false, "already confirmed: spell ID " .. spellID, manual end
+                if observedID or not ability then name, ability = knownName, known end
+                if known.state == "confirmed" then break end
             end
+        end
+        if ability and ability.spellID and ability.spellID ~= spellID then
+            if not observedID then return false, "conflicting spell ID" end
+            name = "Spell ID " .. spellID
+            ability = entry.abilities[name]
+            if ability and ability.spellID ~= spellID then return false, "conflicting spell ID" end
+        end
+        if playerEffect and ability and ability.state == "confirmed" and ability.playerLossOfControl then
+            return false, "already confirmed: spell ID " .. spellID, true
         end
         if not ability then
             ability = {}
             entry.abilities[name] = ability
         end
         -- Keep a manually confirmed record's provenance, notes and tooltip choice.
-        if ability.state ~= "confirmed" then ability.state, ability.origin = "confirmed", "Automatic " .. kind .. " observation" end
+        if ability.state ~= "confirmed" then
+            ability.state = "confirmed"
+            if manual then ability.origin = "Your note"
+            elseif not playerEffect or not ability.origin then ability.origin = "Automatic " .. kind .. " observation" end
+        end
+        if playerEffect then ability.playerLossOfControl = true end
         ability.spellID = spellID
-        -- With automatic recording enabled, fresh verified ability evidence
-        -- restores removed/rejected abilities, including legacy name dismissals.
+        -- Fresh verified evidence or explicit assignment restores removed/rejected
+        -- abilities, including legacy name dismissals.
         if entry.ignoredAbilities then entry.ignoredAbilities[name] = nil end
         if journal.ResolveRumours then journal:ResolveRumours(id, {kind="ability", value=name, spellID=spellID}) end
         journal:Touch()
         journal:TrackStableContent(id)
-        local message = "Automatically recorded: " .. name .. " (Spell ID: " .. spellID .. ") — " .. creatureName
-        journal:RecordAutomaticEvent(message, {kind=kind, creatureID=id, spellID=spellID})
-        return true, "recorded spell ID " .. spellID
+        local message = (manual and "Ability assigned: " or "Automatically recorded: ") .. name .. " (Spell ID: " .. spellID .. ") — " .. creatureName
+        local details = {kind=kind, creatureID=id, spellID=spellID}
+        if manual then journal:RecordEvent(message, details)
+        else journal:RecordAutomaticEvent(message, details) end
+        return true, "recorded spell ID " .. spellID, true
     end
     function journal:SetAutomaticAbilityRecordedCallback(callback)
         self:SetAutomaticRecordCallback(callback)
@@ -81,6 +101,20 @@ function ns.InstallBestiaryBuffs(journal, identify)
         local name = spellName(C_Spell and read(C_Spell.GetSpellName, spellID)) or spellName(observedName)
         if not name then return false, "name unavailable for spell ID " .. spellID end
         return record(id, name, spellID, "cast")
+    end
+    function journal:RecordPlayerLossOfControl(id, spellID)
+        if not self:GetAutoRecordAbilities() then return false, "automatic recording disabled" end
+        if not number(id) or not number(spellID) then return false, "effect identity unreadable or invalid" end
+        local name = spellName(C_Spell and read(C_Spell.GetSpellName, spellID)) or ("Spell ID " .. spellID)
+        return record(id, name, spellID, "player Loss of Control")
+    end
+    -- An explicit portrait click supplies the creature association. The spell ID
+    -- was already observed publicly; resolving a link in combat is unnecessary.
+    function journal:AssignObservedLossOfControl(id, spellID)
+        if ns.InitializationBlocked then return false, "The Bestiary is not available yet." end
+        if not number(id) or not number(spellID) then return false, "effect identity unreadable or invalid" end
+        local name = spellName(C_Spell and read(C_Spell.GetSpellName, spellID)) or ("Spell ID " .. spellID)
+        return record(id, name, spellID, "manual Loss of Control")
     end
     function journal:ReportBuffs(say)
         say("Automatic ability recording: " .. (self:GetAutoRecordAbilities() and "ON" or "OFF"))

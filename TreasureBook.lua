@@ -190,9 +190,9 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     local function build(content)
         c.frame=content;local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
-        U.Label(m,"Treasure Journal",42,-60,260,"GameFontNormalLarge")
+        m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Treasure Journal")
         m.directory=CreateFrame("Frame",nil,m);m.directory:SetAllPoints();local d=m.directory
-        m.search=U.Edit(d,48,-92,240,200);m.search:SetText(state.query)
+        m.search=U.Search(d,48,-92,240,200);m.search:SetText(state.query)
         m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
         m.category=U.MenuButton(d,"All categories",42,-121,121,function(self)
             c:Menu(self,function(_,root)

@@ -8,6 +8,30 @@ class LedgerTests(unittest.TestCase):
     def setUp(self):
         self.lua = new_ledger()
 
+    def test_manual_services_allow_multiple_choices_and_preserve_observations(self):
+        self.lua.execute("""
+            local e=visit();shell:ShowSection('merchants');c:Select(e.id);c:Notes()
+            local p=c.panels.notes;local choices={}
+            MenuUtil={CreateContextMenu=function(_,build)
+                build(nil,{SetScrollMode=function() end,CreateCheckbox=function(_,name,checked,action)
+                    choices[name]={checked=checked,action=action}
+                end})
+            end}
+            p.role.scripts.OnClick(p.role)
+            choices[ns.Ledger.roles.banker].action()
+            choices[ns.Ledger.roles.trainer].action()
+            assert(p.roles.banker and p.roles.trainer)
+            assert(choices[ns.Ledger.roles.banker].checked() and choices[ns.Ledger.roles.trainer].checked())
+            local observed=snapshot(e.roles)
+            assert(j:Annotate(e.id,'Notes',p.roles,''))
+            assert(e.manualRoles.banker and e.manualRoles.trainer)
+            assert(j:Annotate(e.id,'Notes',{trainer=true},''))
+            assert(not e.manualRoles.banker and e.manualRoles.trainer)
+            assert(snapshot(e.roles)==observed,'Manual deselection preserves observed roles')
+            p.contact=nil;c:ClosePanel();c:Notes()
+            assert(p.roles.trainer and not p.roles.banker,'Saved selections reopen checked')
+        """)
+
     def test_class_trainers_discovered_without_training_window(self):
         self.lua.execute('''
             for i,class in ipairs({'Druid','Hunter','Mage','Paladin','Priest','Rogue','Shaman','Warlock','Warrior'}) do
@@ -58,7 +82,7 @@ class LedgerTests(unittest.TestCase):
             local messages={}
             DEFAULT_CHAT_FRAME={AddMessage=function(_,text) messages[#messages+1]=text end}
             local e=visit()
-            assert(#messages==1 and messages[1]:find(e.name,1,true) and messages[1]:find('Merchant discovered',1,true))
+            assert(#messages==1 and messages[1]:find(e.name,1,true) and messages[1]:find('Merchant’s Ledger — Merchant discovered',1,true))
             fire('MERCHANT_UPDATE');fire('MERCHANT_CLOSED');visit()
             assert(#messages==1,'Repeat visits cannot spam discovery messages')
             local reloaded=ns.CreateLedgerJournal(saved)
@@ -258,6 +282,13 @@ class LedgerTests(unittest.TestCase):
             label.GetUnboundedStringWidth=function() return 500 end
             c:Refresh();assert(headingSize==17)
             local view=area.headingViews[2];assert(view.contentWidth==501)
+            local tooltipLink
+            GameTooltip={SetOwner=function() end,SetHyperlink=function(_,link) tooltipLink=link end,
+                Show=function() end,Hide=function() tooltipLink=nil end}
+            view.iconHover.scripts.OnEnter(view.iconHover)
+            assert(tooltipLink==label:GetText():match('|H(item:%d+)'))
+            view.iconHover.scripts.OnLeave();assert(tooltipLink==nil)
+
             assert(label:GetWidth()==view:GetWidth())
             view.scripts.OnEnter(view);assert(view.scripts.OnUpdate)
             assert(label:GetWidth()==501)
@@ -296,17 +327,18 @@ class LedgerTests(unittest.TestCase):
         self.lua.execute('''
             local e=visit(42,'ABC',{item(1001,-1,125)});c.state.detail='goods'
             local v=one(e.goods);local text=c:Details(e)
-            assert(text:find('Price: 1s 25c / 5 (25c each)',1,true))
+            assert(text:find('Price: 1s 25c / 5 (25c ea)',1,true))
             assert(not text:find('0g',1,true) and not text:find('Per item, copper portion',1,true))
             v.price=10125;local colored=c:Details(e,true)
             assert(colored:find('1|cffffd100g|r',1,true))
             assert(colored:find('1|cffc7c7cfs|r',1,true))
             assert(colored:find('25|cffb87333c|r',1,true))
             assert(not colored:find('Per item',1,true))
-            v.price=10000;assert(c:Details(e):find('Price: 1g / 5 (20s each)',1,true))
+            v.price=10000;assert(c:Details(e):find('Price: 1g / 5 (20s ea)',1,true))
             v.price=0;assert(c:Details(e):find('Price: Free / 5',1,true))
             v.price=nil;assert(c:Details(e):find('Price: Unknown / 5',1,true))
-            v.price=101;assert(not c:Details(e):find(' each)',1,true))
+            v.price=101;assert(c:Details(e):find('(20.2c ea)',1,true))
+            v.price=300;v.bundle=200;assert(c:Details(e):find('Price: 3s / 200 (1.5c ea)',1,true))
             v.bundle=nil;assert(c:Details(e):find('Bundle size unknown',1,true))
         ''')
 

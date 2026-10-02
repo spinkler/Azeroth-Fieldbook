@@ -3,6 +3,7 @@ local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or b
 local A,U=ns.Atlas,ns.AtlasUI
 function ns.InstallAtlasEditors(c)
     local j=c.journal
+    local entries=c.entries or j
     local function main() c:Show();c:Refresh() end
     local function locationFields(p,x,y,width)
         p.mapID=U.Field(p,"Map ID (optional)",x,y,140,10)
@@ -29,10 +30,14 @@ function ns.InstallAtlasEditors(c)
         end
     end
     function c:PlaceOnMap(callback,returnView)
+        if self.main.map.microMapID then
+            returnView.message:SetText("Return to the zone map before choosing an exterior position.");return
+        end
         if not self.main.map.available or not j.state.mapID then
             returnView.message:SetText("Map artwork unavailable. Enter a map ID and coordinates, or save without a position.");return
         end
         self.placeReturn=returnView;self.placeCallback=callback;self.main.map.placing=true
+        if self.main.microMap then self.main.microMap:SetEnabled(false) end
         self.main.cancelPlace:Show();self:Show()
         self:Message("Click the displayed map to choose a position. This is not your current position.")
     end
@@ -52,12 +57,37 @@ function ns.InstallAtlasEditors(c)
             p.scroll,p.body=U.Scroll(p,24,-57,810,498);p.body:SetHeight(1010)
             local b=p.body
             p.name=U.Field(b,"Name / title",0,-4,520,160)
-            p.category=U.Button(b,"",540,-25,255,function()
-                local d,err=p:Capture();if not d then p.message:SetText(err);return end
-                c:Picker({title="Discovery category",back=function() c:Show(p) end,
-                    rows=function() local rows={};for _,v in ipairs(A.categories) do rows[#rows+1]={name=v.label,id=v.id} end;return rows end,
-                    pick=function(r) d.category=r.id;p.draft=d;p:Fill();c:Show(p) end})
+            p.category=U.MenuButton(b,"",540,-25,255,function()
+                p.categoryMenu:SetShown(not p.categoryMenu:IsShown())
             end)
+            p.categoryMenu=CreateFrame("Frame",nil,p,"BackdropTemplate")
+            local menu=p.categoryMenu
+            menu:SetPoint("TOPLEFT",p.category,"BOTTOMLEFT",0,-2);menu:SetSize(255,250)
+            menu:SetFrameLevel(p:GetFrameLevel()+40);menu:EnableMouse(true)
+            menu:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,insets={left=2,right=2,top=2,bottom=2}})
+            menu:SetBackdropColor(0.055,0.04,0.022,1)
+            menu.rows={}
+            local choices={};for _,v in ipairs(A.categories) do choices[#choices+1]=v end
+            choices[#choices+1]=ns.AtlasEntrances.generic
+            for i,v in ipairs(choices) do
+                local choice=v
+                local row=U.Button(menu,v.label,8,-8-(i-1)*26,239,function()
+                    local d,err=p:Capture();if not d then p.message:SetText(err);return end
+                    d.category=choice.id
+                    if d.entrance then d.confirmCategory=choice.id;d.classification={kind="player",category=choice.id} end
+                    p.draft=d;p:Fill();menu:Hide()
+                end)
+                row.categoryID=v.id;menu.rows[i]=row
+            end
+            menu:SetScript("OnShow",function()
+                local d=p.draft
+                for _,row in ipairs(menu.rows) do
+                    row:SetShown(row.categoryID~="entrance" or d.entrance~=nil)
+                end
+                menu:SetHeight(16+(#A.categories+(d.entrance and 1 or 0))*26)
+            end)
+            p:HookScript("OnHide",function() menu:Hide() end)
+            menu:Hide()
             p.date=U.Label(b,"",540,-7,260,"GameFontHighlightSmall")
             p.explored=U.Check(b,"Explored — explicitly marked by me",0,-65,360,function() end)
             p.locationHint=U.Label(b,"",0,-100,800,"GameFontHighlightSmall");p.locationHint:SetWordWrap(true)
@@ -65,7 +95,15 @@ function ns.InstallAtlasEditors(c)
             locationFields(p.location,0,0,800)
             p.current=U.Button(b,"Use my current position",4,-262,232,function()
                 local d,err=p:Capture();if not d then p.message:SetText(err);return end
-                local loc=A.CurrentLocation();for _,key in ipairs({"mapID","zone","subzone","x","y"}) do d[key]=loc[key] end
+                local loc=A.CurrentLocation()
+                if d.entrance then
+                    local sample=ns.AtlasEnvironment.Capture()
+                    if not sample or sample.inside or sample.position.mapID~=d.mapID then
+                        p.message:SetText("Use a valid outdoor position on this entrance's exterior zone map.");return
+                    end
+                    loc={mapID=sample.position.mapID,x=sample.position.x,y=sample.position.y,zone=d.zone,subzone=d.subzone}
+                end
+                for _,key in ipairs({"mapID","zone","subzone","x","y"}) do d[key]=loc[key] end
                 p.draft=d;p:Fill();p.message:SetText(A.Position(loc) and "Captured your current position. Check that this is the entrance before saving." or "Position unavailable. No coordinates were substituted; save an unpositioned entry.")
             end)
             p.mapPick=U.Button(b,"Choose on displayed map",247,-262,236,function() c:ChoosePosition() end)
@@ -124,8 +162,8 @@ function ns.InstallAtlasEditors(c)
             end
             function p:Save()
                 local d,err=self:Capture();if not d then return nil,err end
-                local id,e=j:Save(d,self.id,self.expedition)
-                if id then self.id=id;self.draft=j:Get(id,self.expedition);c:Refresh() end
+                local id,e=entries:Save(d,self.id,self.expedition)
+                if id then self.id=id;self.draft=entries:Get(id,self.expedition);self:Fill();c:Refresh() end
                 return id,e
             end
             function p:Fill()
@@ -134,7 +172,8 @@ function ns.InstallAtlasEditors(c)
                 self.name:SetText(d.name or "");self.notes:SetText(d.notes or "");self.access:SetText(d.access or "")
                 self.interior:SetText(d.interior or "");self.interiorMapID:SetText(d.interiorMapID or "")
                 fillLocation(self.location,d);self.explored:SetChecked(d.explored==true)
-                self.category:SetText(A.category[d.category or "other"].label.."  v")
+                local category=A.category[d.category or "other"] or ns.AtlasEntrances.Category(d.category)
+                self.category:SetText(category.label)
                 self.category:SetShown(not self.expedition);self.explored:SetShown(not self.expedition)
                 self.location:SetShown(not self.expedition);self.current:SetShown(not self.expedition);self.mapPick:SetShown(not self.expedition)
                 self.zones:SetShown(self.expedition==true);self.date:SetText(self.id and U.Date(d.created) or "Date set when saved")
@@ -146,6 +185,14 @@ function ns.InstallAtlasEditors(c)
                 self.interior.fieldLabel:SetShown(not self.expedition);self.interiorMapID.fieldLabel:SetShown(not self.expedition)
                 self.source:SetText(self.expedition and "Use Save & connections to link places, routes, creatures and gathering discoveries."
                     or "Knowledge source: "..((d.provenance and d.provenance.kind) or "recorded")..". Saving a location never marks it explored.")
+                if d.entrance then
+                    local e=d.evidence
+                    self.locationHint:SetText("Exterior position only. Map and observed area labels belong to the evidence. Grey ticks are suggestions; choose a category and Save to confirm it in gold.")
+                    self.caveHint:SetText("Interior identity and the original exterior anchor are retained as observation evidence. Position edits move only the displayed zone marker.")
+                    self.source:SetText(A.AutomaticLabel("Observed entrance",true)..": "..e.entries.." entries / "..e.exits.." exits • "..e.evidence..
+                        ". Type: "..d.classification.kind..". Notes never confirm a suggested type. Entrance evidence stays out of legacy field reports.")
+                    self.interior:Hide();self.interiorMapID:Hide();self.interior.fieldLabel:Hide();self.interiorMapID.fieldLabel:Hide()
+                else self.caveHint:SetText("Caves use the entrance as their navigational location. Interior labels do not imply an entrance or a connection.") end
                 -- Give expedition prose room without blank place-only fields.
                 self.locationHint:ClearAllPoints();self.locationHint:SetPoint("TOPLEFT",0,self.expedition and -65 or -100)
                 self.zones:ClearAllPoints();self.zones:SetPoint("TOPLEFT",self.expedition and 4 or 498,self.expedition and -106 or -262)
@@ -155,11 +202,12 @@ function ns.InstallAtlasEditors(c)
                 self.noteScroll:SetHeight(self.expedition and 286 or 166)
                 self.source:ClearAllPoints();self.source:SetPoint("TOPLEFT",0,self.expedition and -582 or -884)
                 self.body:SetHeight(self.expedition and 646 or 1010)
-                self.stops:SetShown(not self.expedition and d.category=="route");self.delete:SetShown(self.expedition);self.delete:SetEnabled(self.id~=nil)
+                self.links:SetEnabled(not d.entrance)
+                self.stops:SetShown(not self.expedition and d.category=="route" and not d.entrance);self.delete:SetShown(self.expedition);self.delete:SetEnabled(self.id~=nil)
                 self.scroll:UpdateScrollChildRect();self.scroll:RefreshScrollBar()
             end
         end
-        local d=id and j:Get(id,expedition) or initial or {}
+        local d=id and entries:Get(id,expedition) or initial or {}
         if not d then self:Message("Entry unavailable.");return end
         d=A.Copy(d);d.related=d.related or {};d.references=d.references or {};d.stops=d.stops or {};d.zones=d.zones or {};d.category=d.category or "other"
         p.id,p.expedition,p.draft=id,expedition==true,d;p:Fill();p.message:SetText("")

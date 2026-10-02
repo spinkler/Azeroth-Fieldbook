@@ -204,7 +204,14 @@ function ns.CreateLedgerJournal(saved)
     function j:Annotate(id,note,role,speciality)
         local e=self:Get(id);if self.readOnly or not e or not L.Text(note,4000,true) then return nil,"Use plain notes, up to 4,000 bytes." end
         if e.note~=note then e.note=note;e.noteOrigin=self:Origin(e,"notes",L.Now(),"recorded") end
-        if role and L.roles[role] then e.manualRoles[role]=self:Origin(e,"manual-role:"..role,L.Now(),"recorded") end
+        if type(role)=="table" then
+            for key in pairs(e.manualRoles) do if role[key]~=true then e.manualRoles[key]=nil end end
+            for key,selected in pairs(role) do
+                if selected==true and L.roles[key] and not e.manualRoles[key] then
+                    e.manualRoles[key]=self:Origin(e,"manual-role:"..key,L.Now(),"recorded")
+                end
+            end
+        elseif role and L.roles[role] then e.manualRoles[role]=self:Origin(e,"manual-role:"..role,L.Now(),"recorded") end
         if L.Name(speciality) and (e.specialities[speciality] or L.Count(e.specialities)<32) then e.specialities[speciality]=self:Origin(e,"speciality:"..speciality,L.Now(),"recorded") end
         self:Changed(id);return true
     end

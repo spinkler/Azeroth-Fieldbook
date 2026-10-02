@@ -2,7 +2,9 @@
 from ui_test_harness import new_ui_client
 
 ATLAS_MODULES = [
-    'AtlasJournal.lua', 'AtlasSubzones.lua', 'AtlasReferences.lua', 'AtlasReports.lua', 'AtlasUI.lua',
+    'AtlasJournal.lua', 'AtlasSubzones.lua', 'AtlasEnvironment.lua', 'AtlasEntranceTypes.lua',
+    'AtlasEntrances.lua', 'AtlasEntranceTracking.lua',
+    'AtlasReferences.lua', 'AtlasReports.lua', 'AtlasUI.lua',
     'AtlasMap.lua', 'AtlasEditors.lua', 'AtlasReportUI.lua', 'AtlasBook.lua',
 ]
 

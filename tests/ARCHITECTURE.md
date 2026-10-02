@@ -143,8 +143,9 @@ changes during the session. `tests/GATHERING.md` defines the acceptance checks.
 
 `AtlasJournal.lua` owns schema 1 in the active account store or character
 `AzerothFieldbookAtlasDB`, outside Bestiary/gathering resets, backups and transport. Deliberate
-recording uses stable local IDs and map-relative positions; no Atlas background
-tracking frame is created. `AtlasBook.lua` registers after gathering and before
+recording uses stable local IDs and map-relative positions. The existing sub-zone
+survey and weather observers remain independent of the opt-in entrance detector.
+`AtlasBook.lua` registers after gathering and before
 Angling, Ledger, Treasure and Lore without resizing the shell.
 
 Atlas controls, editors, pickers and report previews are children of the section.
@@ -155,6 +156,10 @@ browsing/editor state. `AtlasUI.lua` uses shared primitives without altering the
 context is used for navigation. `AtlasReports.lua` has its own bounded literal
 schema/codec and detached Reported staging, without changing Bestiary sharing.
 See `tests/ATLAS.md` for the complete data contract and live acceptance checklist.
+The additive `entrances` extension, coordinate evidence, classification adapter,
+event lifecycle are documented in
+`tests/ATLAS_ENTRANCES.md`. They do not change the deliberate-record/report schema
+or take ownership of `AtlasSubzones.lua`.
 
 ## Angler’s Almanac
 

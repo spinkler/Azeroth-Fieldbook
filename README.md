@@ -1,6 +1,9 @@
-# Azeroth Fieldbook 0.20.0 (Release)
+# Azeroth Fieldbook 0.21.0 (Release)
 
-Version 0.20.0 brings consistent deletion confirmations, in-window gathering
+Version 0.21.0 adds opt-in Atlas entrance discovery, player Loss of Control
+observations and manual attribution, plus consistent search controls and journal
+layout refinements. Entrance evidence and player-confirmed categories stay separate.
+The 0.20.0 release brought consistent deletion confirmations, in-window gathering
 maps, geometry-based mineral previews and clearer journal headers and controls.
 It also refines Ledger location and price displays, adds a first-use map-filter
 hint, and enables behaviour tooltip traits by default while preserving opt-outs.
@@ -141,6 +144,9 @@ positions and unfinished fields. Creature-entry actions select the Bestiary.
 
 Each newly recorded Lore entry is announced in chat and the persistent Event log,
 available from Lorekeeper's Chronicle. Rereads and extra pages do not repeat the announcement.
+Locally captured entries carry the Bestiary's cyan **[A]** tag in the catalogue,
+entry heading and announcement. Manual transcriptions and received records stay
+untagged; renaming or annotating a captured entry retains its capture provenance.
 
 ## Angler’s Almanac
 
@@ -207,16 +213,28 @@ dimensions and aspect-fit policy, with independent state. See the
 Build a personal record of caves, ruins, routes, crossings and useful places.
 Add expedition notes, connect discoveries across Fieldbook sections, and prepare
 regional field reports. The Atlas starts empty, with no seeded sub-zone boundaries
-or secret-place database. Named discoveries are added deliberately; personal
-sub-zone crossings and encountered weather are observed automatically.
+or secret-place database. Deliberate discoveries stay separate from optional
+entrance observations; personal sub-zone crossings and encountered weather are
+observed automatically.
+
+- **Auto-discover entrances** starts off. Enable it to learn exterior entrances
+  from physical indoor / outdoor crossings, with entry/exit evidence counts.
+  Nearby traversals corroborate the same entrance. Loading, summons, death,
+  spirit release, resurrection and other discontinuities reset detection.
+  Each new entrance announces once in chat and the shared Event log, even with
+  Atlas closed or its layer hidden. Automatic entries carry a cyan **[A]** tag;
+  later observations update their evidence without repeating the announcement.
+- **Generic Entrances** starts hidden in Map Layers; hiding it does not stop
+  recording. Choose a category in Edit and Save to confirm it; later inference
+  cannot replace a player-confirmed category.
 
 - **Add Discovery** captures readable current-map context and coordinates. Give
   the entry a name and category; notes are optional. Coordinates can be left
   blank and added later. **Choose on displayed map** explicitly picks a map
   position. Record cave entrances deliberately; interior labels/maps are optional.
 - Browse continent/zone selectors or use **Current Zone**. Search the displayed
-  map or all recorded zones. Pins and the index share selection. Eight independent
-  map layers do not filter the index; **Reveal layer** explicitly shows a hidden
+  map or all recorded zones. Pins and the index share selection. The eight existing
+  map layers plus Generic Entrances do not filter the index; **Reveal layer** explicitly shows a hidden
   selected category. Overlapping pins cycle on repeated clicks.
   A facing arrow shows your live position when viewing your current map; it
   hides on other maps or unavailable position data and records no movement history.
@@ -753,6 +771,13 @@ Pending matches become confirmed; manual notes and tooltip choices are preserved
 For buffs, the marker means the buff was present on the creature; its caster may
 be unknown. Buffs with a known different caster are skipped.
 
+Player Loss of Control effects also supply readable spell IDs. Only a matching
+player aura whose public source resolves to an eligible NPC can confirm that
+creature's ability. These records receive cyan **[A]** with a player-effect
+tooltip; existing origins, notes and tooltip choices are retained. The same
+automatic-recording option applies. Missing spell names use `Spell ID <number>`
+until resolved manually. This does not record behaviour or immunity traits.
+
 Buff capture requires both you and the creature outside combat.
 Player-controlled units and restricted data are skipped. While enabled, a fresh
 verified observation restores a removed or rejected ability, including old
@@ -767,7 +792,8 @@ An ID visible in the spell window can still be restricted to display only; the
 addon cannot save it or infer it from hidden data. Capture works with the window
 hidden. Buff capture retries
 after combat, on target/mouseover and aura changes, and once a second while watching
-a creature. Editing and saving an automatic entry makes it a personal note.
+a creature. Editing and saving an automatic entry makes it a personal note;
+verified player Loss of Control evidence remains attached to the same spell ID.
 
 Confirmed abilities appear in NPC tooltips whether the creature entry is locked or
 unlocked. Each ability checkbox toggles its tooltip display and defaults to on;
@@ -1056,6 +1082,12 @@ comfortable maximum. Each rumour starts with a green verify tick, then a reject
 cross, then its text. It fits up to four rumours and their shared basic
 information before scrolling longer lists; subtle dividers separate records.
 
+The Bestiary preview first tries a matching live target or mouseover, preserving
+that individual's appearance rather than choosing a model from the creature ID.
+Opening at mouseover prioritizes that unit. If the unit is unavailable, restricted,
+or fails to load, the preview falls back to the creature-ID model. This does not
+save an appearance for later visits or enumerate all possible racial variants.
+
 ## Spell IDs and personal notes
 
 The target cast bar can display **Last Spell ID**. It remains for up to one
@@ -1063,10 +1095,42 @@ minute, clearing when the target changes, another cast starts, or you right-clic
 it. **Display Cast IDs** is enabled by default in the book's ? menu.
 
 A separate movable **Last observed spell IDs** window shows the latest enemy
-cast, identifiable instant cast, debuff on you and buff on a non-player-controlled
+cast, identifiable instant cast, debuff on you, player Loss of Control and buff on a non-player-controlled
 NPC target. It starts enabled and unlocked with 35% background opacity. Entries
 expire after two minutes unless **Display Spell IDs in the ID window indefinitely**
 is enabled. Aura effect types are shown when available.
+The tracker also consumes readable aura additions from `UNIT_AURA`, so a debuff
+can appear even when a fresh scan misses it. Restricted polarity or inaccessible
+event data still require the normal filtered scan. Cast observations only cover
+the current enemy target; a debuff on you does not require targeting its caster.
+A non-damaging effect such as Disarm cannot be assumed to appear in damage-meter
+history. Displaying its ID does not automatically attribute a Disarm behaviour to
+an NPC. If an effect is missed, `/fieldbook debug` reports the latest aura scan
+path and access errors, the last player aura-event result and whether Disarm
+6713 is blacklisted. Capture it while the effect is still active when possible.
+
+**Loss of Control on you** is an independent row in that window, with the spell
+ID, available name, effect label and verified creature name when attribution
+succeeds. Like the other window rows, it has no redundant [A]. Every Blizzard
+LOC type is eligible, including Disarm, school interrupts and future types.
+When a source cannot be safely identified, chat supplies the effect and Spell ID
+for manual entry. When you had an eligible NPC targeted at detection, a small
+round portrait appears beside the row, with its captured name and readable level.
+Hover to review the unverified target; click the portrait to assign the spell to
+that creature in the Bestiary. Switching targets does not change this choice.
+A successful click shows **Saved:** and a green portrait rim. This is a manual
+confirmation, works in combat and with automatic recording disabled, and respects
+the creature's entry lock. Existing notes and spell records are preserved; the
+click does not grant automatic [A] evidence. If the portrait cannot be rendered,
+a **?** keeps the same named choice available. Nothing is assigned from your
+current target alone. A missing
+or restricted aura does not discard a readable LOC spell ID; a restricted spell
+ID itself is skipped until Blizzard permits reading it. Duplicate events for one
+application are suppressed. The observer runs on events, independently of the
+window's visibility, with no extra polling or general debuff harvesting.
+`/fieldbook debug` includes LOC event counts, exact public type/ID/instance fields
+and source/access decisions. See [the Forever live checklist](tests/LOSS_OF_CONTROL.md).
+
 
 **Retain hovered aura tooltips** is off by default and available as an optional
 fallback; existing saved choices are preserved. When enabled, it keeps a compact

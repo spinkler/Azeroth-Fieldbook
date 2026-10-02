@@ -186,7 +186,8 @@ class ObservationTrackingTests(unittest.TestCase):
             end
             eq(triangles,1);eq(edges,9);eq(dots,1)
             f.brightness.scripts.OnValueChanged(f.brightness,0.2)
-            window:Hide();window:Open(42);eq(toggle.text,'Tracking: Observations')
+            window:Hide();window:Open(42);eq(toggle.text,'Tracking: Kills')
+            toggle.scripts.OnClick();eq(toggle.text,'Tracking: Observations')
             local reloaded=ns.CreateBestiaryJournal(db,function() end)
             eq(reloaded:GetLocationTrackingMode(),'observations')
             toggle.scripts.OnClick();eq(toggle.text,'Tracking: Kills')
@@ -203,9 +204,14 @@ class ObservationTrackingTests(unittest.TestCase):
         lua = locations.LocationsWindowTests().client(book=True)
         lua.execute('''
             local observedUnit,explicit
-            j=ns.CreateBestiaryJournal({},function(unit,requested)
-                observedUnit,explicit=unit,explicit or requested;return 42
-            end)
+            j=ns.CreateBestiaryJournal({},function() return 42 end)
+            -- Model identity probes also call identify(target). Assert the
+            -- deliberate observation, not the last read-only identity query.
+            local observe=j.Observe
+            j.Observe=function(self,unit,requested,...)
+                observedUnit,explicit=unit,explicit or requested
+                return observe(self,unit,requested,...)
+            end
             local book=ns.CreateBestiaryBook(j)
             book:OpenAtUnit('mouseover')
             assert(AzerothFieldbookBestiarySection:IsShown())

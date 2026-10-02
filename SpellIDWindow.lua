@@ -12,6 +12,9 @@ local displayAlpha = 1
 local layoutHeight = 44
 local blacklistWindow
 local auraStatus = { player = "not scanned", target = "not scanned" }
+local auraEventSerial = 0
+local playerAuraEvents = 0
+local lastPlayerAuraEvent = "none received"
 local events = CreateFrame("Frame")
 local function public(value) return not (issecretvalue and issecretvalue(value)) end
 local function validID(value)
@@ -45,6 +48,14 @@ local function read(fn, ...)
     local ok, value = pcall(fn, ...)
     if ok then return value end
 end
+local function accessibleTable(value)
+    if not public(value) or type(value) ~= "table" then return false end
+    if type(canaccesstable) == "function" then
+        local allowed = read(canaccesstable, value)
+        return public(allowed) and allowed == true
+    end
+    return readableTable(value)
+end
 local function targetUnit(unit)
     if not public(unit) or type(unit) ~= "string" then return false end
     if unit == "target" then return true end
@@ -68,6 +79,12 @@ end
 local function clear(row)
     row.observed = nil
     row.rawID=nil;row.token=nil
+    row.candidate=nil;row.assignmentSaved=nil
+    if row.portraitButton then
+        row.portraitButton:Hide();row.portrait:SetTexture(nil)
+        if row.portraitHovered and GameTooltip then GameTooltip:Hide() end
+        row.portraitHovered=nil
+    end
     row.id:SetText(""); row.name:SetText(""); row.effect:SetText("")
     if row.caster then row.caster:SetText("") end
     row.body:Hide()
@@ -113,6 +130,85 @@ local function text(parent, x, y, width, template)
     value:SetPoint("TOPLEFT", x, y); value:SetSize(width, 14); value:SetJustifyH("LEFT")
     return value
 end
+local function portraitTooltip(row)
+    if not GameTooltip or not row.candidate then return end
+    GameTooltip:SetOwner(row.portraitButton, "ANCHOR_RIGHT")
+    GameTooltip:SetText(row.candidate.name)
+    if row.assignmentSaved then
+        GameTooltip:AddLine("Assigned to this creature in the Bestiary.", 0.5, 1, 0.5, true)
+    else
+        GameTooltip:AddLine("Your target when this effect was detected. The caster is unverified.", 1, 0.82, 0.4, true)
+        GameTooltip:AddLine("Click to assign Spell ID " .. row.rawID .. " to this creature in the Bestiary.", 1, 1, 1, true)
+    end
+    GameTooltip:Show()
+end
+local function createPortrait(row)
+    local button = CreateFrame("Button", nil, row.body)
+    row.portraitButton = button
+    button:SetSize(42, 42);button:SetPoint("TOPRIGHT", row.body, "TOPRIGHT", -9, -8)
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    local function circle(size, r, g, b, layer)
+        local texture = button:CreateTexture(nil, "BACKGROUND", nil, layer)
+        texture:SetSize(size, size);texture:SetPoint("CENTER");texture:SetColorTexture(r, g, b, 1)
+        if button.CreateMaskTexture and texture.AddMaskTexture then
+            local mask = button:CreateMaskTexture()
+            mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            mask:SetAllPoints(texture);texture:AddMaskTexture(mask)
+        end
+        return texture
+    end
+    circle(44, 0.20, 0.12, 0.055, -2)
+    row.portraitRing = circle(42, 0.67, 0.43, 0.19, -1)
+    circle(38, 0.035, 0.025, 0.015, 0)
+    row.portrait = button:CreateTexture(nil, "ARTWORK")
+    row.portrait:SetSize(38, 38);row.portrait:SetPoint("CENTER")
+    if button.CreateMaskTexture and row.portrait.AddMaskTexture then
+        local mask = button:CreateMaskTexture()
+        mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        mask:SetAllPoints(row.portrait);row.portrait:AddMaskTexture(mask)
+    end
+    row.portraitUnknown = text(button, 0, -11, 42, "GameFontNormalLarge")
+    row.portraitUnknown:SetJustifyH("CENTER");row.portraitUnknown:SetText("?")
+    row.portraitLevel = text(button, 25, -31, 22, "GameFontNormalSmall")
+    row.portraitLevel:SetJustifyH("CENTER")
+    button:SetScript("OnEnter", function() row.portraitHovered=true;portraitTooltip(row) end)
+    button:SetScript("OnLeave", function() row.portraitHovered=nil;if GameTooltip then GameTooltip:Hide() end end)
+    button:SetScript("OnClick", function(_, mouseButton)
+        if mouseButton == "RightButton" or IsShiftKeyDown() then
+            row.body:GetScript("OnMouseUp")(row.body, mouseButton)
+        elseif mouseButton == "LeftButton" and row.observed and row.candidate and not row.assignmentSaved and not ns.InitializationBlocked then
+            if row.candidate.assign() then
+                row.assignmentSaved=true
+                row.casterLabel:SetText("Saved:")
+                row.portraitRing:SetColorTexture(0.35, 0.75, 0.35, 1)
+                if row.portraitHovered then portraitTooltip(row) end
+            end
+        end
+    end)
+    button:Hide()
+end
+local function showCandidate(row, candidate)
+    row.title:SetSize(candidate and 260 or 310, 14)
+    row.name:SetSize(candidate and 260 or 310, 14)
+    row.effect:SetSize(candidate and 106 or 156, 14)
+    row.caster:SetSize(candidate and 205 or 255, 14)
+    row.casterLabel:SetText(candidate and "Target:" or "Cast by:")
+    if not candidate then return end
+    row.candidate=candidate
+    row.portraitRing:SetColorTexture(0.67, 0.43, 0.19, 1)
+    row.portraitUnknown:Show()
+    -- Render once while the token still matches the captured identity. Never
+    -- refresh this texture on target changes or inspect native portrait pixels.
+    local guid = read(UnitGUID, "target")
+    if public(guid) and guid == candidate.guid and type(SetPortraitTexture) == "function" then
+        local ok = pcall(SetPortraitTexture, row.portrait, "target")
+        local after = read(UnitGUID, "target")
+        if ok and public(after) and after == candidate.guid then row.portraitUnknown:Hide()
+        else row.portrait:SetTexture(nil) end
+    end
+    row.portraitLevel:SetText(candidate.level or "")
+    row.portraitButton:Show()
+end
 local function updateFade(delta)
     local hasData = false
     for _, row in ipairs(rows) do if row.observed then hasData = true; break end end
@@ -152,7 +248,7 @@ local function setup()
         db.spellIDWindowPosition = { point = point, relativePoint = relativePoint, x = x, y = y }
         customPosition = true
     end)
-    for index, title in ipairs({ "Enemy cast", "Enemy instant cast", "Debuff on you", "Buff on target" }) do
+    for index, title in ipairs({ "Enemy cast", "Enemy instant cast", "Debuff on you", "Buff on target", "Loss of Control on you" }) do
         local row = {}
         rows[index] = row
         row.body = CreateFrame("Frame", nil, panel)
@@ -161,7 +257,7 @@ local function setup()
         row.id = text(row.body, 65, -16, 92)
         row.effect = text(row.body, 164, -16, 156)
         row.name = text(row.body, 10, -32, 310)
-        text(row.body,10,0,310,"GameFontNormalSmall"):SetText(title)
+        row.title=text(row.body,10,0,310,"GameFontNormalSmall");row.title:SetText(title)
         row.casterLabel=text(row.body,10,-48,52);row.casterLabel:SetText("Cast by:")
         row.caster=text(row.body,65,-48,255)
         row.caster:SetTextColor(0.7,0.7,0.7)
@@ -183,6 +279,7 @@ local function setup()
                 db.displaySpellIDWindow=false;window:ApplySettings()
             end
         end)
+        if index == 5 then createPortrait(row) end
         clear(row)
     end
     local elapsed = 0
@@ -225,22 +322,31 @@ local function present(index, id, name, effect, caster, token)
     updateFade(0)
     return true
 end
+-- LOC owns its event/deduplication path. Keep a separate row so an unrelated
+-- harmful aura or the window's event order cannot overwrite the LOC evidence.
+function window:ObserveLossOfControl(id, name, effect, caster, token, candidate)
+    if not db or db.displaySpellIDWindow == false or ns.InitializationBlocked then return false end
+    if not validID(id) then return false end
+    local shown, reason = present(5, id, name or "Name unavailable", effect, candidate and candidate.name or caster, token)
+    if shown then showCandidate(rows[5], candidate) end
+    return shown or reason == "suppressed"
+end
 local function scanAuras(unit, updates)
     if unit == "target" and not npcTarget() then
         seen.target = {}
         auraStatus.target = "target excluded (absent, player or player-controlled)"
         return
     end
-    if not C_UnitAuras then auraStatus[unit] = "aura API unavailable"; return end
+    local C_UnitAuras = C_UnitAuras or {}
     local updated = {}
-    if readableTable(updates) and readableTable(updates.updatedAuraInstanceIDs) then
+    if accessibleTable(updates) and accessibleTable(updates.updatedAuraInstanceIDs) then
         for _, id in ipairs(updates.updatedAuraInstanceIDs) do
             if public(id) and type(id) == "number" then updated[id] = true end
         end
     end
     local current = {}
     local filter = unit == "player" and "HARMFUL" or "HELPFUL"
-    local returned, displayed, unchanged = 0, 0, 0
+    local returned, displayed, unchanged, additions = 0, 0, 0, 0
     local problem
     local path = "index"
     local slotFailure
@@ -250,7 +356,7 @@ local function scanAuras(unit, updates)
         end
         return label .. " (error text unavailable)"
     end
-    local function accept(aura, key)
+    local function accept(aura, key, added)
         returned = returned + 1
         if not public(aura) or type(aura) ~= "table" then
             problem = "aura table unavailable"
@@ -276,7 +382,7 @@ local function scanAuras(unit, updates)
             key = "instance:" .. instance
         else key = path .. ":" .. key end
         current[key] = identity
-        if seen[unit][key] ~= identity or (identity ~= true and updated[identity]) then
+        if added or seen[unit][key] ~= identity or (identity ~= true and updated[identity]) then
             local source=read(function() return aura.sourceUnit end)
             local caster
             if public(source) and type(source)=="string" and source~="" then caster=read(UnitName,source) end
@@ -315,10 +421,12 @@ local function scanAuras(unit, updates)
         end
         if not completed and not problem then problem = "aura page limit reached" end
     else completed = false end
-    -- A slot-query error is not an empty aura list. Try the documented indexed
-    -- API when slots returned nothing, and retain both errors if access is denied.
-    if not completed and returned == 0 then
+    -- Enumerating slots does not guarantee their aura data was readable. A nil
+    -- or inaccessible slot result must not prevent the indexed fallback.
+    if path == "slots" and problem then slotFailure = slotFailure or problem end
+    if (not completed or problem) and displayed == 0 then
         path = slotFailure and "index fallback" or "index"
+        completed = false
         if type(C_UnitAuras.GetAuraDataByIndex) == "function" then
             problem = nil
             for index = 1, 255 do
@@ -330,8 +438,32 @@ local function scanAuras(unit, updates)
             if not completed and not problem then problem = "aura index limit reached" end
         else problem = "aura index API unavailable" end
     end
+    -- The event can carry a short-lived aura which enumeration no longer
+    -- returns (or cannot read). Give additions precedence over the full scan.
+    -- Polarity must be public; never mistake a player buff for a debuff.
+    local eventStatus = "no additions"
+    if accessibleTable(updates) and accessibleTable(updates.addedAuras) then
+        eventStatus = "accessible additions"
+        auraEventSerial = auraEventSerial + 1
+        for index, aura in ipairs(updates.addedAuras) do
+            local polarity = accessibleTable(aura) and read(function()
+                if unit == "player" then return aura.isHarmful end
+                return aura.isHelpful
+            end)
+            if public(polarity) and polarity == true then
+                additions = additions + 1
+                accept(aura, "event:" .. auraEventSerial .. ":" .. index, true)
+            elseif not public(polarity) then
+                eventStatus = "addition polarity restricted"
+            end
+        end
+    elseif not public(updates) or updates ~= nil then
+        eventStatus = "addition data unavailable"
+    end
     if completed then seen[unit] = current end
     auraStatus[unit] = "path=" .. path .. "; returned=" .. returned .. "; displayed=" .. displayed .. "; unchanged=" .. unchanged
+        .. "; event additions=" .. additions
+        .. "; " .. eventStatus
         .. (slotFailure and ("; " .. slotFailure) or "")
         .. (problem and problem ~= slotFailure and ("; " .. problem) or "")
 end
@@ -369,7 +501,10 @@ events:SetScript("OnEvent", function(_, event, unit, second, id, bar)
     elseif event == "PLAYER_REGEN_ENABLED" then
         scanAuras("player"); scanAuras("target")
     elseif event == "UNIT_AURA" then
-        if public(unit) and unit == "player" then scanAuras("player", second)
+        if public(unit) and unit == "player" then
+            playerAuraEvents = playerAuraEvents + 1
+            scanAuras("player", second)
+            lastPlayerAuraEvent = auraStatus.player
         elseif targetUnit(unit) then scanAuras("target", second) end
     elseif targetUnit(unit) and enemyTarget() then
         if event == "UNIT_SPELLCAST_SUCCEEDED" then
@@ -456,6 +591,9 @@ end
 
 function window:Report(say)
     say("ID window player debuffs: " .. auraStatus.player)
+    say("ID window player UNIT_AURA events=" .. playerAuraEvents .. "; last event: " .. lastPlayerAuraEvent)
+    say("ID window enabled=" .. tostring(db and db.displaySpellIDWindow ~= false)
+        .. "; Disarm 6713 blacklisted=" .. tostring(self:IsBlacklisted(6713)))
     say("ID window target buffs: " .. auraStatus.target)
     if ns.AuraTooltipSnapshot then ns.AuraTooltipSnapshot:Report(say) end
 end

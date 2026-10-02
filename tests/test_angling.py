@@ -954,6 +954,7 @@ class AnglingUITests(unittest.TestCase):
         self.lua.execute('''
             local e=spot('Pier','School');observe('one','pool',e.poolID,e.id)
             c:Select(e.id);assert(c:State().selected==e.id and m.map.pins[1].group[1].id==e.id)
+            assert(m.map.pins[1]:GetWidth()==24,'Adapters without Atlas state use the default selected icon size')
             m.map.pins[1].scripts.OnEnter(m.map.pins[1]);assert(GameTooltip:GetText()=='Remembered fishing locations')
             assert(GameTooltip.lines[1].text=='Pier')
             m.map.pins[1].scripts.OnClick(m.map.pins[1]);assert(c:State().selected==e.id)

@@ -2,7 +2,7 @@ local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local U={};ns.AtlasUI=U
 local ui=ns.FieldbookUI
-U.Button=ui.Button;U.Edit=ui.Edit
+U.Button=ui.Button;U.Edit=ui.Edit;U.Search=ui.Search
 U.ShareButton=ui.ShareButton
 U.MenuButton=ui.MenuButton
 function U.ZoneMenu(parent,x,y,width,getMaps,onSelect)
@@ -40,6 +40,12 @@ end
 function U.SavedIcon(saved)
     local texture=saved and "Interface\\Buttons\\UI-CheckBox-Check" or "Interface\\Buttons\\UI-CheckBox-Up"
     return "|T"..texture..":14:14:0:0|t "
+end
+function U.TypeCheck(texture,kind)
+    local inferred=kind=="inferred"
+    texture:SetDesaturated(inferred)
+    texture:SetVertexColor(inferred and 0.6 or 1,inferred and 0.6 or 1,inferred and 0.6 or 1)
+    texture:SetShown(kind=="inferred" or kind=="player")
 end
 function U.SavedButton(parent,text,x,y,width,action)
     local button=U.Button(parent,text,x,y,width,action)

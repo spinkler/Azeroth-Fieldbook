@@ -1,6 +1,9 @@
 local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A=ns.Atlas
+local function categoryInfo(id)
+    return A.category[id] or (ns.AtlasEntrances and ns.AtlasEntrances.Category(id))
+end
 function A.MapCatalog(journal)
     local maps,seen={},{}
     local function add(id,name)
@@ -376,12 +379,12 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
         if cachedMap~=mapID or not self.available then drawArt(mapID);cachedMap=mapID end
         self:ApplyBrightness()
         positionCanvas()
-        displayedMapID=mapID;self.subzoneMapID=mapID;self:ResumePlayer();self:UpdateWeather()
+        displayedMapID=mapID;self.displayedMapID=mapID;self.subzoneMapID=mapID;self:ResumePlayer();self:UpdateWeather()
         self.empty:SetShown(not self.available)
         self.empty:SetText(mapID and "Map artwork unavailable in this client.\nCoordinates and the index remain available." or "Choose a zone or use Current Zone.\nAdd Discovery can also save an unpositioned record.")
         if not self.available then return "Map unavailable; use the index." end
         local markers={};local entry=journal:Get(selected)
-        if entry and entry.category=="route" then
+        if entry and entry.category=="route" and not entry.entrance then
             local routePins,segments=journal:RouteMap(entry,mapID)
             for _,p in ipairs(routePins) do markers[#markers+1]={id=selected,point=p,category="route",number=p.number,name=entry.name.." • "..p.number..". "..p.name} end
             for i,segment in ipairs(segments) do
@@ -401,7 +404,7 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
             -- A passage can be recorded as a position before an itinerary is
             -- built. Show that observation without manufacturing a stop.
             if e.category=="route" and #e.stops==0 and e.mapID==mapID and A.Position(e) and journal:Layer("route") then
-                markers[#markers+1]={id=e.id,point=e,category="route",name=e.name.." • recorded passage position"}
+                markers[#markers+1]={id=e.id,point=e,category="route",name=e.name..(e.entrance and " • observed entrance" or " • recorded passage position")}
             elseif e.category~="route" and A.Position(e) and journal:Layer(e.category) then
                 markers[#markers+1]={id=e.id,point=e,category=e.category,name=e.name}
             elseif e.category=="route" and e.id~=selected and journal:Layer("route") then
@@ -443,8 +446,13 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
                     GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText("Atlas discoveries")
                     for n,m in ipairs(self.group) do
                         if n>8 then GameTooltip:AddLine("… "..(#self.group-8).." more; use the index.");break end
-                        GameTooltip:AddLine(A.Safe(m.name).." — "..A.category[m.category].label,1,1,1,true)
+                        GameTooltip:AddLine(A.AutomaticLabel(m.name,m.point.entrance).." — "..categoryInfo(m.category).label,1,1,1,true)
                         GameTooltip:AddLine(string.format("%.1f, %.1f",m.point.x/100,m.point.y/100),0.75,0.8,0.8)
+                        if m.point.entrance then
+                            local e=m.point.evidence
+                            GameTooltip:AddLine(e.entries.." entries / "..e.exits.." exits • "..e.evidence,0.75,0.8,0.8)
+                            GameTooltip:AddLine("Type: "..m.point.classification.kind,0.75,0.8,0.8)
+                        end
                     end
                     if #self.group>1 then GameTooltip:AddLine("Click repeatedly to cycle overlapping entries.",1,0.82,0.14,true) end
                     GameTooltip:Show()
@@ -454,15 +462,18 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
             local m=g[1];for _,v in ipairs(g) do if v.id==selected then m=v;break end end
             p.group,p.selected=g,selected;p:ClearAllPoints()
             p:SetPoint("CENTER",canvas,"TOPLEFT",m.point.x/10000*self:GetWidth(),-m.point.y/10000*self:GetHeight())
-            p.icon:SetTexture(A.category[m.category].icon);p.text:SetText(m.number and tostring(m.number) or (#g>1 and tostring(#g) or ""))
-            p:SetSize(g.selected and 24 or 20,g.selected and 24 or 20)
+            p.icon:SetTexture(categoryInfo(m.category).icon);p.text:SetText(m.number and tostring(m.number) or (#g>1 and tostring(#g) or ""))
+            local iconSize=journal.state and journal.state.iconSize
+            local size=A.Number(iconSize,6,40) and iconSize or 20
+            size=size+(g.selected and 4 or 0)
+            p:SetSize(size,size)
             p:SetBackdropBorderColor(g.selected and 1 or 0.15,g.selected and 0.82 or 0.15,g.selected and 0.14 or 0.15,1)
             p:Show()
         end
         self.pins,self.lines=pins,lines
         local caption=""
         if #groups>192 then caption="192 marker groups shown; use the index for the full journal." end
-        if entry and entry.category=="route" then
+        if entry and entry.category=="route" and not entry.entrance then
             if #entry.stops==0 then
                 caption=A.Position(entry) and "Recorded passage position; no itinerary stops added yet." or "Unpositioned passage; add a map position or itinerary stops."
             else
