@@ -359,8 +359,10 @@ class LedgerTests(unittest.TestCase):
         self.lua.execute('''
             local e=visit();shell:ShowSection('merchants');c:Select(e.id);local m=c.main
             assert(m.notes==nil)
-            assert(m.sightings.point[3]==-174 and m.link.point[3]==-174)
-            assert(m.link.point[2]-(m.sightings.point[2]+m.sightings:GetWidth())==6)
+            assert(m.sightings.point[3]==-174)
+            assert(m.link.parent==m.directory and m.link.point[2]+m.link:GetWidth()<306)
+            assert(m.search.point[3]-m.search:GetHeight()>m.link.point[3])
+            assert(m.link.point[3]-m.link:GetHeight()>m.count.point[3] and m.count.point[3]>m.contactList.point[3])
             assert(not m.details.text:GetText():find('Access notes',1,true))
             e.note='Upstairs';c:Refresh();assert(m.details.text:GetText():find('Upstairs',1,true))
         ''')
@@ -524,6 +526,7 @@ class LedgerTests(unittest.TestCase):
             fire('TRAINER_SHOW');local e=j:Get(t.visits.trainer.contact);local v=one(e.lessons)
             assert(e.roles.trainer and v.name=='Sword lesson' and v.rank=='Rank 2' and v.requiredLevel==20)
             assert(v.availability=='unavailable' and v.price==0 and v.costUnit=='copper')
+            assert(v.icon==123)
             assert(not e.trainerInspection.complete and #v.requirements==2 and e.specialities.Swords)
             assert(next(e.goods)==nil)
             trainer[1].level=nil;trainer[1].name='Pet lesson';trainerType=2;fire('TRAINER_UPDATE');flush()
@@ -531,6 +534,22 @@ class LedgerTests(unittest.TestCase):
             C_Trainer.GetTrainerType=function() return secret end
             fire('TRAINER_UPDATE');flush()
             for _,v in pairs(e.lessons) do if v.name=='Pet lesson' then assert(v.costUnit=='unknown') end end
+        ''')
+
+    def test_training_icons_survive_unreadable_refresh_without_changing_reports(self):
+        self.lua.execute('''
+            trainer={{name='Sword lesson',status='available',rank='Rank 2',category='',price=100}}
+            fire('TRAINER_SHOW');local e=j:Get(t.visits.trainer.contact)
+            local original=GetTrainerServiceInfo
+            function GetTrainerServiceInfo(i)
+                local name,status,_,level,rank,category=original(i)
+                return name,status,nil,level,rank,category
+            end
+            now=now+10;fire('TRAINER_UPDATE');flush()
+            assert(one(e.lessons).icon==123)
+            local loaded=ns.CreateLedgerJournal(saved);assert(one(loaded:Get(e.id).lessons).icon==123)
+            local report=reportFor(e);assert(report.lessons[1].icon==nil and R.Validate(report))
+            local receiver=ns.CreateLedgerJournal({});assert(#import(receiver,report).reports[1].lessons==1)
         ''')
 
     def test_extended_costs_unknown_metadata_and_restrictions(self):
@@ -572,6 +591,22 @@ class LedgerTests(unittest.TestCase):
             assert(#j:List({query='copper',zone='Elsewhere'})==0)
             assert(#j:List({knowledge='reported'})==0)
             local zones=j:Zones();assert(zones['Synthetic coast']['Synthetic subzone'] and not zones['Undiscovered'])
+        ''')
+
+    def test_current_zone_filter_combines_search_with_guarded_zone_lookup(self):
+        self.lua.execute('''
+            local coast=visit();mapID=102;local hills=visit(43,'DEF')
+            mapID=101;repair=false;local merchant=visit(44,'ACD')
+            local revision=j.revision;local rows=j:List({query='repair',currentZone=true})
+            assert(#rows==1 and rows[1].contact==coast)
+            assert(#j:List({currentZone=true})==2)
+            mapID=102;rows=j:List({query='REPAIR',currentZone=true,roles={repair=true}})
+            assert(#rows==1 and rows[1].contact==hills)
+            mapID=nil;GetRealZoneText=function() return 'Synthetic coast' end
+            rows=j:List({query='repair',currentZone=true});assert(#rows==1 and rows[1].contact==coast)
+            GetRealZoneText=function() return nil end
+            assert(#j:List({currentZone=true})==0,'unavailable zone must not expose the whole directory')
+            assert(#j:List({query='repair'})==2 and j.revision==revision)
         ''')
 
     def test_report_roundtrip_private_notes_and_per_fact_provenance(self):
@@ -797,6 +832,125 @@ class LedgerUITests(unittest.TestCase):
         end
     ''')
 
+    def test_training_sort_menu_orders_all_sources_and_remembers_choice(self):
+        self.lua.execute('''
+            local e=visit()
+            trainer={
+                {name='Zulu',status='available',level=10,rank='',category='',price=100},
+                {name='alpha',status='unavailable',level=20,rank='',category='',price=100},
+                {name='Unknown level',status='unknown',rank='',category='',price=100},
+                {name='Beta',status='used',level=10,rank='Rank 10',category='',price=100},
+                {name='Beta',status='used',level=10,rank='Rank 2',category='',price=100},
+            }
+            fire('TRAINER_SHOW');flush();c:Select(e.id)
+            local report=reportFor(e);local lesson=L.Copy(report.lessons[1])
+            lesson.name='Reported first';lesson.rank='';lesson.requiredLevel=5;lesson.key=L.LessonKey(lesson)
+            lesson.origin.source='Another observer';report.lessons={lesson};report.goods={}
+            import(j,report,e.id);flush()
+            for key,v in pairs(e.lessons) do if v.name=='alpha' then c.state.focus=key end end
+            c:Catalogue('training');local p=c.panels.catalogue;local area=p.read
+            local function order(expected)
+                local _,blocks=c:Details(e,true,'training');local index=0
+                for _,block in ipairs(blocks) do if block.heading then
+                    index=index+1;assert(block.text:find(expected[index],1,true),block.text)
+                end end
+                assert(index==#expected)
+            end
+            assert(p.sort:IsShown() and c.state.trainingSort=='level')
+            order({'Reported first','(Rank 2)','(Rank 10)','Zulu','alpha','Unknown level'})
+            area:SetVerticalScroll(50);choose(openMenu(p.sort),'Name')
+            assert(c.state.trainingSort=='name' and area:GetVerticalScroll()==0)
+            order({'alpha','(Rank 2)','(Rank 10)','Reported first','Unknown level','Zulu'})
+            c:Refresh();order({'alpha','(Rank 2)','(Rank 10)','Reported first','Unknown level','Zulu'})
+            c:Catalogue('goods');assert(not p.sort:IsShown())
+            c:Catalogue('training');assert(p.sort:IsShown())
+            choose(openMenu(p.sort),'Name (selected)')
+            local loaded=ns.CreateLedgerJournal(saved)
+            local book=ns.CreateLedgerBook(loaded,t,ns.CreateFieldbookShell())
+            assert(book.state.trainingSort=='name')
+            choose(openMenu(p.sort),'Level');assert(c.state.trainingSort=='level')
+            order({'Reported first','(Rank 2)','(Rank 10)','Zulu','alpha','Unknown level'})
+        ''')
+
+    def test_training_rich_rows_icons_colours_and_historical_cost_units(self):
+        self.lua.execute(r'''
+            local e=visit()
+            trainer={{name='Sword lesson',status='available',level=20,rank='Rank 2',category='Swords',price=12345}}
+            fire('TRAINER_SHOW');flush();c:Select(e.id);c:Catalogue('training')
+            local area=c.panels.catalogue.read;local lesson=one(e.lessons)
+            local before=snapshot(e)
+            local text,blocks=c:Details(e,true,'training')
+            assert(blocks[2].heading and blocks[2].text:find('|T123:18:18:0:0|t ',1,true))
+            assert(text:find('|cff80e680Sword lesson|r',1,true) and text:find('(Rank 2)',1,true))
+            assert(text:find('|cffffd100Required level: 20|r',1,true))
+            assert(select(2,text:gsub('Required level:', ''))==1)
+            assert(text:find('|cff80cfffCategory: Swords|r',1,true))
+            assert(text:find('1|cffffd100g|r 23|cffc7c7cfs|r 45|cffb87333c|r',1,true))
+            assert(text:find('|cff888888First:',1,true) and text:find('Last: '..L.Date(lesson.last),1,true))
+            assert(text:match('Last quoted cost: ([^\n]+)')=='1|cffffd100g|r 23|cffc7c7cfs|r 45|cffb87333c|r')
+            assert(c:Details(e,false,'training'):match('Last quoted cost: ([^\n]+)')=='1g 23s 45c')
+            local view=area.headingViews[2]
+            assert(view.icon.texture==123 and view.icon:GetWidth()==40 and view.icon:IsShown())
+            local tooltipLink
+            C_Spell={GetSpellLink=function(identifier)
+                assert(identifier=='Sword lesson(Rank 2)');return '|Hspell:1234|h[Sword lesson]|h'
+            end}
+            GameTooltip.SetHyperlink=function(_,link) tooltipLink=link end
+            view.iconHover.scripts.OnEnter(view.iconHover);assert(tooltipLink:find('spell:1234',1,true))
+            view.iconHover.scripts.OnLeave();assert(not GameTooltip:IsShown())
+            tooltipLink=nil;view.hover.scripts.OnEnter(view.hover);assert(tooltipLink:find('spell:1234',1,true))
+            view.hover.scripts.OnLeave();assert(not GameTooltip:IsShown())
+            C_Spell.GetSpellLink=function() return nil end
+            view.iconHover.scripts.OnEnter(view.iconHover);assert(GameTooltip:GetText()=='Sword lesson (Rank 2)')
+            view.iconHover.scripts.OnLeave()
+
+            assert(area.blocks[3].point[2]==46 and area.blocks[3]:GetWidth()==175)
+            assert(not area.blocks[2]:GetText():find('|T',1,true))
+            assert(snapshot(e)==before,'Display must not change observations')
+            for status,color in pairs({unavailable='ffff8080',used='ff999999',unknown='ffffd100'}) do
+                lesson.availability=status
+                assert(c:Details(e,true,'training'):find('|c'..color..'Sword lesson|r',1,true))
+            end
+            lesson.costUnit='training points';lesson.price=7
+            text=c:Details(e,true,'training');assert(text:find('7 training points',1,true) and not text:find('7c',1,true))
+            lesson.costUnit='unknown';assert(c:Details(e,true,'training'):find('7 (unit unknown)',1,true))
+            lesson.icon=nil
+            C_Spell={GetSpellTexture=function(identifier) assert(identifier=='Sword lesson(Rank 2)');return 456 end}
+            c:Refresh();assert(view.icon.texture==456 and lesson.icon==nil)
+            C_Spell.GetSpellTexture=function(identifier) return identifier=='Sword lesson' and 789 or nil end
+            c:Refresh();assert(view.icon.texture==789)
+            C_Spell.GetSpellTexture=function() return secret end
+            c:Refresh();assert(view.icon.texture==134400)
+            C_Spell=nil;c:Refresh();assert(view.icon.texture==134400)
+            c:Catalogue('goods');assert(view.icon.texture==123)
+            c:Catalogue('training');assert(view.icon.texture==134400)
+            lesson.name='Bad |Hitem:999|hname|h';lesson.rank='|cffff0000Rank'
+            text=c:Details(e,true,'training')
+            assert(not text:find('|Hitem:999|h',1,true) and not text:find('|cffff0000Rank',1,true))
+        ''')
+
+    def test_training_overflow_scrolls_from_text_headings_icons_and_viewport(self):
+        self.lua.execute('''
+            local e=visit()
+            for i=1,20 do trainer[i]={name='Lesson '..i,status='available',level=i,rank='',category='',price=100} end
+            fire('TRAINER_SHOW');flush();c:Select(e.id);c:Catalogue('training')
+            local area=c.panels.catalogue.read;local body=area.blocks[1].parent
+            local view=area.headingViews[2];local mapZoom=m.map.zoom
+            assert(body:GetHeight()>area:GetHeight() and area.ScrollBar:IsShown() and area.mouseWheel)
+            for _,surface in ipairs({area,body,view,view.hover,view.iconHover}) do
+                area:SetVerticalScroll(0);surface.scripts.OnMouseWheel(surface,-1)
+                assert(area:GetVerticalScroll()==32)
+                surface.scripts.OnMouseWheel(surface,-100000)
+                assert(area:GetVerticalScroll()==body:GetHeight()-area:GetHeight())
+                surface.scripts.OnMouseWheel(surface,100000);assert(area:GetVerticalScroll()==0)
+            end
+            assert(m.map.zoom==mapZoom)
+            area:SetVerticalScroll(64);c:Refresh();assert(area:GetVerticalScroll()==64)
+            area:SetContact(nil,false,'training')
+            assert(area:GetVerticalScroll()==0 and not area.ScrollBar:IsShown() and not area.mouseWheel)
+            body.scripts.OnMouseWheel(body,-1);assert(area:GetVerticalScroll()==0)
+        ''')
+
     def test_training_requires_personal_or_reported_lessons(self):
         self.lua.execute('''
             assert(m.detailButtons.training.enabled==false)
@@ -837,6 +991,35 @@ class LedgerUITests(unittest.TestCase):
             c:Catalogue('goods');assert(c.panel==c.panels.catalogue)
             c:ClosePanel();c:Select(empty.id)
             assert(m.detailButtons.goods.enabled==false)
+        ''')
+
+    def test_current_zone_checkbox_tracks_travel_and_excludes_fixed_zone_filters(self):
+        self.lua.execute('''
+            local coast=visit();mapID=102;local hills=visit(43,'DEF')
+            mapID=101;repair=false;visit(44,'ACD');flush()
+            m.search:SetText('repair');assert(#c.rows==2)
+            local current=choose(openMenu(m.filters),'Current Zone')
+            assert(current.selected() and current.response==MenuResponse.Refresh and m.filters.afbSelected)
+            assert(#c.rows==1 and c.rows[1].contact==coast and c.state.query=='repair')
+            assert(ns.CreateLedgerJournal(saved).state.currentZone==true)
+            mapID=102;fire('ZONE_CHANGED_NEW_AREA');assert(#c.rows==1 and c.rows[1].contact==hills)
+            choose(openMenu(m.filters),'Current Zone');assert(#c.rows==2 and not m.filters.afbSelected)
+            local locations=choose(openMenu(m.filters),'Zone / location')
+            choose(choose(locations,'Synthetic coast'),'Synthetic subzone')
+            assert(c.state.zone=='Synthetic coast' and c.state.subzone=='Synthetic subzone')
+            choose(openMenu(m.filters),'Current Zone')
+            assert(c.state.currentZone and not c.state.zone and not c.state.subzone and c.rows[1].contact==hills)
+            locations=choose(openMenu(m.filters),'Zone / location')
+            choose(choose(locations,'Synthetic coast'),'All of Synthetic coast')
+            assert(not c.state.currentZone and #c.rows==1 and c.rows[1].contact==coast)
+            choose(openMenu(m.filters),'Current Zone')
+            locations=choose(openMenu(m.filters),'Zone / location');choose(locations,'All zones')
+            assert(not c.state.currentZone and #c.rows==2)
+            choose(openMenu(m.filters),'Current Zone');shell:ShowSection('other')
+            mapID=101;fire('ZONE_CHANGED_NEW_AREA');shell:ShowSection('merchants')
+            assert(c.state.currentZone and #c.rows==1 and c.rows[1].contact==coast)
+            choose(openMenu(m.filters),'Clear')
+            assert(not c.state.currentZone and c.state.query=='' and #c.rows==3 and not m.filters.afbSelected)
         ''')
 
     def test_widget_selection_item_reason_reset_and_empty_states(self):
@@ -902,7 +1085,7 @@ class LedgerUITests(unittest.TestCase):
     def test_bounded_list_sort_favourites_and_stable_scroll_during_updates(self):
         self.lua.execute('''
             for i=1,20 do now=now+1;name=string.format('Contact %02d',i);visit(i,'ABC') end
-            flush();c.state.contactScroll=780;c:Refresh();local first=m.rows[1].id
+            flush();c.state.contactScroll=924;c:Refresh();local first=m.rows[1].id
             fire('MERCHANT_UPDATE');flush();assert(c.state.offset==12 and m.rows[1].id==first)
             choose(openMenu(m.sort),'Last encounter');assert(c.state.offset==0 and m.rows[1].name:GetText()=='Contact 20')
             click(m.rows[1]);click(m.favourite);flush();local item=choose(openMenu(m.filters),'Favourites');assert(item.selected() and item.response==MenuResponse.Refresh)

@@ -14,6 +14,25 @@ LORE_MODULES = ['LoreJournal.lua', 'LoreSettings.lua', 'LoreTracking.lua', 'Lore
 
 
 class FieldbookTabsTests(unittest.TestCase):
+    def test_search_placeholders_follow_query_and_clear_button(self):
+        self.lua.execute('''
+            local sections={atlas=atlas,angling=angling,merchants=ledger,treasure=treasure,lore=lore}
+            for _,id in ipairs({'bestiary','gathering','atlas','angling','merchants','treasure','lore'}) do
+                shell:ShowSection(id)
+                local page=sections[id] and sections[id].main or shell.sections[id].frame
+                local search=assert(page.search,id)
+                assert(search.placeholder:IsShown(),id..': empty query')
+                search:SetText('no matching entry')
+                assert(not search.placeholder:IsShown(),id..': entered query')
+                search:SetText('')
+                assert(search.placeholder:IsShown(),id..': deleted query')
+                search:SetText('restored query')
+                assert(not search.placeholder:IsShown(),id..': restored query')
+                search.clearButton.scripts.OnClick(search.clearButton)
+                assert(search:GetText()=='' and search.placeholder:IsShown(),id..': clear button')
+            end
+        ''')
+
     def test_background_lore_capture_announces_automatic_tag_once(self):
         self.lua.execute('''
             local chat={};DEFAULT_CHAT_FRAME={AddMessage=function(_,message) chat[#chat+1]=message end}
@@ -338,6 +357,7 @@ class FieldbookTabsTests(unittest.TestCase):
                 shell:ShowSection(id)
                 local page=sections[id] and sections[id].main or shell.sections[id].frame
                 local title=page.pageTitle
+                assert(shell.sections[id].frame:GetHeight()==740 and shell:GetFrame():GetHeight()==740,id..': standard section height')
                 assert(title and title.point[1]=='TOPLEFT' and title.point[2]==37 and title.point[3]==-60,id)
                 assert(title:GetText()==shell.sections[id].definition.title,id)
             end
@@ -355,8 +375,8 @@ class FieldbookTabsTests(unittest.TestCase):
             assert(-g.mapOptions.worldMap.point[3]+g.mapOptions.worldMap:GetHeight()<=714)
             for _,page in ipairs({b,g}) do
                 assert(page.entryCount.point[3]==-88 and page.search.point[3]==-110)
-                assert(#page.rows==16 and page.rows[1].point[3]==-140 and page.rows[16].point[3]==-560)
-                assert(page.rows[16]:GetHeight()==26)
+                assert(#page.rows==18 and page.rows[1].point[3]==-140 and page.rows[18].point[3]==-599)
+                assert(page.rows[18]:GetHeight()==26)
             end
         """)
 
@@ -373,8 +393,8 @@ class FieldbookTabsTests(unittest.TestCase):
             end
             assert(root.closeButton:GetFrameLevel()>root.titleIcon:GetFrameLevel())
             assert(not root.titleIcon:IsMouseEnabled(),'decorative trim does not block tab clicks')
-            local names={'Bestiary',"Gatherer's Compendium",'Traveller’s Atlas','Angler’s Almanac',
-                'Merchant’s Ledger','Treasure Journal',"Lorekeeper's Chronicle"}
+            local names={'Bestiary',"Gatherer's Compendium",'Traveller’s Atlas','Merchant’s Ledger',
+                'Treasure Journal','Angler’s Almanac',"Lorekeeper's Chronicle"}
             assert(shell.active=='bestiary' and #root.sectionTabs==7)
             assert(root.navigation.point[2]==root and root.navigation.point[3]=='TOPRIGHT')
             assert(root.navigation.point[4]==-2,'native tab art overlaps the trim only enough to seal the seam')

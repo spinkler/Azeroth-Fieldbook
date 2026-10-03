@@ -1,5 +1,200 @@
 # Changelog
 
+## v0.24.0 - 2026-10-04
+
+Release-channel update covering all changes since v0.23.0-beta and previous-push
+baseline 2e13fb6ffe89a764a330b059fd5271bdf51e9ca9.
+
+- Remove the Discovery index label from Traveller’s Atlas.
+
+- Standardize Annals, Treasure and Almanac zone selectors and Ledger’s
+  NPC Locations button at 256 × 24. Fit Treasure’s adjacent controls with six-pixel
+  gaps while preserving the shared row edges and map dimensions. Keep Atlas’s
+  zone selector expanded to 306 pixels to fill its control area.
+
+- Align Annals Journey controls with the other map pages: place the zone and
+  navigation row seven pixels above the map with matching left/right overhang,
+  and align the date-filter and Around selected event rows. Preserve map and control sizes.
+
+- Add inner padding to Chronicle and Treasure entry rows; show eight Chronicle
+  entries per page to keep the padded rows clear of navigation. Ledger training
+  icons and titles now show cached ability tooltips, with a fallback for unavailable details.
+
+- Increase Ledger contact-list names by two font points and tags by one, adjusting
+  row spacing and scroll heights to fit the larger text.
+
+- Match Gatherer’s Location window to Bestiary’s 603 × 627 panel at the same
+  position, preserving their shared bottom edge.
+
+- Add four pixels of inner padding to Almanac list rows and match Atlas entrance
+  discovery checkboxes to the automatic-mapping checkbox.
+
+- Remove Atlas discovery pins’ outer borders while keeping their icon bevels.
+  Close Map Layers on outside clicks, place the zone selector on the bottom
+  control row, and move entrance, mapping and layer controls up one row.
+- Remove Bestiary and Gatherer Previous/Next buttons and expand both scrolling
+  lists to 18 rows. Retain Bestiary entry-navigation keybindings.
+
+- Replace Almanac main-list pagination with scrolling. Show Merge spot only on
+  Waters in the former Previous slot; reserve the former Next slot for Restore
+  when a removed record is selected on any Almanac tab.
+
+- Remove the darkened background behind Ledger's contact list, retaining row
+  selection highlights.
+- Swap the Almanac's session-source buttons and zone selector rows, placing
+  the zone selector directly above the map with Record catch right-aligned on
+  that row, clear of the session-source buttons. Preserve the remaining layout.
+- Add four pixels of padding on each side inside Ledger contact selection rows,
+  increasing row heights and scroll spacing to preserve readable contact details.
+- Keep Lorekeeper's Chronicle on Entry by default, remove the Entry button,
+  and make Location a standard highlighted toggle that returns to Entry when off.
+- Centre the Annals legend horizontally over the Journey map. Adjust Bestiary's
+  Locations panel to 603 × 627 while preserving its bottom edge after the main
+  window height adjustment.
+- Reorder the page tabs: Bestiary, Gatherer's Compendium, Traveller's Atlas,
+  Adventurer's Annals, Merchant's Ledger, Treasure Journal, Angler's Almanac,
+  then Lorekeeper's Chronicle. Use the pocket-watch icon for Annals.
+- Left-align Annals' Around selected event button in the right pane, retaining
+  the compact settings row beneath the map. Match Bestiary's base height to the
+  other sections by tightening its ability form and footer spacing; long
+  summaries retain their required expansion without clipping lower controls.
+- Restore the Annals Journey map to the shared map position. Put the contrast
+  and icon-size labels, sliders and values on one row beneath it. Explain the
+  one-hour window (30 minutes each side) in Around selected event's tooltip,
+  including the exact dates/times when an event is selected.
+- Add Ledger's Current Zone filter beside its other filter options. Combine it
+  with searches such as "repair" and refresh matches when the player changes
+  zones; selecting a fixed zone or clearing filters disables it.
+- Move Ledger's Link identity button below Search and above the contact list
+  in the left pane.
+- Replace Annals' Event filter text button with the standard funnel beside
+  Search, highlighted when event types are filtered out.
+- Open Annals with Journey on the right and its timeline on the left. Put the
+  highlighted Show detail toggle in the left pane, where it overlays scrollable
+  event details while the map and playback remain available. Restore the same
+  timeline page and selection when closing details. Selecting a timeline event
+  seeks its Journey time and map. Move Around selected event, recorded level,
+  trail age contrast and map icon size into the right pane; explain contrast
+  in a hover tooltip.
+- Use the minimap's book icon for Azeroth Fieldbook in the addon selection list.
+- Soften Annals timeline icon
+  shadows and match both Timeline and Journey to the standard pane divider.
+  Place Find player and Follow player together immediately left of Legend.
+  Show only the newest three events in grouped map tooltips, indicate older
+  events, and remove the redundant discovery/quest-causation disclaimer.
+- Add player-supplied Lore translations through copy/paste report sharing.
+  Translate a selected source page, type a transcription or explicitly choose
+  your own readable capture, then share it back with language labels, translator
+  credit and an exact copy of the original. Keep both versions in the reader,
+  preserve attribution on forwarding, and include translations in search.
+  Report schema 2 retains schema 1 compatibility and installed-version checks;
+  translations never replace captured text or grant encounter credit.
+- Recover incomplete new Annals acceptance rewards from the matching quest log
+  for up to ten seconds after fast acceptance. Preserve the observed time,
+  location and known offers; restore the selected quest after guarded reads,
+  retain pending capture across reloads, and freeze incomplete data when the
+  retry window ends or the quest leaves the log. Never backfill older events.
+- Omit ×1 from single rewards, enlarge reward names by two points and add
+  shadows to timeline icons, including quest ! / ? markers. Give instance
+  entries/exits green inward and orange outward arrow badges in the timeline,
+  map and legend. Use the shared toggle glow for Legend and Follow player,
+  remove the legend close button and keep the Follow player label unchanged.
+- Record dungeon, raid and scenario entry/exit in Annals. Hold the Journey arrow
+  at the observed outdoor entrance during a visit, including after reloads and
+  when entry precedes the selected range. Keep interior events in the timeline,
+  suppress interior trails, and jump to observed exits or hearth destinations.
+  Leave unobserved entrances unknown instead of guessing their coordinates.
+- Confirm disabling Record Journey with Yes / No; keep recording until Yes.
+  Align Choose zone above the map's top left without moving the map. Replace
+  the text legend with a compact button opening an overlay of actual marker
+  icons, player arrows and trail colours. Offer Full / 3 hours / 1 hour /
+  15 minutes as Journey time ranges.
+- Recover Bestiary entries from readable post-combat enemy rosters even when
+  no creature ability can be imported, fixing missing entries when the client
+  restricts live unit identity. Retry when addon restrictions change and report
+  hidden roster fields. Keep dungeon and raid observations under their instance
+  name when maps are missing or lead to an outdoor parent. Add regressions for
+  restricted identities, roster-only recovery and unmapped instance discovery/kill
+  recording. Operator confirmed Hall of Thanes creatures appeared after reload.
+  Explain post-combat dungeon/raid discovery, party encounters and the scan retry
+  command in Bestiary Help.
+- Add the shared styled search bar to Annals. Match partial, case-insensitive
+  text across quests, event details, places and offered/received rewards, with
+  multi-word searches across fields. Include client item names, weapon/armour
+  types, equipment slots, quality, descriptions and readable tooltip text, so
+  sword rewards match even when their names do not contain "sword". Refresh
+  results as missing item data loads, combine with date/type/level filters, and
+  filter Journey markers without hiding the historical arrow or route.
+- Add Annals Follow player mode: keep the historical arrow in view during
+  playback, switch recorded zones/continents automatically and jump at observed
+  hearth/teleport arrivals without connecting the gap. Keep panning smooth between
+  route redraws and retain zoom when changing maps.
+- Add Annals Now / reset to return to the current time, clear search/date/level/event
+  filters and restore full-range timing, 1x speed and an unfollowed current-map view.
+- Style Annals timeline entries and details with clear headings, event colours,
+  quieter location/time metadata and coloured gold/silver/copper units. Show
+  quality-coloured reward names, item icons and hover tooltips in scrollable rows;
+  resolve missing cached artwork/quality without rewriting historical records.
+- Capture potential choices and guaranteed rewards when a quest is accepted,
+  including readable XP/money and currency/spell offers. Completed entries show
+  the observed chosen reward separately from guaranteed rewards and actual
+  XP/money. Preserve unknown older or incomplete offers and exact item links.
+- Add a remembered Level / Name sort-arrow menu to Ledger's Observed Training.
+  Match Known Goods with large ability headings and icons, coloured availability,
+  highlighted requirements and compact coin prices. Retain native trainer icons
+  and use cached artwork for older lessons when available. Enable scrolling over
+  the text, headings and icons when the list overflows, and omit the cost-line date.
+- Smooth Annals playback between connected samples using recorded timestamps,
+  with per-frame arrow movement and a progressively revealed route. Preserve
+  real gaps and label estimated positions; retain stop/resume timing and speed
+  changes in future recordings without adding periodic stationary samples.
+- Replace the Annals -1 sec / +1 sec buttons with Find player, which pauses and
+  centers the historical position at the selected time, changing maps when needed.
+  Keep mouse-wheel adjustments for second-by-second scrubbing.
+- Fix blank gathering previews with a broad camera clipping range and a shared
+  bounds-based scene viewer for herbs and minerals, verified in-client with Copper
+  Vein and Bruiseweed. Load visible actors, clear failed loads, and retain rotation
+  and automatic framing when switching entries or reopening the book.
+- Add `/fieldbook debug model` to inspect the selected gathering preview's loaded
+  asset, visibility and camera state in a copyable report.
+- Add Annals Hearthstone/recall and Classic teleport cast markers, battleground
+  entry/exit markers, and ship markers for observed cross-continent transfers.
+  Record departures and loading-transition arrivals without drawing connecting
+  trails across the transfer; include independent event filters and tooltip colours.
+- Colour-code Annals map tooltips: yellow names, cyan discoveries, grey timestamps
+  and supporting details, with distinct event colours and spacing between entries.
+- Keep map icon counts small, proportional and anchored to the artwork's bottom
+  corner. Borderless icons fill their selected base size, and icons and counts
+  scale together with map zoom.
+- Join Annals journey trails into continuous ribbons with shallow elbows, removing
+  overlapping square segment ends. Keep the visible stroke at two UI pixels
+  throughout map zoom and rebuild elbow detail for the current zoom level.
+- Fix Chronicle capture gaps for standard world-book readers: recover ready text
+  after a missed opening event, bind book identity when text is ready instead of
+  retaining stale opening metadata, and accept a false no-creator result.
+- Give the Annals Map icon size slider an opaque black track.
+- Add Annals journey playback with play/pause symbols and 1x/8x/32x/64x/128x speeds, stopping at
+  the selected range's end. Improve timeline precision with relative slider
+  values, time zoom and second-by-second mouse-wheel scrubbing.
+- Remove added map-pin frames in Annals, Lore, Ledger and Angling, preserving
+  the full original icon artwork and its built-in bevels.
+- Add persistent multi-select Annals event filters, a map icon-size slider and a
+  historical player arrow showing the latest recorded position and state at the
+  selected time; heading follows recorded movement where available.
+- Keep rounded journey elbows visible at low zoom by avoiding tiny line pieces.
+- Colour newly recorded flight travel green and record deaths in the Annals
+  timeline and map, including when journey recording is disabled.
+- Round connected Annals journey corners into shallow curves while preserving
+  recorded gaps, original samples and the map's drawing budget.
+- Show Annals archive usage at the bottom left in both views, with a tooltip
+  estimating the full character store and detailing events and journey data.
+- Fix the Search placeholder overlapping entered text in all journal and picker
+  search bars; restore it when the query is cleared.
+- Expand regression coverage for Annals playback, tracking, rewards, storage and
+  layout; Lore translations and capture; Bestiary identity and instance recovery;
+  gathering previews, Ledger filters/training, and journal navigation. Update
+  section, architecture, storage and verification documentation.
+
 ## v0.23.0-beta - 2026-10-03
 
 Beta-channel update covering all changes since v0.22.0 and previous-push

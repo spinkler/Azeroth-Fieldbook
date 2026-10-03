@@ -3,6 +3,38 @@ import unittest
 from test_zone_colours import client
 
 class SubzoneTests(unittest.TestCase):
+    def test_dungeon_and_raid_name_take_priority_over_outdoor_parent(self):
+        for kind in ('party', 'raid'):
+            with self.subTest(kind=kind):
+                lua=client()
+                lua.globals().instanceKind=kind
+                lua.execute(r'''
+                    zone='Reliquary of Kings'
+                    function GetSubZoneText() return zone end
+                    function GetInstanceInfo() return 'The Hall of Thanes',instanceKind end
+                    C_Map={GetBestMapForUnit=function() return 101 end,GetMapInfo=function(id)
+                        if id==101 then return {name=zone,mapType=5,parentMapID=100} end
+                        return {name='Ironforge',mapType=3,parentMapID=0}
+                    end}
+                    j:Observe('target')
+                    assert(e.locations['The Hall of Thanes'] and not e.locations.Ironforge)
+                    assert(e.subzones['The Hall of Thanes'][zone])
+                    C_Map.GetBestMapForUnit=function() return nil end
+                    zone='The Hall of Thanes';j:Observe('target')
+                    assert(not e.locations['Reliquary of Kings'])
+                ''')
+
+    def test_dungeon_map_is_not_relabelled_as_parent_zone(self):
+        lua=client()
+        lua.execute(r'''
+            zone='The Hall of Thanes'
+            C_Map={GetBestMapForUnit=function() return 101 end,GetMapInfo=function(id)
+                if id==101 then return {name=zone,mapType=4,parentMapID=100} end
+                return {name='Ironforge',mapType=3,parentMapID=0}
+            end}
+            j:Observe('target');assert(e.locations[zone] and not e.locations.Ironforge)
+        ''')
+
     def test_zone_parent_and_locked_subzone_observation(self):
         lua=client()
         lua.execute(r'''

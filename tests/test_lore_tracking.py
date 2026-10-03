@@ -258,11 +258,43 @@ class LoreTrackingTests(unittest.TestCase):
             assert(pageCount(writing())==1 and #requests==0)
         ''')
 
-    def test_ready_without_begin_and_opening_fieldbook_cannot_capture_stale_globals(self):
+    def test_ready_without_begin_recovers_visible_world_book(self):
         lua = client()
         lua.execute('''
             open=true;t:Event('ITEM_TEXT_READY');step(1)
-            assert(not writing() and not t:CaptureCurrent())
+            assert(writing() and pageCount(writing())==1)
+            turn(2);step(1);turn(3);step(1)
+            assert(#j:List({kind='writing'})==1 and j:WritingSummary(writing()).complete)
+        ''')
+
+    def test_ready_recovery_waits_for_native_reader_and_respects_close(self):
+        for cancel in ["t:Event('ITEM_TEXT_CLOSED')", "t:Event('PLAYER_LEAVING_WORLD')", 'open=false']:
+            lua = client()
+            lua.execute("t:Event('ITEM_TEXT_READY');open=true;" + cancel + '''
+                step(1);assert(not writing() and not t:CaptureCurrent())
+            ''')
+        lua = client()
+        lua.execute('''
+            assert(not t:CaptureCurrent(),'opening the Fieldbook cannot archive stale globals')
+            t:Event('ITEM_TEXT_READY');open=true;step(1)
+            assert(writing(),'native READY handlers can show the reader after our event')
+        ''')
+
+    def test_begin_stale_source_metadata_is_bound_at_ready(self):
+        lua = client()
+        lua.execute('''
+            begin();step(1);close()
+            open=true;t:Event('ITEM_TEXT_BEGIN')
+            book.title='Aegwynn and the Dragon Hunt';book.identity='fixture:westfall-book'
+            book.material='Parchment';book.pages={'New first page','New second page'}
+            t:Event('ITEM_TEXT_READY');step(1)
+            book.page=2;t:Event('ITEM_TEXT_BEGIN');t:Event('ITEM_TEXT_READY');step(1)
+            local found
+            for _,e in ipairs(j:List({kind='writing'})) do
+                if e.title==book.title then found=e end
+            end
+            assert(found and pageCount(found)==2 and j:WritingSummary(found).complete)
+            assert(found.pages[1].raw=='New first page' and #j:List({kind='writing'})==2)
         ''')
 
     def test_deliberate_dialogue_correct_attribution_and_deduplication(self):
@@ -353,6 +385,10 @@ class LoreTrackingTests(unittest.TestCase):
             begin();step(1);ItemTextNextPage();step(1);ItemTextNextPage();step(1)
             assert(#j:List({kind='writing'})==1 and pageCount(writing())==3 and j:WritingSummary(writing()).complete)
             close();begin();step(1);assert(#j:List({kind='writing'})==1)
+            close();book.title='World book with false creator';book.pages={'World text'}
+            function ItemTextGetCreator() return false end
+            begin();step(1);assert(#j:List({kind='writing'})==2)
+            close();assert(j:Delete(writing().id))
             close();book.title='Untrusted creator signal';book.pages={'Do not automatically collect'}
             function ItemTextGetCreator() error('unavailable') end
             begin();step(1);assert(#j:List({kind='writing'})==1)

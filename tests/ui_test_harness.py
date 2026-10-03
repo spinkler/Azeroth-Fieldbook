@@ -159,7 +159,14 @@ def new_ui_client(modules=()):
         if kind=='ModelScene' then
             function f:CreateActor()
                 local actor=CreateFrame('Actor',nil,self)
-                function actor:SetModelByFileID(id) self.requestedModel=id;return true end
+                function actor:SetModelByFileID(id)
+                    local ancestor=self
+                    while ancestor do
+                        assert(ancestor:IsShown(),'actor model requested while hidden')
+                        ancestor=ancestor.parent
+                    end
+                    self.requestedModel=id;self.modelLoads=(self.modelLoads or 0)+1;return true
+                end
                 function actor:GetModelFileID() return self.loadedModel end
                 function actor:IsLoaded() return self.loadedModel~=nil end
                 function actor:ClearModel() self.loadedModel=nil;self.requestedModel=nil end

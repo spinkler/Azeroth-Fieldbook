@@ -611,6 +611,8 @@ local function initializeImpl()
     if ns.CreateBestiaryEncounterReader then
         encounters = ns.CreateBestiaryEncounterReader(function(id, spellID, creatureName)
             return storeObserved(id, spellID, nil, creatureName)
+        end, function(id, creatureName)
+            return journal and journal:ObserveEncounter(id, creatureName)
         end)
     end
     if encounters and db.ignoreEncounterHistory then encounters:ForgetHistory() end
@@ -768,7 +770,7 @@ end
 -- Standalone GUID events in Forever 69977 (not combat-log subevents). Missing
 -- registration can fail; a watched alive-to-dead transition can still count
 -- with readable tag eligibility. PARTY_KILL is optional (pets may not emit it).
-for _, event in ipairs({ "PARTY_KILL", "UNIT_DIED", "MODIFIER_STATE_CHANGED", "SPELL_TEXT_UPDATE", "LOSS_OF_CONTROL_ADDED", "LOSS_OF_CONTROL_UPDATE" }) do
+for _, event in ipairs({ "PARTY_KILL", "UNIT_DIED", "MODIFIER_STATE_CHANGED", "SPELL_TEXT_UPDATE", "LOSS_OF_CONTROL_ADDED", "LOSS_OF_CONTROL_UPDATE", "ADDON_RESTRICTION_STATE_CHANGED" }) do
     pcall(frame.RegisterEvent, frame, event)
 end
 
@@ -830,6 +832,11 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         ns.KillDiagnostics:Report(function(line) lines[#lines + 1] = line end)
         if ns.ShowDebugReport then ns.ShowDebugReport(table.concat(lines, "\n")) end
         say("Kill diagnostic snapshot opened. Decision lines separate kill awards from discovery knowledge.")
+    elseif command == "debug model" then
+        if not gatheringBook or not gatheringBook.ReportModel then say("Open the Gatherer's Compendium first.");return end
+        local lines={}
+        gatheringBook:ReportModel(function(line) lines[#lines+1]=line end)
+        if ns.ShowDebugReport then ns.ShowDebugReport(table.concat(lines,"\n")) end
     elseif command == "debug on" or command == "debug off" then
         local enabled = command == "debug on"
         if ns.CastIDs then ns.CastIDs:SetDebug(enabled) end

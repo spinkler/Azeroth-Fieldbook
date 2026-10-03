@@ -60,8 +60,9 @@ class ShareFooterTests(unittest.TestCase):
                 assert(e.removed and not m.deleteButton.enabled and c:State().selected==nil)
                 assert(history==snapshot(saved.history) and facts==snapshot(saved.aggregates))
                 c:State().status='removed';c:Refresh();c:Select(e.id)
-                assert(not m.deleteButton.enabled and m.merge:GetText()=='Restore')
-                click(m.merge);assert(not e.removed)
+                assert(not m.deleteButton.enabled and m.restore:IsShown() and m.restore.enabled)
+                assert(m.restore:GetText()=='Restore')
+                click(m.restore);assert(not e.removed)
             end
             c:Select(fish.id);click(m.deleteButton);c:Select(pool.id)
             click(m.deleteForm.confirm);assert(not fish.removed and not pool.removed)

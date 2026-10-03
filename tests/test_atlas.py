@@ -292,6 +292,20 @@ class AtlasUITests(unittest.TestCase):
             assert(j.state.showSubzones and j.state.showSubzonePoints)
             m.iconSize.scripts.OnValueChanged(m.iconSize,6)
             assert(j.state.iconSize==6 and m.map.pins[1]:GetWidth()==10)
+            assert(c.entries.borderlessPins and m.map.pins[1].icon.texture==A.category.cave.icon)
+            assert(m.autoEntrances.point[3]==-91 and m.automaticMapping.point[3]==-119)
+            assert(m.layerMenu.point[3]==-146 and m.cleanPoints.point[3]==-146 and m.zone.point[3]==-174)
+            m.layerPanel.IsMouseOver=function() return true end
+            m.layerPanel.scripts.OnEvent(m.layerPanel,'GLOBAL_MOUSE_DOWN')
+            assert(m.layerPanel:IsShown(),'Clicks inside must keep layer choices open')
+            m.layerPanel.IsMouseOver=function() return false end
+            m.layerMenu.IsMouseOver=function() return true end
+            m.layerPanel.scripts.OnEvent(m.layerPanel,'GLOBAL_MOUSE_DOWN')
+            assert(m.layerPanel:IsShown(),'The toggle button handles its own click')
+            m.layerMenu.IsMouseOver=function() return false end
+            m.layerPanel.scripts.OnEvent(m.layerPanel,'GLOBAL_MOUSE_DOWN')
+            assert(not m.layerPanel:IsShown(),'Outside clicks dismiss the layer menu')
+
         ''')
 
     def test_native_shell_size_state_and_page_owned_lifetime(self):

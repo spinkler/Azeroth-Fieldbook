@@ -24,7 +24,12 @@ function A.Decode(s)
         local dt=unpackNumber(s.data:sub(i+6,i+7));local flag=s.data:sub(i+8,i+8)
         if not x or x>10000 or not y or y>10000 or not dt or (flag~='0' and flag~='1') or (#out==0 and dt~=0) then return nil,'Malformed trail payload.' end
         t=t+dt;if t>9999999999 then return nil,'Invalid time.' end
-        out[#out+1]={x=x,y=y,at=t,anchor=flag=='1',mapID=s.mapID,level=A.Int(s.level,1,1000) and s.level or nil}
+        local state=s.state
+        if state~='dead' and state~='ghost' and state~='alive' and state~='flight' then
+            state=s.flight==true and 'flight' or (type(s.context)=='string' and s.context:match(':true$') and 'dead / ghost')
+                or (type(s.context)=='string' and s.context:match(':false$') and 'alive') or nil
+        end
+        out[#out+1]={x=x,y=y,at=t,anchor=flag=='1',mapID=s.mapID,level=A.Int(s.level,1,1000) and s.level or nil,flight=s.flight==true,state=state}
     end
     if s.finish~=nil and (not A.Int(s.finish,s.at,9999999999) or s.finish~=t) then return nil,'Trail time header mismatch.' end
     return out
@@ -35,6 +40,10 @@ local function deviation(p,a,b)
     local f=den>0 and math.max(0,math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/den)) or 0
     return math.sqrt((p.x-a.x-f*dx)^2+(p.y-a.y-f*dy)^2)
 end
+local function timedDeviation(p,a,b)
+    local f=b.at>a.at and math.max(0,math.min(1,(p.at-a.at)/(b.at-a.at))) or 0
+    return math.sqrt((p.x-a.x-f*(b.x-a.x))^2+(p.y-a.y-f*(b.y-a.y))^2)
+end
 function A.Simplify(points,tolerance)
     if #points<3 then return points end
     local keep={[1]=true,[#points]=true};local anchors={1}
@@ -44,7 +53,9 @@ function A.Simplify(points,tolerance)
     while #stack>0 do
         local pair=table.remove(stack);local first,last=pair[1],pair[2];local far,index=tolerance or 10
         for i=first+1,last-1 do
-            local d=deviation(points[i],points[first],points[last])
+            -- Playback follows elapsed time, so a straight line with a stop or
+            -- speed change still needs its timing observations.
+            local d=math.max(deviation(points[i],points[first],points[last]),timedDeviation(points[i],points[first],points[last]))
             -- Preserve timing too: no simplified chord spans over two minutes.
             if points[last].at-points[first].at>120 and i==math.floor((first+last)/2) then d=math.huge end
             if d>far then far,index=d,i end
@@ -55,12 +66,20 @@ function A.Simplify(points,tolerance)
 end
 function ns.CreateAnnalsTrail(j,options)
     local t={journal=j,options=options or {},reason='session',revision=0};j.trail=t
-    local current,points,lastPoll,pending
+    local current,points,lastPoll,pending,idlePoint
     local function write(p)
         local encoded=A.EncodePoint(p,points[#points] and points[#points].at or current.at)
         if not encoded then return end
         current.data=current.data..encoded;points[#points+1]=A.Copy(p);current.finish=p.at
         t.revision=t.revision+1
+    end
+    local function writeAnchor(p)
+        local previous=points[#points]
+        if p.at==previous.at and distance(p,previous)==0 then
+            if not previous.anchor then previous.anchor=true;current.data=current.data:sub(1,-2)..'1';t.revision=t.revision+1 end
+        elseif p.at>previous.at then
+            local copy=A.Copy(p);copy.anchor=true;write(copy)
+        end
     end
     function t:Break(reason)
         if j.readOnly or ns.InitializationBlocked then return end
@@ -74,7 +93,7 @@ function ns.CreateAnnalsTrail(j,options)
             end
             current.closed=true
         end
-        current,points,lastPoll,pending=nil,nil,nil,nil;self.reason=reason or 'break';self.revision=self.revision+1
+        current,points,lastPoll,pending,idlePoint=nil,nil,nil,nil,nil;self.reason=reason or 'break';self.revision=self.revision+1
     end
     function t:SetEnabled(enabled)
         if j.readOnly or ns.InitializationBlocked then return end
@@ -82,11 +101,14 @@ function ns.CreateAnnalsTrail(j,options)
     end
     function t:Sample(p,anchor)
         if j.readOnly or ns.InitializationBlocked or j.db.settings.trail==false then return end
+        if p and A.JourneyInstance(p.instanceType) then self:Break('inside instance');return end
         if not p or not A.Int(p.mapID,1,2147483647) or not A.Int(p.x,0,10000) or not A.Int(p.y,0,10000) then self:Break('position unavailable');return end
         p=A.Copy(p);p.at=p.at or A.Now();p.anchor=anchor==true
         if not A.Int(p.at,0,9999999999) then return end
         local joinFrom
         if current then
+            if p.flight==nil then p.flight=current.flight==true end
+            if p.state==nil then p.state=current.state end
             local gap=p.at-(lastPoll and lastPoll.at or current.finish)
             if p.at<current.finish or gap>12 then self:Break('observation gap')
             elseif p.context and current.context and p.context~=current.context then self:Break('travel state')
@@ -99,14 +121,32 @@ function ns.CreateAnnalsTrail(j,options)
                 end
                 self:Break('map transition')
             elseif lastPoll and distance(lastPoll,p)>(self.options.jump or 1000) then self:Break('discontinuous movement')
-            elseif (anchor or distance(points[#points],p)>=(self.options.minimum or 40)) and
+            elseif p.flight~=nil and p.flight~=(current.flight==true) then
+                joinFrom=#j.db.segments;self:Break('flight state')
+            elseif p.state and current.state and p.state~=current.state then self:Break('player state')
+            elseif (anchor or distance(points[#points],p)>=(self.options.minimum or 40) or (idlePoint and distance(lastPoll,p)>0)) and
                 (p.at-current.at>1800 or #points>=A.MAX_POINTS-1) then
                 joinFrom=#j.db.segments;self:Break('chunk')
             end
         end
         if not current then
-            current={v=1,mapID=p.mapID,at=p.at,finish=p.at,level=p.level,reason=self.reason,context=p.context,joinFrom=joinFrom,data=''}
-            j.db.segments[#j.db.segments+1]=current;points={};write(p);lastPoll=p;return
+            current={v=1,mapID=p.mapID,at=p.at,finish=p.at,level=p.level,reason=self.reason,context=p.context,joinFrom=joinFrom,flight=p.flight==true or nil,state=p.state,data=''}
+            j.db.segments[#j.db.segments+1]=current;points={};write(p);lastPoll=p;idlePoint=p;return
+        end
+        -- Retain arrival/departure times once a stop is confirmed. No periodic
+        -- idle writes; these two anchors prevent playback drifting through rests.
+        if lastPoll and p.at>lastPoll.at then
+            if distance(lastPoll,p)==0 then
+                idlePoint=idlePoint or lastPoll
+                if p.at-idlePoint.at>=4 and (idlePoint.at==points[#points].at or distance(idlePoint,points[#points])>=4) then
+                    writeAnchor(idlePoint)
+                end
+            else
+                if idlePoint and lastPoll.at-idlePoint.at>=4 and lastPoll.at>points[#points].at then
+                    writeAnchor(lastPoll)
+                end
+                idlePoint=nil
+            end
         end
         local previous=points[#points];local moved=distance(previous,p)
         local interval=self.options.interval or 15

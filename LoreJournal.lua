@@ -10,7 +10,7 @@ end
 L.kinds={writing='Writings',landmark='Landmarks',person='People',mystery='Mysteries'}
 local aliases={writings='writing',landmarks='landmark',people='person',mysteries='mystery'}
 local origins={captured=true,manual=true,reported=true}
-local natures={source=true,observation=true,account=true,interpretation=true,annotation=true,paraphrase=true,rumour=true,theory=true}
+local natures={source=true,translation=true,observation=true,account=true,interpretation=true,annotation=true,paraphrase=true,rumour=true,theory=true}
 local methods={displayed=true,automatic=true,manual=true,reported=true,observed=true,transcribed=true,gossip=true,quest=true,dialogue=true}
 local meanings={['read-here']=true,['found-here']=true,landmark=true,observation=true,encounter=true,reported=true,mentioned=true}
 local statuses={open=true,investigating=true,resolved=true}
@@ -131,14 +131,43 @@ function L.Page(value)
     local _,err=provenance(value,out);if err then return nil,err end
     out.nature='source';return out
 end
+-- A translation carries its exact original, never a title-only association or
+-- a foreign archive ID. It remains understandable after forwarding/deletion.
+local translationFields={translator=200,fromLanguage=80,toLanguage=80,sourceTitle=200,sourceRaw=131072}
+function L.Translation(value)
+    if not plainTable(value) then return nil,'Translation details are missing.' end
+    for key in pairs(value) do if not translationFields[key] and key~='page' then return nil,'Unexpected translation detail.' end end
+    local out={}
+    for key,max in pairs(translationFields) do
+        local valid=key=='sourceRaw' and rawText(value[key],max) or key~='sourceRaw' and L.Text(value[key],max)
+        if not valid then return nil,'Enter a translator, both languages, source title and original text within their limits.' end
+        out[key]=value[key]
+    end
+    if value.page~=nil then
+        if not L.Integer(value.page,0,100000) then return nil,'Invalid translated page number.' end
+        out.page=value.page
+    end
+    return out
+end
+function L.TranslationLabel(t)
+    return 'Translation • '..t.fromLanguage..' → '..t.toLanguage..(t.page~=nil and ' • page '..t.page or '')..' • '..t.translator
+end
+local function sameTranslation(a,b)
+    if not a or not b then return a==b end
+    for key in pairs(translationFields) do if a[key]~=b[key] then return false end end
+    return a.page==b.page
+end
 function L.Passage(value)
     if not plainTable(value) or not rawText(value.raw or value.text,L.MAX_PAGE_BYTES) then return nil,'Enter passage text, up to 128 KiB; nothing was truncated.' end
     local out={raw=value.raw or value.text}
     local _,err=provenance(value,out);if err then return nil,err end
+    if out.nature=='translation' then
+        out.translation,err=L.Translation(value.translation);if not out.translation then return nil,err end
+    elseif value.translation~=nil then return nil,'Translation details require a translation passage.' end
     if value.id~=nil then if not L.Text(value.id,64) then return nil,'Invalid passage ID.' end;out.id=value.id end
     if value.private~=nil and type(value.private)~='boolean' then return nil,'Invalid privacy flag.' end
     if value.private~=nil then out.private=value.private
-    else out.private=not (out.nature=='source' or (out.nature=='account' and out.origin=='captured')) end
+    else out.private=not (out.nature=='source' or out.nature=='translation' or (out.nature=='account' and out.origin=='captured')) end
     return out
 end
 function L.Link(value)
@@ -374,7 +403,7 @@ function ns.CreateLoreJournal(saved)
         for _,old in ipairs(e.passages) do
             if old.raw==p.raw and old.origin==p.origin and old.nature==p.nature and old.source==p.source and old.speaker==p.speaker
                 and old.sender==p.sender and old.claimedObserver==p.claimedObserver and old.private==p.private
-                and old.sourceTitle==p.sourceTitle and old.locale==p.locale and old.claim==p.claim then
+                and old.sourceTitle==p.sourceTitle and old.locale==p.locale and old.claim==p.claim and sameTranslation(old.translation,p.translation) then
                 if p.origin=='captured' then self:Encounter(e,p.at);self:Changed(e) end
                 return old
             end
@@ -622,15 +651,19 @@ function ns.CreateLoreJournal(saved)
     function j:SearchText(e)
         local cached=self.cache[e.id];if cached then return cached end
         local out={e.title,e.sourceTitle,e.sourceName,e.subtype,e.description,e.notes,e.theory,e.nextStep}
+        local function translation(p)
+            local t=p.translation;if not t then return end
+            out[#out+1]=L.TranslationLabel(t);out[#out+1]=t.sourceTitle;out[#out+1]=L.Plain(t.sourceRaw)
+        end
         for _,tag in ipairs(e.tags) do out[#out+1]=tag end
         for _,p in pairs(e.pages) do out[#out+1]=L.Plain(p.raw);out[#out+1]=p.source;out[#out+1]=p.claimedObserver end
-        for _,p in ipairs(e.passages) do out[#out+1]=L.Plain(p.raw);out[#out+1]=p.source;out[#out+1]=p.speaker;out[#out+1]=p.sender;out[#out+1]=p.claimedObserver end
+        for _,p in ipairs(e.passages) do out[#out+1]=L.Plain(p.raw);out[#out+1]=p.source;out[#out+1]=p.speaker;out[#out+1]=p.sender;out[#out+1]=p.claimedObserver;translation(p) end
         for _,p in ipairs(e.locations) do out[#out+1]=p.zone;out[#out+1]=p.subzone;out[#out+1]=p.note end
         for _,p in ipairs(e.links) do out[#out+1]=p.label;out[#out+1]=p.explanation end
         for _,r in ipairs(e.reports or {}) do
             out[#out+1]=r.title;out[#out+1]=r.sourceTitle;out[#out+1]=r.sender;out[#out+1]=r.originalSource;out[#out+1]=r.receivedFrom or ''
             for _,p in ipairs(r.pages) do out[#out+1]=L.Plain(p.raw);out[#out+1]=p.source end
-            for _,p in ipairs(r.passages) do out[#out+1]=L.Plain(p.raw);out[#out+1]=p.source end
+            for _,p in ipairs(r.passages) do out[#out+1]=L.Plain(p.raw);out[#out+1]=p.source;translation(p) end
             for _,p in ipairs(r.locations) do out[#out+1]=p.zone;out[#out+1]=p.subzone;out[#out+1]=p.label end
             for _,p in ipairs(r.references) do out[#out+1]=p.label;out[#out+1]=p.explanation end
             for _,v in pairs(r.annotations) do if type(v)=='string' then out[#out+1]=v elseif type(v)=='table' then for _,tag in ipairs(v) do out[#out+1]=tag end end end

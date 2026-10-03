@@ -692,6 +692,32 @@ class AnglingUITests(unittest.TestCase):
         end
     ''')
 
+    def test_scrolling_index_and_context_actions(self):
+        self.lua.execute("""
+            for i=1,40 do spot(string.format('Spot %02d',i)) end
+            local rows=j:List('waters',c:Filters())
+            assert(not m.previous and not m.next and #m.rows==11)
+            assert(m.merge:IsShown() and not m.restore:IsShown())
+            m.list.scripts.OnMouseWheel(m.list,-4)
+            -- The widget harness does not dispatch native scroll events.
+            m.list.scripts.OnVerticalScroll(m.list,m.list:GetVerticalScroll())
+            assert(c:State().indexScroll==152 and m.rows[1].id==rows[5].id)
+            local before=c:State().indexScroll
+            c:SetView('pools');assert(not m.merge:IsShown())
+            c:SetView('catches');assert(not m.merge:IsShown())
+            c:SetView('waters');assert(c:State().indexScroll==before)
+            c:Select(rows[#rows].id)
+            assert(m.list:GetVerticalScroll()==#rows*38-380)
+            local visible=false
+            for _,row in ipairs(m.rows) do if row.id==rows[#rows].id then visible=true end end
+            assert(visible)
+            c:Select(rows[1].id);assert(m.merge.enabled)
+            m.search:SetText('Spot 01')
+            assert(c:State().indexScroll==0 and m.rows[1].id)
+            m.search:SetText('No matching record')
+            assert(m.empty:IsShown() and not m.rows[1]:IsShown())
+        """)
+
     def test_event_log_page_navigation_live_updates_and_clear(self):
         self.lua.execute('''
             local p=c.eventLog
@@ -744,8 +770,8 @@ class AnglingUITests(unittest.TestCase):
             click(m.deleteButton);assert(not e.removed);click(m.deleteForm.confirm);assert(e.removed and not m.deleteButton.enabled)
             choose(choose(openMenu(m.filters),'Show'),'Removed')
             assert(c:State().status=='removed' and m.rows[1].id==e.id)
-            m.rows[1].scripts.OnClick(m.rows[1]);assert(m.merge:GetText()=='Restore')
-            click(m.merge);assert(not e.removed)
+            m.rows[1].scripts.OnClick(m.rows[1]);assert(m.restore:IsShown())
+            click(m.restore);assert(not e.removed)
             c:SetView('pools');assert(#j:List('pools')==1)
         ''')
 
@@ -891,8 +917,8 @@ class AnglingUITests(unittest.TestCase):
             click(m.deleteButton);assert(not pool.removed);click(m.deleteForm.confirm);assert(#j:List('pools')==0 and pool.note=='Keep this note')
             choose(choose(openMenu(m.filters),'Show'),'Removed')
             assert(c:State().status=='removed' and m.rows[1].id==pool.id)
-            m.rows[1].scripts.OnClick(m.rows[1]);assert(m.merge:GetText()=='Restore')
-            m.merge.scripts.OnClick(m.merge);assert(#j:List('pools')==1 and pool.favourite and pool.note=='Keep this note')
+            m.rows[1].scripts.OnClick(m.rows[1]);assert(m.restore:IsShown())
+            m.restore.scripts.OnClick(m.restore);assert(#j:List('pools')==1 and pool.favourite and pool.note=='Keep this note')
         ''')
 
     def test_three_views_empty_states_stable_map_no_atlas_initialization(self):
@@ -1024,7 +1050,7 @@ class AnglingUITests(unittest.TestCase):
             catch('long-name');c:Refresh()
             assert(m.session:GetHeight()==41 and m.session.text:GetStringHeight()>41)
             assert(m.session.point[2]==342 and m.session.point[3]==-125)
-            assert(m.assign.point[3]==-174 and m.map.point[5]==-205)
+            assert(m.assign.point[3]==-91 and m.map.point[5]==-205)
         ''')
 
     def test_private_note_opt_in_is_scoped_to_the_selected_record(self):

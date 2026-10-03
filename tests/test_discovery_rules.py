@@ -27,6 +27,34 @@ def client():
 
 
 class DiscoveryRules(unittest.TestCase):
+    def test_instance_observations_and_kills_do_not_require_a_map(self):
+        for kind in ('party', 'raid'):
+            for token,event in (('target','PLAYER_TARGET_CHANGED'),('mouseover','UPDATE_MOUSEOVER_UNIT')):
+                with self.subTest(kind=kind,token=token):
+                    lua=client()
+                    from kill_test_harness import ROOT
+                    lua.execute((ROOT/'CreatureLocations.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
+                    lua.globals().instanceKind=kind
+                    lua.globals().watchedToken=token
+                    lua.globals().observedEvent=event
+                    lua.execute(r'''
+                        function IsInInstance() return true,instanceKind end
+                        function GetInstanceInfo() return 'The Hall of Thanes',instanceKind end
+                        function GetRealZoneText() return 'The Hall of Thanes' end
+                        function GetSubZoneText() return '' end
+                        C_Map={GetBestMapForUnit=function() return nil end}
+                        units[watchedToken]=mob(17)
+                        fire('PLAYER_ENTERING_WORLD');fire(observedEvent)
+                        local e=journal.entries[42]
+                        assert(e and e.levelMin==17 and e.locations['The Hall of Thanes'])
+                        assert(not e.observationLocations and not e.killLocations)
+                        units[watchedToken].combat=true;tick()
+                        fire('PARTY_KILL',UnitGUID('player'),units[watchedToken].guid)
+                        units[watchedToken].dead=true
+                        fire('UNIT_DIED',units[watchedToken].guid);tick()
+                        assert(e.kills==1 and points()==1 and not e.killLocations)
+                    ''')
+
     def test_airborne_mouseover_excluded_target_allowed(self):
         for state in ['taxi=true', 'flying=true', 'taxi=secret', 'flying=secret']:
             with self.subTest(state=state):

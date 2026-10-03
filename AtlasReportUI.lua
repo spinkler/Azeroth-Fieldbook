@@ -43,7 +43,7 @@ function ns.InstallAtlasReportUI(c)
                 p.mode=p.mode=="records" and "expeditions" or "records";p.offset=0;p:Render()
             end)
             U.Button(p,"Clear selection",630,-115,222,function() d.records={};d.notes={};d.expeditions={};p:Render() end)
-            p.search=U.Search(p,29,-155,555,200);p.search:SetScript("OnTextChanged",function() p.offset=0;p:Render() end)
+            p.search=U.Search(p,29,-155,555,200);p.search:HookScript("OnTextChanged",function() p.offset=0;p:Render() end)
             p.refs=U.Check(p,"Include reference names",609,-155,217,function(on) d.includeReferences=on end)
             p.hint=U.Label(p,"",24,-189,822,"GameFontHighlightSmall");p.hint:SetWordWrap(true)
             p.rows={}

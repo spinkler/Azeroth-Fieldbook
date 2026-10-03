@@ -285,7 +285,8 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         local book=getBook and getBook() or UIParent
         frame=CreateFrame("Frame","AzerothFieldbookCreatureLocations",book,"BackdropTemplate")
         -- Keep 24px between the panel and either the divider edge (309) or book edge (960).
-        frame:SetPoint("TOPLEFT",book,"TOPLEFT",333,-78);frame:SetSize(603,636)
+        -- Lower the top by 16px for the shorter Bestiary, preserving the bottom at 714.
+        frame:SetPoint("TOPLEFT",book,"TOPLEFT",333,-87);frame:SetSize(603,627)
         frame:SetFrameLevel(book:GetFrameLevel()+30);frame:EnableMouse(true)
         frame:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=20})
         frame.paper=frame:CreateTexture(nil,"BACKGROUND")

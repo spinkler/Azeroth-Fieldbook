@@ -89,7 +89,7 @@ class MapBrightnessTests(unittest.TestCase):
             assert(m.legacySubzones.parent==m.subzoneControls)
             assert(m.legacySubzones:GetWidth()==20 and m.legacySubzones:GetHeight()==20)
             assert(m.legacySubzones.label:GetText()=='Legacy Fill')
-            assert(m.layerMenu.parent==m and m.layerMenu.point[3]==-174)
+            assert(m.layerMenu.parent==m and m.layerMenu.point[3]==-146)
             assert(m.brightness==m.map.brightness and m.brightness.parent.parent==m.map)
             m.legacySubzones:SetChecked(true);click(m.legacySubzones)
             assert(j.state.subzoneFillMethod=='convex')

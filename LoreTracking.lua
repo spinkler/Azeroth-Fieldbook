@@ -55,7 +55,7 @@ local function defaultAdapter()
             page=number(page,0,1000000) and page or nil,
             hasNext=hasNext==true or hasNext==1,
             nextKnown=nextOK and (hasNext==nil or type(hasNext)=="boolean" or hasNext==1),
-            creator=label(creator),creatorKnown=creatorOK and (creator==nil or type(creator)=="string"),
+            creator=label(creator),creatorKnown=creatorOK and (creator==nil or creator==false or type(creator)=="string"),
             playerAuthored=creatorOK and type(creator)=="string" and creator~="",
             sourceKind="readable",material=label(read(ItemTextGetMaterial)),locale=read(GetLocale) or "unknown"}
     end
@@ -421,15 +421,32 @@ function ns.CreateLoreTracking(journal,settings,adapter)
             end
             if self.active then finish(self.active,"Capture interrupted: another reading interaction began.");release(self.active) end
             serial=serial+1
-            local s={sessionID=tostring(L.Now())..":"..serial,title=v.title,material=v.material,locale=v.locale,
-                identity=v.identity,creator=v.creator,creatorKnown=false,generation=0,location=L.CurrentLocation("read-here"),steps=0,started=a.Now()}
+            -- BEGIN announces a load; its accessors may still describe the
+            -- previous book. Bind source identity only when READY arrives.
+            local s={sessionID=tostring(L.Now())..":"..serial,creatorKnown=false,
+                generation=0,location=L.CurrentLocation("read-here"),steps=0,started=a.Now()}
             self.active=s;s.hooks=self.navigationHooked
             if a.HookScroll then a.HookScroll(function() if self.active and (self.active.traversing or self.active.restoring) then self:OnNavigation("scroll") end end) end
         elseif event=="ITEM_TEXT_READY" then
             local s=self.active
+            -- READY is itself evidence of a reading interaction. Recover a
+            -- missed BEGIN only for a visible reader, after native handlers
+            -- have had a chance to show it. Closing invalidates this callback.
+            if not s then
+                local expected=serial
+                local function recover()
+                    if ns.InitializationBlocked or self.active or serial~=expected or not a.IsOpen or a.IsOpen()~=true then return end
+                    self:Event("ITEM_TEXT_BEGIN")
+                    self:Event("ITEM_TEXT_READY")
+                end
+                if not (a.After and a.After(0,recover)==true) then recover() end
+                return
+            end
             if s then
                 local v=a.Read and a.Read()
-                if v and not s.title then s.title=v.title end
+                if v and not s.bound then
+                    s.title=v.title;s.material=v.material;s.locale=v.locale;s.identity=v.identity;s.bound=true
+                end
                 if v and not s.creatorKnown and v.creatorKnown then s.creatorKnown=true;s.creator=v.creator end
                 ready(s)
             end
@@ -441,6 +458,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
                 if s.pending and public(duration) and type(duration)=="number" and duration==duration then s.pending.deadline=a.Now()+math.max(6,math.min(30,duration+2)) end
             end
         elseif event=="ITEM_TEXT_CLOSED" or event=="PLAYER_LEAVING_WORLD" then
+            serial=serial+1
             if self.active then
                 if self.active.traversing or self.active.restoring or self.active.pending then finish(self.active,"Capture interrupted: the source closed.") end
                 release(self.active);self.active=nil

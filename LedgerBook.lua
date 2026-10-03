@@ -2,7 +2,16 @@ local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local L,U,R=ns.Ledger,ns.AtlasUI,ns.LedgerReports
 local date=L.Date
-local function money(n) return n~=nil and string.format("%dg %ds %dc",math.floor(n/10000),math.floor(n/100)%100,n%100) or "Unknown" end
+local trainingColors={available="ff80e680",unavailable="ffff8080",used="ff999999",unknown="ffffd100"}
+local function trainingIcon(v)
+    if L.Integer(v.icon,1,2147483647) then return v.icon end
+    -- Older observations and reports have no retained texture. Cached artwork
+    -- is display-only; resolving it never adds spell identity or new knowledge.
+    local identifier=v.name..(v.rank~="" and "("..v.rank..")" or "")
+    local icon=L.Read(C_Spell and C_Spell.GetSpellTexture,identifier)
+    if not L.Integer(icon,1,2147483647) then icon=L.Read(C_Spell and C_Spell.GetSpellTexture,v.name) end
+    return L.Integer(icon,1,2147483647) and icon or 134400
+end
 local function goodsMoney(n)
     if n==nil then return "Unknown" end
     if n==0 then return "Free" end
@@ -17,8 +26,10 @@ local function sortedKeys(t) local keys={};for k in pairs(t) do keys[#keys+1]=k 
 function ns.CreateLedgerBook(journal,tracking,shell)
     local state=journal.state
     state.query=L.Text(state.query,200,true) and state.query or "";state.roles=type(state.roles)=="table" and state.roles or {}
+    state.currentZone=state.currentZone==true or nil
     state.offset=L.Integer(state.offset,0,L.MAX_CONTACTS) and state.offset or 0
     state.detail=({goods=true,training=true,services=true})[state.detail] and state.detail or "services"
+    state.trainingSort=state.trainingSort=="name" and "name" or "level"
     local c={journal=journal,tracking=tracking,shell=shell,state=state,panels={}}
     c.mapPins=ns.CreateLedgerWorldPins(journal)
     function c:Message(text) self.main.message:SetText(L.Safe(text or "")) end
@@ -27,7 +38,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
     end
     function c:Filter() state.offset=0;state.contactScroll=0;self:Refresh() end
     function c:Reset()
-        for _,k in ipairs({"zone","subzone","knowledge","favourites","recipes","sort"}) do state[k]=nil end
+        for _,k in ipairs({"currentZone","zone","subzone","knowledge","favourites","recipes","sort"}) do state[k]=nil end
         state.roles={};state.query="";state.offset=0;state.contactScroll=0;self.main.search:SetText("");self:Refresh()
     end
     function c:DefaultDetail(e)
@@ -91,13 +102,31 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         local inspection=e[training and "trainerInspection" or "merchantInspection"]
         local lines={training and "Observed Training" or "Known goods — historical observations"}
         if inspection then lines[#lines+1]="Latest inspection: "..date(inspection.at).." • "..(inspection.complete and "Readable, unfiltered" or inspection.reason) end
-        local rows={};local headings={};local muted={};local prices={}
+        local rows={};local headings={};local trainingHeadings={};local muted={};local prices={};local styled={}
         for key,v in pairs(e[kind]) do rows[#rows+1]={value=v,key=key} end
         for _,report in ipairs(e.reports) do for _,v in ipairs(report[kind]) do
             local receipt=report.factReceipts and report.factReceipts[L.Key(v.origin.source,v.origin.key)]
             rows[#rows+1]={value=v,key=v.key,reported=true,received=receipt and receipt.received or report.received}
         end end
         table.sort(rows,function(a,b)
+            if training then
+                -- An explicit lesson sort applies across personal and reported
+                -- rows, even when the contact was selected via a search match.
+                local an,bn=a.value.name:lower(),b.value.name:lower()
+                local al,bl=a.value.requiredLevel or math.huge,b.value.requiredLevel or math.huge
+                if state.trainingSort=="name" and an~=bn then return an<bn end
+                if al~=bl then return al<bl end
+                if an~=bn then return an<bn end
+                local ar,br=a.value.rank or "",b.value.rank or ""
+                if ar~=br then
+                    local ai,bi=tonumber(ar:match("%d+")) or math.huge,tonumber(br:match("%d+")) or math.huge
+                    if ai~=bi then return ai<bi end
+                    return ar<br
+                end
+                if a.key~=b.key then return a.key<b.key end
+                if not a.reported~=not b.reported then return not a.reported end
+                return L.Key(a.value.origin.source,a.value.origin.key)<L.Key(b.value.origin.source,b.value.origin.key)
+            end
             local af=a.key==state.focus and not a.reported==not state.focusReported
             local bf=b.key==state.focus and not b.reported==not state.focusReported
             if af~=bf then return af end
@@ -107,7 +136,12 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         for _,row in ipairs(rows) do
             local v=row.value;lines[#lines+1]="\n"..(row.reported and "REPORTED: " or "")..(v.name or ("Item #"..tostring(v.itemID).." — metadata pending"))..
                 (training and v.rank~="" and " ("..v.rank..")" or "")..(v.recipe and " • Recipe"..(v.profession and " / "..v.profession or "") or "")
-            if rich and not training and L.Integer(v.itemID,1,2147483647) then
+            if rich and training then
+                trainingHeadings[#lines]=v
+                headings[#lines]="\n"..(row.reported and "|cff80cfffREPORTED: |r" or "")..
+                    "|T"..trainingIcon(v)..":18:18:0:0|t |c"..(trainingColors[v.availability] or trainingColors.unknown)..
+                    L.Safe(v.name).."|r"..(v.rank~="" and " |cffb0b0b0("..L.Safe(v.rank)..")|r" or "")
+            elseif rich and L.Integer(v.itemID,1,2147483647) then
                 local icon=v.icon or L.Read(C_Item and C_Item.GetItemIconByID,v.itemID)
                 local art=L.Integer(icon,1,2147483647) and ("|T"..icon..":18:18:0:0|t ") or ""
                 local quality
@@ -126,8 +160,14 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             if training then
                 local labels={available="Available when inspected",unavailable="Unavailable when inspected",used="Already known when inspected",unknown="Availability unknown"}
                 lines[#lines+1]=labels[v.availability] or "Availability unknown"
-                local cost=v.costUnit=="copper" and money(v.price) or tostring(v.price or "Unknown")..(v.costUnit=="training points" and " training points" or " (unit unknown)")
-                lines[#lines+1]="Last quoted cost: "..cost.." • "..date(v.priceAt)
+                styled[#lines]="|c"..(trainingColors[v.availability] or trainingColors.unknown)..lines[#lines].."|r"
+                local cost=v.costUnit=="copper" and goodsMoney(v.price) or tostring(v.price or "Unknown")..(v.costUnit=="training points" and " training points" or " (unit unknown)")
+                lines[#lines+1]="Last quoted cost: "..cost;prices[#lines]=v.costUnit=="copper"
+                lines[#lines+1]="Required level: "..(v.requiredLevel or "Unknown")
+                styled[#lines]="|cffffd100"..lines[#lines].."|r"
+                if v.category and v.category~="" then
+                    lines[#lines+1]="Category: "..v.category;styled[#lines]="|cff80cfff"..L.Safe(lines[#lines]).."|r"
+                end
             else
                 local price=goodsMoney(v.price)..(v.bundle==1 and " each" or v.bundle and " / "..v.bundle or " • Bundle size unknown")
                 if v.price and v.price>0 and v.bundle and v.bundle>1 then
@@ -143,10 +183,12 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 -- Keep the native requirements below without inventing a purchase restriction.
                 if v.purchasable==false and v.usable==true then lines[#lines+1]="Not purchasable when inspected; reason unknown unless displayed below" end
             end
-            for _,requirement in ipairs(v.requirements or {}) do lines[#lines+1]=requirement end
+            for _,requirement in ipairs(v.requirements or {}) do
+                if not training or requirement~="Required level: "..tostring(v.requiredLevel) then lines[#lines+1]=requirement end
+            end
             lines[#lines+1]="First: "..date(v.first).." • Last: "..date(v.last).." • "..v.origin.source.." / "..v.origin.method
             muted[#lines]=true
-            if row.reported then lines[#lines+1]="Report received: "..date(row.received) end
+            if row.reported then lines[#lines+1]="Report received: "..date(row.received);muted[#lines]=training end
         end
         if #rows==0 then lines[#lines+1]=training and "No training recorded. Open a trainer to remember readable lessons." or "No goods recorded. Open this merchant to remember visible offerings." end
         local blocks={};local pending={}
@@ -154,19 +196,27 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             if #pending>0 then blocks[#blocks+1]={text=table.concat(pending,"\n")};pending={} end
         end
         if rich then for i,line in ipairs(lines) do
-            local safe=L.Safe(line)
+            local safe=styled[i] or L.Safe(line)
             if prices[i] then
                 local colors={g="ffffd100",s="ffc7c7cf",c="ffb87333"}
                 safe=safe:gsub("(%d+%.?%d*)([gsc])",function(amount,unit) return amount.."|c"..colors[unit]..unit.."|r" end)
             end
             lines[i]=headings[i] or (muted[i] and "|cff888888"..safe.."|r" or safe)
-            if headings[i] then flush();blocks[#blocks+1]={text=headings[i]:gsub("^\n",""),heading=true}
+            if headings[i] then flush();blocks[#blocks+1]={text=headings[i]:gsub("^\n",""),heading=true,lesson=trainingHeadings[i]}
             else pending[#pending+1]=lines[i] end
         end;flush() end
         return table.concat(lines,'\n'),blocks
     end
     function c:GoodsReadArea(parent,x,y,width,height)
         local area,body=U.Scroll(parent,x,y,width,height)
+        local function scroll(_,delta)
+            local range=math.max(0,body:GetHeight()-area:GetHeight())
+            area:SetVerticalScroll(math.max(0,math.min(range,area:GetVerticalScroll()-delta*32)))
+        end
+        -- The hyperlink-enabled body can receive wheel input instead of the
+        -- template scroll frame. Route every row surface to the same viewport.
+        area:SetScript("OnMouseWheel",scroll)
+        body:EnableMouseWheel(true);body:SetScript("OnMouseWheel",scroll)
         local text=U.Label(body,"",0,0,width,"GameFontHighlightSmall");text:SetWordWrap(true);text:SetSpacing(3)
         body:SetHyperlinksEnabled(true)
         body:SetScript("OnHyperlinkEnter",function(self,link)
@@ -193,13 +243,29 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             local iconHover=CreateFrame("Frame",nil,body)
             iconHover:SetAllPoints(view.icon);iconHover:EnableMouse(true)
             view.iconHover=iconHover
-            iconHover:SetScript("OnEnter",function(self)
-                local link=label:GetText():match("|H(item:%d+)")
-                if link then body:GetScript("OnHyperlinkEnter")(self,link) end
-            end)
+            local function showHeadingTooltip(owner)
+                if not GameTooltip then return end
+                local lesson=view.lesson
+                if lesson then
+                    local identifier=lesson.name..(lesson.rank~="" and "("..lesson.rank..")" or "")
+                    local link=L.Read(C_Spell and C_Spell.GetSpellLink or GetSpellLink,identifier)
+                    GameTooltip:SetOwner(owner,"ANCHOR_CURSOR")
+                    if type(link)=="string" and link:match("|Hspell:%d+") then
+                        GameTooltip:SetHyperlink(link)
+                    else
+                        GameTooltip:SetText(L.Safe(lesson.name)..(lesson.rank~="" and " ("..L.Safe(lesson.rank)..")" or ""))
+                        GameTooltip:AddLine("Ability details are unavailable in the local spell cache.",1,1,1,true)
+                    end
+                    GameTooltip:Show()
+                else
+                    local link=label:GetText():match("|H(item:%d+)")
+                    if link then body:GetScript("OnHyperlinkEnter")(owner,link) end
+                end
+            end
+            iconHover:SetScript("OnEnter",showHeadingTooltip)
             iconHover:SetScript("OnLeave",hide);iconHover:SetScript("OnHide",hide)
             iconHover:EnableMouseWheel(true)
-            iconHover:SetScript("OnMouseWheel",function(_,delta) view:GetScript("OnMouseWheel")(view,delta) end)
+            iconHover:SetScript("OnMouseWheel",scroll)
 
             view.canvas=canvas;self.headingViews[index]=view
             local function stop(self)
@@ -226,22 +292,19 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             -- steal mouse focus or restart the scroll's initial pause.
             hover:SetScript("OnEnter",function(self)
                 view:GetScript("OnEnter")(view)
-                local link=label:GetText():match("|H(item:%d+)")
-                if link then body:GetScript("OnHyperlinkEnter")(self,link) end
+                showHeadingTooltip(self)
             end)
             hover:SetScript("OnLeave",function() stop(view) end)
             hover:SetScript("OnHide",function() stop(view) end)
             view:EnableMouseWheel(true)
-            view:SetScript("OnMouseWheel",function(_,delta)
-                area:SetVerticalScroll(math.max(0,math.min(math.max(0,body:GetHeight()-height),area:GetVerticalScroll()-delta*32)))
-            end)
+            view:SetScript("OnMouseWheel",scroll)
             hover:EnableMouseWheel(true)
-            hover:SetScript("OnMouseWheel",function(_,delta) view:GetScript("OnMouseWheel")(view,delta) end)
+            hover:SetScript("OnMouseWheel",scroll)
             return view
         end
         function area:SetContact(e,reset,detail)
             detail=detail or state.detail
-            local rich=detail=="goods" and e~=nil
+            local rich=(detail=="goods" or detail=="training") and e~=nil
             local content,blocks=c:Details(e,rich,detail)
             if not rich or not blocks or #blocks==0 then blocks={{text=L.Safe(content)}} end
             local y,inset=0,0
@@ -263,7 +326,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 label:SetText(block.text);label:Show()
                 if block.heading then
                     y=y+8
-                    local view=self:HeadingView(i,label)
+                    local view=self:HeadingView(i,label);view.lesson=block.lesson
                     view:SetScript("OnUpdate",nil);view:SetHorizontalScroll(0)
                     local icon=block.text:match("|T(%d+):18:18:0:0|t ")
                     inset=icon and 46 or 0
@@ -443,6 +506,35 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         local p=self:Panel("catalogue",kind=="training" and "Observed Training" or "Known Goods")
         p.kind=kind;p.title:SetText(kind=="training" and "Observed Training" or "Known Goods")
         if not p.read then p.read=self:GoodsReadArea(p,7,-33,221,527) end
+        if not p.sort then
+            p.title:SetWidth(218)
+            p.sort=U.Button(p,"",228,-4,22,function(button)
+                c:Menu(button,function(_,root)
+                    root:CreateTitle("Sort training by")
+                    for _,choice in ipairs({{"level","Level"},{"name","Name"}}) do
+                        local value,label=choice[1],choice[2]
+                        root:CreateButton(state.trainingSort==value and label.." (selected)" or label,function()
+                            state.trainingSort=value;p.read:SetContact(journal:Get(state.selected),true,"training")
+                        end)
+                    end
+                end)
+            end)
+            p.sort:SetSize(22,22)
+            for row=0,4 do
+                local stroke=p.sort:CreateTexture(nil,"OVERLAY")
+                stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,2-row);stroke:SetColorTexture(1,0.82,0.14,1)
+            end
+            p.sort:SetScript("OnEnter",function(button)
+                if GameTooltip then
+                    GameTooltip:SetOwner(button,"ANCHOR_RIGHT");GameTooltip:SetText("Sort training")
+                    GameTooltip:AddLine(state.trainingSort=="name" and "Name: A–Z" or "Required level: lowest first; unknown last",1,1,1,true)
+                    GameTooltip:Show()
+                end
+            end)
+            local function hide() if GameTooltip then GameTooltip:Hide() end end
+            p.sort:SetScript("OnLeave",hide);p.sort:SetScript("OnHide",hide)
+        end
+        p.sort:SetShown(kind=="training")
         p.read:SetContact(journal:Get(state.selected),true,kind)
         self:UpdateDetailToggles()
     end
@@ -549,7 +641,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         local within=math.max(0,(state.contactScroll or 0)-oldTop)
         local tops={};local fullHeight=0
         for i,found in ipairs(rows) do
-            tops[i]=fullHeight;fullHeight=fullHeight+(journal:Sublabel(found.contact)=="" and 53 or 65)
+            tops[i]=fullHeight;fullHeight=fullHeight+(journal:Sublabel(found.contact)=="" and 63 or 77)
         end
         local scroll=state.contactScroll or 0
         if topID then for i,found in ipairs(rows) do if found.contact.id==topID then scroll=tops[i]+within;break end end end
@@ -568,12 +660,12 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             if found then
                 local e=found.contact;local p=journal:Index(e).locations[1];row.id=e.id;row.match=found.match
                 row.name:SetText((e.favourite and U.SavedIcon(true) or "")..L.Safe(e.name))
-                local sublabel=journal:Sublabel(e);local lineOffset=sublabel=="" and 12 or 0
+                local sublabel=journal:Sublabel(e);local lineOffset=sublabel=="" and 14 or 0
                 row.sublabel:SetText(L.Safe(sublabel));row.sublabel:SetShown(sublabel~="")
-                row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-rowTop);row:SetSize(228,64-lineOffset)
-                rowTop=rowTop+65-lineOffset
-                for key,y in pairs({zone=-25,roles=-37,reason=-49}) do
-                    row[key]:ClearAllPoints();row[key]:SetPoint("TOPLEFT",3,y+lineOffset)
+                row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-rowTop);row:SetSize(228,76-lineOffset)
+                rowTop=rowTop+77-lineOffset
+                for key,y in pairs({zone=-33,roles=-45,reason=-57}) do
+                    row[key]:ClearAllPoints();row[key]:SetPoint("TOPLEFT",7,y+lineOffset)
                 end
                 row.zone:SetText(L.Safe((p and p.zone or "Unknown zone")..(p and p.subzone~="" and " / "..p.subzone or "")))
                 row.roles:SetText(L.Safe(journal:RoleText(e)))
@@ -581,7 +673,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 row:SetSelected(e.id==state.selected);row:Show()
             end
         end
-        m.filters:SetSelected(next(state.roles)~=nil or state.zone~=nil or state.subzone~=nil
+        m.filters:SetSelected(next(state.roles)~=nil or state.currentZone==true or state.zone~=nil or state.subzone~=nil
             or state.knowledge~=nil or state.favourites==true or state.recipes==true)
         local e=journal:Get(state.selected)
         if not e and rows[1] then
@@ -637,7 +729,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Merchant’s Ledger")
         m.directory=CreateFrame("Frame",nil,m);m.directory:SetAllPoints();local d=m.directory
         m.search=U.Search(d,47,-92,188,200);m.search:SetText(state.query)
-        m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
+        m.search:HookScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
         m.filters=ns.FieldbookUI.FilterButton(d,244,-92,function(button)
             m.search:ClearFocus()
             c:Menu(button,function(_,root)
@@ -651,13 +743,17 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                     checkbox(roles,L.roles[k],function() return state.roles[k]==true end,function() state.roles[k]=not state.roles[k] or nil end)
                 end
                 root:CreateDivider();root:CreateTitle("Filters")
+                checkbox(root,"Current Zone",function() return state.currentZone==true end,function()
+                    state.currentZone=not state.currentZone or nil
+                    if state.currentZone then state.zone=nil;state.subzone=nil end
+                end)
                 local locations=root:CreateButton("Zone / location");locations:SetScrollMode(400)
-                checkbox(locations,"All zones",function() return state.zone==nil and state.subzone==nil end,function() state.zone=nil;state.subzone=nil end)
+                checkbox(locations,"All zones",function() return not state.currentZone and state.zone==nil and state.subzone==nil end,function() state.currentZone=nil;state.zone=nil;state.subzone=nil end)
                 local zones=journal:Zones();for _,zone in ipairs(sortedKeys(zones)) do
                     local name=zone;local sub=locations:CreateButton(L.Safe(name));sub:SetScrollMode(400)
-                    checkbox(sub,"All of "..L.Safe(name),function() return state.zone==name and state.subzone==nil end,function() state.zone=name;state.subzone=nil end)
+                    checkbox(sub,"All of "..L.Safe(name),function() return not state.currentZone and state.zone==name and state.subzone==nil end,function() state.currentZone=nil;state.zone=name;state.subzone=nil end)
                     for _,s in ipairs(sortedKeys(zones[name])) do local subzone=s
-                        checkbox(sub,L.Safe(s),function() return state.zone==name and state.subzone==subzone end,function() state.zone=name;state.subzone=subzone end)
+                        checkbox(sub,L.Safe(s),function() return not state.currentZone and state.zone==name and state.subzone==subzone end,function() state.currentZone=nil;state.zone=name;state.subzone=subzone end)
                     end
                 end
                 local knowledge=root:CreateButton("Contact source")
@@ -695,26 +791,27 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             item[1]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         end
         m.reports=U.ShareButton(d,function() c:Reports() end)
-        m.count=U.Label(d,"",42,-126,250,"GameFontHighlightSmall");m.rows={}
-        m.contactsBackground=d:CreateTexture(nil,"BACKGROUND")
-        m.contactsBackground:SetPoint("TOPLEFT",38,-142);m.contactsBackground:SetSize(258,490)
-        m.contactsBackground:SetColorTexture(0,0,0,0.12)
-        m.contactList,m.listBody=U.Scroll(d,42,-146,228,486)
+        m.count=U.Label(d,"",42,-150,250,"GameFontHighlightSmall");m.rows={}
+        m.contactList,m.listBody=U.Scroll(d,42,-170,228,462)
         m.contactList:HookScript("OnVerticalScroll",function(self,value)
             if not m.updatingList then state.contactScroll=value or self:GetVerticalScroll();c:Refresh() end
         end)
         for i=1,10 do
-            local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*65);row:SetSize(228,64)
+            local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*77);row:SetSize(228,76)
             ns.FieldbookUI.StyleMenuRow(row)
-            row.name=U.Label(row,"",3,-1,222,"GameFontNormalSmall")
-            row.sublabel=U.Label(row,"",3,-13,222,"GameFontHighlightSmall")
-            row.zone=U.Label(row,"",3,-25,222,"GameFontDisableSmall")
-            row.roles=U.Label(row,"",3,-37,222,"GameFontHighlightSmall")
-            row.reason=U.Label(row,"",3,-49,222,"GameFontDisableSmall")
+            row.name=U.Label(row,"",7,-5,214,"GameFontNormalSmall")
+            local namePath,nameSize,nameFlags=row.name:GetFont()
+            if namePath and type(nameSize)=="number" then row.name:SetFont(namePath,nameSize+4,nameFlags) end
+            row.sublabel=U.Label(row,"",7,-21,214,"GameFontHighlightSmall")
+            local tagPath,tagSize,tagFlags=row.sublabel:GetFont()
+            if tagPath and type(tagSize)=="number" then row.sublabel:SetFont(tagPath,tagSize+1,tagFlags) end
+            row.zone=U.Label(row,"",7,-33,214,"GameFontDisableSmall")
+            row.roles=U.Label(row,"",7,-45,214,"GameFontHighlightSmall")
+            row.reason=U.Label(row,"",7,-57,214,"GameFontDisableSmall")
             for _,k in ipairs({"name","sublabel","zone","roles","reason"}) do row[k]:SetWordWrap(false) end
             row:SetScript("OnClick",function(self) c:Select(self.id,self.match) end);m.rows[i]=row
         end
-        m.empty=U.Label(d,"",49,-173,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
+        m.empty=U.Label(d,"",49,-197,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
         m.manual=U.Button(d,"Record contact",174,-638,118,function() c:Manual() end)
         m.remove=U.Button(d,"Delete",174,-672,118,function() c:RemoveContact() end)
         m.portraitFrame=CreateFrame("Frame",nil,m)
@@ -762,7 +859,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.services=U.Label(m,"",392,-108,254,"GameFontHighlightSmall");m.services:SetWordWrap(false)
         m.location=U.Label(m,"",342,-128,580,"GameFontHighlightSmall");m.location:SetWordWrap(true)
         m.dates=U.Label(m,"",342,-158,580,"GameFontDisableSmall");m.dates:SetWordWrap(false)
-        m.sightings=U.MenuButton(m,"NPC Locations",342,-174,287,function(self)
+        m.sightings=U.MenuButton(m,"NPC Locations",342,-174,256,function(self)
             local e=journal:Get(state.selected);if not e then return end
             c:Menu(self,function(_,root)
                 root:SetScrollMode(400)
@@ -776,7 +873,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 end
             end)
         end)
-        m.link=U.Button(m,"Link identity",635,-174,287,function() c:Identity() end)
+        m.link=U.Button(d,"Link identity",42,-120,250,function() c:Identity() end)
         m.link:SetScript("OnEnter",function(self)
             if not GameTooltip then return end
             GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText("Link identity")
@@ -798,6 +895,10 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.favourite,"TOPLEFT",-8,0)
         m.details=U.ReadArea(m,342,-588,555,113)
         m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall");m.message:SetWordWrap(false)
+        for _,event in ipairs({"ZONE_CHANGED","ZONE_CHANGED_INDOORS","ZONE_CHANGED_NEW_AREA","PLAYER_ENTERING_WORLD"}) do m:RegisterEvent(event) end
+        m:SetScript("OnEvent",function()
+            if state.currentZone and m:IsVisible() then c:Filter() end
+        end)
         content:SetScript("OnHide",function()
             state.detailScroll=m.details:GetVerticalScroll();m.map:SuspendPlayer();m.search:ClearFocus()
             for _,p in pairs(c.panels) do for _,input in ipairs(p.inputs or {}) do input:ClearFocus() end end
@@ -807,7 +908,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         if journal.readOnly then c:Message("Newer Ledger schema: read-only; saved data is untouched.") end
     end
     shell:RegisterSection("merchants",{title="Merchant’s Ledger",icon="Interface\\Icons\\INV_Misc_Coin_01",frameName="AzerothFieldbookLedgerSection",build=build,
-        help=L.VISION.."\n\n|cffffd100Directory|r\nFind remembered merchants, trainers and services by name, goods, training, zone or notes. Use role, location and recipe filters to narrow the directory; Filters > Clear shows the full directory again. Record contact adds a contact manually.\n\n"..
+        help=L.VISION.."\n\n|cffffd100Directory|r\nFind remembered merchants, trainers and services by name, goods, training, zone or notes. Use role, location and recipe filters to narrow the directory. Tick Current Zone to combine searches such as repair with sightings in your current zone; it follows zone changes. Choosing a fixed zone or Filters > Clear turns it off. Record contact adds a contact manually. Link identity sits below Search, above the contact list.\n\n"..
             "|cffffd100Observation|r\nOpen a merchant or trainer to record readable offerings without buying. Supported service interactions also record contacts; recognizable class-trainer titles can reveal a trainer before you open its services.\n\nGoods, prices and stock describe past inspections, not live availability. A partial or filtered view may miss offerings. Something absent from the latest inspection is not proof it is no longer sold.\n\n"..
             "|cffffd100Locations and identity|r\nLocations shows remembered encounters. Encountered near means your approximate position during an interaction, not the NPC's exact position. Distant targeting does not add your position as the contact's location.\n\nContacts with the same name may be different individuals. Use Link identity only when you recognize two entries as the same contact; their goods and history are combined after confirmation.\n\n"..
             "|cffffd100Access notes and details|r\nUse Edit for entrances, floors, personal notes or a manual role annotation. Known Goods and Observed Training open offering lists; click the same button again or Back to contacts to return to the directory.\n\n"..

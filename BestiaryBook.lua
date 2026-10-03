@@ -162,7 +162,7 @@ function ns.CreateBestiaryBook(journal,shell)
     local ui=ns.FieldbookUI
     local label,button,cornerClose,edit=ui.Label,ui.Button,ui.Close,ui.Edit
     local book, selected, offset, abilityOffset = nil, nil, 0, 0
-    local creaturePageSize = 16
+    local creaturePageSize = 18
     local creatureNotes = ns.CreateCreatureNotesWindow and ns.CreateCreatureNotesWindow(journal,function() return shell:GetFrame() end)
     local creatureLocations = ns.CreateCreatureLocationsWindow and ns.CreateCreatureLocationsWindow(journal,function() return shell:GetFrame() end)
     local sharingWindow = journal.sharing and ns.CreateSharingWindow and ns.CreateSharingWindow(journal,journal.sharing,function() return shell:GetFrame() end)
@@ -209,7 +209,7 @@ local ink = { 0.75, 0.8, 0.8 }
         -- below it together, preserving panel sizes and space for the footer.
         local extra=math.max(0,84+height+5-133)
         book.detail:ClearAllPoints(); book.detail:SetPoint("TOPLEFT",0,-extra)
-        shell:SetSectionSize("bestiary",960,756+extra)
+        shell:SetSectionSize("bestiary",960,740+extra)
     end
     local filterFonts={}
     local function filterFont(base)
@@ -855,7 +855,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.pointsCount:SetJustifyH("RIGHT")
         book.search = ui.Search(book,70,-110,168,100)
         book.searchClear=book.search.clearButton
-        book.search:SetScript("OnTextChanged", function() offset=0;refresh() end)
+        book.search:HookScript("OnTextChanged", function() offset=0;refresh() end)
         -- Keep the popup independent of book focus/strata changes. Its entire
         -- hierarchy must draw above nested row rewards and scrollbar buttons.
         local sortDismiss=CreateFrame("Button","AzerothFieldbookSortMenu",UIParent)
@@ -1043,7 +1043,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.rows = {}
         book.creatureScrollBar=CreateFrame("Slider",nil,book,"UIPanelScrollBarTemplate")
         book.creatureScrollBar:SetPoint("TOPLEFT",282,-156)
-        book.creatureScrollBar:SetSize(14,416)
+        book.creatureScrollBar:SetSize(14,454)
         ns.StyleScrollBarTrack(book.creatureScrollBar,0.3)
         book.creatureScrollBar:SetMinMaxValues(0,0)
         book.creatureScrollBar:SetValueStep(1)
@@ -1058,7 +1058,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.creatureScrollBar:Hide()
         for i = 1, creaturePageSize do
             local row = CreateFrame("Button", nil, book, "BackdropTemplate")
-            row:SetPoint("TOPLEFT", 42, -140 - (i-1)*28); row:SetSize(236, 26)
+            row:SetPoint("TOPLEFT", 42, -140 - (i-1)*27); row:SetSize(236, 26)
             ns.FieldbookUI.StyleMenuRow(row)
             row.reviewMark = label(row, "", 16, -6, 10)
             row.reviewMark:SetTextColor(1, 1, 1)
@@ -1084,8 +1084,6 @@ local ink = { 0.75, 0.8, 0.8 }
             row:SetScript("OnMouseWheel", function(_, delta) offset=offset-delta*3; refresh() end)
             book.rows[i] = row
         end
-        button(book, "Previous", 42, -604, 118, function() cycleEntry(-1) end)
-        button(book, "Next", 174, -604, 118, function() cycleEntry(1) end)
         local deleteForm=ui.DeletePanel(book,shell,"Delete creature entry",true)
         book.deleteForm=deleteForm
         book.deleteButton=button(book,"Delete",174,-672,118,function()
@@ -1614,18 +1612,18 @@ local ink = { 0.75, 0.8, 0.8 }
             row.tooltipArea:SetScript("OnMouseWheel",function(_,delta) abilityOffset=abilityOffset-delta; refresh() end)
             book.abilities[i]=row
         end
-        label(abilityPanel,"Ability name you experienced",342,-565,251,"GameFontHighlightSmall")
-        label(abilityPanel,"Effects |cff999999(optional)|r",608,-565,268,"GameFontHighlightSmall")
-        book.manualName=edit(abilityPanel,348,-583,244,100)
+        label(abilityPanel,"Ability name you experienced",342,-549,251,"GameFontHighlightSmall")
+        label(abilityPanel,"Effects |cff999999(optional)|r",608,-549,268,"GameFontHighlightSmall")
+        book.manualName=edit(abilityPanel,348,-567,244,100)
         book.manualEffects={}
-        book.effectButton=button(abilityPanel,"Choose effects",614,-583,321,function() book.effectPicker:SetShown(not book.effectPicker:IsShown()); book.refreshEffectPicker() end)
-        label(abilityPanel,"Field note |cff999999(optional)|r",342,-606,559,"GameFontHighlightSmall")
-        book.manualNote=edit(abilityPanel,348,-625,587,300)
-        label(abilityPanel,"Optional spell ID, link, or exact name |cff999999(out of combat)|r",342,-653,559,"GameFontHighlightSmall")
-        book.spellLink=edit(abilityPanel,348,-672,284,255)
+        book.effectButton=button(abilityPanel,"Choose effects",614,-567,321,function() book.effectPicker:SetShown(not book.effectPicker:IsShown()); book.refreshEffectPicker() end)
+        label(abilityPanel,"Field note |cff999999(optional)|r",342,-590,559,"GameFontHighlightSmall")
+        book.manualNote=edit(abilityPanel,348,-609,587,300)
+        label(abilityPanel,"Optional spell ID, link, or exact name |cff999999(out of combat)|r",342,-637,559,"GameFontHighlightSmall")
+        book.spellLink=edit(abilityPanel,348,-656,284,255)
         if ns.CreateDetectedAbilityHint then
             book.detectedAbility=ns.CreateDetectedAbilityHint(abilityPanel,journal)
-            book.detectedAbility:SetPoint("TOPLEFT",342,-700)
+            book.detectedAbility:SetPoint("TOPLEFT",342,-684)
         end
         local function resolveSpellLink()
             local spellID,spellName,errorMessage=journal:ResolveSpell(book.spellLink:GetText())
@@ -1638,8 +1636,8 @@ local ink = { 0.75, 0.8, 0.8 }
             message("Exact match: "..spellName.." (ID "..spellID..").")
         end
         book.spellLink:SetScript("OnEnterPressed",function(self) resolveSpellLink(); self:ClearFocus() end)
-        book.resolveButton=button(abilityPanel,"Resolve",640,-672,92,resolveSpellLink)
-        book.confirmAbilityButton=button(abilityPanel,"Confirm this ability",740,-672,195,function()
+        book.resolveButton=button(abilityPanel,"Resolve",640,-656,92,resolveSpellLink)
+        book.confirmAbilityButton=button(abilityPanel,"Confirm this ability",740,-656,195,function()
             local ok,msg=journal:AddManual(selected,book.manualName:GetText(),book.manualNote:GetText(),book.spellLink:GetText(),book.manualEffects)
             message(msg)
             if ok then book.manualName:SetText(""); book.manualNote:SetText(""); book.spellLink:SetText(""); book.manualEffects={}; book.effectButton:SetText("Choose effects"); refresh() end
@@ -1710,7 +1708,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.behaviourButton=button(detail,"Behaviour",811,-277,111,function()
             book.behaviourPicker:SetShown(not book.behaviourPicker:IsShown())
         end)
-        book.message=label(detail,"",342,-732,593,"GameFontHighlightSmall")
+        book.message=label(detail,"",342,-716,593,"GameFontHighlightSmall")
         book.message:SetHeight(18); book.message:SetJustifyV("TOP")
         local effectPicker=CreateFrame("Frame",nil,UIParent,"BackdropTemplate")
         effectPicker:SetSize(560,673); effectPicker:SetPoint("CENTER",book,"CENTER"); effectPicker:SetFrameStrata("FULLSCREEN_DIALOG")

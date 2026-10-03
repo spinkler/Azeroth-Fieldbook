@@ -320,6 +320,7 @@ function ns.CreateLedgerJournal(saved)
                 complete=false;reason="Stored offering limit reached"
             else
                 local v=L.Copy(data);v.key=key;v.first=old and old.first or at;v.last=at;v.visit=visit.id
+                if kind=="trainer" and old and v.icon==nil then v.icon=old.icon end
                 if kind=="merchant" and old then
                     for _,field in ipairs({"name","recipe","profession","icon","bundle"}) do if v[field]==nil then v[field]=old[field] end end
                     if not v.costsKnown then v.variant=old.variant;v.costs=L.Copy(old.costs);v.costsAt=old.costsAt end
@@ -395,11 +396,13 @@ function ns.CreateLedgerJournal(saved)
     end
     function j:List(f)
         f=f or {};local q=string.lower(f.query or "");local rows={};local total=0
+        local zone,subzone=f.zone,f.subzone;local currentOnly=f.currentZone==true
+        if currentOnly then zone=L.Name(ns.Atlas.CurrentLocation().zone);subzone=nil end
         for _,e in pairs(db.contacts) do
             total=total+1;local ix=self:Index(e);local roleOK=not f.roles or not next(f.roles)
             for role in pairs(f.roles or {}) do if ix.roles[role] then roleOK=true end end
-            local zoneOK=not f.zone
-            for _,p in ipairs(ix.locations) do if p.zone==f.zone and (not f.subzone or p.subzone==f.subzone) then zoneOK=true end end
+            local zoneOK=not zone and not currentOnly
+            for _,p in ipairs(ix.locations) do if p.zone==zone and (not subzone or p.subzone==subzone) then zoneOK=true end end
             if roleOK and zoneOK and (not f.favourites or e.favourite) and (not f.recipes or ix.recipe)
                 and (f.knowledge~="personal" or e.personal) and (f.knowledge~="reported" or (not e.personal and not e.recorded and #e.reports>0)) then
                 local match=ix.text:find(q,1,true)~=nil;local why

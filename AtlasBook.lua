@@ -5,6 +5,7 @@ local function categoryInfo(id) return A.category[id] or ns.AtlasEntrances.Categ
 function ns.CreateAtlasBook(journal,shell,adapters)
     local c={journal=journal,shell=shell,adapters=adapters,pages={}}
     local entries=ns.AtlasEntrances and ns.AtlasEntrances.View(journal) or journal
+    entries.borderlessPins=true -- The icon artwork retains its own bevel.
     c.entries=entries
     c.worldSubzones=ns.AtlasSubzones.CreateWorldOverlay(journal)
     c.subzoneObserver=ns.AtlasSubzones.Track(journal,function()
@@ -104,7 +105,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
                 self.previous:SetEnabled(self.offset>0);self.next:SetEnabled(self.offset+10<#rows)
                 self.count:SetText(#rows==0 and (self.config.empty or "No matching entries.") or (self.offset+1).."–"..math.min(self.offset+10,#rows).." of "..#rows)
             end
-            p.search:SetScript("OnTextChanged",function() if p.config then p.offset=0;p:Render() end end)
+            p.search:HookScript("OnTextChanged",function() if p.config then p.offset=0;p:Render() end end)
         end
         p.config=config;p.offset=0;p.title:SetText(config.title);p.search:SetText("")
         p.extra:SetText(config.extraLabel or "");p.extra:SetShown(config.extra~=nil)
@@ -199,9 +200,8 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         spine:SetColorTexture(0.25,0.13,0.055,0.35)
         spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Traveller’s Atlas")
-        U.Label(m,"Discovery index",42,-93,245,"GameFontNormalSmall")
         m.search=U.Search(m,48,-113,240,200);m.search:SetText(state.query)
-        m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();state.offset=0;c:Refresh() end)
+        m.search:HookScript("OnTextChanged",function() state.query=m.search:GetText();state.offset=0;c:Refresh() end)
         m.scope=U.Button(m,"",42,-146,250,function() state.all=not state.all;state.offset=0;c:Refresh() end)
         m.count=U.Label(m,"",42,-179,250,"GameFontHighlightSmall")
         m.rows={}
@@ -242,10 +242,10 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         U.Button(m,"Current Zone",794,-60,128,function()
             local location=A.CurrentLocation();c:SetZone(location.mapID,location.zone);c:Message(location.mapID and "Showing your current zone." or "Current map unavailable; you can still record notes.")
         end)
-        m.zone=U.ZoneMenu(m,342,-91,306,function()
+        m.zone=U.ZoneMenu(m,342,-174,306,function()
             local ids={state.mapID};for _,row in ipairs(A.MapCatalog(entries)) do ids[#ids+1]=row.mapID end;return ids
         end,function(id,name) c:SetZone(id,name) end)
-        m.layerMenu=U.MenuButton(m,"Map Layers",342,-174,130,function()
+        m.layerMenu=U.MenuButton(m,"Map Layers",342,-146,130,function()
             m.layerPanel:SetShown(not m.layerPanel:IsShown())
         end)
         m.layerPanel=CreateFrame("Frame",nil,m,"BackdropTemplate")
@@ -275,6 +275,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end)
         m.iconSize:SetEnabled(not journal.readOnly)
         layers:SetSize(244,-y+30)
+        ns.FieldbookUI.DismissOnOutsideClick(layers,m.layerMenu)
         layers:SetScript("OnShow",function()
             for _,check in ipairs(layers.checks) do check:SetChecked(entries:Layer(check.layerID)) end
             m.iconSize:Display(A.Number(state.iconSize,6,40) and state.iconSize or 20)
@@ -283,18 +284,17 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         layers:Hide()
         U.Tip(m.layerMenu,"Choose which discovery markers appear on the map. Check several layers or use Show all / Hide all. The discovery index and sub-zone controls are unchanged.")
         if journal.entrances then
-            m.autoEntrances=U.Check(m,"Auto-discover entrances",342,-119,148,function(on) c.entranceObserver:SetEnabled(on) end)
-            m.autoEntrances:SetSize(20,20);m.autoEntrances.label:ClearAllPoints();m.autoEntrances.label:SetPoint("TOPLEFT",22,-4)
+            m.autoEntrances=U.Check(m,"Auto-discover entrances",342,-91,148,function(on) c.entranceObserver:SetEnabled(on) end)
             m.autoEntrances:SetEnabled(not journal.entrances.readOnly)
             U.Tip(m.autoEntrances,"Learn exterior entrances from indoor / outdoor crossings. Starts off. This controls recording only; Map Layers controls visibility. Sub-zone mapping is independent.")
         end
-        m.automaticMapping=U.Check(m,"Toggle Automatic Mapping",342,-146,280,function(on)
+        m.automaticMapping=U.Check(m,"Toggle Automatic Mapping",342,-119,280,function(on)
             if not journal.readOnly then state.automaticMapping=on;journal.subzones:Reset() end
         end)
         m.automaticMapping:SetChecked(state.automaticMapping~=false)
         m.automaticMapping:SetEnabled(not journal.readOnly)
         U.Tip(m.automaticMapping,"Automatically record sub-zone crossings and interior survey points. Pauses in The Great Sea, on flight paths and while flying. City mapping is enabled. Manual survey-point keybindings remain available when this is off.")
-        m.cleanPoints=U.Button(m,"Clean Redundant Points",480,-174,168,function()
+        m.cleanPoints=U.Button(m,"Clean Redundant Points",480,-146,168,function()
             local allMaps=A.Read(IsControlKeyDown)==true
             local function done(count,message)
                 m.cleanPoints:SetEnabled(not journal.readOnly)

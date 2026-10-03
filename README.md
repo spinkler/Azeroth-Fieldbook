@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.23.0 (Beta)
+# Azeroth Fieldbook 0.24.0 (Release)
 
 **New in this Beta:** Adventurer's Annals adds an eighth journal for
 this character's quest history and Journey Trail. It is independent of account
@@ -1189,7 +1189,11 @@ Readable target or mouseover casts become pending field notes. Supported
 post-combat damage-meter records may also contribute abilities when an NPC can be
 attributed safely within the same encounter, even without targeting or hovering
 over it. These entries retain the meter's readable creature name; level, type and
-location still require direct observation. Automatic abilities require a usable
+location still require direct observation. Readable enemy rosters can create
+creature entries even without usable spell details. Dungeon and raid observations
+use the instance name and do not require map coordinates; map markers still
+require a readable position. If live identity is restricted, post-combat recovery
+depends on the game's meter retaining readable enemy IDs and names. Automatic abilities require a usable
 name and a journal entry. Ambiguous, incomplete, secret or unreadable records
 fail closed.
 

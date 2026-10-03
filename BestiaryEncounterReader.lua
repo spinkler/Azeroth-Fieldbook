@@ -1,7 +1,7 @@
 -- Only consumes this character's retained combat sessions. No static ability data.
 local _, ns = ...
 
-function ns.CreateBestiaryEncounterReader(record)
+function ns.CreateBestiaryEncounterReader(record, recordCreature)
     local reader = { status = "Waiting for post-combat data.", scans = 0 }
     local delay, retries = 1, 0
     local ignoredSessions, seenSessions = {}, {}
@@ -63,9 +63,8 @@ function ns.CreateBestiaryEncounterReader(record)
         local meter, modes = C_DamageMeter, Enum and Enum.DamageMeterType
         if not meter or not modes or type(meter.GetAvailableCombatSessions) ~= "function"
             or type(meter.GetCombatSessionFromID) ~= "function"
-            or type(meter.GetCombatSessionSourceFromID) ~= "function"
-            or not enum(modes.EnemyDamageTaken) or not enum(modes.DamageTaken) then
-            self.status = "API MISSING: combat-session queries or required categories unavailable."
+            or not enum(modes.EnemyDamageTaken) then
+            self.status = "API MISSING: combat-session queries or enemy roster unavailable."
             return
         end
         if type(meter.IsDamageMeterAvailable) == "function" then
@@ -76,8 +75,20 @@ function ns.CreateBestiaryEncounterReader(record)
             end
         end
         local stats = { sessions = 0, roster = 0, incoming = 0, candidates = 0,
-            ambiguous = 0, excluded = 0, unreadable = 0, errors = 0, capped = 0 }
+            ambiguous = 0, excluded = 0, unreadable = 0, errors = 0, capped = 0,
+            rosterRows = 0, hiddenIDs = 0, hiddenNames = 0, hiddenGUIDs = 0 }
         local proposals = {}
+        local function identity(npcID, name)
+            local proposal = proposals[npcID]
+            if not proposal then
+                proposal = { name = name, spells = {} }
+                proposals[npcID] = proposal
+            elseif proposal.name ~= name and proposal.name ~= false then
+                proposal.name = false
+                stats.ambiguous = stats.ambiguous + 1
+            end
+            return proposal
+        end
         local function get(fn, ...)
             local ok, result = pcall(fn, ...)
             if not ok then stats.errors = stats.errors + 1; return end
@@ -116,14 +127,7 @@ function ns.CreateBestiaryEncounterReader(record)
                 stats.excluded = stats.excluded + 1; return
             end
             stats.candidates = stats.candidates + 1
-            local proposal = proposals[npcID]
-            if not proposal then
-                proposal = { name = name, spells = {} }
-                proposals[npcID] = proposal
-            elseif proposal.name ~= name then
-                proposal.name = false
-                stats.ambiguous = stats.ambiguous + 1
-            end
+            local proposal = identity(npcID, name)
             proposal.spells[spell.spellID] = true
         end
         local function details(sessionID, mode, source)
@@ -164,6 +168,10 @@ function ns.CreateBestiaryEncounterReader(record)
                 local completeRoster = true
                 if roster then
                     local completeList = each(roster.combatSources, 250, function(source)
+                    stats.rosterRows = stats.rosterRows + 1
+                    if not public(source.sourceCreatureID) then stats.hiddenIDs = stats.hiddenIDs + 1 end
+                    if not public(source.name) then stats.hiddenNames = stats.hiddenNames + 1 end
+                    if not public(source.sourceGUID) then stats.hiddenGUIDs = stats.hiddenGUIDs + 1 end
                     local creatureID = npc(source)
                     if not creatureID or not text(source.name) then
                         stats.excluded = stats.excluded + 1; completeRoster = false; return
@@ -172,6 +180,9 @@ function ns.CreateBestiaryEncounterReader(record)
                     if previousName == nil then enemies[creatureID] = source.name
                     elseif previousName ~= source.name then enemies[creatureID] = false end
                     stats.roster = stats.roster + 1
+                    -- The enemy roster is direct encounter evidence even when
+                    -- live unit identity or every spell detail is unavailable.
+                    identity(creatureID, source.name)
                     local previous = names[source.name]
                     if previous == nil then names[source.name] = creatureID
                     elseif previous ~= creatureID then names[source.name] = false end
@@ -185,7 +196,9 @@ function ns.CreateBestiaryEncounterReader(record)
                 -- Incoming rows are grouped by the victim; NEVER assign their
                 -- spells to that victim. Match the NPC attacker to this session's
                 -- roster only. Same-name/different-ID encounters fail closed.
-                local taken = get(meter.GetCombatSessionFromID, sessionID, modes.DamageTaken)
+                local hasDetails = type(meter.GetCombatSessionSourceFromID) == "function"
+                local taken = hasDetails and enum(modes.DamageTaken)
+                    and get(meter.GetCombatSessionFromID, sessionID, modes.DamageTaken)
                 if taken then each(taken.combatSources, 250, function(victim)
                     local result = details(sessionID, modes.DamageTaken, victim)
                     if result then each(result.combatSpells, 500, function(spell)
@@ -206,7 +219,7 @@ function ns.CreateBestiaryEncounterReader(record)
                 -- must never be imported as that NPC's own abilities.
                 for _, modeName in ipairs({ "DamageDone", "HealingDone" }) do
                     local mode = modes[modeName]
-                    if enum(mode) then
+                    if hasDetails and enum(mode) then
                         local summary = get(meter.GetCombatSessionFromID, sessionID, mode)
                         if summary then each(summary.combatSources, 250, function(source)
                             local creatureID = npc(source)
@@ -226,15 +239,17 @@ function ns.CreateBestiaryEncounterReader(record)
             self.status = "API/table access ERROR: discarded this scan; no partial import."
             return
         end
-        local added = 0
+        local added, creatures = 0, 0
         for creatureID, proposal in pairs(proposals) do
             if proposal.name then
+                if recordCreature and recordCreature(creatureID, proposal.name) then creatures = creatures + 1 end
                 for spellID in pairs(proposal.spells) do
                     if record(creatureID, spellID, proposal.name) then added = added + 1 end
                 end
             end
         end
         self.status = "Last scan: " .. stats.sessions .. " sessions; " .. added .. " new NPC/ability pairs."
+        self.status = self.status .. " " .. creatures .. " new creature records."
         if stats.candidates == 0 then
             self.status = self.status .. " No spell rows could be attributed safely. See /fieldbook encounters."
         end
@@ -251,6 +266,7 @@ function ns.CreateBestiaryEncounterReader(record)
 
     function reader:Event(event)
         if event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD"
+            or event == "ADDON_RESTRICTION_STATE_CHANGED"
             or event == "DAMAGE_METER_COMBAT_SESSION_UPDATED" or event == "DAMAGE_METER_CURRENT_SESSION_UPDATED" then
             self:Schedule()
         elseif event == "DAMAGE_METER_RESET" then
@@ -268,8 +284,11 @@ function ns.CreateBestiaryEncounterReader(record)
                 .. "; attributed candidates " .. s.candidates .. ".")
             say("Skipped: unmatched/ambiguous attacker " .. s.ambiguous .. "; excluded/invalid " .. s.excluded
                 .. "; unreadable data " .. s.unreadable .. "; API errors " .. s.errors .. "; capped lists " .. s.capped .. ".")
+            say("Enemy roster rows inspected " .. s.rosterRows .. "; secret creature IDs " .. s.hiddenIDs
+                .. "; secret names " .. s.hiddenNames .. "; secret GUIDs " .. s.hiddenGUIDs .. ".")
         end
         say("Imports only readable records in your retained encounters, including attacks on party members.")
+        say("Readable enemy rosters also recover creature entries without spell details; no kills, levels or locations are inferred.")
         say("Incoming NPC names must match one creature ID in the SAME encounter. Players, pets and ambiguous names are excluded.")
         say("The meter is not a full cast log: buffs, missed/interrupted casts and enemy self-heals may be absent.")
         say("/fieldbook scan retries now outside combat. Scans also retry automatically after combat ends.")

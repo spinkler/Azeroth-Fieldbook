@@ -19,7 +19,7 @@ function ns.CreateLoreReportUI(parent,journal,getSelected,onChanged,shell)
         end
         p.accept:SetEnabled(false);p.message:SetText('Prepare or preview again after changing selections.')
     end
-    local labels={includePages='Source pages',includePassages='Source passages',includeLocations='Locations',includeReferences='Related references only',
+    local labels={includePages='Source pages',includePassages='Passages / translations',includeLocations='Locations',includeReferences='Related references only',
         description='Description / observations',notes='Private notes',theory='Working theory',nextStep='Next step',tags='Tags',status='My mystery status',interpretations='Private passages / interpretations'}
     local order={'includePages','includePassages','includeLocations','includeReferences','description','notes','theory','nextStep','tags','status','interpretations'}
     p.checks={}
@@ -54,6 +54,7 @@ function ns.CreateLoreReportUI(parent,journal,getSelected,onChanged,shell)
                 for _,key in ipairs(keys) do local k=key;local category=kind;local item=values[k]
                     local caption=category=='pages' and ('Page '..tostring(item.number or '?')) or category=='locations' and L.LocationText(item)
                         or category=='references' and (item.label or item.name) or (item.source or item.nature or 'Passage')..' '..tostring(k)
+                    if category=='passages' and item.translation then caption=L.TranslationLabel(item.translation) end
                     menu:CreateCheckbox(L.Safe(caption or tostring(k)),function() return c.selection[category]==nil or c.selection[category][k]==true end,function()
                         if c.selection[category]==nil then c.selection[category]={};for _,all in ipairs(keys) do c.selection[category][all]=true end end
                         c.selection[category][k]=not c.selection[category][k];invalidate()

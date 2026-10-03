@@ -397,8 +397,8 @@ class LocationsWindowTests(unittest.TestCase):
             local map=AzerothFieldbookCreatureLocations
             map.scripts.OnShow(map) -- The mock's Show omits native OnShow dispatch.
             assert(map:IsShown() and content.creatureLocationsButton.afbSelected)
-            eq(map:GetWidth(),603);eq(map:GetHeight(),636)
-            eq(map.point[1],'TOPLEFT');eq(map.point[3],'TOPLEFT');eq(map.point[4],333);eq(map.point[5],-78)
+            eq(map:GetWidth(),603);eq(map:GetHeight(),627)
+            eq(map.point[1],'TOPLEFT');eq(map.point[3],'TOPLEFT');eq(map.point[4],333);eq(map.point[5],-87)
             eq(map.point[4]-309,960-map.point[4]-map:GetWidth(),"balanced panel margins")
             assert(map.zoneButton.arrow and map.zoneButton.arrowShadow)
             assert(map.map:GetWidth()<=558 and map.map:GetHeight()<=372)

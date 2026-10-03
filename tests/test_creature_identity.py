@@ -51,6 +51,101 @@ def client():
 
 
 class CreatureIdentityTests(unittest.TestCase):
+    def test_roster_recovers_creature_without_live_identity_or_abilities(self):
+        for kind in ('party', 'raid'):
+            with self.subTest(kind=kind):
+                lua = client()
+                lua.globals().instanceKind = kind
+                lua.execute(r'''
+                    function IsInInstance() return true,instanceKind end
+                    function GetInstanceInfo() return 'The Hall of Thanes',instanceKind end
+                    units.target=spawn('restricted',false)
+                    units.target.guid=secret;units.target.name=secret
+                    fire('PLAYER_TARGET_CHANGED')
+                    assert(not next(journal.entries),'hidden live identity must stay excluded')
+                    C_DamageMeter.GetCombatSessionSourceFromID=function() return {combatSpells={}} end
+                    scan()
+                    local e=journal.entries[creatureID]
+                    assert(e and e.name==creatureName and e.personalEncountered)
+                    assert(not next(e.abilities) and e.kills==0 and not e.levelMin and not next(e.locations))
+                    assert(not e.killLocations and not e.observationLocations and points()==0)
+                    assert(#journal:GetEventLog().entries==1)
+                    scan();fire('ADDON_LOADED','AzerothFieldbook');scan()
+                    assert(#journal:GetEventLog().entries==1 and #journal:List()==1)
+                ''')
+
+    def test_roster_recovery_does_not_require_spell_detail_api_or_category(self):
+        lua = client()
+        lua.execute(r'''
+            C_DamageMeter.GetCombatSessionSourceFromID=nil
+            Enum.DamageMeterType.DamageTaken=nil
+            scan()
+            assert(journal.entries[creatureID].name==creatureName)
+            assert(not next(journal.entries[creatureID].abilities))
+        ''')
+
+    def test_roster_recovery_preserves_wipe_boundary(self):
+        lua = client()
+        lua.execute(r'''
+            C_DamageMeter.GetCombatSessionSourceFromID=function() return {combatSpells={}} end
+            scan();assert(journal.entries[creatureID])
+            SlashCmdList.AZEROTHFIELDBOOK('wipe')
+            SlashCmdList.AZEROTHFIELDBOOK('wipe confirm')
+            scan();assert(not next(journal.entries))
+            fire('ADDON_LOADED','AzerothFieldbook');scan()
+            assert(not next(journal.entries),'reload cannot reimport wiped roster history')
+            C_DamageMeter.GetAvailableCombatSessions=function() return {{sessionID=2}} end
+            scan();assert(journal.entries[creatureID])
+        ''')
+
+    def test_restriction_change_retries_roster_only_recovery_outside_combat(self):
+        lua=client()
+        lua.execute(r'''
+            C_DamageMeter.GetCombatSessionSourceFromID=nil
+            local summary=C_DamageMeter.GetCombatSessionFromID
+            local readable=false
+            C_DamageMeter.GetCombatSessionFromID=function(sid,mode)
+                local result=summary(sid,mode)
+                if not readable and mode==10 then result.combatSources[1].name=secret end
+                return result
+            end
+            scan();assert(not next(journal.entries))
+            local combat=true
+            function InCombatLockdown() return combat end
+            fire('ADDON_RESTRICTION_STATE_CHANGED')
+            readable=true
+            for _=1,10 do tick() end
+            assert(not next(journal.entries),'restriction event never enables in-combat imports')
+            combat=false
+            for _=1,10 do tick() end
+            assert(journal.entries[creatureID].name==creatureName)
+        ''')
+
+    def test_roster_only_import_rejects_restricted_owned_and_conflicting_identities(self):
+        fixtures = [
+            "row.sourceGUID=secret", "row.name=secret", "row.sourceCreatureID=secret",
+            "row.sourceGUID='Pet-0-1-2-3-1176-1'", "row.classFilename='MAGE'",
+            "row.isLocalPlayer=true", "row.sourceDisplayType=1",
+            "rows[2]={sourceCreatureID=creatureID,name='Conflicting name',classFilename='',isLocalPlayer=false,sourceDisplayType=2}",
+            "row.name=nil;setmetatable(row,{__index=function() error('restricted row') end})",
+        ]
+        for fixture in fixtures:
+            with self.subTest(fixture=fixture):
+                lua=client()
+                lua.execute(r'''
+                    C_DamageMeter.GetCombatSessionSourceFromID=nil
+                    local summary=C_DamageMeter.GetCombatSessionFromID
+                    C_DamageMeter.GetCombatSessionFromID=function(sid,mode)
+                        local result=summary(sid,mode)
+                        if mode==10 then
+                            local rows=result.combatSources;local row=rows[1]
+                ''' + fixture + r'''
+                        end
+                        return result
+                    end
+                    scan();assert(not next(journal.entries) and points()==0)
+                ''')
+
     def test_post_combat_import_has_name_without_target_or_mouseover(self):
         lua = client()
         lua.execute(r'''

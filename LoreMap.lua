@@ -24,7 +24,7 @@ function L.LocationLabel(p)
     return text
 end
 function ns.CreateLoreMap(parent,journal,getSelection,onSelect,onPlace)
-    local adapter={}
+    local adapter={borderlessPins=true}
     local function points()
         local id=getSelection();local e=journal:Get(id);local rows={}
         for i,p in ipairs(L.VisibleLocations(e)) do
@@ -57,7 +57,7 @@ function ns.CreateLoreMap(parent,journal,getSelection,onSelect,onPlace)
         self.empty:SetWidth(self:GetWidth()-24)
         if noMap then self.empty:SetText("No map recorded. Add a location or keep the reference as text.");self.empty:Show() end
         for _,pin in ipairs(self.pins or {}) do if pin.group and pin:IsShown() then
-            pin.icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
+            self:SetPinIcon(pin,"Interface\\Icons\\INV_Misc_Book_09")
             pin:SetScript("OnEnter",function(self)
                 if not GameTooltip then return end
                 GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText("Lore locations")

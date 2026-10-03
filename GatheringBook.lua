@@ -1,26 +1,20 @@
 local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 
--- Keep gathering camera settings independent of the Bestiary. A camera distance
--- of 1.25 / 0.40 gives approximately 40% of the original apparent model size.
-local function applyModelZoom(model)
-    if model.isMineralViewer then return end
-    model:SetPortraitZoom(0)
-    model:SetCamDistanceScale(3.125)
-end
-
--- Mineral assets have different placement origins (including below-ground
+-- Gathering assets have different placement origins (including below-ground
 -- origins). Use their render bounds, never a resource-name offset table.
-local function createMineralViewer(parent,onReady)
+local function createGatheringViewer(parent,onReady)
     local scene=CreateFrame("ModelScene",nil,parent)
-    scene.isMineralViewer=true
+    scene.isGatheringViewer=true
     local actor=scene:CreateActor()
     scene.actor=actor
     actor:SetUseCenterForOrigin(true,true,true)
     actor:SetPreferModelCollisionBounds(false)
     actor:SetPosition(0,0,0)
     scene:SetCameraFieldOfView(math.rad(30))
-    scene:SetCameraOrientationByAxisVectors(-1,0,0,0,1,0,0,0,1)
+    -- Match Blizzard's orbit camera at +X, looking toward the origin. Supplying
+    -- (-X,+Y,+Z) as a basis reflects an axis instead of defining a rotation.
+    scene:SetCameraOrientationByYawPitchRoll(math.pi,0,0)
     scene:SetLightType(0) -- Directional.
     scene:SetLightAmbientColor(0.75,0.75,0.75)
     scene:SetLightDiffuseColor(0.8,0.8,0.8)
@@ -31,9 +25,10 @@ local function createMineralViewer(parent,onReady)
         pending=nil;actor:ClearModel();actor:Hide()
     end
     function scene:SetModel(fileID)
-        pending=fileID;elapsed=0;actor:Hide()
+        -- The scene and actor must be visible when the native load begins.
+        pending=fileID;elapsed=0;actor:Show()
         if not actor:SetModelByFileID(fileID) then
-            pending=nil;error("Mineral model unavailable")
+            pending=nil;actor:Hide();error("Gathering model unavailable")
         end
     end
     function scene:SetRotation(angle) actor:SetYaw(angle) end
@@ -65,8 +60,10 @@ local function createMineralViewer(parent,onReady)
                 local halfFov=math.atan(math.tan(math.rad(15))*math.min(1,aspect)*0.70)
                 local distance=radius/math.sin(halfFov)
                 self:SetCameraPosition(distance,0,0)
-                self:SetCameraNearClip(math.max(0.001,(distance-radius)*0.5))
-                self:SetCameraFarClip(distance+radius*2)
+                -- Tight bounds-derived planes clip loaded geometry on Forever.
+                -- This range was verified in-client with the Copper Vein preview.
+                self:SetCameraNearClip(0.01)
+                self:SetCameraFarClip(10000)
                 actor:Show();pending=nil;onReady(true)
                 return
             end
@@ -208,8 +205,49 @@ function ns.CreateGatheringBook(journal,shell)
     local ui=ns.FieldbookUI
     local label,button,edit=ui.Label,ui.Button,ui.Edit
     local book,selected,category
+    function controller:ReportModel(say)
+        say("Gathering model preview")
+        if not book or not book.activeModel then say("Select a gathering entry first.");return end
+        local function value(v)
+            if issecretvalue and issecretvalue(v) then return "RESTRICTED" end
+            local kind=type(v)
+            if kind=="number" or kind=="boolean" or kind=="nil" then return tostring(v) end
+            if kind=="string" then return v:gsub("|",""):gsub("[%c]"," "):sub(1,160) end
+            return "<"..kind..">"
+        end
+        local function read(label,object,method,...)
+            if not object or type(object[method])~="function" then say(label..": API unavailable");return end
+            local function result(ok,...)
+                if not ok then say(label..": API error");return end
+                local parts={}
+                for i=1,select("#",...) do parts[i]=value(select(i,...)) end
+                say(label..": "..table.concat(parts,", "))
+            end
+            result(pcall(object[method],object,...))
+        end
+        local model=book.activeModel
+        say("Entry: "..value(selected).."; requested file: "..value(book.modelFileID))
+        say("Renderer: "..(model.isGatheringViewer and "ModelScene" or "PlayerModel"))
+        read("Caption",book.modelCaption,"GetText")
+        for _,method in ipairs({"IsShown","IsVisible","GetAlpha","GetEffectiveAlpha","GetSize",
+            "GetFrameLevel","GetFrameStrata","GetCameraPosition"}) do read("Viewer "..method,model,method) end
+        if model.isGatheringViewer then
+            for _,method in ipairs({"GetModelFileID","IsLoaded","IsShown","IsVisible","GetAlpha",
+                "GetScale","GetPosition","IsUsingCenterForOrigin","GetActiveBoundingBox"}) do
+                read("Actor "..method,model.actor,method)
+            end
+            for _,method in ipairs({"GetCameraForward","GetCameraRight","GetCameraUp","GetCameraFieldOfView",
+                "GetCameraNearClip","GetCameraFarClip","GetDrawLayer","IsLightVisible"}) do
+                read("Scene "..method,model,method)
+            end
+            read("Origin projection",model,"Project3DPointTo2D",0,0,0)
+        else
+            for _,method in ipairs({"GetModelFileID","GetModelAlpha","GetModelScale","GetPosition",
+                "GetCameraTarget","GetCameraDistance","HasCustomCamera"}) do read("Model "..method,model,method) end
+        end
+    end
     local offset=0
-    local PAGE_SIZE=16
+    local PAGE_SIZE=18
     local locationFilters,drafts={},{}
     local locations=ns.CreateGatheringLocationsWindow(journal,function()
         if not book then shell:EnsureSection("gathering") end
@@ -224,15 +262,6 @@ function ns.CreateGatheringBook(journal,shell)
     end
     local function currentRows()
         return journal:List(category,book.search:GetText(),nil,locationFilters)
-    end
-    local function cycle(direction)
-        local rows=currentRows()
-        if #rows==0 then return end
-        local index=direction>0 and 0 or 1
-        for i,e in ipairs(rows) do if e.id==selected then index=i;break end end
-        index=(index-1+direction)%#rows+1
-        if index<=offset then offset=index-1 elseif index>offset+PAGE_SIZE then offset=index-PAGE_SIZE end
-        choose(rows[index].id)
     end
     local function dateText(stamp)
         return stamp and stamp>0 and type(date)=="function" and date("%d %b %Y, %H:%M",stamp) or "Unknown"
@@ -266,7 +295,6 @@ function ns.CreateGatheringBook(journal,shell)
         end
         book.entryCount:SetText(#journal:List().." entries")
         book.indexCount:SetText(#rows==0 and "No matching entries." or (#rows.." shown"))
-        book.previous:SetEnabled(#rows>0);book.next:SetEnabled(#rows>0)
         book.noMatches:SetShown(#rows==0)
         book.noMatches:SetText(journal.readOnly and "Saved by a newer addon version.\nUpdate Azeroth Fieldbook to view this journal.\nYour data has been left untouched."
             or next(journal.entries) and "No matching entries.\nTry clearing your filters."
@@ -295,11 +323,14 @@ function ns.CreateGatheringBook(journal,shell)
             book.modelCaption:SetText("Model unavailable")
             if modelFileID then
                 book.modelCaption:SetText("Loading model…")
+                -- Forever may retain the file ID but omit geometry when loading
+                -- a hidden widget. Showing it afterwards does not repair that load.
+                model:Show()
                 local ok=pcall(model.SetModel,model,modelFileID)
-                if ok then
-                    model:Show()
-                    applyModelZoom(model)
-                else book.modelCaption:SetText("Model unavailable") end
+                if not ok then
+                    model:ClearModel();model:Hide()
+                    book.modelCaption:SetText("Model unavailable")
+                end
                 model:SetRotation(0)
             end
         end
@@ -420,7 +451,7 @@ function ns.CreateGatheringBook(journal,shell)
         book.search=ui.Search(book,70,-110,168,100)
         book.searchClear=book.search.clearButton
         book.searchPlaceholder=book.search.placeholder
-        book.search:SetScript("OnTextChanged",function() offset=0;refresh() end)
+        book.search:HookScript("OnTextChanged",function() offset=0;refresh() end)
         local dismiss=CreateFrame("Button","AzerothFieldbookGatheringSortMenu",UIParent)
         dismiss:SetAllPoints(UIParent);dismiss:SetFrameStrata("FULLSCREEN_DIALOG");dismiss:SetToplevel(true)
         dismiss:SetScript("OnShow",function(self) self:SetScale(shell:GetFrame():GetScale());self:Raise() end)
@@ -473,7 +504,7 @@ function ns.CreateGatheringBook(journal,shell)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookGatheringSortMenu" end
         book.rows={}
         book.resourceScrollBar=CreateFrame("Slider",nil,book,"UIPanelScrollBarTemplate")
-        book.resourceScrollBar:SetPoint("TOPLEFT",282,-156);book.resourceScrollBar:SetSize(14,416)
+        book.resourceScrollBar:SetPoint("TOPLEFT",282,-156);book.resourceScrollBar:SetSize(14,454)
         ns.StyleScrollBarTrack(book.resourceScrollBar,0.3)
         book.resourceScrollBar:SetMinMaxValues(0,0);book.resourceScrollBar:SetValueStep(1)
         book.resourceScrollBar:SetObeyStepOnDrag(true)
@@ -485,15 +516,13 @@ function ns.CreateGatheringBook(journal,shell)
         book.resourceScrollBar:EnableMouseWheel(true);book.resourceScrollBar:SetScript("OnMouseWheel",wheel)
         for i=1,PAGE_SIZE do
             local row=CreateFrame("Button",nil,book,"BackdropTemplate")
-            row:SetPoint("TOPLEFT",42,-140-(i-1)*28);row:SetSize(236,26)
+            row:SetPoint("TOPLEFT",42,-140-(i-1)*27);row:SetSize(236,26)
             ns.FieldbookUI.StyleMenuRow(row)
             row.text=label(row,"",28,-6,203);row.text:SetWordWrap(false);addNameScroller(row)
             row:SetScript("OnClick",function(self) if self.id then choose(self.id) end end)
             row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",wheel);book.rows[i]=row
         end
         book.noMatches=label(book,"",52,-152,226,"GameFontHighlightSmall");book.noMatches:SetSpacing(4)
-        book.previous=button(book,"Previous",42,-604,118,function() cycle(-1) end)
-        book.next=button(book,"Next",174,-604,118,function() cycle(1) end)
         local deleteForm=ui.DeletePanel(book,shell,"Delete gathering entry",true);book.deleteForm=deleteForm
         book.deleteButton=button(book,"Delete",174,-672,118,function()
             local id=selected;local entry=id and journal.entries[id]
@@ -531,25 +560,20 @@ function ns.CreateGatheringBook(journal,shell)
             edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8,insets={left=2,right=2,top=2,bottom=2}})
         book.modelBorder:SetBackdropColor(0.045,0.032,0.018,0.88)
         book.modelBorder:SetBackdropBorderColor(0.37,0.25,0.11,0.90)
-        book.model=CreateFrame("PlayerModel",nil,detail)
+        book.model=createGatheringViewer(detail,function(ready)
+            book.modelCaption:SetText(ready and "" or "Model unavailable")
+        end)
         book.model:SetFrameLevel(book.modelBorder:GetFrameLevel()+1)
         book.model:SetPoint("TOPLEFT",346,-135);book.model:SetSize(223,164)
-        applyModelZoom(book.model);book.model:EnableMouse(true)
+        book.model:EnableMouse(true)
         book.modelCaption=label(book.modelBorder,"",8,-76,211,"GameFontHighlightSmall")
         book.modelCaption:SetJustifyH("CENTER")
-        book.mineralModel=createMineralViewer(detail,function(ready)
+        book.mineralModel=createGatheringViewer(detail,function(ready)
             book.modelCaption:SetText(ready and "" or "Model unavailable")
         end)
         book.mineralModel:SetFrameLevel(book.modelBorder:GetFrameLevel()+1)
         book.mineralModel:SetPoint("TOPLEFT",346,-135);book.mineralModel:SetSize(223,164)
         book.mineralModel:Hide();book.mineralModel:EnableMouse(true)
-        book.model:SetScript("OnModelLoaded",function(self)
-            -- Ignore late callbacks belonging to the previously selected entry.
-            if book.activeModel==self and book.modelFileID and self:GetModelFileID()==book.modelFileID then
-                applyModelZoom(self)
-                book.modelCaption:SetText("")
-            end
-        end)
         local rotating,lastCursorX=false,nil
         local function cursorX()
             local x=GetCursorPosition and GetCursorPosition()
@@ -561,7 +585,7 @@ function ns.CreateGatheringBook(journal,shell)
         viewer:SetScript("OnMouseDown",function() rotating=true;lastCursorX=cursorX() end)
         viewer:SetScript("OnMouseUp",function() rotating=false;lastCursorX=nil end)
         viewer:SetScript("OnUpdate",function(self,dt)
-            if self.isMineralViewer then self:UpdateFraming(dt) end
+            if self.isGatheringViewer then self:UpdateFraming(dt) end
             if not rotating then return end
             local x=cursorX()
             if x and lastCursorX then

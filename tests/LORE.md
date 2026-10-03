@@ -9,8 +9,10 @@ quest walkthrough, automatic relationship inference or rewards are added.
 Open a supported readable, wait for its text, leave the source, then select the
 writing in Lorekeeper's Chronicle. The Entry reader displays saved pages, gaps,
 capture labels, passages, personal notes and received reports. It works without
-the source and saves each work's reading position. The Location switch uses a
-separate `CreateAtlasMap` instance at the exact Atlas anchor `(632, -205)`.
+the source and saves each work's reading position. Entry is the default view.
+The Location toggle highlights while showing the map; switch it off to return
+to Entry. It uses a separate `CreateAtlasMap` instance at the exact Atlas anchor
+`(632, -205)`.
 
 The existing shared Options page contains two character settings in
 `AzerothFieldbookDB`, initialized only when missing:
@@ -38,6 +40,42 @@ Captured pages are not marked “read.” Page labels distinguish normal display
 from automatic retrieval; no dwell-time inference is made. A source's claim
 does not become established truth because it was preserved.
 
+## Player translations
+
+Translations use the existing copy/paste sharing workflow with other players:
+
+1. Export the original source with **Share → Export report**.
+2. The helper imports it, selects a received source page in the reader and uses
+   **Sources / manage → Add translation of selected text**.
+3. Enter the original and translation languages, then type readable text or use
+   **Use captured text…** to explicitly choose a different locally captured page
+   with the same title. This only offers candidates; it never merges by title or
+   claims the selected page is a correct translation. A helper who understands
+   the source can encounter it in-game first to capture its readable version.
+4. Save, then export **Local sources**, leaving **Passages / translations** on.
+5. The requester selects their original entry, imports the reply, checks
+   **Attach to selected entry**, previews it and accepts.
+
+The reader offers translation and original-snapshot rows. Language labels,
+translator credit and page number travel with the exact original raw text;
+forwarding preserves them. The helper's current character supplies the local
+credit. Imported names, languages and accuracy remain player claims. Translation
+does not replace source pages, establish understanding, grant encounter credit,
+or automatically decode WoW's language substitution. Multiple contributions stay
+separate, including identical translations for different originals or authors.
+Translations are shareable passages; private original passages cannot be used by
+the translation form. Existing notes/interpretations remain excluded by default.
+
+Lore report content schema 2 adds bounded translation metadata. The `AFBLR1:`
+length-prefix envelope is unchanged. Schema 1 reports normalize to schema 2;
+legacy reports cannot contain translation fields. Installed-addon version checks
+remain mandatory on incoming reports. Storage and report byte caps include the
+original snapshot, with refusal rather than truncation. No automatic delivery is
+introduced. `test_lore_translations.py` covers round trips, forwarding, reload,
+legacy schema, invalid metadata, capacity, privacy, drafts, captured-text choice
+and both reader versions. Live check: two players on this build exchange an
+Ameth'Aran page, attach the reply, switch original/translation and reload.
+
 ## Client capability investigation and boundaries
 
 The installed addon workspace does not contain an extracted Forever item-text
@@ -58,6 +96,10 @@ The production adapter feature-tests public globals and guards calls/results:
   existing handlers are never replaced. No hidden-page fetch API was established.
 
 After READY, two consistent snapshots stabilize text and terminal evidence.
+New sessions bind their source metadata at READY because BEGIN may still expose
+the previous source. A READY without an active session can recover capture after
+native event handlers show the reader; a closed/hidden reader or world departure
+prevents that recovery. Opening the Fieldbook alone never captures cached text.
 Traversal first moves backward to page 1, then forward one ready page at a
 time. A known beginning, stable terminal indication, and every required captured
 page establish completeness. The native adapter accepts successful Classic
@@ -74,10 +116,16 @@ an announced translation up to 30 seconds. At most 768 navigation requests and
 per-frame lore scan. Delayed callbacks carry their session/generation identity.
 
 Automatic capture requires a successfully readable creator accessor returning
-no player creator. A nonempty creator, unavailable creator capability, active
+no player creator (nil, false or an empty string). A nonempty creator, unavailable creator capability, active
 mail session or visible mail reader excludes automatic capture. This conservative
 rule may exclude some world sources until Forever's behaviour is tested. It is
 not based on guessing titles. Explicit capture/transcription remains available.
+
+Regression coverage includes stale BEGIN metadata followed by a different world
+book, READY without BEGIN, reader visibility after event dispatch, cancellation
+before recovery, and a false no-creator result. The Westfall report of
+“Aegwynn and the Dragon Hunt” still needs a live reread to verify the client path;
+the deterministic fixture uses synthetic page text, not a bundled book database.
 
 The native adapter has no established stable work/object/item identifier. It
 does not pretend the observed title is one. Rereads match exact numbered source

@@ -157,6 +157,15 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     local function currentZone()
         local sub=clean(read(GetSubZoneText),200)
         local raw=clean(read(GetRealZoneText),200) or clean(read(GetZoneText),200)
+        -- Instance maps may be absent, be a floor, or lead to an outdoor parent.
+        -- The instance's own name is the location for dungeon/raid observations.
+        if type(GetInstanceInfo)=="function" then
+            local ok,instance,kind=pcall(GetInstanceInfo)
+            if ok and public(kind) and (kind=="party" or kind=="raid") then
+                local zone=clean(instance,200) or raw
+                if zone then return zone,sub,raw end
+            end
+        end
         local mapID=read(C_Map and C_Map.GetBestMapForUnit,"player")
         local visited={}
         for _=1,16 do
@@ -166,7 +175,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             if type(info)~="table" then break end
             local kind=read(function() return info.mapType end)
             local zoneType=Enum and Enum.UIMapType and Enum.UIMapType.Zone or 3
-            if kind==zoneType then
+            local dungeonType=Enum and Enum.UIMapType and Enum.UIMapType.Dungeon or 4
+            if kind==zoneType or kind==dungeonType then
                 local zone=clean(read(function() return info.name end),200)
                 if zone then return zone,sub,raw end
             end
@@ -1207,6 +1217,15 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         startPending(observed, at)
         sampleEligibility(observed, unit, guid)
         return completeKill(self, guid, observed)
+    end
+    function journal:ObserveEncounter(id, name)
+        if not number(id) or not creatureName(name) then return false end
+        local wasNamed = self:GetCreatureName(id)
+        local wasPersonal = self.entries[id] and self.entries[id].personalEncountered
+        local entry, discovered = self:Ensure(id, false, name)
+        if not entry or (wasNamed and wasPersonal) then return false end
+        if onEntryAdded then onEntryAdded(entry, discovered, nil, creditFor(id).discovered) end
+        return true
     end
     function journal:Offer(id, name, origin, spellID, observedCreatureName)
         name = clean(name, 100)

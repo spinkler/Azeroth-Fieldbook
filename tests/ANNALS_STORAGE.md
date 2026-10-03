@@ -9,11 +9,11 @@ The fixtures use the current instance/death context (`false:false` outdoors and 
 | Scenario | Retained points | Segments | Payload bytes | Estimated SV bytes | Effective SV bytes/point |
 |---|---:|---:|---:|---:|---:|
 | Stationary | 1 | 1 | 9 | 220 | 220.00 |
-| Continuous meandering travel | 883 | 19 | 7,947 | 11,996 | 13.59 |
-| Mixed play: 1/3 travelling, 2/3 idle | 317 | 17 | 2,853 | 6,538 | 20.62 |
-| Pessimistic: continuous tight turns | 1,248 | 19 | 11,232 | 15,281 | 12.24 |
+| Continuous meandering travel | 1,024 | 19 | 9,216 | 13,265 | 12.95 |
+| Mixed play: 1/3 travelling, 2/3 idle | 366 | 16 | 3,294 | 6,751 | 18.45 |
+| Pessimistic: continuous tight turns | 1,370 | 19 | 12,330 | 16,379 | 11.96 |
 | Continuous, simplification disabled | 1,115 | 19 | 10,035 | 14,084 | 12.63 |
-| Previous prototype: continuous | 1,625 | 20 | 14,625 | 18,901 | 11.63 |
+| Previous prototype: continuous | 2,022 | 20 | 18,198 | 22,474 | 11.11 |
 | Previous prototype: tight turns | 10,801 | 55 | 97,209 | 109,460 | 10.13 |
 
 Payload is exactly **9 ASCII bytes per retained point**. No escaping is needed. The SavedVariables estimator includes explicit numeric indices, quoted keys/strings, indentation, braces and commas; actual client whitespace may differ. Runtime Lua heap use is additional and is not predicted by disk bytes. Empty root/other Annals indexes are excluded from the trail table.
@@ -24,16 +24,16 @@ Cells are **compact point payload / estimated trail SavedVariables MiB**. Projec
 
 | Scenario | 100 hours | 1,000 hours | 3,000 hours | 7,200 hours / 300 days |
 |---|---:|---:|---:|---:|
-| Continuous meandering travel | 0.13 / 0.19 | 1.26 / 1.91 | 3.79 / 5.74 | 9.09 / 13.77 |
-| Mixed play: 1/3 travelling, 2/3 idle | 0.05 / 0.10 | 0.45 / 1.04 | 1.36 / 3.13 | 3.26 / 7.52 |
-| Pessimistic: continuous tight turns | 0.18 / 0.24 | 1.79 / 2.43 | 5.36 / 7.30 | 12.85 / 17.53 |
+| Continuous meandering travel | 0.15 / 0.21 | 1.46 / 2.11 | 4.39 / 6.34 | 10.55 / 15.22 |
+| Mixed play: 1/3 travelling, 2/3 idle | 0.05 / 0.11 | 0.52 / 1.08 | 1.57 / 3.23 | 3.77 / 7.76 |
+| Pessimistic: continuous tight turns | 0.20 / 0.26 | 1.96 / 2.61 | 5.88 / 7.83 | 14.11 / 18.79 |
 
 Default continuous segment/header overhead in this fixture: **4,049 bytes total**, approximately **213.1 bytes/segment**.
-Simplification reduced continuous retained points from **1,115 to 883** (20.8%). The timing guard deliberately retains points on long straight stretches.
+Simplification reduced continuous retained points from **1,115 to 1,024** (8.2%). The timing guard deliberately retains points on long straight stretches.
 
-Compared with the previous prototype settings on the same fixtures, balanced recording reduces continuous points by **45.7%** and tight-turn points by **88.4%**. Existing recorded history is not rewritten.
+Compared with the previous prototype settings on the same fixtures, balanced recording reduces continuous points by **49.4%** and tight-turn points by **87.3%**. Existing recorded history is not rewritten.
 
-Ordinary retained points are at least 15 seconds apart (normally 16 with the two-second ticker). At the conservative 15-second limit, 300 days of continuous travel would contribute 1,728,000 ordinary points / **14.83 MiB payload**, before headers and simplification. Event anchors, segment starts/endpoints and loading/map boundaries are exceptions; this is not a total storage cap. Combat skips simplification but still obeys the ordinary cadence limit.
+Ordinary retained points are at least 15 seconds apart (normally 16 with the two-second ticker). At the conservative 15-second limit, 300 days of continuous travel would contribute 1,728,000 ordinary points / **14.83 MiB payload**, before headers and simplification. Event and stop/resume anchors, segment starts/endpoints and loading/map boundaries are exceptions; this is not a total storage cap. Combat skips simplification but still obeys the ordinary cadence limit.
 
 ## Durable history, separately
 
@@ -49,17 +49,17 @@ Quest/title and discovery metadata are snapshots. Events have no age/count evict
 ## Sampling and policy
 
 - Check position every two seconds, with no per-frame history writes. Ordinary points must be at least 15 seconds apart and at least 40/10,000 map units (0.4%) from the previous retained point. Retain at 160 units (1.6%) displacement or 60 elapsed seconds. A bend deviating at least 40 units can preserve the preceding candidate, subject to the same minimum distance and cadence. The 60 seconds is elapsed time since the last retained point, not accumulated travel; stationary players do not produce periodic points. Event locations remain anchors.
-- Stationary observations change only transient sampling state. A constant position produces one initial point, even across hours. An event at that position may intentionally add an anchor. New sessions retain a separate starting point.
+- A constant position produces one initial point, even across hours. Once movement pauses at exactly the same recorded coordinates for four seconds, retain its arrival as an anchor; on departure retain the last stationary timestamp as another anchor. These are boundary writes, with no periodic idle samples. An event at that position may intentionally add an anchor. New sessions retain a separate starting point.
 - Keep continuous flight paths through subzone-name and mounting changes. Break on loading/session boundaries, death/release, level changes, instance/death state, observed gaps over 12 seconds, backward time, or same-map jumps over 1,000 normalized units. Exact map changes start a new chunk; a join reference is saved only when adjacent observations have validated world positions on the same continent at most 1,000 yards apart. Normal chunk rotations may also join. Missing observations never gain a join.
 - Each segment has version, map ID, Unix start/finish seconds, start level, boundary reason, instance/death context and a printable data string, plus an optional `joinFrom` segment index. Each point encodes x(3 base64 digits), y(3), delta-seconds(2, maximum 4,095 seconds), anchor flag(1). Chunks hold at most 256 points; moving chunks rotate after 30 minutes. Closing may keep a pending endpoint at least four normalized units from the last retained point if it fits. Unknown formats or malformed chunks are preserved and skipped.
-- Completed chunks use iterative Ramer–Douglas–Peucker simplification, 30-unit tolerance, mandatory event anchors/endpoints, and a maximum 120-second simplified chord where intermediate samples exist. Combat skips simplification for that chunk. There is no scheduled full-history simplification or silent deletion.
+- Completed chunks use iterative Ramer–Douglas–Peucker simplification with 30-unit spatial and time-interpolation error tolerances, mandatory event/stop/resume anchors and endpoints, and a maximum 120-second simplified chord where intermediate samples exist. Straight-line speed changes are retained when their timestamp-based positional error exceeds tolerance. Combat skips simplification for that chunk. There is no scheduled full-history simplification or silent deletion.
 - The live chunk is always a decodable saved string. Reload begins a fresh segment. Pending candidate coordinates are deliberately expendable; durable markers keep their own position.
 - Confirmed flight departures append durable events with flight-master icons. Opening or cancelling a taxi map does not create a departure; reloading already in flight does not invent one. Event capture continues with breadcrumb recording disabled. Flight events can add protected trail anchors while recording is enabled.
 
 ## Projection, draw limits and age gradient
 
 - Range/map selection builds a metadata index, including descendant maps with validated map rectangles. Direct child-to-ancestor rectangles are preferred; otherwise immediate-parent rectangles are composed. Projection changes display coordinates only and never duplicates saved points for continent/world maps.
-- Scrubbing decodes at most 64 nearby chunks and keeps a 64-chunk cache. A bounded ring retains the newest 2,048 edges when these chunks exceed the draw budget; edges are then sorted chronologically for drawing. There are at most 512 recent event inputs and 192 grouped Atlas pins. Dense views disclose truncation; scrubbing earlier or narrowing dates exposes older geometry. These limits never delete history.
+- Scrubbing decodes at most 64 nearby chunks and keeps a 64-chunk cache. One following chunk may occupy a slot to interpolate a validated boundary connection. Arrow and partial-edge positions are display-only linear estimates between connected samples; gaps hold the last observation. The arrow updates every playback frame from cached endpoints while full route rendering remains throttled to ten updates per second, with immediate updates at sample/event boundaries. A bounded ring retains the newest 2,048 edges when these chunks exceed the draw budget; edges are then sorted chronologically for drawing. There are at most 512 recent event inputs and 192 grouped Atlas pins. Dense views disclose truncation; scrubbing earlier or narrowing dates exposes older geometry. These limits never delete history.
 - A saved `joinFrom` is drawn only when both endpoints are present in the selected view, in chronological order and at most 12 seconds apart. This preserves real loading/observation gaps and prevents a display-only projection from inventing connectivity.
 - Line age is measured from its destination timestamp to the clamped scrubber time: `age = max(0, scrubberTime - line.to.at)`. Heat is `2^(-age / 1800)`, giving a 30-minute half-life. With contrast `s`, cooling is `(1 - heat) * s`; RGBA is `(1 - 0.75*cooling, 0.82 - 0.27*cooling, 0.14 + 0.86*cooling, 0.8 - 0.68*cooling)`. Recent lines stay warm gold; older lines cool toward blue and fade. At maximum contrast the limiting alpha is 0.12, so age never hides a line entirely.
 - Trail age contrast ranges from 0% (uniform gold at alpha 0.8) to 100% (strongest effect), in 5% steps, defaulting to 75%. The setting is stored once per character as `settings.trailContrast`; an absent setting uses the default without a write. Markers retain their normal colors. Scrubbing into the past makes travel recent to that historical time warm again.

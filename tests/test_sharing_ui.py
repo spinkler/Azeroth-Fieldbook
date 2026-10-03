@@ -634,7 +634,7 @@ local function checkSummaryPanels()
     assert(extra-main.damageBorder.point[3]>=bottom+5,'summary stays above the damage panel')
     eq(main.damageScroll:GetHeight(),75,'expanded summary preserves the damage viewport')
     eq(main.model:GetHeight(),164,'expanded summary preserves the illustration size')
-    eq(main:GetHeight(),756+extra,'the book grows to include its shifted content')
+    eq(main:GetHeight(),740+extra,'the book grows from the shared height to include its shifted content')
     assert(main.confirm.parent==main,'entry lock stays alongside the creature title')
     assert(main.message.parent==main.detail,'footer status follows the shifted controls')
     assert(main.summaryArea.kind=='Frame' and not main.summaryArea:IsMouseClickEnabled(),
@@ -644,7 +644,7 @@ checkSummaryPanels()
 entry.locations={}
 for i=1,8 do entry.locations['Long observed location '..i..string.rep(' far away',5)]=true end
 book:Refresh();checkSummaryPanels()
-assert(main.summaryArea:GetHeight()>85 and main:GetHeight()>756,
+assert(main.summaryArea:GetHeight()>85 and main:GetHeight()>740,
     'extensive location and trait lists grow the summary and book without scrolling')
 local last=main.summaryCombatRows[2]
 assert(main.summaryArea:GetHeight()>=-last.point[3]+last:GetStringHeight(),'even the final wrapped line fits in the summary')
@@ -653,7 +653,7 @@ book:Refresh();checkSummaryPanels()
 assert(not main.summaryCombatRows[1]:IsShown() and not main.summaryCombatRows[2]:IsShown(),'cleared groups leave no stale text')
 eq(-main.modelBorder.point[3],133,'short summary restores the original panel layout')
 eq(main.damageScroll:GetHeight(),75)
-eq(main:GetHeight(),756,'clearing the expanded summary restores the original book height')
+eq(main:GetHeight(),740,'clearing the expanded summary restores the shared book height')
 
 -- Full reset clears in-flight composition as well as saved accounting and positions.
 main.shareButton.scripts.OnClick();assert(composer.shown)
@@ -736,14 +736,14 @@ do
     local book=ns.CreateBestiaryBook(j);book:Toggle()
     local main=AzerothFieldbookBestiarySection
 local window=book:GetShell():GetFrame()
-    eq(#main.rows,16);assert(main.creatureScrollBar.shown)
-    eq(-main.rows[16].point[3]+main.rows[16]:GetHeight(),586,'compact list rows leave space above navigation')
+    eq(#main.rows,18);assert(main.creatureScrollBar.shown)
+    eq(-main.rows[18].point[3]+main.rows[18]:GetHeight(),625,'expanded list stays above the legend')
     local width=main.rows[1]:GetWidth()
     local left=main.rows[1].point[2]
     assert(left+width<main.creatureScrollBar.point[2],'scrollbar has a reserved gutter')
     main.creatureScrollBar.scripts.OnValueChanged(main.creatureScrollBar,19)
-    eq(main.rows[16].id,35,'dragging reaches the last entry')
-    main.rows[1].scripts.OnMouseWheel(main.rows[1],1);eq(main.rows[1].id,17,'wheel and slider use the same offset')
+    eq(main.rows[18].id,35,'dragging reaches the last entry')
+    main.rows[1].scripts.OnMouseWheel(main.rows[1],1);eq(main.rows[1].id,15,'wheel and slider use the same offset')
     main.search:SetText('Creature 01');main.search.scripts.OnTextChanged(main.search)
     assert(not main.creatureScrollBar.shown and main.rows[1].id==1)
     eq(main.rows[1]:GetWidth(),width,'hiding scrollbar never moves the row edge')

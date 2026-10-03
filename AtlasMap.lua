@@ -237,6 +237,10 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
     map.playerCoordinates:SetFont(coordinateFont,coordinateSize,"OUTLINE")
     map.playerCoordinates:SetShadowColor(0,0,0,1);map.playerCoordinates:SetShadowOffset(1,-1)
     local tiles,overlays,pins,lines={},{},{},{}
+    function map:SetPinIcon(pin,texture)
+        pin.icon:SetTexture(texture)
+        pin.icon:SetTexCoord(0,1,0,1)
+    end
     function map:ApplyBrightness()
         local value=ns.MapBrightness.saved and ns.MapBrightness:Get()
             or (journal.subzones and A.Number(journal.state.mapBrightness,0.2,1) and journal.state.mapBrightness or 1)
@@ -387,15 +391,19 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
         if entry and entry.category=="route" and not entry.entrance then
             local routePins,segments=journal:RouteMap(entry,mapID)
             for _,p in ipairs(routePins) do markers[#markers+1]={id=selected,point=p,category="route",number=p.number,name=entry.name.." • "..p.number..". "..p.name} end
-            for i,segment in ipairs(segments) do
-                local line=lines[i]
-                if not line and type(canvas.CreateLine)=="function" then
-                    local ok,v=pcall(canvas.CreateLine,canvas,nil,"ARTWORK");if ok then line=v;lines[i]=v end
-                end
-                if line and type(line.SetStartPoint)=="function" then
-                    line:SetThickness(2);line:SetColorTexture(1,0.82,0.14,0.8)
-                    line:SetStartPoint("TOPLEFT",segment.from.x/10000*self:GetWidth(),-segment.from.y/10000*self:GetHeight())
-                    line:SetEndPoint("TOPLEFT",segment.to.x/10000*self:GetWidth(),-segment.to.y/10000*self:GetHeight());line:Show()
+            if journal.DrawRoute then
+                journal:DrawRoute(self,lines,segments)
+            else
+                for i,segment in ipairs(segments) do
+                    local line=lines[i]
+                    if not line and type(canvas.CreateLine)=="function" then
+                        local ok,v=pcall(canvas.CreateLine,canvas,nil,"ARTWORK");if ok then line=v;lines[i]=v end
+                    end
+                    if line and type(line.SetStartPoint)=="function" then
+                        line:SetThickness(2);line:SetColorTexture(1,0.82,0.14,0.8)
+                        line:SetStartPoint("TOPLEFT",segment.from.x/10000*self:GetWidth(),-segment.from.y/10000*self:GetHeight())
+                        line:SetEndPoint("TOPLEFT",segment.to.x/10000*self:GetWidth(),-segment.to.y/10000*self:GetHeight());line:Show()
+                    end
                 end
             end
             self.linesAvailable=#segments==0 or lines[1]~=nil
@@ -428,9 +436,15 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
             if not p then
                 p=CreateFrame("Button",nil,canvas,"BackdropTemplate");p:SetSize(20,20)
                 p:EnableMouseWheel(true);p:SetScript("OnMouseWheel",function(_,delta) map:ZoomBy(delta) end)
-                p:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8})
+                if not journal.borderlessPins then p:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8}) end
                 p.icon=p:CreateTexture(nil,"ARTWORK");p.icon:SetPoint("TOPLEFT",3,-3);p.icon:SetPoint("BOTTOMRIGHT",-3,3)
-                p.text=p:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalSmall"));p.text:SetPoint("BOTTOMRIGHT",5,-4)
+                -- Counts belong to the icon, not the journal's reading text.
+                -- Scale a small fixed font with the pin and inherited map zoom.
+                p.text=p:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
+                local font=p.text:GetFont()
+                p.text:SetFont(font or STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",8,"OUTLINE")
+                p.text:SetPoint("BOTTOMRIGHT",p.icon,"BOTTOMRIGHT",0,0)
+                p.text:SetJustifyH("RIGHT")
                 p:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
                 p:RegisterForClicks("LeftButtonUp","RightButtonUp")
                 p:SetScript("OnMouseDown",function(_,button) map:StartPan(button) end)
@@ -467,7 +481,10 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
             local size=A.Number(iconSize,6,40) and iconSize or 20
             size=size+(g.selected and 4 or 0)
             p:SetSize(size,size)
-            p:SetBackdropBorderColor(g.selected and 1 or 0.15,g.selected and 0.82 or 0.15,g.selected and 0.14 or 0.15,1)
+            local inset=journal.borderlessPins and 0 or size*0.15
+            p.icon:ClearAllPoints();p.icon:SetPoint("TOPLEFT",inset,-inset);p.icon:SetPoint("BOTTOMRIGHT",-inset,inset)
+            p.text:SetScale(size/20)
+            if not journal.borderlessPins then p:SetBackdropBorderColor(g.selected and 1 or 0.15,g.selected and 0.82 or 0.15,g.selected and 0.14 or 0.15,1) end
             p:Show()
         end
         self.pins,self.lines=pins,lines

@@ -4,7 +4,7 @@ local A=ns.Angling
 function ns.CreateAnglingMap(parent,journal,onSelect,getFilters,onNavigate)
     -- Adapt data into the already exposed renderer. Its closure owns its tiles,
     -- pins, map cache and player updates; it never needs an Atlas saved variable.
-    local adapter={};local selectedID
+    local adapter={borderlessPins=true};local selectedID
     local function marker(e)
         return {id=e.id,name=e.name,mapID=e.mapID,zone=e.zone,x=e.x,y=e.y,precision=e.precision,
             last=e.personalLast or e.last,category="other",stops={},transient=e.transient,itemName=e.itemName}
@@ -65,7 +65,7 @@ function ns.CreateAnglingMap(parent,journal,onSelect,getFilters,onNavigate)
                     for n,m in ipairs(self.group) do if m.id==self.selected then index=n;break end end
                     onSelect(self.group[index%#self.group+1].id)
                 end)
-                pin.icon:SetTexture("Interface\\Icons\\Trade_Fishing")
+                self:SetPinIcon(pin,"Interface\\Icons\\Trade_Fishing")
                 local e=journal:Get(pin.group[1].id)
                 if e and not e.personal then pin.icon:SetVertexColor(0.65,0.75,1) else pin.icon:SetVertexColor(1,1,1) end
                 pin:SetScript("OnEnter",function(self)

@@ -4,6 +4,8 @@ local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or b
 -- Shared window chrome and navigation. Sections own their content and data;
 -- the legacy root name preserves saved positions and external window anchors.
 local ink, inkShadow = {0.75,0.8,0.8}, {0.05,0.05,0.05}
+-- Display order is independent of initialization dependencies between journals.
+local sectionOrder={bestiary=1,gathering=2,atlas=3,annals=4,merchants=5,treasure=6,angling=7,lore=8}
 local function addonVersion()
     if C_AddOns and type(C_AddOns.GetAddOnMetadata) == "function" then
         local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, "Version")
@@ -111,6 +113,7 @@ local function search(parent,x,y,width,limit)
     clear:SetScript("OnClick",function() e:SetText("");e:SetFocus() end)
     local placeholder=label(e,"Search",0,-5,width-22,"GameFontHighlightSmall")
     placeholder:SetTextColor(0.55,0.55,0.55);placeholder:SetWordWrap(false)
+    -- Consumers must HookScript their filters to preserve placeholder updates.
     e:HookScript("OnTextChanged",function(self) placeholder:SetShown(self:GetText()=="") end)
     e.clearButton=clear;e.placeholder=placeholder
     return e
@@ -239,7 +242,7 @@ function ns.CreateFieldbookShell(settings)
         local width,height
         for index,id in ipairs(self.order) do
             local section=self.sections[id]
-            local tab=book.sectionTabs[index]
+            local tab=section.tab
             if not tab then
                 tab=CreateFrame("Frame",nil,navigation,"LargeSideTabButtonTemplate")
                 tab:SetFillToInterior(true,50)
@@ -252,8 +255,9 @@ function ns.CreateFieldbookShell(settings)
                     self:ShowSection(id,{navigation=true})
                 end)
                 tab:HookScript("OnHide",function() tab:OnLeave() end)
-                book.sectionTabs[index]=tab
+                section.tab=tab
             end
+            book.sectionTabs[index]=tab
             width,height=tab:GetWidth(),tab:GetHeight()
             tab:ClearAllPoints();tab:SetPoint("TOPLEFT",0,-(index-1)*(height+tabGap))
             tab:SetChecked(id==(self.active or self.order[1]))
@@ -704,7 +708,11 @@ function ns.CreateFieldbookShell(settings)
         assert(type(definition)=="table" and type(definition.title)=="string" and type(definition.build)=="function",
             "A Fieldbook section needs a title and builder")
         self.sections[id]={definition=definition,width=definition.width or 960,height=definition.height or 740}
-        self.order[#self.order+1]=id
+        local position=#self.order+1
+        for index,other in ipairs(self.order) do
+            if (sectionOrder[id] or math.huge)<(sectionOrder[other] or math.huge) then position=index;break end
+        end
+        table.insert(self.order,position,id)
         self:UpdateNavigation()
     end
     function shell:EnsureSection(id)

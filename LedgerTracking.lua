@@ -155,9 +155,10 @@ local function merchantItem(index)
 end
 local function trainerItem(index)
     -- Forever Mainline/Camelot: name, type, texture, required level, subtext, category.
-    local name,status,_,level,rank,category=values(GetTrainerServiceInfo,index)
+    local name,status,icon,level,rank,category=values(GetTrainerServiceInfo,index)
     if not L.Name(name) or status=="header" then return end
     local v={name=name,rank=L.Name(rank) or "",category=L.Name(category) or "",requirements={},availability="unknown"}
+    if L.Integer(icon,1,2147483647) then v.icon=icon end
     if status=="available" or status=="unavailable" or status=="used" then v.availability=status end
     if L.Integer(level,1,255) then v.requiredLevel=level;v.requirements[#v.requirements+1]="Required level: "..level end
     local skill,required=values(GetTrainerServiceSkillReq,index)

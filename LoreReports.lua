@@ -1,9 +1,9 @@
 local addonName, ns = ...
 local L=ns.Lore
-local R={VERSION=1,MAX_BYTES=1048576,MAX_REPORTS=L.MAX_REPORTS};ns.LoreReports=R
+local R={VERSION=2,MAX_BYTES=1048576,MAX_REPORTS=L.MAX_REPORTS};ns.LoreReports=R
 local kinds={writing=true,landmark=true,person=true,mystery=true}
 local origins={captured=true,manual=true,reported=true}
-local natures={source=true,observation=true,account=true,interpretation=true,annotation=true,paraphrase=true,rumour=true,theory=true}
+local natures={source=true,translation=true,observation=true,account=true,interpretation=true,annotation=true,paraphrase=true,rumour=true,theory=true}
 local methods={displayed=true,automatic=true,manual=true,gossip=true,quest=true,dialogue=true,reported=true,observed=true}
 local meanings={['read-here']=true,['found-here']=true,landmark=true,observation=true,encounter=true,reported=true,mentioned=true}
 local function need(ok,msg) if not ok then error(msg,0) end end
@@ -35,11 +35,11 @@ local encode
 local function normalize(v,stored)
     fields(v,{format=true,version=true,addonVersion=true,sender=true,created=true,sourceKey=true,kind=true,title=true,sourceTitle=true,subtype=true,
         pages=true,passages=true,locations=true,annotations=true,references=true,originalSource=true})
-    need(v.format=='AFB-LORE' and v.version==R.VERSION,'Unsupported Lore report schema.')
+    need(v.format=='AFB-LORE' and (v.version==R.VERSION or v.version==1),'Unsupported Lore report schema.')
     local installed=str(v.addonVersion,32)
     need(installed:match('^%d+%.%d+%.%d+$') and (stored or version() and installed==version()),'Lore reports require the same installed addon version.')
     need(kinds[v.kind],'Invalid entry kind.')
-    local out={format=v.format,version=v.version,addonVersion=v.addonVersion,sender=str(v.sender,160),created=int(v.created,0,9999999999),
+    local out={format=v.format,version=R.VERSION,addonVersion=v.addonVersion,sender=str(v.sender,160),created=int(v.created,0,9999999999),
         sourceKey=str(v.sourceKey,400),kind=v.kind,title=str(v.title,200),sourceTitle=str(v.sourceTitle or '',200,true),subtype=str(v.subtype or '',80,true),
         pages={},passages={},locations={},annotations={},references={},originalSource=str(v.originalSource or v.sender,160)}
     for _,p in ipairs(list(v.pages,256)) do
@@ -51,13 +51,19 @@ local function normalize(v,stored)
         out.pages[#out.pages+1]=page
     end
     for _,p in ipairs(list(v.passages,256)) do
-        fields(p,{raw=true,method=true,origin=true,nature=true,source=true,at=true,title=true,private=true,speaker=true,sourceTitle=true})
+        fields(p,{raw=true,method=true,origin=true,nature=true,source=true,at=true,title=true,private=true,speaker=true,sourceTitle=true,translation=v.version==R.VERSION})
         need(methods[p.method] and origins[p.origin] and natures[p.nature],'Invalid passage provenance.')
-        local private=p.private;if private==nil then private=not ({source=true,account=true})[p.nature] end
-        out.passages[#out.passages+1]={raw=str(p.raw,131072,true),method=p.method,origin=p.origin,nature=p.nature,
+        need(v.version==R.VERSION or p.nature~='translation','Translations require Lore report schema 2.')
+        local private=p.private;if private==nil then private=not ({source=true,account=true,translation=true})[p.nature] end
+        local passage={raw=str(p.raw,131072,true),method=p.method,origin=p.origin,nature=p.nature,
             source=str(p.source,240),at=int(p.at,0,9999999999),title=str(p.title or '',240,true),
             private=flag(private),
             speaker=str(p.speaker or '',200,true),sourceTitle=str(p.sourceTitle or '',200,true)}
+        if p.nature=='translation' then
+            local t,err=L.Translation(p.translation);need(t,err);passage.translation=t
+            need(L.Passage(p),'Invalid translation text.')
+        else need(p.translation==nil,'Translation details require a translation passage.') end
+        out.passages[#out.passages+1]=passage
     end
     for _,p in ipairs(list(v.locations,128)) do
         fields(p,{meaning=true,zone=true,subzone=true,mapID=true,x=true,y=true,label=true,source=true,at=true})
@@ -183,9 +189,9 @@ function R.Build(journal,id,options)
     if options.includePages~=false then for _,v in ipairs(pages) do if selected(options.pages,v.key) then out.pages[#out.pages+1]=pageCopy(v.page,out.originalSource) end end end
     if options.includePassages~=false then for i,p in ipairs(base and base.passages or e.passages or {}) do
         if selected(options.passages,i) and (not p.private or options.interpretations==true)
-            and (({source=true,observation=true,account=true})[p.nature] or options.interpretations==true) then
+            and (({source=true,translation=true,observation=true,account=true})[p.nature] or options.interpretations==true) then
             local copy=pageCopy(p,out.originalSource);copy.number=nil;copy.first=nil;copy.last=nil;copy.nature=natures[p.nature] and p.nature or 'source';copy.title=p.title or ''
-            copy.private=p.private==true;copy.speaker=p.speaker;copy.sourceTitle=p.sourceTitle;out.passages[#out.passages+1]=copy
+            copy.private=p.private==true;copy.speaker=p.speaker;copy.sourceTitle=p.sourceTitle;copy.translation=L.Copy(p.translation);out.passages[#out.passages+1]=copy
         end
     end end
     if options.includeLocations~=false then for i,p in ipairs(base and base.locations or e.locations or {}) do if selected(options.locations,i) then
@@ -206,8 +212,12 @@ function R.Preview(value)
         'All received material stays reported. No personal encounter, reading credit or Knowledge is granted.',
         'Pages: '..#r.pages..' • passages: '..#r.passages..' • locations: '..#r.locations,'Original title: '..r.sourceTitle,'Subtype: '..r.subtype}
     for _,p in ipairs(r.pages) do lines[#lines+1]='\nPage '..(p.number~=nil and tostring(p.number) or 'unknown')..' • claimed '..p.method..' / '..p.source..'\n'..L.Plain(p.raw) end
-    for _,p in ipairs(r.passages) do lines[#lines+1]='\n'..p.nature..' • '..p.source..(p.private and ' • explicitly shared private passage' or '')..
-        (p.speaker~='' and '\nSpeaker: '..p.speaker or '')..(p.sourceTitle~='' and '\nSource title: '..p.sourceTitle or '')..'\n'..L.Plain(p.raw) end
+    for _,p in ipairs(r.passages) do
+        lines[#lines+1]='\n'..p.nature..' • '..p.source..(p.private and ' • explicitly shared private passage' or '')..
+            (p.speaker~='' and '\nSpeaker: '..p.speaker or '')..(p.sourceTitle~='' and '\nSource title: '..p.sourceTitle or '')..
+            (p.translation and '\n'..L.TranslationLabel(p.translation)..' (player contribution; attribution is a claim)' or '')..'\n'..L.Plain(p.raw)
+        if p.translation then lines[#lines+1]='Original: '..p.translation.sourceTitle..'\n'..L.Plain(p.translation.sourceRaw) end
+    end
     for _,p in ipairs(r.locations) do lines[#lines+1]='\n'..p.meaning..': '..p.zone..' '..p.subzone..' '..p.label..(p.mapID and ' (map '..p.mapID..')' or '')..(p.x and string.format(' %.2f, %.2f',p.x/100,p.y/100) or ' — coordinates unknown') end
     for _,k in ipairs({'description','notes','theory','nextStep','status'}) do if r.annotations[k] then lines[#lines+1]='\nExplicitly included '..k..': '..L.Plain(r.annotations[k]) end end
     if r.annotations.tags then lines[#lines+1]='Tags: '..table.concat(r.annotations.tags,', ') end

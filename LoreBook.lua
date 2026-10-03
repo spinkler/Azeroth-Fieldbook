@@ -4,7 +4,7 @@ local L,U=ns.Lore,ns.AtlasUI
 local icons={writing="Interface\\Icons\\INV_Misc_Book_09",landmark="Interface\\Icons\\INV_Misc_Map_01",person="Interface\\Icons\\INV_Misc_GroupLooking",mystery="Interface\\Icons\\INV_Misc_QuestionMark"}
 local statusNames={partial="Partial archive",complete="Complete archive",interrupted="Capture interrupted",failed="Partial archive",unsupported="Automatic full-book capture unavailable"}
 local mysteryNames={open="Open",investigating="Investigating",resolved="Resolved by me"}
-local natureNames={source="Preserved source text",observation="Direct observation",account="Reported account",interpretation="Personal interpretation",annotation="Annotation",paraphrase="Paraphrase",rumour="Rumour",theory="Working theory"}
+local natureNames={source="Preserved source text",translation="Player translation",observation="Direct observation",account="Reported account",interpretation="Personal interpretation",annotation="Annotation",paraphrase="Paraphrase",rumour="Rumour",theory="Working theory"}
 local function dateText(at) return at and U.Date(at) or "Time unknown" end
 local function nonempty(value,fallback) return type(value)=="string" and value~="" and value or fallback end
 local function latestReceipt(report)
@@ -33,6 +33,10 @@ local function provenance(p,report)
     if p.sourceTitle and p.sourceTitle~="" then lines[#lines+1]="Source title: "..p.sourceTitle end
     if p.private then lines[#lines+1]=report and "Private passage explicitly included by the sender." or "Private passage; excluded from export unless selected explicitly." end
     if p.speaker and p.speaker~="" then lines[#lines+1]="Speaker: "..p.speaker end
+    if p.translation then
+        lines[#lines+1]=L.TranslationLabel(p.translation)
+        lines[#lines+1]='Player contribution; language and translator attribution are claims. Original text remains separately available.'
+    end
     lines[#lines+1]="Method: "..(p.method=="manual" and "manual transcription / record" or p.method or "unknown").." • "..dateText(p.at)
     return table.concat(lines,"\n")
 end
@@ -104,11 +108,15 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         for _,key in ipairs(keys) do if not seen[key] then
             rows[#rows+1]={id="page:"..key,label=type(key)=="number" and "Page "..key or "Page order unknown",page=e.pages[key],number=type(key)=="number" and key}
         end end
-        for i,p in ipairs(e.passages or {}) do rows[#rows+1]={id="passage:"..(p.id or i),label="Passage "..i.." • "..(natureNames[p.nature] or "Source"),page=p} end
+        local function passage(p,id,label,report)
+            rows[#rows+1]={id=id,label=p.translation and L.TranslationLabel(p.translation) or label,page=p,report=report}
+            if p.translation then rows[#rows+1]={id=id..':original',label='Original for '..L.TranslationLabel(p.translation),translationOriginal=p.translation,report=report} end
+        end
+        for i,p in ipairs(e.passages or {}) do passage(p,"passage:"..(p.id or i),"Passage "..i.." • "..(natureNames[p.nature] or "Source")) end
         for index,report in ipairs(e.reports or {}) do
             rows[#rows+1]={id="report:"..index,label="Received report "..index.." • source & selected annotations",report=report}
             for i,p in ipairs(report.pages or {}) do rows[#rows+1]={id="report:"..index..":page:"..i,label="Report "..index.." • "..(p.number and "page "..p.number or "page order unknown"),page=p,report=report} end
-            for i,p in ipairs(report.passages or {}) do rows[#rows+1]={id="report:"..index..":passage:"..i,label="Report "..index.." • passage "..i,page=p,report=report} end
+            for i,p in ipairs(report.passages or {}) do passage(p,"report:"..index..":passage:"..i,"Report "..index.." • passage "..i,report) end
         end
         return rows
     end
@@ -150,6 +158,12 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
     function c:SourceText(e,row)
         if row.overview then return self:Overview(e) end
         if row.missing then return "This page has not been preserved. Missing text is never filled from an external source." end
+        if row.translationOriginal then
+            local t=row.translationOriginal
+            local metadata='Original supplied with translation\n'..t.sourceTitle..'\n'..L.TranslationLabel(t)..
+                (row.report and '\nReceived with a player report; not personally encountered or independently verified.' or '\nExact source text selected when this translation was recorded.')
+            local text=L.Plain(t.sourceRaw);return metadata..'\n\n'..text,metadata,text
+        end
         if row.page then
             local p=row.page
             local metadata=provenance(p,row.report)
@@ -178,7 +192,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         if not self.main then return end
         local m=self.main;self:Remember()
         local rows=journal:List(state);self.rows=rows
-        state.offset=math.max(0,math.min(state.offset,math.floor(math.max(0,#rows-1)/9)*9))
+        state.offset=math.max(0,math.min(state.offset,math.floor(math.max(0,#rows-1)/8)*8))
         for i,row in ipairs(m.rows) do
             local e=rows[state.offset+i];row.id=e and e.id;row:SetShown(e~=nil)
             if e then
@@ -195,7 +209,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             "Your archive begins empty.\n\nOpen supported readable lore to preserve it, or record a writing, landmark, person or mystery.")
         local usage=journal:StorageStatus();m.capacity:SetText(usage)
         m.count:SetText(#rows.." entries"..(state.zone and " • "..L.Safe(tostring(state.zone)) or ""))
-        m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+9<#rows)
+        m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+8<#rows)
         local filters=0;for _,key in ipairs({"kind","zone","origin","revisit","status","completeness"}) do if state[key] then filters=filters+1 end end
         m.filters:SetSelected(filters>0)
         local e=journal:Get(state.selected);m.name:SetText(e and L.AutomaticLabel(journal:Title(e),L.IsAutomatic(e)) or "Your personal archive")
@@ -204,7 +218,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         -- Reading and reference navigation remain available for a future-schema archive.
         m.sourceMenu:SetEnabled(e~=nil);m.related:SetEnabled(e~=nil);m.locationMenu:SetEnabled(e~=nil)
         m.revisit:SetText(e and e.revisit and "Revisit: Yes" or "Revisit: No")
-        m.entry:SetSelected(state.view=="entry");m.locationView:SetSelected(state.view=="location")
+        m.locationView:SetSelected(state.view=="location")
         for _,control in ipairs({m.reader,m.sourceMenu,m.pagePrevious,m.pageNext}) do control:SetShown(state.view=="entry") end
         for _,control in ipairs({m.map,m.locationMenu,m.addLocation,m.place,m.locationDescription,m.mapZone}) do control:SetShown(state.view=="location") end
         if state.view=="entry" then
@@ -240,7 +254,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Lorekeeper's Chronicle")
         m.search=U.Search(m,47,-92,188,200);m.search:SetText(state.query)
-        m.search:SetScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
+        m.search:HookScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
         m.filters=ns.FieldbookUI.FilterButton(m,244,-92,function(button)
             m.search:ClearFocus()
             c:Menu(button,function(_,root)
@@ -303,12 +317,12 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             item[1]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         end
         m.rows={}
-        for i=1,9 do
-            local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-173-(i-1)*44);row:SetSize(250,43)
+        for i=1,8 do
+            local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-173-(i-1)*50);row:SetSize(250,49)
             ns.FieldbookUI.StyleMenuRow(row)
-            row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",3,-5);row.icon:SetSize(20,20)
-            row.name=U.Label(row,"",29,-3,214,"GameFontHighlightSmall");row.name:SetWordWrap(false)
-            row.context=U.Label(row,"",29,-24,215,"GameFontDisableSmall");row.context:SetWordWrap(false)
+            row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",7,-9);row.icon:SetSize(20,20)
+            row.name=U.Label(row,"",33,-7,210,"GameFontHighlightSmall");row.name:SetWordWrap(false)
+            row.context=U.Label(row,"",33,-28,210,"GameFontDisableSmall");row.context:SetWordWrap(false)
             row:SetScript("OnClick",function(self) if self.id then c:Select(self.id) end end);m.rows[i]=row
         end
         m.empty=U.Label(m,"",46,-184,242,"GameFontHighlight");m.empty:SetWordWrap(true)
@@ -324,8 +338,8 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         end)
         m.capacityHover:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         m.count=U.Label(m,"",42,-582,250,"GameFontHighlightSmall")
-        m.previous=U.Button(m,"Previous",42,-604,120,function() state.offset=math.max(0,state.offset-9);c:Refresh() end)
-        m.next=U.Button(m,"Next",173,-604,119,function() state.offset=state.offset+9;c:Refresh() end)
+        m.previous=U.Button(m,"Previous",42,-604,120,function() state.offset=math.max(0,state.offset-8);c:Refresh() end)
+        m.next=U.Button(m,"Next",173,-604,119,function() state.offset=state.offset+8;c:Refresh() end)
         m.new=U.MenuButton(m,"Record…",42,-638,120,function(button)
             c:Menu(button,function(_,root)
                 for _,row in ipairs({{"writing","Transcribe writing"},{"landmark","Record Landmark"},{"person","Manual person"},{"mystery","Create Mystery"}}) do root:CreateButton(row[2],function() c:Edit(row[1]) end) end
@@ -350,17 +364,18 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         m.name:SetShadowColor(0,0,0,0.85);m.name:SetShadowOffset(1,-1)
         local titlePath,titleSize,titleFlags=m.name:GetFont()
         if titlePath and titleSize then m.name:SetFont(titlePath,titleSize+2,titleFlags) end
-        m.entry=U.Button(m,"Entry",734,-60,92,function() c:SetView("entry") end);U.StyleSelection(m.entry)
-        m.locationView=U.Button(m,"Location",832,-60,104,function() c:SetView("location") end);U.StyleSelection(m.locationView)
+        m.locationView=U.Button(m,"Location",832,-60,104,function()
+            c:SetView(state.view=="location" and "entry" or "location")
+        end);U.StyleSelection(m.locationView)
         m.locationView:ClearAllPoints();m.locationView:SetPoint("TOPRIGHT",m,"TOPRIGHT",-24,-60)
-        m.entry:ClearAllPoints();m.entry:SetPoint("RIGHT",m.locationView,"LEFT",-6,0)
-        m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.entry,"TOPLEFT",-8,0)
+        m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.locationView,"TOPLEFT",-8,0)
         m.edit=U.Button(m,"Edit",566,-99,76,function() c:Edit(nil,state.selected) end)
         m.revisit=U.Button(m,"Revisit: No",652,-99,128,function() local e=journal:Get(state.selected);if e then journal:Update(e.id,{revisit=not e.revisit});c:Refresh() end end)
         m.related=U.Button(m,"Related",790,-99,120,function() c:Relationships() end)
         m.more=U.MenuButton(m,"Sources / manage",342,-137,190,function(button)
             c:Menu(button,function(_,root)
                 root:CreateButton("Add passage / transcription",function() c:Passage() end)
+                root:CreateButton("Add translation of selected text",function() c:Translation() end)
                 root:CreateButton("Remove manual annotation",function() c:RemovePassage() end)
                 root:CreateButton("Add location",function() c:Location() end)
             end)
@@ -424,7 +439,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         c:Refresh()
     end
     shell:RegisterSection("lore",{title="Lorekeeper's Chronicle",icon=icons.writing,frameName="AzerothFieldbookLoreSection",build=build,sharedEventLog=true,
-        help=L.HELP or "Lorekeeper's Chronicle preserves writings, significant places, people and personal investigations. Use search and Filters to find known entries by kind, location or source.\n\nOpen a supported readable source to archive its text. Automatically archive readable lore and Only archive pages I open both start on in Options. Turn off the second option to request the whole accessible book where supported; keep the reader open while pages are retrieved. An interrupted capture can leave a partial archive. Automatically retrieved pages are labelled separately from pages presented to you; neither proves you read or understood them.\n\nUse Record… > Capture / retry current text for an open supported source, or Record… > Transcribe writing for a manual entry. After saving, Sources / manage > Add passage / transcription lets you enter source text. Edit keeps your description and private notes separate from that text.\n\nFor People, use Record… > Record current Person with a supported NPC selected or in conversation. Save Passage preserves the currently displayed supported gossip or quest text. Manual person and Add passage / transcription let you record other sources yourself.\n\nIn Entry, use the reader selector to choose captured pages, manual passages, received reports or Entry & personal notes. Archived text remains available away from its source and after reload. A partial archive contains only the pages actually preserved.\n\nUse Record… > Record Landmark to create a place entry. Location shows its recorded positions; Place landmark on map lets you place one deliberately. Read here records where text was encountered, not where a carried letter originated. Approximate observation positions are distinct from landmark positions.\n\nCreate Mystery records a question, working theory, next step and status. Related links it to known evidence. Resolved by me is your conclusion and can be reopened. Removing a link does not delete its evidence.\n\nFor a copyable report, select Share > Export report, choose the pages, passages and locations, then Prepare exact preview. Private notes and interpretations start excluded. To receive one, use Share > Import report, paste the text, Preview pasted report, then Accept reported material. Received material retains source attribution and stays separate from your own encounters; accepting it does not verify its claims.\n\nAccount-wide tracking in Options applies to Lore too. It starts on; turn it off to use this character's separate archive after /reload. Existing character entries import once; later changes in the two scopes stay separate.",
+        help=L.HELP or "Lorekeeper's Chronicle preserves writings, significant places, people and personal investigations. Use search and Filters to find known entries by kind, location or source.\n\nOpen a supported readable source to archive its text. Automatically archive readable lore and Only archive pages I open both start on in Options. Turn off the second option to request the whole accessible book where supported; keep the reader open while pages are retrieved. An interrupted capture can leave a partial archive. Automatically retrieved pages are labelled separately from pages presented to you; neither proves you read or understood them.\n\nUse Record… > Capture / retry current text for an open supported source, or Record… > Transcribe writing for a manual entry. After saving, Sources / manage > Add passage / transcription lets you enter source text. Edit keeps your description and private notes separate from that text.\n\nFor People, use Record… > Record current Person with a supported NPC selected or in conversation. Save Passage preserves the currently displayed supported gossip or quest text. Manual person and Add passage / transcription let you record other sources yourself.\n\nIn Entry, use the reader selector to choose captured pages, manual passages, received reports or Entry & personal notes. Archived text remains available away from its source and after reload. A partial archive contains only the pages actually preserved.\n\nUse Record… > Record Landmark to create a place entry. Location shows its recorded positions; Place landmark on map lets you place one deliberately. Read here records where text was encountered, not where a carried letter originated. Approximate observation positions are distinct from landmark positions.\n\nCreate Mystery records a question, working theory, next step and status. Related links it to known evidence. Resolved by me is your conclusion and can be reopened. Removing a link does not delete its evidence.\n\nFor a copyable report, select Share > Export report, choose the pages, passages and locations, then Prepare exact preview. Private notes and interpretations start excluded. To receive one, use Share > Import report, paste the text, Preview pasted report, then Accept reported material. Received material retains source attribution and stays separate from your own encounters; accepting it does not verify its claims.\n\nFor a player translation, share the original page with another player. They select it in their reader and use Sources / manage > Add translation of selected text. They can enter readable text or choose their own readable capture, then export Local sources with Passages / translations included. Select your original entry when importing the reply and check Attach to selected entry. Both the translation and its original snapshot remain in the reader, with language labels and translator credit. Translations are player contributions, not automatic decoding.\n\nAccount-wide tracking in Options applies to Lore too. It starts on; turn it off to use this character's separate archive after /reload. Existing character entries import once; later changes in the two scopes stay separate.",
         onOpen=function(context)
             if context and context.entryID then c:Select(context.entryID) end
             c:Refresh()

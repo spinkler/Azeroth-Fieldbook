@@ -106,6 +106,69 @@ function L.InstallEditors(c)
         p.source:SetText(d.source or e.sourceTitle or j:Title(e));p.raw:SetText(d.raw or "");p.natureID=d.nature or "source"
         p.nature:SetText(({source="Preserved source text",observation="Direct observation",account="Reported account",interpretation="Personal interpretation"})[p.natureID])
     end
+    function c:Translation()
+        local e=j:Get(state.selected);if not e then return end
+        local reading=state.reading[e.id];local selected
+        for _,row in ipairs(self:Sources(e)) do if reading and row.id==reading.source then selected=row;break end end
+        local source=selected and selected.page
+        if not source or source.nature~='source' or source.private or not L.Text(L.Plain(source.raw or ''),L.MAX_PAGE_BYTES) then
+            self:Message('Choose a nonempty source page or source passage in the reader, then Add translation.');return
+        end
+        local p=self:Panel('translation','Translate selected source')
+        if not p.raw then
+            p.context=U.Label(p,'',24,-57,800,'GameFontHighlightSmall')
+            p.from=U.Field(p,'Original language (enter Unknown if uncertain)',24,-104,385,80)
+            p.to=U.Field(p,'Translation language',446,-104,385,80)
+            U.Label(p,'Original text — preserved with your translation',24,-170,800,'GameFontNormalSmall')
+            p.original=U.ReadArea(p,29,-192,778,112)
+            U.Label(p,'Your translation / readable transcription',24,-323,450,'GameFontNormalSmall')
+            p.captured=U.MenuButton(p,'Use captured text…',540,-313,290,function(button)
+                c:Menu(button,function(_,root)
+                    root:SetScrollMode(400);local found=false
+                    for _,entry in ipairs(j:List({kind='writing'})) do
+                        if entry.sourceTitle==p.originalDetails.sourceTitle or j:Title(entry)==p.originalDetails.sourceTitle then
+                            local keys={};for key,page in pairs(entry.pages) do if page.origin=='captured' then keys[#keys+1]=key end end
+                            table.sort(keys,function(a,b) return tostring(a)<tostring(b) end)
+                            for _,key in ipairs(keys) do
+                                local page=entry.pages[key];local raw=page.raw
+                                if raw~=p.originalDetails.sourceRaw and L.Plain(raw):find('%S') then
+                                    found=true
+                                    root:CreateButton(L.Safe(j:Title(entry)..' • page '..tostring(page.number or '?')..' • '..L.Plain(raw):sub(1,90)),function()
+                                        p.raw:SetText(L.Plain(raw));p.message:SetText('Captured text copied into this draft. Check the page and language before saving the translation.')
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                    if not found then root:CreateTitle('No different captured text for this title.');root:CreateTitle('Open the readable source yourself, or enter a transcription.') end
+                end)
+            end)
+            p.raw=U.TextArea(p,29,-348,778,180,0)
+            p.inputs={p.from,p.to,p.raw};p.drafts={}
+            function p:StoreDraft()
+                if self.key then self.drafts[self.key]={raw=self.raw:GetText(),from=self.from:GetText(),to=self.to:GetText()} end
+            end
+            p.save=U.Button(p,'Save translation',24,-571,220,function()
+                local t=L.Copy(p.originalDetails);t.fromLanguage=p.from:GetText();t.toLanguage=p.to:GetText()
+                local result,err=j:AddPassage(p.entryID,{raw=p.raw:GetText(),origin='manual',nature='translation',method='manual',
+                    source=t.sourceTitle,sourceTitle=t.sourceTitle,translation=t,private=false})
+                if not result then p.message:SetText(L.Safe(err or 'Translation could not be saved.'));return end
+                p.drafts[p.key]=nil;p.key=nil;c:ClosePanel();c:Select(p.entryID);c:Page(0,'passage:'..result.id)
+                c:Message('Translation saved. Share > Export report > Local sources includes it. The recipient can attach it to their original entry.')
+            end)
+            U.Button(p,'Discard this draft',260,-571,220,function() p.drafts[p.key]=nil;p.key=nil;c:ClosePanel() end)
+        end
+        p.entryID=e.id;p.key=e.id..':'..selected.id
+        local title=source.sourceTitle
+        if not title or title=='' then title=selected.report and selected.report.sourceTitle or e.sourceTitle end
+        if not title or title=='' then title=j:Title(e) end
+        p.originalDetails={translator=L.Player(),sourceTitle=title,sourceRaw=source.raw,page=source.number or selected.number}
+        local d=p.drafts[p.key] or {}
+        p.from:SetText(d.from or '');p.to:SetText(d.to or 'Common');p.raw:SetText(d.raw or '')
+        p.context:SetText(L.Safe(title..' • '..selected.label..'\nTranslation by '..p.originalDetails.translator..'. Enter readable text or choose your captured version.'))
+        p.original:SetText(L.Plain(source.raw),true)
+        p.message:SetText('Saved as a shareable player contribution, with its original text. It does not replace the source or verify the translation.')
+    end
     function c:Location(index,placed)
         local e=j:Get(state.selected);if not e then return end
         local existing=index and L.VisibleLocations(e)[index]
@@ -229,7 +292,7 @@ function L.InstallEditors(c)
                 self.previous:SetEnabled(self.offset>0);self.next:SetEnabled(self.offset+6<#rows)
                 self.count:SetText(#rows.." references / matching entries")
             end
-            p.search:SetScript("OnTextChanged",function() if p.entryID then p.offset=0;p:Render() end end)
+            p.search:HookScript("OnTextChanged",function() if p.entryID then p.offset=0;p:Render() end end)
         end
         if p.entryID~=e.id then p.entryID=e.id;p.offset=0;p.linked=false;p.search:SetText("");p.reason:SetText("") end
         p:Render();p.message:SetText("Links share no ownership. Unlinking or deleting a mystery never deletes its evidence. Missing references keep their saved labels.")

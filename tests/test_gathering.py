@@ -50,7 +50,7 @@ ENV = r'''
         if select(1,...)=='PlayerModel' then
             function frame:SetCreature() error('game objects are not creatures') end
             function frame:SetModel(id)
-                local ancestor=self.parent
+                local ancestor=self
                 while ancestor do
                     assert(ancestor:IsShown(),'model requested under a hidden ancestor')
                     ancestor=ancestor.parent
@@ -570,6 +570,43 @@ class GatheringTrackingTests(unittest.TestCase):
 
 
 class GatheringUITests(unittest.TestCase):
+    def test_bruiseweed_uses_verified_scene_and_clipping_without_debug_command(self):
+        lua=client(ui=True)
+        lua.execute('''
+            gather('Bruiseweed','bruise');shell:ShowSection('gathering')
+            local book=gathering.frame;local scene=book.activeModel;local actor=scene.actor
+            assert(actor and actor.requestedModel==219440 and scene==book.model)
+            actor.loadedModel=219440;actor.bounds={-1,-1,-2,1,1,3}
+            scene:UpdateFraming(.1)
+            assert(scene.nearClip==.01 and scene.farClip==10000 and actor:IsShown())
+            assert(book.modelCaption:GetText()=='')
+            shell:Hide();shell:Toggle()
+            assert(actor.requestedModel==219440 and not actor.loadedModel)
+            scene:UpdateFraming(5)
+            assert(not actor:IsShown() and book.modelCaption:GetText()=='Model unavailable')
+        ''')
+
+    def test_model_report_reads_live_state_without_reloading(self):
+        lua = client(ui=True)
+        lua.execute('''
+            gather('Copper Vein','copper',2575);shell:ShowSection('gathering')
+            local book=gathering.frame;local actor=book.mineralModel.actor
+            actor.loadedModel=219514;actor.bounds={-2,-2,-8,2,2,-4}
+            book.mineralModel:UpdateFraming(.1)
+            actor.SetModelByFileID=function() error('Report must not reload models') end
+            function actor:GetAlpha() return secret end
+            function actor:GetPosition() error('unavailable on this client') end
+            local lines={}
+            gathering:ReportModel(function(line) lines[#lines+1]=line end)
+            local report=table.concat(lines,'\\n')
+            assert(report:find('Actor IsLoaded: true',1,true))
+            assert(report:find('Actor GetModelFileID: 219514',1,true))
+            assert(report:find('Actor GetAlpha: RESTRICTED',1,true))
+            assert(report:find('Actor GetPosition: API error',1,true))
+            assert(report:find('Actor GetActiveBoundingBox: -2, -2, -8, 2, 2, -4',1,true))
+            assert(actor:IsShown() and book.modelCaption:GetText()=='')
+        ''')
+
     def setUp(self):
         self.lua = client(ui=True)
 
@@ -577,25 +614,25 @@ class GatheringUITests(unittest.TestCase):
         self.lua.execute('''
             gather('Peacebloom','peace')
             shell:EnsureSection('gathering');local book=gathering.frame
-            assert(not book:IsShown() and not book.model.modelLoads,'building a hidden section must not load its model')
+            assert(not book:IsShown() and not book.model.actor.modelLoads,'building a hidden section must not load its model')
             shell:ShowSection('gathering')
-            assert(book.model.modelLoads==1 and book.model.requestedModel==219481)
+            assert(book.model.actor.modelLoads==1 and book.model.actor.requestedModel==219481)
             assert(book.model:GetFrameLevel()>book.modelBorder:GetFrameLevel())
-            book.model.loadedModel=219481;book.model.scripts.OnModelLoaded(book.model)
+            book.model.actor.loadedModel=219481;book.model.actor.bounds={-1,-1,0,1,1,2};book.model:UpdateFraming(.1)
             book.note:SetText('Keep my draft');book.search:SetText('Peace')
             shell:ShowSection('atlas');book.model:ClearModel() -- Native render state lost while hidden.
-            local loads=book.model.modelLoads
-            gathering:Refresh();assert(book.model.modelLoads==loads)
+            local loads=book.model.actor.modelLoads
+            gathering:Refresh();assert(book.model.actor.modelLoads==loads)
             shell:ShowSection('gathering')
-            assert(book.model.modelLoads==loads+1 and book.model.requestedModel==219481 and book.model:IsShown())
+            assert(book.model.actor.modelLoads==loads+1 and book.model.actor.requestedModel==219481 and book.model:IsShown())
             assert(book.note:GetText()=='Keep my draft' and book.search:GetText()=='Peace')
-            assert(book.model.cameraDistance==3.125)
+            assert(book.model.actor.centered[3])
             shell:Hide();book.model:ClearModel();gathering:Refresh()
-            assert(book.model.modelLoads==loads+1,'hidden refresh must not reload')
+            assert(book.model.actor.modelLoads==loads+1,'hidden refresh must not reload')
             shell:Toggle()
-            assert(book.model.modelLoads==loads+2 and book.model.requestedModel==219481)
-            local reopened=book.model.modelLoads;gathering:Refresh()
-            assert(book.model.modelLoads==reopened,'ordinary updates must not continually reload models')
+            assert(book.model.actor.modelLoads==loads+2 and book.model.actor.requestedModel==219481)
+            local reopened=book.model.actor.modelLoads;gathering:Refresh()
+            assert(book.model.actor.modelLoads==reopened,'ordinary updates must not continually reload models')
         ''')
 
     def test_reopening_retries_failed_model_without_stale_preview(self):
@@ -605,10 +642,10 @@ class GatheringUITests(unittest.TestCase):
             local load=book.model.SetModel
             book.model.SetModel=function() error('temporary native model failure') end
             book.rows[2].scripts.OnClick(book.rows[2])
-            assert(not book.model:IsShown() and not book.model.requestedModel)
+            assert(not book.model:IsShown() and not book.model.actor.requestedModel)
             assert(book.modelCaption:GetText()=='Model unavailable')
             book.model.SetModel=load;shell:ShowSection('atlas');shell:ShowSection('gathering')
-            assert(book.title:GetText()=='Peacebloom • Herb' and book.model.requestedModel==219481 and book.model:IsShown())
+            assert(book.title:GetText()=='Peacebloom • Herb' and book.model.actor.requestedModel==219481 and book.model:IsShown())
         ''')
 
     def test_mineral_framing_is_origin_independent_and_fits_rotation(self):
@@ -647,7 +684,7 @@ class GatheringUITests(unittest.TestCase):
             scene.scripts.OnMouseDown();cursorX=120;scene.scripts.OnUpdate(scene,.1)
             assert(actor.yaw>0);scene.scripts.OnMouseUp()
             shell:Hide();shell:Toggle();assert(actor.requestedModel==219514)
-            assert(not actor:IsShown(),'Wait for fresh geometry on reopening')
+            assert(actor:IsShown() and not actor.loadedModel,'New load starts visible with old geometry cleared')
         ''')
 
     def test_mineral_bounds_vectors_invalid_data_and_stale_loads(self):
@@ -658,7 +695,7 @@ class GatheringUITests(unittest.TestCase):
             book.rows[2].scripts.OnClick(book.rows[2])
             assert(actor.requestedModel==189103)
             actor.loadedModel=219514;actor.bounds={-2,-2,-2,2,2,2}
-            scene:UpdateFraming(.1);assert(not actor:IsShown(),'Ignore stale Copper completion')
+            scene:UpdateFraming(.1);assert(book.modelCaption:GetText()=='Loading model…','Ignore stale Copper completion')
             actor.loadedModel=189103
             actor.bounds={{GetXYZ=function() return -2,-2,-8 end},{GetXYZ=function() return 2,2,-4 end}}
             scene:UpdateFraming(.1);assert(actor:IsShown())
@@ -680,27 +717,27 @@ class GatheringUITests(unittest.TestCase):
             assert(book.model:GetWidth()==223 and book.model:GetHeight()==164)
             assert(book.modelBorder:GetWidth()==227 and book.modelBorder:GetHeight()==168)
             assert(book.model.point[2]==346 and book.model.point[3]==-135)
-            assert(book.model.requestedModel==219481 and book.model:IsShown())
-            assert(book.model.cameraDistance==3.125)
+            assert(book.model.actor.requestedModel==219481 and book.model:IsShown())
+            assert(book.model.actor.centered[3])
             assert(book.zoneRows[1]:GetText()=='Elwynn  •  0 mapped positions')
             assert(positionReads==0 and entry('herb:peacebloom').interactions==0)
-            book.model.cameraDistance=1;book.model.loadedModel=219481;book.model.scripts.OnModelLoaded(book.model)
-            assert(book.model.cameraDistance==3.125,'async loading must restore gathering zoom')
+            book.model.actor.loadedModel=219481;book.model.actor.bounds={-1,-1,0,1,1,2};book.model:UpdateFraming(.1)
+            assert(book.model.cameraPosition[1]>0 and book.model.nearClip==.01 and book.model.farClip==10000)
             assert(book.modelCaption:GetText()=='')
-            local loads=book.model.modelLoads;gathering:Refresh();assert(book.model.modelLoads==loads)
+            local loads=book.model.actor.modelLoads;gathering:Refresh();assert(book.model.actor.modelLoads==loads)
             cursorX=100;GetCursorPosition=function() return cursorX,0 end
             book.model.scripts.OnMouseDown();cursorX=120;book.model.scripts.OnUpdate(book.model)
-            assert(book.model.rotation>0)
-            book.model.scripts.OnMouseUp();local rotation=book.model.rotation
-            cursorX=140;book.model.scripts.OnUpdate(book.model);assert(book.model.rotation==rotation)
+            assert(book.model.actor.yaw>0)
+            book.model.scripts.OnMouseUp();local rotation=book.model.actor.yaw
+            cursorX=140;book.model.scripts.OnUpdate(book.model);assert(book.model.actor.yaw==rotation)
             hover('Copper Vein','Requires Mining');discover();gathering:Refresh()
             book.rows[1].scripts.OnClick(book.rows[1]);assert(book.mineralModel.actor.requestedModel==219514)
             assert(not book.model:IsShown() and book.mineralModel:IsShown())
-            book.model.loadedModel=219481;book.model.scripts.OnModelLoaded(book.model)
+            book.model.actor.loadedModel=219481;book.model.actor.bounds={-1,-1,0,1,1,2};book.model:UpdateFraming(.1)
             assert(book.modelCaption:GetText()=='Loading model…','stale load must not clear the caption')
             hover('Unknown herb');discover();gathering:Refresh()
             book.rows[3].scripts.OnClick(book.rows[3])
-            assert(not book.model:IsShown() and not book.model.requestedModel)
+            assert(not book.model:IsShown() and not book.model.actor.requestedModel)
             assert(book.modelCaption:GetText()=='Model unavailable')
         ''')
 
@@ -733,15 +770,15 @@ class GatheringUITests(unittest.TestCase):
         self.lua.execute('''
             assert(not shell:GetFrame() and not gathering.frame)
             shell:ShowSection('gathering');local book=gathering.frame
-            assert(book:GetWidth()==960 and book:GetHeight()==740 and #book.rows==16)
+            assert(book:GetWidth()==960 and book:GetHeight()==740 and #book.rows==18)
             assert(book.parent==shell:GetFrame() and book:GetScale()==1)
             assert(book.rows[1]:GetWidth()==236 and book.rows[1]:GetHeight()==26)
             assert(book.rows[1].point[2]==42 and book.rows[1].point[3]==-140)
-            assert(book.rows[16].point[3]==-560)
+            assert(book.rows[18].point[3]==-599)
             assert(book.search:GetWidth()==168 and book.search.point[2]==70 and book.search.point[3]==-110)
-            assert(book.resourceScrollBar:GetHeight()==416 and book.resourceScrollBar:GetWidth()==14)
+            assert(book.resourceScrollBar:GetHeight()==454 and book.resourceScrollBar:GetWidth()==14)
             assert(book.empty:IsShown() and not book.details:IsShown() and not book.locations.enabled)
-            assert(not book.previous.enabled and not book.next.enabled and count(journal.entries)==0)
+            assert(not book.previous and not book.next and count(journal.entries)==0)
             assert(positionReads==0,'opening the journal never samples locations')
         ''')
 
@@ -754,7 +791,7 @@ class GatheringUITests(unittest.TestCase):
             book.typeButtons.herb.scripts.OnClick();assert(book.rows[1].id=='herb:herb 01')
             book.rows[1].scripts.OnClick(book.rows[1])
             book.rows[1].scripts.OnMouseWheel(book.rows[1],-1);assert(book.rows[1].id=='herb:herb 04')
-            book.next.scripts.OnClick();assert(book.title:GetText()=='Herb 02 • Herb' and book.resourceScrollBar:GetValue()==1)
+            book.rows[1].scripts.OnClick(book.rows[1]);assert(book.title:GetText()=='Herb 04 • Herb' and book.resourceScrollBar:GetValue()==3)
             book.search:SetText('Herb 2');assert(book.rows[1].id=='herb:herb 20' and not book.resourceScrollBar:IsShown())
             book.searchClear.scripts.OnClick();assert(book.search:GetText()=='')
             assert(book.indexButton==nil and book.letterButtons==nil,'Compendium uses filters instead of an A-Z index')
@@ -763,7 +800,7 @@ class GatheringUITests(unittest.TestCase):
             book.clearFilters.scripts.OnClick();book.sortButton.scripts.OnClick()
             book.sortChoices[8].control.scripts.OnClick()
             assert(book.rows[1].id=='herb:herb 24' and select(2,journal:GetListSort()))
-            book.search:SetText('no such resource');assert(book.noMatches:IsShown() and not book.next.enabled)
+            book.search:SetText('no such resource');assert(book.noMatches:IsShown() and not book.next)
         ''')
 
     def test_notes_drafts_selection_and_filters_survive_switching_and_background_interactions(self):
@@ -838,8 +875,8 @@ class GatheringUITests(unittest.TestCase):
             book.locations.scripts.OnClick();local overlay=gathering.locations:GetFrame()
             assert(overlay.parent==book and overlay:GetScale()==1)
             assert(overlay.point[1]=='TOPLEFT' and overlay.point[2]==book)
-            assert(overlay.point[4]==333 and overlay.point[5]==-78)
-            assert(333+overlay:GetWidth()==936 and 78+overlay:GetHeight()==714)
+            assert(overlay.point[4]==333 and overlay.point[5]==-87)
+            assert(333+overlay:GetWidth()==936 and 87+overlay:GetHeight()==714)
             assert(overlay.point[4]-309==960-overlay.point[4]-overlay:GetWidth())
             for _,object in ipairs(objects) do
                 assert(object.parent~=overlay or object.template~='UIPanelCloseButton')

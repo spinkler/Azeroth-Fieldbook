@@ -13,6 +13,15 @@ wishlist remains in Help. No Forever client interaction or visual verification
 was performed for this implementation; synthetic checks are a separate form of
 evidence and the in-game checklist below remains outstanding.
 
+The funnel menu includes **Current Zone**. Combine it with a search such as
+`repair` to list matching known contacts with a recorded or reported sighting
+in the player's current zone. It follows zone changes while the Ledger is open,
+retains the checkbox across reopening, and returns no matches if the current
+zone is unavailable. Choosing a fixed zone/subzone, All zones or Clear disables
+Current Zone. This filters historical sightings; it does not discover NPCs or
+establish their current presence.
+**Link identity** sits between Search and the contact list in the left pane.
+
 ## Ownership and files
 
 | File | Responsibility |
@@ -93,7 +102,7 @@ leave full curriculum completeness unestablished. Buyback is never scanned.
 | Coordinates | Prefer the existing guarded `CreatureLocations.Sample` NPC position when readable and natively converted to the same recorded map, source `npc`. Otherwise use player position only during a nearby service interaction, source `player`, labelled **Encountered near**, approximate. No distant player-position substitution, 0,0 placeholder, guessed conversion or inferred route |
 | Goods | Readable merchant item/currency/spell ID, name/icon, price, purchase bundle, additional costs, stock, purchasable/usable flags and typed displayed requirements |
 | Recipe / profession | `C_Item.GetItemInfo` class `Enum.ItemClass.Recipe` and localized subtype only; no name-based recipe or profession inference |
-| Training | Native name, rank/subtext, category, quoted cost, availability, required level, skill/ability requirements. Pet training costs remain training points, not copper |
+| Training | Native name, rank/subtext, icon, category, quoted cost, availability, required level, skill/ability requirements. Pet training costs remain training points, not copper |
 | Manual facts | Contact name/sublabel, service role and speciality; personal access notes and favourite. Manual claims retain method `recorded` |
 | Reports | Identity, sublabel provenance, services, locations, selected goods/lessons and explicitly included notes remain reported claims. Meeting/linking confirms only actually observed fields |
 | Unsupported | Unreadable NPC positions, undisplayed requirements, unreadable restrictions, hidden inventory/curriculum, recipe graphs, current remote stock, route planning, automated purchases and external service databases |
@@ -105,6 +114,18 @@ the mutable target or merchant slot. They cannot refresh observation/quote
 dates. Close/reopen invalidates queued visit scans. Updates coalesce at 150 ms,
 with two bounded load retries and at most one metadata-triggered rescan per
 visit. Unsupported metadata cannot create a recurring inventory poll.
+
+Observed Training uses the Known Goods heading/icon layout. Its top sort arrow
+chooses required level (ascending, unknown last) or name (A–Z), remembered in
+`state.trainingSort`. The chosen order spans personal and reported lessons;
+rank and stable source/key ties keep repeated refreshes consistent. Green means
+available when inspected, red unavailable, grey already known and gold unknown.
+Required levels use gold, categories/report labels blue and dates/source details grey.
+These labels remain historical; viewing a lesson does not recheck availability.
+Native trainer textures are retained locally across unreadable refreshes. Older
+lessons and reports can resolve cached artwork through `C_Spell.GetSpellTexture`
+using name/subtext, falling back to a question mark. This is display-only; report
+fields, lesson identity and observation times are unchanged.
 
 ### Forever compatibility evidence
 
@@ -300,6 +321,11 @@ loads Ledger and still checks all seven tabs and auxiliary/window behaviour.
    confirm the same contact gains observed lessons. Inspect ordinary and pet/profession trainers
    where available; verify native rank, required level, category, costs and
    requirements. Change trainer filters without curriculum completeness claims.
+   In Observed Training, check the top sort arrow's Level and Name choices,
+   ordering across ranks and unknown levels, remembered selection after reload,
+   40-pixel icons, availability colours, pet cost units and long heading hover
+   scrolling at each text size. Toggle Known Goods and Training to check reused
+   rows and icons; report-only lessons must keep their source labels.
    Check banker, stable, auctioneer, taxi and inn bind-confirmation events.
    Unsupported identities/events must remain manual/unknown, without errors.
 6. **Identity and search:** Compare same-name or same-template NPCs with different
@@ -307,6 +333,9 @@ loads Ledger and still checks all seven tabs and auxiliary/window behaviour.
    identity; inspect both records before confirming. Search by sublabel, item,
    recipe, lesson, zone and note; combine multiple roles with other filters;
    verify match explanation/focus, favourites, sorting, counts and reset.
+   Search `repair`, tick Current Zone and cross a zone boundary; verify the list
+   follows the new zone. Check fixed-zone choices and Clear disable the checkbox.
+   Confirm Link identity sits below Search and above the contact list.
 7. **Maps:** Test valid points, multiple sightings/maps/floors, zone-only entries,
    unavailable artwork and reported-only markers. Tooltip source, approximate
    label and observation/receipt times must agree with the selected sighting.

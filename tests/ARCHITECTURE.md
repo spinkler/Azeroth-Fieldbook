@@ -50,11 +50,13 @@ Registration does not construct UI. `ShowSection(id, context)` builds each
 section once, hides the previous content/pages, selects its size and title, and
 calls `onOpen`. `ToggleSection(id)` opens a particular section or closes it when
 already shown. `Toggle()` reopens the last active section, defaulting to the
-first registration. Normal Bestiary bindings explicitly select the Bestiary;
+first displayed tab. Normal Bestiary bindings explicitly select the Bestiary;
 the minimap and general book command use the shared shell.
 
-The Bestiary registers first, followed by Herbs & Minerals (`GatheringBook.lua`),
-Traveller’s Atlas (`AtlasBook.lua`), Angler’s Almanac (`AnglingBook.lua`), Merchant’s Ledger (`LedgerBook.lua`), Treasure Journal (`TreasureBook.lua`), and Lorekeeper's Chronicle (`LoreBook.lua`).
+The shell displays Bestiary, Gatherer's Compendium, Traveller's Atlas,
+Adventurer's Annals, Merchant's Ledger, Treasure Journal, Angler's Almanac,
+then Lorekeeper's Chronicle. This order is independent of initialization order,
+so journals can initialize after the reference adapters they depend on.
 Each section owns its registration, title, icon and content.
 `FieldbookSections.lua` retains an empty wishlist extension point; it registers
 no additional section. The Bestiary's icon is in its registration

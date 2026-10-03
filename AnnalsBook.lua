@@ -1,6 +1,6 @@
 local _,ns=...
 local A,U=ns.Annals,ns.AtlasUI
-local HELP="Your character writes this history automatically: quest acceptance, removal and confirmed turn-in, plus flight departures and lightweight links to Fieldbook discoveries. Existing quests are not backfilled. Removed does not always mean abandoned.\n\nJourney Trail is a separate approximate route. Uncheck Record Journey to stop future breadcrumbs; events and their locations remain. No history is erased. Balanced recording checks every two seconds but keeps ordinary points roughly 15–60 seconds apart while moving; stationary players add no periodic points. Events and segment endpoints are exceptions. Loading and missing positions leave gaps. Subzone names do not interrupt flights.\n\nEnter dates as YYYY-MM-DD, optionally a character level, then Apply. Dates use your computer's local calendar. Select an event and Around event to inspect its surrounding hour, or Quest interval for discoveries during its observed acceptance-to-removal/turn-in period. Temporal overlap never means a quest caused those discoveries.\n\nThe timeline runs oldest to newest. Use Latest, page buttons or the mouse wheel. Show Journey opens the map for the selected dates. Choose a historical map and drag the time slider. Routes and markers also project onto continent and world maps where the client supplies map rectangles. Existing saved gaps are preserved. The clock uses recorded timestamps; the position is the latest actual sample, not an invented constant-speed location.\n\nLarge map ranges display at most 64 recent chunks, 2,048 lines and 512 events at the selected time (Atlas groups at most 192 visible pins). Scrub earlier or narrow dates for older geometry. The timeline always retains all matching events.\n\nReward choices are recorded only when an observed reward request matches a confirmed turn-in and readable offered item metadata. Automatic items are labelled separately. XP and copper come from the turn-in event. Currency offers are recorded where readable and labelled as offered amounts, not measured balance changes. Reputation and spell rewards are not captured; missing item metadata remains unknown. Source inspection and mock tests still require in-game API validation.\n\nAll history is local and character-specific, regardless of account tracking. SavedVariables persist on a successful logout or /reload; a client crash may lose the current session, as with other journals."
+local HELP="Your character writes this history automatically: quest acceptance, removal and confirmed turn-in, plus deaths, flight departures, Hearthstone/teleport casts, cross-continent crossings, battleground transfers, dungeon/raid visits and lightweight links to Fieldbook discoveries. Existing quests are not backfilled. Removed does not always mean abandoned.\n\nJourney Trail is a separate approximate route. Uncheck Record Journey and choose Yes to stop future breadcrumbs; No keeps recording. Re-enabling is immediate; events and their locations remain. No history is erased. Balanced recording checks every two seconds but keeps ordinary points roughly 15–60 seconds apart while moving; stationary players add no periodic points. Events, confirmed stops and segment endpoints are exceptions. Stop arrival/departure times are retained without periodic idle samples. Loading and missing positions leave gaps. Successful Hearthstone, Astral Recall, Classic capital teleports and Moonglade casts record departures. Loading transitions record arrivals, battleground entry/exit and cross-continent travel with separate icons. Ship icons indicate observed continent crossings, not a confirmed vessel. Login/reload do not invent journeys. Ordinary same-continent loading does not create travel events. Dungeon, raid and scenario visits record entry/exit and hold the arrow at the last observed outdoor entrance while inside, including across reloads. Interior events remain in the timeline but do not move the outdoor arrow or create route lines. Exits and hearths out jump to the observed outdoor arrival. If the entrance was not observed, its position remains unknown. Unrecognized portal uses are not automatically identified. Subzone names do not interrupt flights.\n\nSearch matches partial words without case sensitivity across quest names, event details, dates, places and offered/received rewards. Multiple words can match different fields: sword Westfall finds recorded sword rewards in Westfall. Client item types, equipment slots, descriptions and readable tooltip text are included when available; results refresh when item data loads. Search combines with date/level/event filters and filters map markers without hiding the historical route or arrow. Clear it with the red cross or Now / reset. Enter dates as YYYY-MM-DD, optionally a character level, then Apply. Dates use your computer's local calendar. Select an event and Around event to inspect its surrounding hour, or Quest interval for discoveries during its observed acceptance-to-removal/turn-in period. Temporal overlap never means a quest caused those discoveries.\n\nThe timeline runs oldest to newest. Use Latest, page buttons or the mouse wheel. Journey opens by default on the right for the selected dates, with the timeline on the left. Selecting a timeline event pauses and seeks its recorded time and map. Show detail sits in the left pane and glows while its scrollable detail overlay covers the timeline. Turn it off to restore the same timeline page and selection. The Journey map and playback remain available while details are open. Around selected event, recorded level, Trail age contrast and Map icon size are in the right pane. Hover the contrast slider for an explanation. Choose zone above the map selects a historical map. The Legend button toggles an overlay with the actual event icons, player arrows and trail colours. Legend and Follow player glow while active. Instance icons show a green entry arrow or an orange exit arrow. Drag the time slider to browse. Play advances one recorded second per real second at 1x; choose 8x, 32x, 64x or 128x to speed up. Use the arrow / pause symbol to start or stop playback. Pause, scrub or leave Journey to stop playback. Playback stops at the range end; Play there restarts from the beginning. Now / reset returns to the current time, clears search/date/level/event filters, restores full-range timing and 1x speed, disables Follow player, and returns to the current map (or the known outdoor entrance during an instance visit). Choose Full range, 3 hours, 1 hour or 15 minutes to change slider resolution. The mouse wheel makes precise second-by-second adjustments. Find player pauses at the selected time and centers its historical position, switching to the recorded map if needed. It keeps a closer zoom or zooms in to locate the arrow. Follow player keeps the historical arrow in view during playback, switching recorded zones and continents and jumping directly to observed hearth/teleport arrivals. Turn it off to pan freely while playback continues. Playback estimates movement between connected samples using their timestamps, with smooth arrow updates and a progressively revealed route. Estimates are labelled; no new positions are saved. Routes and markers also project onto continent and world maps where the client supplies map rectangles. Existing saved gaps are preserved. The clock uses recorded timestamps; the arrow moves between connected samples and holds at the last known position through gaps. Old recordings may lack stop timing; new recordings preserve it during simplification. Its heading follows recorded movement, not camera facing. Green means flight, red means dead, blue means ghost and white means alive or unknown. Event filter checkboxes combine types without hiding the arrow. Map icon size adjusts markers and the arrow.\n\nLarge map ranges display at most 64 recent chunks, 2,048 lines and 512 events at the selected time (Atlas groups at most 192 visible pins). Scrub earlier or narrow dates for older geometry. The timeline always retains all matching events.\n\nAccepted quests retain the potential item choices and guaranteed rewards observed in the quest dialogue, plus readable XP, money, currency and spell offers. If accepted before reward data loads, the new entry waits up to ten seconds for the matching quest log rewards; its original time and location stay fixed. The selected quest is restored after reads. Missing data stays explicitly unknown after the retry window or quest removal, and older entries are not backfilled. Completed quests show the chosen reward when the reward request and turn-in were observed; guaranteed items are separate. Hover reward icons or names for tooltips. Reward names are enlarged and use quality colours; single items omit the count. Timeline icons have drop shadows. Money uses gold, silver and copper units. Actual XP and money come from the turn-in event. Currency and spell offers are not proof of balance changes or learned spells. Reputation rewards are not captured. Older entries and unreadable offers remain explicitly unknown; opening them does not rewrite history. Source inspection and mock tests still require in-game API validation.\n\nAll history is local and character-specific, regardless of account tracking. SavedVariables persist on a successful logout or /reload; a client crash may lose the current session, as with other journals."
 function A.ParseDate(text,ending)
     if not A.Text(text,10) then return end
     local y,m,d=text:match('^(%d%d%d%d)%-(%d%d)%-(%d%d)$');y,m,d=tonumber(y),tonumber(m),tonumber(d)
@@ -9,8 +9,175 @@ function A.ParseDate(text,ending)
     if not A.Int(stamp,0,9999999999) or (date and date('%Y-%m-%d',stamp)~=text) then return end
     return stamp
 end
+local function detailArea(parent)
+    local area,body=U.Scroll(parent,0,0,228,364)
+    area.rows={};area.requests={};area.body=body
+    local function hideTooltip() if GameTooltip then GameTooltip:Hide() end end
+    local function scroll(_,delta)
+        area:SetVerticalScroll(math.max(0,math.min(math.max(0,body:GetHeight()-area:GetHeight()),area:GetVerticalScroll()-delta*32)))
+    end
+    area:EnableMouseWheel(true);area:SetScript('OnMouseWheel',scroll)
+    body:EnableMouseWheel(true);body:SetScript('OnMouseWheel',scroll)
+    function area:SetEvent(e,reset)
+        hideTooltip();self.event=e;self.visibleItems={}
+        local blocks={}
+        local function add(text,kind) blocks[#blocks+1]={text=text,kind=kind or 'text'} end
+        if not e then add(A.Paint('Select an event to read its historical details.','999999'))
+        else
+            add(A.Paint(e.title,'ffd100'),'title')
+            add(A.Paint(A.eventNames[e.kind] or e.kind,A.eventColours[e.kind] or '55ddee'),'status')
+            add(A.Paint(U.Date(e.at)..(e.level and (' • Level '..e.level) or ''),'999999'))
+            if e.zone or e.subzone then
+                local location=e.zone or e.subzone
+                if e.zone and e.subzone and e.subzone~='' and e.subzone~=e.zone then location=location..' — '..e.subzone end
+                add(A.Paint(location,'dddddd'))
+            end
+            if A.Int(e.x,0,10000) and A.Int(e.y,0,10000) then add(A.Paint(string.format('Coordinates: %.1f, %.1f',e.x/100,e.y/100),'999999')) end
+            if e.removal=='abandoned' then add(A.Paint('Abandon request observed.','999999')) end
+            local instanceNote=A.InstanceNote(e);if instanceNote then add(A.Paint(instanceNote,'999999')) end
+            for _,block in ipairs(A.RewardBlocks(e,true)) do blocks[#blocks+1]=block end
+            if e.link then add(A.Paint('Fieldbook discovery','55ddee'),'heading');add(A.Paint(e.link.section..' • Recorded during the journey.','dddddd')) end
+        end
+        local y=0
+        for i,block in ipairs(blocks) do
+            local row=self.rows[i]
+            if not row then
+                row=CreateFrame('Button',nil,body);row:SetWidth(228)
+                row.label=U.Label(row,'',0,0,228,'GameFontHighlightSmall');row.label:SetWordWrap(true);row.label:SetSpacing(3)
+                row.icon=row:CreateTexture(nil,'ARTWORK');row.icon:SetSize(24,24);row.icon:SetPoint('TOPLEFT',0,0)
+                row:EnableMouseWheel(true);row:SetScript('OnMouseWheel',scroll)
+                row:SetScript('OnEnter',function(self)
+                    if not self.link or not GameTooltip then return end
+                    GameTooltip:SetOwner(self,'ANCHOR_RIGHT');GameTooltip:SetHyperlink(self.link);GameTooltip:Show()
+                end)
+                row:SetScript('OnLeave',hideTooltip);row:SetScript('OnHide',hideTooltip)
+                self.rows[i]=row
+            end
+            local font=block.kind=='title' and 'GameFontNormalLarge' or block.kind=='heading' and 'GameFontNormal' or 'GameFontHighlightSmall'
+            local fontObject=ns.TextSize and ns.TextSize:Font(font) or font
+            row.label:SetFontObject(fontObject)
+            local base=type(fontObject)=='string' and _G[fontObject] or fontObject
+            if base and type(base.GetFont)=='function' then
+                local path,size,flags=base:GetFont()
+                if path and type(size)=='number' then row.label:SetFont(path,size+(block.item and 2 or 0),flags) end
+            end
+            row.block=block;row.link=nil;row.label:ClearAllPoints()
+            row.label:SetPoint('TOPLEFT',block.item and 32 or 0,0);row.label:SetWidth(block.item and 196 or 228)
+            row.label:SetText(block.text);row.icon:SetShown(block.item~=nil);row:EnableMouse(block.item~=nil)
+            if block.item then
+                local _,_,icon,link=A.RewardPresentation(block.item);row.icon:SetTexture(icon);row.link=link
+                local id=block.item.itemID
+                if id then self.visibleItems[id]=true end
+                if id and not self.requests[id] and C_Item and type(C_Item.RequestLoadItemDataByID)=='function' then
+                    self.requests[id]=true;A.Read(C_Item.RequestLoadItemDataByID,id)
+                end
+            end
+            if block.kind=='heading' then y=y+10 end
+            row:ClearAllPoints();row:SetPoint('TOPLEFT',0,-y)
+            row:SetHeight(math.max(block.item and 26 or 0,row.label:GetStringHeight()))
+            row:Show();y=y+row:GetHeight()+(block.kind=='title' and 6 or 5)
+        end
+        for i=#blocks+1,#self.rows do self.rows[i].link=nil;self.rows[i].block=nil;self.rows[i]:Hide() end
+        body:SetHeight(math.max(364,y+8))
+        self:SetVerticalScroll(reset and 0 or math.min(self:GetVerticalScroll(),math.max(0,body:GetHeight()-self:GetHeight())))
+        self:UpdateScrollChildRect();self:RefreshScrollBar()
+    end
+    area:SetScript('OnHide',hideTooltip)
+    area:SetScript('OnShow',function(self) if self.event then self:SetEvent(self.event,false) end end)
+    area:RegisterEvent('GET_ITEM_INFO_RECEIVED')
+    area:SetScript('OnEvent',function(self,_,id,success)
+        if success and self.visibleItems[id] and self:IsVisible() and self.event then self:SetEvent(self.event,false) end
+    end)
+    area:SetEvent(nil,true)
+    return area
+end
 function ns.CreateAnnalsBook(j,shell)
-    local c={journal=j,shell=shell,offset=0,filter='all',rows={},mode='timeline'}
+    local c={journal=j,shell=shell,offset=0,filter='all',rows={},showDetail=false,query='',searchCache={}}
+    local eventKinds={'accepted','removed','completed','discovery','flight','death','hearth','teleport','crossing','battleground','instance'}
+    c.filter={}
+    for _,kind in ipairs(eventKinds) do
+        c.filter[kind]=type(j.db.settings.eventFilters)~='table' or j.db.settings.eventFilters[kind]~=false
+    end
+    function c:SetEventFilter(kind,enabled)
+        for _,key in ipairs(eventKinds) do if kind=='all' or key==kind then self.filter[key]=enabled end end
+        if not j.readOnly and not ns.InitializationBlocked then j.db.settings.eventFilters=A.Copy(self.filter) end
+        self.offset=0;self:Refresh(true)
+    end
+    function c:QueueSearchRefresh()
+        if self.searchPending then return end
+        if C_Timer and type(C_Timer.After)=='function' then
+            self.searchPending=true
+            C_Timer.After(0.15,function()
+                self.searchPending=false
+                if self.main:IsVisible() then self:Refresh(true) end
+            end)
+        else self:Refresh(true) end
+    end
+    function c:RefreshStorage()
+        if self.main then local usage=j:StorageStatus();self.main.capacity:SetText(usage) end
+    end
+    function c:SyncDetailOverlay()
+        if not self.main then return end
+        local m=self.main
+        m.detailPane:SetShown(self.showDetail);m.timeline:SetShown(not self.showDetail);m.paging:SetShown(not self.showDetail)
+        m.show:SetSelected(self.showDetail)
+    end
+    c.playbackSpeed=1
+    function c:SyncPlayButton()
+        if not self.main or not self.main.play then return end
+        local button=self.main.play
+        button.symbol:SetShown(not self.playing)
+        for _,bar in ipairs(button.pauseBars) do bar:SetShown(self.playing==true) end
+        button.tooltipText=self.playing and 'Pause playback' or 'Play journey'
+    end
+    function c:SetPlaybackSpeed(rate)
+        self.playbackSpeed=rate
+        if self.main then for value,button in pairs(self.main.speeds) do button:SetEnabled(value~=rate) end end
+    end
+    function c:PausePlayback()
+        self.playing=false;self.playbackElapsed=0
+        self:SyncPlayButton()
+    end
+    function c:SyncSlider()
+        if not self.main or not self.first then return end
+        local first,last=self.first,self.last
+        local span=self.sliderSpan
+        if span and last-first>span then
+            local start=self.sliderStart
+            if not start or self.at<start or self.at>start+span then start=self.at-span/2 end
+            first=math.max(self.first,math.min(self.last-span,start));last=first+span
+        end
+        self.sliderStart=first
+        local slider=self.main.slider;slider.syncing=true
+        -- Native sliders use floats: epoch timestamps can lose whole minutes.
+        -- Small offsets retain second-level precision, especially when zoomed.
+        slider:SetMinMaxValues(0,math.max(1,last-first));slider:SetValue((self.at or last)-first)
+        slider.syncing=false
+    end
+    function c:Seek(at)
+        self:PausePlayback();self.follow=false
+        self.at=math.max(self.first,math.min(self.last,at));self:SyncSlider();self:Journey()
+    end
+    function c:TogglePlayback()
+        if self.playing then self:PausePlayback();return end
+        if self.last<=self.first then return end
+        self.follow=false
+        if not self.at or self.at>=self.last then self.at=self.first;self.sliderStart=nil end
+        self.playing=true;self.playbackElapsed=0;self:SyncPlayButton()
+        self:SyncSlider();self:Journey()
+    end
+    function c:TickPlayback(elapsed)
+        if not self.playing then return end
+        self.at=math.min(self.last,self.at+elapsed*self.playbackSpeed)
+        self.playbackElapsed=(self.playbackElapsed or 0)+elapsed
+        if self.playbackElapsed>=0.1 or self.at>=self.last or (self.followPlayer and self.followBoundary and self.at>=self.followBoundary) then
+            self.playbackElapsed=0;self:SyncSlider();self:Journey()
+        elseif not self.main.map:AdvanceHistoricalPlayer(self.at) then
+            self.playbackElapsed=0;self:SyncSlider();self:Journey()
+        end
+        if self.followPlayer then self.main.map:PanToHistoricalPlayer() end
+        if self.at>=self.last then self:PausePlayback() end
+    end
     function c:Message(text) if self.main then self.main.message:SetText(ns.Atlas.Safe(text or '')) end end
     function c:Maps()
         local known={};local rows={}
@@ -23,6 +190,7 @@ function ns.CreateAnnalsBook(j,shell)
         return rows
     end
     function c:SetRange(first,last)
+        self:PausePlayback();self.sliderStart=nil
         self.follow=false
         self.first,self.last=first,last;self.at=last;self.offset=0;self.index=nil
         if self.main then
@@ -31,10 +199,30 @@ function ns.CreateAnnalsBook(j,shell)
         end
         self:Refresh(true)
     end
-    function c:Select(id)
+    function c:ResetNow()
+        self:PausePlayback();self:SetPlaybackSpeed(1)
+        self.followPlayer=false;self.followBoundary=nil;self.main.followPlayer:SetSelected(false)
+        self.level=nil;self.selected=nil;self.sliderSpan=nil;self.sliderStart=nil
+        self.query='';self.searchCache={};self.searchSync=true;self.main.search:SetText('');self.searchSync=false
+        self.main.level:SetText('');self.main.timeZoom:SetText('Full range');self.main.detail:SetEvent(nil,true)
+        for _,kind in ipairs(eventKinds) do self.filter[kind]=true end
+        if not j.readOnly and not ns.InitializationBlocked then j.db.settings.eventFilters=A.Copy(self.filter) end
+        self.mapID=A.Location().mapID or self.mapID
+        self.first=math.min(j:Bounds(),A.Now());self.last=A.Now();self.at=self.last
+        local held=A.JourneyPosition(A.JourneyIndex(j,self.first,self.last,nil),self.last)
+        if held and held.instanceName then self.mapID=held.mapID end
+        self.follow=true;self.index=nil;self.offset=math.huge
+        self.main.map.zoom,self.main.map.panX,self.main.map.panY=1,0,0
+        self:Refresh(true)
+    end
+    function c:Select(id,preserveJourney)
         id=tonumber(id);local e=id and j.db.events[id];if not A.ValidEvent(e) then return end
-        self.selected=id;self.mapID=e.mapID or self.mapID
-        if self.main then self.main.detail:SetText(A.EventText(e),true) end
+        self.selected=id
+        if self.main then self.main.detail:SetEvent(e,true) end
+        if not preserveJourney then
+            self.mapID=e.mapID or self.mapID
+            if self.main then self.index=nil;self:Seek(e.at) end
+        end
     end
     function c:Around(quest)
         local e=self.selected and j.db.events[self.selected];if not e then self:Message('Select an event first.');return end
@@ -52,110 +240,288 @@ function ns.CreateAnnalsBook(j,shell)
                 end
             end
         end
-        self:SetRange(math.max(0,first),last);self.mode='journey';self:Refresh()
+        self:SetRange(math.max(0,first),last)
+    end
+    function c:FindPlayer()
+        self:PausePlayback();self.follow=false
+        local at=self.at or self.last
+        -- Search all recorded maps, independently of marker filters. A nil map
+        -- keeps source coordinates, so a stale arrow on the viewed map cannot win.
+        local all=A.JourneyIndex(j,self.first,self.last,nil,nil,self.level)
+        local p=A.JourneyPosition(all,at)
+        if not p then self:Message('No recorded player position at this time in the selected range.');return end
+        if not A.MapTransform(p.mapID,self.mapID) then self.mapID=p.mapID end
+        self.index=nil;self:Journey()
+        if not self.main.map:CenterHistoricalPlayer() then self:Message('Player position found, but map artwork is unavailable.');return end
+        p=self.main.map.historicalPlayer
+        self:Message(p.interpolated and 'Centered on the estimated player position at the selected time.' or 'Centered on the last recorded player position at or before the selected time.')
+    end
+    function c:ToggleFollowPlayer()
+        self.followPlayer=not self.followPlayer;self.followBoundary=nil
+        self.main.followPlayer:SetSelected(self.followPlayer)
+        if self.followPlayer then self:Journey() end
     end
     function c:Journey()
-        if not self.main or self.mode~='journey' then return end
+        if not self.main then return end
+        local followPosition;local zoom=self.main.map.zoom
+        if self.followPlayer then
+            local index=self.positionIndex
+            if not index or index.first~=self.first or index.last~=self.last or index.level~=self.level then
+                index=A.JourneyIndex(j,self.first,self.last,nil,nil,self.level);self.positionIndex=index
+            end
+            followPosition,self.followBoundary=A.JourneyPosition(index,self.at or self.last)
+            if followPosition then self.mapID=followPosition.mapID end
+        end
         self.mapID=self.mapID or (self:Maps()[1] or {}).mapID
-        if not self.index or self.index.mapID~=self.mapID then self.index=A.JourneyIndex(j,self.first,self.last,self.mapID,self.filter,self.level) end
+        if not self.index or self.index.mapID~=self.mapID then self.index=A.JourneyIndex(j,self.first,self.last,self.mapID,self.filter,self.level,self.query,self.searchCache) end
         local cursor,limited,invalid=self.main.map:ShowJourney(self.index,self.at or self.last)
-        self.main.clock:SetText(U.Date(self.at or self.last)..(cursor and (' • Last sample '..U.Date(cursor.at)..string.format(' • %.1f, %.1f',cursor.x/100,cursor.y/100)) or ' • No sample on this map yet'))
+        if followPosition then self.main.map:CenterHistoricalPlayer(zoom) end
+        local stamp=math.floor(self.at or self.last)
+        self.main.clock:SetText((date and date('%Y-%m-%d %H:%M:%S',stamp) or U.Date(stamp))..(cursor and ((cursor.instanceName and ' • At instance entrance' or cursor.interpolated and ' • Estimated position' or (' • Last sample '..U.Date(cursor.at)))..string.format(' • %.1f, %.1f',cursor.x/100,cursor.y/100)) or ' • No sample on this map yet'))
         local level=cursor and cursor.level;local lo,hi=1,#self.rows
         while lo<=hi do local mid=math.floor((lo+hi)/2);if self.rows[mid].event.at<=(self.at or self.last) then lo=mid+1 else hi=mid-1 end end
         if not level and self.rows[hi] then level=self.rows[hi].event.level end
-        self.main.levelAt:SetText(level and ('Recorded level '..level) or 'Level unknown in this interval')
+        self.main.levelAt:SetText(level and ('Recorded level '..level) or 'Recorded level unknown')
         self:Message((limited and 'Dense range: recent geometry shown. Scrub earlier or narrow dates. ' or 'Recorded routes projected onto this map. ')
             ..(invalid>0 and (invalid..' malformed segments preserved but not drawn. ') or '')
             ..(self.main.map.linesAvailable==false and 'Line rendering unavailable; markers and stored history remain.' or ''))
     end
     function c:Refresh(requery)
         if not self.main then return end
-        if self.follow then self.first,self.last=j:Bounds();self.at=self.last end
+        if self.follow then self.first=math.min(j:Bounds(),A.Now());self.last=A.Now();self.at=self.last end
         if not self.first then local lo,hi=j:Bounds();self.first,self.last=lo,hi;self.at=hi end
-        if requery or self.revision~=j.revision then self.rows=j:Range(self.first,self.last,self.filter,self.level);self.revision=j.revision;self.index=nil end
+        if requery or self.revision~=j.revision then
+            self.rows=A.SearchEvents(j:Range(self.first,self.last,self.filter,self.level),self.query,self.searchCache)
+            self.revision=j.revision;self.index=nil;self.positionIndex=nil
+        end
         self.offset=math.max(0,math.min(self.offset,math.max(0,math.floor((#self.rows-1)/7)*7)))
-        local m=self.main;local journey=self.mode=='journey'
-        m.timeline:SetShown(not journey);m.journey:SetShown(journey)
-        m.show:SetText(journey and 'Show Timeline' or 'Show Journey')
+        local m=self.main
+        local filtered=false
+        for _,kind in ipairs(eventKinds) do if not self.filter[kind] then filtered=true;break end end
+        m.filter:SetSelected(filtered)
+        if self.follow then
+            m.from:SetText(date and date('%Y-%m-%d',self.first) or '');m.to:SetText(date and date('%Y-%m-%d',self.last) or '')
+        end
+        self:SyncDetailOverlay()
         m.page:SetText(string.format('%d–%d / %d events',#self.rows>0 and self.offset+1 or 0,math.min(self.offset+7,#self.rows),#self.rows))
+        m.emptySearch:SetShown(#self.rows==0)
+        m.emptySearch:SetText(self.query~='' and 'No matching events. Try a broader search or reset the filters.' or 'No events match the current filters.')
         for i,row in ipairs(m.rows) do local source=self.rows[self.offset+i]
             row:SetShown(source~=nil);row.record=source
             if source then
-                local e=source.event;row.icon:SetTexture(A.icons[e.kind]);row.label:SetText(ns.Atlas.Safe(U.Date(e.at)..' — '..A.eventNames[e.kind]..'\n'..e.title..'\n'..(e.zone or 'Unknown location')..(e.level and (' • Level '..e.level) or '')))
+                local e=source.event;row.icon:SetTexture(A.icons[e.kind]);row.iconShadow:SetTexture(A.icons[e.kind]);A.InstanceDirection(row,row.icon,e,0.6);row.label:SetText(A.Paint(e.title,'ffd100'))
+                row.status:SetText(A.Paint(A.eventNames[e.kind],A.eventColours[e.kind])..A.Paint(' • '..U.Date(e.at),'999999'))
+                row.location:SetText(A.Paint((e.zone or 'Unknown location')..(e.level and (' • Level '..e.level) or ''),'bbbbbb'))
             end
         end
         m.record:SetChecked(j.db.settings.trail~=false)
-        if journey then
-            m.slider.syncing=true;m.slider:SetMinMaxValues(self.first,math.max(self.first+1,self.last));m.slider:SetValue(self.at or self.last);m.slider.syncing=false
-            self:Journey()
-        end
+        self:RefreshStorage()
+        self:SyncSlider()
+        self:Journey()
     end
     local function build(content)
         c.main=content;local m=content;m.rows={}
-        U.Label(m,"Adventurer's Annals",48,-64,600,'GameFontNormalLarge')
-        m.from=U.Field(m,'From date',48,-92,145,10);m.to=U.Field(m,'Through date',205,-92,145,10)
-        m.level=U.Field(m,'Level (optional)',362,-92,115,3)
-        U.Button(m,'Apply',494,-112,75,function()
+        m.spine=m:CreateTexture(nil,'ARTWORK');m.spine:SetColorTexture(0.25,0.13,0.055,0.35)
+        m.spine:SetPoint('TOPLEFT',306,-53);m.spine:SetSize(3,661)
+        ns.FieldbookUI.SectionTitle(m,"Adventurer's Annals")
+        m.search=U.Search(m,42,-96,220,200);m.search:SetText(c.query)
+        m.search:HookScript('OnTextChanged',function(self)
+            if c.searchSync then return end
+            c.query=self:GetText();c.offset=0;c.selected=nil
+            if #A.SearchTerms(c.query)==0 then c.searchCache={} end
+            m.detail:SetEvent(nil,true);c:QueueSearchRefresh()
+        end)
+        m:RegisterEvent('GET_ITEM_INFO_RECEIVED')
+        m:SetScript('OnEvent',function(_,_,id,success)
+            local cache=c.searchCache;local keys=cache.itemKeys and cache.itemKeys[id]
+            if not keys or not success then return end
+            for key in pairs(keys) do cache.items[key]=nil end
+            if c.query~='' and m:IsVisible() then c:QueueSearchRefresh() end
+        end)
+        m.from=U.Field(m,'From date',342,-71,130,10);m.to=U.Field(m,'Through date',480,-71,130,10)
+        m.level=U.Field(m,'Level (optional)',618,-71,105,3)
+        U.Button(m,'Apply',731,-91,75,function()
             local first,last=A.ParseDate(m.from:GetText()),A.ParseDate(m.to:GetText(),true)
             local levelText=m.level:GetText();local level=levelText~='' and tonumber(levelText) or nil
             if not first or not last or first>last or (levelText~='' and not A.Int(level,1,1000)) then c:Message('Use valid YYYY-MM-DD dates, earliest first, and an optional level.');return end
             c.level=level;c:SetRange(first,last)
         end)
-        U.Button(m,'All dates',575,-112,90,function() c.level=nil;m.level:SetText('');c:SetRange(j:Bounds());c.follow=true end)
-        m.filter=U.MenuButton(m,'Event filter',672,-112,120,function()
+        m.now=U.Button(m,'Now / reset',814,-91,106,function() c:ResetNow() end)
+        m.filter=ns.FieldbookUI.FilterButton(m,270,-96,function()
+            m.search:ClearFocus()
             if not MenuUtil then return end
             MenuUtil.CreateContextMenu(m.filter,function(_,root)
-                for _,kind in ipairs({'all','accepted','removed','completed','discovery','flight'}) do local key=kind
-                    root:CreateButton(A.eventNames[key] or 'All events',function() c.filter=key;c.offset=0;c:Refresh(true) end)
+                local function allSelected()
+                    for _,key in ipairs(eventKinds) do if not c.filter[key] then return false end end;return true
+                end
+                local all=root:CreateCheckbox('All events',allSelected,function() c:SetEventFilter('all',not allSelected()) end)
+                all:SetResponse(MenuResponse.Refresh)
+                for _,kind in ipairs(eventKinds) do local key=kind
+                    local item=root:CreateCheckbox(A.eventNames[key],function() return c.filter[key] end,function() c:SetEventFilter(key,not c.filter[key]) end)
+                    item:SetResponse(MenuResponse.Refresh)
                 end
             end)
         end)
-        m.show=U.Button(m,'Show Journey',798,-112,122,function() c.mode=c.mode=='journey' and 'timeline' or 'journey';c.index=nil;c:Refresh() end)
-        m.timeline=CreateFrame('Frame',nil,m);m.timeline:SetAllPoints()
-        m.journey=CreateFrame('Frame',nil,m);m.journey:SetAllPoints();m.journey:Hide()
+        U.StyleSelection(m.filter)
+        m.filter:SetScript('OnEnter',function(self)
+            if GameTooltip then GameTooltip:SetOwner(self,'ANCHOR_RIGHT');GameTooltip:SetText('Filter events');GameTooltip:Show() end
+        end)
+        m.filter:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
+        m.show=U.Button(m,'Show detail',42,-126,250,function() c.showDetail=not c.showDetail;c:SyncDetailOverlay() end)
+        U.StyleSelection(m.show)
+        m.timeline=CreateFrame('Frame',nil,m);m.timeline:SetPoint('TOPLEFT',42,-155);m.timeline:SetSize(250,455)
+        m.detailPane=CreateFrame('Frame',nil,m);m.detailPane:SetPoint('TOPLEFT',42,-155);m.detailPane:SetSize(250,455)
+        m.detailPane:SetFrameLevel(m.timeline:GetFrameLevel()+5);m.detailPane:EnableMouse(true);m.detailPane:Hide()
+        m.journey=CreateFrame('Frame',nil,m);m.journey:SetAllPoints()
+        m.emptySearch=U.Label(m.timeline,'',0,-5,250,'GameFontDisableSmall');m.emptySearch:SetWordWrap(true);m.emptySearch:Hide()
         for i=1,7 do
-            local row=CreateFrame('Button',nil,m.timeline);row:SetPoint('TOPLEFT',48,-155-(i-1)*65);row:SetSize(485,60)
+            local row=CreateFrame('Button',nil,m.timeline);row:SetPoint('TOPLEFT',0,-(i-1)*65);row:SetSize(250,60)
             row:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight')
             row.icon=row:CreateTexture(nil,'ARTWORK');row.icon:SetSize(22,22);row.icon:SetPoint('TOPLEFT',2,-5)
-            row.label=U.Label(row,'',32,-3,446,'GameFontHighlightSmall');row.label:SetSpacing(3)
+            row.iconShadow=row:CreateTexture(nil,'BACKGROUND');row.iconShadow:SetSize(22,22);row.iconShadow:SetPoint('TOPLEFT',row.icon,'TOPLEFT',2,-2);row.iconShadow:SetVertexColor(0,0,0,0.6)
+            row.label=U.Label(row,'',32,-2,214,'GameFontNormal');row.label:SetWordWrap(false)
+            row.status=U.Label(row,'',32,-20,214,'GameFontHighlightSmall');row.status:SetWordWrap(true);row.status:SetHeight(27)
+            row.location=U.Label(row,'',32,-48,214,'GameFontHighlightSmall');row.location:SetWordWrap(false)
             row:SetScript('OnClick',function(self) if self.record then c:Select(self.record.id) end end)
             m.rows[i]=row
         end
         m.timeline:EnableMouseWheel(true);m.timeline:SetScript('OnMouseWheel',function(_,delta) c.offset=c.offset+(delta<0 and 7 or -7);c:Refresh() end)
-        m.detail=U.ReadArea(m.timeline,553,-157,340,364);m.detail:SetText('Select an event to read its historical details.',true)
-        U.Button(m.timeline,'Around event',553,-537,155,function() c:Around(false) end)
-        U.Button(m.timeline,'Quest interval',723,-537,170,function() c:Around(true) end)
-        U.Button(m.timeline,'Open linked journal',553,-572,340,function()
+        m.detail=detailArea(m.detailPane)
+        U.Button(m.detailPane,'Around event',0,-377,112,function() c:Around(false) end)
+        U.Button(m.detailPane,'Quest interval',118,-377,132,function() c:Around(true) end)
+        U.Button(m.detailPane,'Open linked journal',0,-411,250,function()
             local e=c.selected and j.db.events[c.selected]
             if not e or not e.link then c:Message('Select a linked discovery first.');return end
             local ok,message=c:OpenLink(e.link);if not ok then c:Message(message) end
         end)
-        U.Button(m.timeline,'Previous',48,-618,95,function() c.offset=c.offset-7;c:Refresh() end)
-        U.Button(m.timeline,'Next',148,-618,75,function() c.offset=c.offset+7;c:Refresh() end)
-        U.Button(m.timeline,'Latest',228,-618,75,function() c.offset=math.max(0,math.floor((#c.rows-1)/7)*7);c:Refresh() end)
-        m.page=U.Label(m.timeline,'',319,-624,214,'GameFontHighlightSmall')
-        m.map=ns.CreateAnnalsMap(m.journey,j,function(id) c:Select(id);c.mode='timeline';c:Refresh() end,function(id) c.mapID=id;c.index=nil;c:Journey() end)
+        m.paging=CreateFrame('Frame',nil,m);m.paging:SetPoint('TOPLEFT',42,-618);m.paging:SetSize(250,42)
+        U.Button(m.paging,'Previous',0,0,80,function() c.offset=c.offset-7;c:Refresh() end)
+        U.Button(m.paging,'Next',86,0,70,function() c.offset=c.offset+7;c:Refresh() end)
+        U.Button(m.paging,'Latest',162,0,80,function() c.offset=math.max(0,math.floor((#c.rows-1)/7)*7);c:Refresh() end)
+        m.page=U.Label(m.paging,'',0,-26,250,'GameFontHighlightSmall')
+        m.map=ns.CreateAnnalsMap(m.journey,j,function(id) c:Select(id,true);c.showDetail=true;c:SyncDetailOverlay() end,function(id) c.mapID=id;c.index=nil;c:Journey() end)
         m.map:SetPoint('TOP',m.journey,'TOPLEFT',632,-205)
-        U.ZoneMenu(m.journey,48,-160,270,function() return c:Maps() end,function(id) c.mapID=id;c.index=nil;c:Journey() end)
-        U.Label(m.journey,'Historical maps\n\nAccepted: !\nCompleted: ?\nRemoved: parchment\nDiscoveries: map\nFlights: flight master\n\nRecorded routes also appear on continent and world maps. Missing observations leave gaps.',48,-213,260,'GameFontHighlightSmall')
-        U.Button(m.journey,'Around selected event',48,-410,270,function() c:Around(false) end)
-        m.slider=CreateFrame('Slider',nil,m.journey,'OptionsSliderTemplate');m.slider:SetPoint('TOPLEFT',355,-610);m.slider:SetSize(545,18)
+        m.zoneMenu=U.ZoneMenu(m.journey,0,0,256,function() return c:Maps() end,function(id) c.mapID=id;c.index=nil;c:Journey() end)
+        m.zoneMenu:ClearAllPoints();m.zoneMenu:SetPoint('TOPLEFT',m.journey,'TOPLEFT',342,-174)
+        m.legend=CreateFrame('Frame',nil,m.map,'BackdropTemplate');m.legend:SetSize(500,326)
+        m.legend:SetPoint('TOP',m.map,'TOP',0,-8);m.legend:SetFrameLevel(m.map:GetFrameLevel()+20);m.legend:EnableMouse(true)
+        m.legend:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\DialogFrame\\UI-DialogBox-Border',edgeSize=16})
+        m.legend:SetBackdropColor(0.06,0.045,0.025,0.97);m.legend:Hide()
+        U.Label(m.legend,'Journey legend',16,-16,410,'GameFontNormal')
+        m.legend.icons={};m.legend.arrows={};m.legend.trails={}
+        local legendEntries={}
+        for _,kind in ipairs(eventKinds) do
+            if kind=='instance' then
+                legendEntries[#legendEntries+1]={kind=kind,instanceAction='enter',label='Instance entry'}
+                legendEntries[#legendEntries+1]={kind=kind,instanceAction='exit',label='Instance exit'}
+            else legendEntries[#legendEntries+1]={kind=kind,label=A.eventNames[kind]} end
+        end
+        for i,entry in ipairs(legendEntries) do
+            local holder=CreateFrame('Frame',nil,m.legend);holder:SetSize(20,20);holder:SetPoint('TOPLEFT',16,-46-(i-1)*22)
+            local icon=holder:CreateTexture(nil,'ARTWORK');icon:SetTexture(A.icons[entry.kind]);icon:SetAllPoints();A.InstanceDirection(holder,icon,entry)
+            m.legend.icons[entry.instanceAction or entry.kind]=icon;U.Label(m.legend,entry.label,44,-49-(i-1)*22,208,'GameFontHighlightSmall')
+        end
+        for i,entry in ipairs({{'Alive / unknown','alive'},{'Flying','flight'},{'Dead','dead'},{'Ghost','ghost'}}) do
+            local icon=m.legend:CreateTexture(nil,'ARTWORK');icon:SetTexture('Interface\\Minimap\\MinimapArrow');icon:SetVertexColor(A.PlayerColor(entry[2]))
+            icon:SetSize(20,20);icon:SetPoint('TOPLEFT',270,-46-(i-1)*26);m.legend.arrows[i]=icon
+            U.Label(m.legend,entry[1],299,-49-(i-1)*26,178,'GameFontHighlightSmall')
+        end
+        for i,entry in ipairs({{'Recent trail',0,false},{'Older trail (1 hour)',3600,false},{'Flight trail',0,true}}) do
+            local line=m.legend:CreateTexture(nil,'ARTWORK');line:SetSize(25,3);line:SetPoint('TOPLEFT',267,-178-(i-1)*26)
+            m.legend.trails[i]={texture=line,age=entry[2],flight=entry[3]}
+            U.Label(m.legend,entry[1],299,-173-(i-1)*26,178,'GameFontHighlightSmall')
+        end
+        U.Label(m.legend,'Instance visits hold the arrow at the observed entrance.',270,-260,208,'GameFontDisableSmall'):SetWordWrap(true)
+        function m.legend:RefreshTrails()
+            for _,entry in ipairs(m.legend.trails) do
+                local r,g,b,alpha=A.TrailColor(entry.age,0,j.db.settings.trailContrast,entry.flight);entry.texture:SetColorTexture(r,g,b,alpha)
+            end
+        end
+        m.legendButton=U.Button(m.journey,'Legend',0,0,65,function()
+            m.legend:RefreshTrails()
+            m.legend:SetShown(not m.legend:IsShown())
+            m.legendButton:SetSelected(m.legend:IsShown())
+        end)
+        U.StyleSelection(m.legendButton)
+        m.legend:SetScript('OnHide',function() m.legendButton:SetSelected(false) end)
+        m.legendButton:ClearAllPoints();m.legendButton:SetPoint('TOPLEFT',m.journey,'TOPLEFT',857,-174)
+        m.followPlayer=U.Button(m.journey,'Follow player',0,0,110,function() c:ToggleFollowPlayer() end);U.StyleSelection(m.followPlayer)
+        m.followPlayer:ClearAllPoints();m.followPlayer:SetPoint('RIGHT',m.legendButton,'LEFT',-6,0)
+        m.findPlayer=U.Button(m.journey,'Find player',0,0,100,function() c:FindPlayer() end)
+        m.findPlayer:ClearAllPoints();m.findPlayer:SetPoint('RIGHT',m.followPlayer,'LEFT',-6,0)
+        m.journey:SetScript('OnHide',function() m.legend:Hide() end)
+        m.around=U.Button(m.journey,'Around selected event',342,-129,200,function() c:Around(false) end)
+        m.around:SetScript('OnEnter',function(self)
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(self,'ANCHOR_TOP');GameTooltip:SetText('Around selected event')
+            GameTooltip:AddLine('Selects a one-hour window: 30 minutes before and 30 minutes after the selected event. Pauses playback.',1,1,1,true)
+            local e=c.selected and j.db.events[c.selected]
+            if e then GameTooltip:AddLine(U.Date(math.max(0,e.at-1800))..' — '..U.Date(e.at+1800),1,0.82,0.14,true)
+            else GameTooltip:AddLine('Select a timeline event or map marker first.',0.6,0.6,0.6,true) end
+            GameTooltip:Show()
+        end)
+        m.around:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
+        m.around:SetScript('OnHide',function() if GameTooltip then GameTooltip:Hide() end end)
+        m.slider=CreateFrame('Slider',nil,m.journey,'OptionsSliderTemplate');m.slider:SetPoint('TOPLEFT',355,-618);m.slider:SetSize(545,18)
         m.slider.track=m.slider:CreateTexture(nil,'BACKGROUND')
         m.slider.track:SetPoint('TOPLEFT',2,-4);m.slider.track:SetPoint('BOTTOMRIGHT',-2,4)
         m.slider.track:SetColorTexture(0,0,0,1)
         m.slider:SetValueStep(1);m.slider:SetObeyStepOnDrag(true)
         for _,key in ipairs({'Low','High','Text'}) do local region=m.slider[key];if type(region)=='table' or type(region)=='userdata' then region:Hide() end end
         m.slider:SetScript('OnValueChanged',function(self,value)
-            if self.syncing then return end;c.at=math.max(c.first,math.min(c.last,math.floor(value)))
+            if self.syncing then return end;c:PausePlayback();c.follow=false
+            c.at=math.max(c.first,math.min(c.last,c.sliderStart+math.floor(value+0.5)))
             if c.scrubPending then return end
             if C_Timer and C_Timer.After then c.scrubPending=true;C_Timer.After(0.1,function() c.scrubPending=false;if m:IsVisible() then c:Journey() end end)
             else c:Journey() end
         end)
-        m.clock=U.Label(m.journey,'',350,-644,558,'GameFontHighlightSmall')
-        m.levelAt=U.Label(m.journey,'',48,-465,275,'GameFontNormalSmall')
-        U.Label(m.journey,'Trail age contrast',48,-500,210,'GameFontNormalSmall')
+        m.slider:EnableMouseWheel(true)
+        m.slider:SetScript('OnMouseWheel',function(_,delta) c:Seek((c.at or c.last)+(delta>0 and 1 or -1)) end)
+        m.play=U.Button(m.journey,'',350,-671,45,function() c:TogglePlayback() end)
+        m.play.symbol=m.play:CreateTexture(nil,'OVERLAY');m.play.symbol:SetTexture('Interface\\ChatFrame\\ChatFrameExpandArrow')
+        m.play.symbol:SetSize(14,16);m.play.symbol:SetPoint('CENTER',1,0)
+        m.play.pauseBars={}
+        for i=1,2 do
+            local bar=m.play:CreateTexture(nil,'OVERLAY');bar:SetColorTexture(1,0.82,0.14,1)
+            bar:SetSize(4,13);bar:SetPoint('CENTER',i==1 and -4 or 4,0);m.play.pauseBars[i]=bar
+        end
+        m.play:SetScript('OnEnter',function(self) if GameTooltip then GameTooltip:SetOwner(self,'ANCHOR_TOP');GameTooltip:SetText(self.tooltipText);GameTooltip:Show() end end)
+        m.play:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
+        c:SyncPlayButton()
+        m.speeds={}
+        for i,speed in ipairs({1,8,32,64,128}) do local rate=speed
+            m.speeds[rate]=U.Button(m.journey,tostring(rate)..'x',400+(i-1)*43,-671,41,function() c:SetPlaybackSpeed(rate) end)
+        end
+        m.speeds[1]:SetEnabled(false)
+        m.timeZoom=U.MenuButton(m.journey,'Full range',619,-671,115,function()
+            if not MenuUtil then return end
+            MenuUtil.CreateContextMenu(m.timeZoom,function(_,root)
+                for _,choice in ipairs({{'Full range',false},{'3 hours',10800},{'1 hour',3600},{'15 minutes',900}}) do
+                    local label,span=choice[1],choice[2]
+                    root:CreateButton(label,function() c.sliderSpan=span or nil;c.sliderStart=nil;m.timeZoom:SetText(label);c:SyncSlider() end)
+                end
+            end)
+        end)
+        m.clock=U.Label(m.journey,'',350,-641,558,'GameFontHighlightSmall')
+        m.levelAt=U.Label(m.journey,'',746,-677,174,'GameFontNormalSmall');m.levelAt:SetWordWrap(false)
+        U.Label(m.journey,'Map icon size',646,-594,92,'GameFontNormalSmall'):SetWordWrap(false)
+        m.iconSize=CreateFrame('Slider',nil,m.journey,'OptionsSliderTemplate')
+        m.iconSize:SetPoint('TOPLEFT',746,-591);m.iconSize:SetSize(110,18)
+        m.iconSize.track=m.iconSize:CreateTexture(nil,'BACKGROUND')
+        m.iconSize.track:SetPoint('TOPLEFT',2,-4);m.iconSize.track:SetPoint('BOTTOMRIGHT',-2,4)
+        m.iconSize.track:SetColorTexture(0,0,0,1)
+        m.iconSize:SetMinMaxValues(6,40);m.iconSize:SetValueStep(1);m.iconSize:SetObeyStepOnDrag(true)
+        for _,key in ipairs({'Low','High','Text'}) do local region=m.iconSize[key];if type(region)=='table' or type(region)=='userdata' then region:Hide() end end
+        local iconSize=ns.Atlas.Number(j.db.settings.iconSize,6,40) and j.db.settings.iconSize or 20
+        m.iconSize:SetValue(iconSize)
+        m.iconSizeValue=U.Label(m.journey,tostring(iconSize),868,-594,48,'GameFontHighlightSmall')
+        m.iconSize:SetScript('OnValueChanged',function(_,value)
+            if j.readOnly or ns.InitializationBlocked or not ns.Atlas.Number(value,6,40) then return end
+            value=math.floor(value+0.5);j.db.settings.iconSize=value;m.iconSizeValue:SetText(tostring(value));c:Journey()
+        end)
+        U.Label(m.journey,'Trail age contrast',350,-594,118,'GameFontNormalSmall'):SetWordWrap(false)
         m.contrast=CreateFrame('Slider',nil,m.journey,'OptionsSliderTemplate')
-        m.contrast:SetPoint('TOPLEFT',48,-525);m.contrast:SetSize(210,18)
+        m.contrast:SetPoint('TOPLEFT',476,-591);m.contrast:SetSize(98,18)
         m.contrast.track=m.contrast:CreateTexture(nil,'BACKGROUND')
         m.contrast.track:SetPoint('TOPLEFT',2,-4);m.contrast.track:SetPoint('BOTTOMRIGHT',-2,4)
         m.contrast.track:SetColorTexture(0,0,0,1)
@@ -163,36 +529,65 @@ function ns.CreateAnnalsBook(j,shell)
         m.contrast:SetMinMaxValues(0,100);m.contrast:SetValueStep(5);m.contrast:SetObeyStepOnDrag(true)
         local contrast=ns.Atlas.Number(j.db.settings.trailContrast,0,1) and j.db.settings.trailContrast or 0.75
         m.contrast:SetValue(contrast*100)
-        m.contrastValue=U.Label(m.journey,math.floor(contrast*100+0.5)..'%',270,-528,48,'GameFontHighlightSmall')
-        U.Label(m.journey,'0%: uniform gold\n100%: strongest cooling and fading\nRecent: warm gold • Older: cool blue\nHalf cooled after 30 minutes.',48,-554,270,'GameFontHighlightSmall')
+        m.contrastValue=U.Label(m.journey,math.floor(contrast*100+0.5)..'%',582,-594,44,'GameFontHighlightSmall')
+        m.contrast:SetScript('OnEnter',function(self)
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(self,'ANCHOR_TOP');GameTooltip:SetText('Trail age contrast')
+            GameTooltip:AddLine('0%: uniform gold\n100%: strongest cooling and fading\nRecent: warm gold • Older: cool blue\nHalf cooled after 30 minutes.',1,1,1,true)
+            GameTooltip:Show()
+        end)
+        m.contrast:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
+        m.contrast:SetScript('OnHide',function() if GameTooltip then GameTooltip:Hide() end end)
         m.contrast:SetScript('OnValueChanged',function(_,value)
             if j.readOnly or ns.InitializationBlocked or not ns.Atlas.Number(value,0,100) then return end
             value=math.floor(value/5+0.5)*5
             j.db.settings.trailContrast=value/100;m.contrastValue:SetText(value..'%')
+            if m.legend:IsShown() then m.legend:RefreshTrails() end
             c:Journey()
         end)
-        m.record=U.Check(m,'Record Journey',48,-660,160,function(value) j.trail:SetEnabled(value) end)
-        U.Button(m,'Refresh',218,-661,90,function() c.index=nil;c:Refresh(true) end)
-        U.Button(m,'Storage',316,-661,85,function()
-            local points,bytes=0,0;for _,s in ipairs(j.db.segments) do if type(s)=='table' and type(s.data)=='string' then points=points+#s.data/9;bytes=bytes+#s.data end end
-            c:Message(string.format('%d events • %d segments • %d points • %.2f MiB trail payload (headers and events additional).',#j.events,#j.db.segments,points,bytes/1048576))
+        m.recordConfirm=CreateFrame('Frame',nil,m);m.recordConfirm:SetAllPoints();m.recordConfirm:SetFrameLevel(m:GetFrameLevel()+40);m.recordConfirm:EnableMouse(true);m.recordConfirm:Hide()
+        local shade=m.recordConfirm:CreateTexture(nil,'BACKGROUND');shade:SetAllPoints();shade:SetColorTexture(0,0,0,0.45)
+        local dialog=CreateFrame('Frame',nil,m.recordConfirm,'BackdropTemplate');dialog:SetSize(360,132);dialog:SetPoint('CENTER');dialog:EnableMouse(true)
+        dialog:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\DialogFrame\\UI-DialogBox-Border',edgeSize=20});dialog:SetBackdropColor(0.09,0.065,0.035,1)
+        U.Label(dialog,'Stop recording your Journey?',24,-26,312,'GameFontNormal')
+        m.recordConfirm.yes=U.Button(dialog,'Yes',70,-82,95,function()
+            j.trail:SetEnabled(false);m.record:SetChecked(j.db.settings.trail~=false);m.recordConfirm:Hide()
         end)
-        m.message=U.Label(m,'',48,-699,860,'GameFontHighlightSmall')
-        m:SetScript('OnHide',function() m.from:ClearFocus();m.to:ClearFocus();m.level:ClearFocus();if GameTooltip then GameTooltip:Hide() end end)
+        m.recordConfirm.no=U.Button(dialog,'No',195,-82,95,function() m.recordConfirm:Hide() end)
+        m.record=U.Check(m,'Record Journey',48,-660,160,function(value)
+            if value then j.trail:SetEnabled(true)
+            elseif j.db.settings.trail~=false then m.recordConfirm:Show() end
+            m.record:SetChecked(j.db.settings.trail~=false)
+        end)
+        U.Button(m,'Refresh',218,-661,74,function() c.index=nil;c:Refresh(true) end)
+        m.capacity=U.Label(m,'',42,-701,250,'GameFontDisableSmall');m.capacity:SetWordWrap(false)
+        m.capacityHover=CreateFrame('Frame',nil,m);m.capacityHover:SetPoint('TOPLEFT',42,-699);m.capacityHover:SetSize(250,20)
+        m.capacityHover:EnableMouse(true)
+        m.capacityHover:SetScript('OnEnter',function(self)
+            local title,detail=j:StorageStatus();m.capacity:SetText(title)
+            if GameTooltip then
+                GameTooltip:SetOwner(self,'ANCHOR_RIGHT');GameTooltip:SetText(title);GameTooltip:AddLine(detail,1,1,1,true);GameTooltip:Show()
+            end
+        end)
+        m.capacityHover:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
+        -- Journey samples can grow without a new event. Only poll while visible.
+        local storageElapsed=0
+        m:SetScript('OnUpdate',function(_,elapsed)
+            c:TickPlayback(elapsed)
+            storageElapsed=storageElapsed+elapsed
+            if storageElapsed>=30 then storageElapsed=0;c:RefreshStorage() end
+        end)
+        m.message=U.Label(m,'',350,-699,558,'GameFontHighlightSmall')
+        m:SetScript('OnHide',function()
+            c:PausePlayback();m.from:ClearFocus();m.to:ClearFocus();m.level:ClearFocus();m.search:ClearFocus()
+            c.searchCache={};c.index=nil
+            m.recordConfirm:Hide();m.legend:Hide()
+            if GameTooltip then GameTooltip:Hide() end
+        end)
         c:SetRange(j:Bounds());c.follow=true
         if j.readOnly then c:Message('Unsupported or malformed Annals store: recording disabled; original data preserved.') end
     end
-    local function buildTabIcon(tab)
-        tab.Icon:SetColorTexture(0.04,0.025,0.01,1)
-        tab.questMarkers={}
-        for i,kind in ipairs({'completed','accepted'}) do
-            local marker=tab:CreateTexture(nil,'ARTWORK',nil,i)
-            marker:SetTexture(A.icons[kind]);marker:SetSize(28,28)
-            marker:SetPoint('CENTER',tab.Icon,'CENTER',i==1 and -7 or 7,i==1 and 7 or -7)
-            tab.questMarkers[i]=marker
-        end
-    end
-    shell:RegisterSection('annals',{title="Adventurer's Annals",icon=A.icons.completed,buildTabIcon=buildTabIcon,
+    shell:RegisterSection('annals',{title="Adventurer's Annals",icon='Interface\\Icons\\INV_Misc_PocketWatch_02',
         frameName='AzerothFieldbookAnnalsSection',help=HELP,build=build,onOpen=function() c:Refresh(true) end})
     return c
 end

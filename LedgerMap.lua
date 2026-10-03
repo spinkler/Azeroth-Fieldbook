@@ -108,7 +108,7 @@ function ns.CreateLedgerWorldPins(journal)
     return controller
 end
 function ns.CreateLedgerMap(parent,journal,getSelection,onSighting)
-    local adapter={}
+    local adapter={borderlessPins=true}
     local function points()
         local id,index=getSelection();local e=journal:Get(id);local rows={}
         if not e then return rows end
@@ -149,7 +149,7 @@ function ns.CreateLedgerMap(parent,journal,getSelection,onSighting)
         end
         for _,pin in ipairs(self.pins or {}) do if pin.group and pin:IsShown() then
             local point=pin.group[1].point
-            pin.icon:SetTexture(contactIcon(journal,point.contact))
+            self:SetPinIcon(pin,contactIcon(journal,point.contact))
             pin.icon:SetVertexColor(point.reported and 0.55 or 1,point.reported and 0.7 or 1,1)
             pin:SetScript("OnEnter",function(self)
                 if not GameTooltip then return end
