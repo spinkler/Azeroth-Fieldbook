@@ -24,6 +24,77 @@ LOG_REWARDS = '''
 
 
 class AnnalsTests(unittest.TestCase):
+    def test_recent_trail_window_and_marker_fading(self):
+        l=client();l.execute('''
+            local A=ns.Annals
+            local j=ns.CreateAnnalsJournal({})
+            local data=''
+            for at=0,1800,300 do data=data..A.EncodePoint({x=at,y=1000,at=at},math.max(0,at-300)) end
+            j.db.segments={{v=1,mapID=101,at=0,finish=1800,data=data,mount=60}}
+            for i=1,20 do j:Append('accepted','Event '..i,nil,{mapID=101,x=i*100,y=2000},i*80) end
+            local idx=A.JourneyIndex(j,0,1800,101);idx.trailSpan=900
+            local lines,markers=A.JourneyFrame(idx,1750)
+            assert(#markers==15 and markers[1].event.title=='Event 6' and markers[15].event.title=='Event 20')
+            for i=1,5 do assert(math.abs(markers[i].alpha-i/6)<0.0001) end
+            for i=6,15 do assert(markers[i].alpha==1) end
+            local earliest=1800
+            for _,edge in ipairs(lines) do
+                assert(edge.from.at>=850 and edge.to.at<=1750)
+                earliest=math.min(earliest,edge.from.at)
+                assert(edge.from.mount==60 and edge.to.mount==60)
+            end
+            assert(earliest==850,'must clip an edge crossing the duration boundary')
+            idx.trailSpan=nil
+            assert(#A.JourneyFrame(idx,1750)>#lines,'full range should restore older geometry')
+            local r,g,b=A.TrailColor(0,0,1,false,60)
+            assert(r==0 and g==112/255 and b==221/255)
+            r,g,b=A.TrailColor(0,0,1,false,100)
+            assert(r==163/255 and g==53/255 and b==238/255)
+            r,g,b=A.TrailColor(0,0,1,true,100);assert(g>r and g>b,'taxi colour takes priority')
+        ''')
+
+    def test_mount_capture_and_segment_transitions(self):
+        l=client();l.execute('''
+            local A=ns.Annals
+            IsMounted=function() return true end
+            GetUnitSpeed=function() return 0,11.2 end
+            assert(A.Location().mount==60,'stationary mounts need maximum run speed')
+            GetUnitSpeed=function() return 0,14 end
+            assert(A.Location().mount==100)
+            IsMounted=function() return false end
+            assert(A.Location().mount==0)
+            local j=ns.CreateAnnalsJournal({});local trail=ns.CreateAnnalsTrail(j)
+            trail:Sample({at=100,mapID=101,x=100,y=100,mount=60},true)
+            trail:Sample({at=102,mapID=101,x=200,y=100,mount=100},true)
+            trail:Sample({at=104,mapID=101,x=300,y=100,mount=0},true)
+            assert(#j.db.segments==3)
+            assert(j.db.segments[2].joinFrom==1 and j.db.segments[3].joinFrom==2)
+            assert(A.Decode(j.db.segments[1])[1].mount==60 and A.Decode(j.db.segments[2])[1].mount==100)
+            assert(not A.Decode(j.db.segments[3])[1].mount)
+        ''')
+
+    def test_custom_playback_and_timeline_scrollbar(self):
+        l=full_client();l.execute(ENV);l.execute('''
+            local c=ns.AnnalsController;local j=c.journal
+            for i=1,20 do j:Append('accepted','Event '..i,nil,{mapID=101,x=i*100,y=100},100+i) end
+            c.shell:ShowSection('annals');c:SetRange(100,200)
+            local m=c.main
+            assert(m.timelineScroll:IsShown())
+            m.timelineScroll.scripts.OnValueChanged(m.timelineScroll,2)
+            assert(c.offset==14 and m.rows[1].record.event.title=='Event 15')
+            m.customSpeed:SetText('2.5');m.customSpeed.scripts.OnEnterPressed(m.customSpeed)
+            assert(c.playbackSpeed==2.5)
+            c:Seek(100);c:TogglePlayback();c:TickPlayback(2)
+            assert(c.at==105)
+            m.customSpeed:SetText('0');m.customSpeed.scripts.OnEnterPressed(m.customSpeed)
+            assert(c.playbackSpeed==2.5 and m.customSpeed:GetText()=='2.5')
+            m.speeds[256].scripts.OnClick();assert(c.playbackSpeed==256 and m.customSpeed:GetText()=='256')
+            c:SetEventFilter('accepted',false)
+            assert(m.filter.afbSelected and m.mapFilter.afbSelected)
+            assert(not m.timelineScroll:IsShown())
+            c:ResetNow();assert(c.playbackSpeed==1 and m.customSpeed:GetText()=='1')
+        ''')
+
     def test_fast_acceptance_recovers_rewards_from_matching_quest_log(self):
         l=client();l.execute(LOG_REWARDS);l.execute('''
             local acceptedAt=now;missing=true;logPresent=false
@@ -196,7 +267,7 @@ class AnnalsTests(unittest.TestCase):
             assert(-my+m.map:GetHeight()<-m.contrast.point[3],'map overlaps display settings')
             m.legendButton.scripts.OnClick();assert(m.legend:IsShown() and m.legendButton.afbSelected)
             for kind,icon in pairs(m.legend.icons) do assert(icon.texture==ns.Annals.icons[(kind=='enter' or kind=='exit') and 'instance' or kind]) end
-            assert(#m.legend.arrows==4 and #m.legend.trails==3)
+            assert(#m.legend.arrows==4 and #m.legend.trails==5)
             assert(not m.legend.close)
             m.legendButton.scripts.OnClick();assert(not m.legend:IsShown() and not m.legendButton.afbSelected)
             c:ToggleFollowPlayer();assert(m.followPlayer:GetText()=='Follow player' and m.followPlayer.afbSelected)
@@ -517,9 +588,11 @@ class AnnalsTests(unittest.TestCase):
             for i=1,64 do many.reward.choices[i]={itemID=i,quantity=1,name='Long offered reward name '..i,quality=2} end
             detail:SetEvent(many,true)
             assert(detail.body:GetHeight()>detail:GetHeight() and #detail.rows>=64)
+            assert(detail.ScrollBar:IsShown(),'long details need a visible scrollbar')
             detail.rows[10].scripts.OnMouseWheel(detail.rows[10],-1);assert(detail:GetVerticalScroll()==32)
             detail.scripts.OnMouseWheel(detail,1000);assert(detail:GetVerticalScroll()==0)
             detail:SetEvent(e,true);assert(detail:GetVerticalScroll()==0 and not detail.rows[60]:IsShown())
+            detail:SetEvent(nil,true);assert(not detail.ScrollBar:IsShown(),'short details should hide the scrollbar')
         ''')
 
     def test_interpolated_motion_timing_gaps_and_exact_samples(self):

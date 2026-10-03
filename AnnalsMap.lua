@@ -247,7 +247,7 @@ end
 local function project(p,index)
     local r=index.transforms[p.mapID]
     if not r or not A.Int(p.x,0,10000) or not A.Int(p.y,0,10000) then return end
-    return {x=math.floor(r.x*10000+p.x*r.w+0.5),y=math.floor(r.y*10000+p.y*r.h+0.5),at=p.at,level=p.level,mapID=index.mapID or p.mapID,flight=p.flight,state=p.state}
+    return {x=math.floor(r.x*10000+p.x*r.w+0.5),y=math.floor(r.y*10000+p.y*r.h+0.5),at=p.at,level=p.level,mapID=index.mapID or p.mapID,flight=p.flight,mount=p.mount,state=p.state}
 end
 -- Date/map index is rebuilt only when a range is selected or explicitly refreshed.
 -- Scrubbing decodes at most 64 nearby chunks and reuses a bounded 64-chunk cache.
@@ -317,7 +317,7 @@ function A.InterpolatePosition(from,to,at)
     local f=(at-from.at)/(to.at-from.at)
     local moving=from.x~=to.x or from.y~=to.y
     return {x=from.x+(to.x-from.x)*f,y=from.y+(to.y-from.y)*f,at=at,mapID=from.mapID,
-        level=from.level,flight=from.flight,state=from.state,sampleAt=from.at,interpolated=at>from.at,
+        level=from.level,flight=from.flight,mount=from.mount,state=from.state,sampleAt=from.at,interpolated=at>from.at,
         previous=moving and from or from.previous,headingX=moving and (to.x-from.x) or nil,headingY=moving and (to.y-from.y) or nil}
 end
 -- Follow mode needs a source map, not all the route geometry. Decode only the
@@ -363,7 +363,11 @@ function A.JourneyFrame(index,at)
     local stop=finish+(following and A.Int(following.joinFrom,1,100000000) and 1 or 0)
     limited=stop>64
     local nextLine=1
+    local trailFirst=math.max(index.first,index.trailSpan and at-index.trailSpan or index.first)
     local function edge(from,to)
+        if to.at<=trailFirst then return end
+        if from.at<trailFirst then from=A.InterpolatePosition(from,to,trailFirst) end
+        if not from then return end
         -- Keep the newest edges even when 64 dense chunks exceed the draw budget.
         if #lines==2048 then limited=true end
         lines[nextLine]={from=from,to=to};nextLine=nextLine%2048+1
@@ -408,23 +412,28 @@ function A.JourneyFrame(index,at)
     local held,inside=instancePosition(index,at)
     if inside then cursor=held;motion=nil end
     local endEvent=upper(index.events,at,function(row) return row.event.at end)
-    for i=math.max(1,endEvent-511),endEvent do
+    for i=endEvent,1,-1 do
         local row=index.events[i];local e=row.event
         local p=project(e,index)
         if p then
-            markers[#markers+1]={id=tostring(row.id),name=e.title,mapID=index.mapID,x=p.x,y=p.y,category='other',event=e}
+            markers[#markers+1]={id=tostring(row.id),name=e.title,mapID=index.mapID,x=p.x,y=p.y,category='other',event=e,alpha=math.min(1,(16-(#markers+1))/6)}
+            if #markers==15 then break end
         end
     end
-    if endEvent>512 then limited=true end
+    -- Preserve chronological overlap cycling after selecting the newest markers.
+    for i=1,math.floor(#markers/2) do markers[i],markers[#markers-i+1]=markers[#markers-i+1],markers[i] end
+    -- Marker limits are intentional; the timeline retains every event.
     return lines,markers,cursor,limited,invalid,motion
 end
-function A.TrailColor(at,stamp,strength,flight)
+function A.TrailColor(at,stamp,strength,flight,mount)
     strength=ns.Atlas.Number(strength,0,1) and strength or 0.75
     -- Thirty minutes behind the scrubber is halfway cooled. Keep an opacity
     -- floor so old travel remains discoverable, without altering stored history.
     local heat=2^(-math.max(0,at-stamp)/1800)
     local fade=(1-heat)*strength
     if flight then return 0.2-0.1*fade,1-0.35*fade,0.3+0.15*fade,0.8-0.68*fade,heat end
+    if mount==60 then return 0,112/255,221/255,0.8-0.68*fade,heat end
+    if mount==100 then return 163/255,53/255,238/255,0.8-0.68*fade,heat end
     return 1-0.75*fade,0.82-0.27*fade,0.14+0.86*fade,0.8-0.68*fade,heat
 end
 function A.PlayerColor(state)
@@ -445,12 +454,12 @@ function A.SmoothTrail(lines,width,height)
     local budget=math.max(0,2048-#lines)
     local function between(a,b,t)
         return {x=a.x+(b.x-a.x)*t,y=a.y+(b.y-a.y)*t,
-            at=a.at+(b.at-a.at)*t,mapID=a.mapID,level=a.level,flight=b.flight}
+            at=a.at+(b.at-a.at)*t,mapID=a.mapID,level=a.level,flight=b.flight,mount=b.mount}
     end
     -- Prefer recent corners when the existing geometry approaches its budget.
     for i=#lines,1,-1 do
         local edge=lines[i];local p=edge.to;local nextEdge=outgoing[p]
-        if budget>=2 and incoming[p]==edge and nextEdge and edge.from.flight==p.flight and p.flight==nextEdge.to.flight then
+        if budget>=2 and incoming[p]==edge and nextEdge and edge.from.flight==p.flight and p.flight==nextEdge.to.flight and edge.from.mount==p.mount and p.mount==nextEdge.to.mount then
             local dx,dy=(p.x-edge.from.x)*width/10000,(p.y-edge.from.y)*height/10000
             local ex,ey=(nextEdge.to.x-p.x)*width/10000,(nextEdge.to.y-p.y)*height/10000
             local before,after=math.sqrt(dx*dx+dy*dy),math.sqrt(ex*ex+ey*ey)
@@ -625,7 +634,7 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         for i,segment in ipairs(adapter.lines) do
             local line=self.lines and self.lines[i]
             if line then
-                local r,g,b,alpha,heat=A.TrailColor(cutoff,segment.to.at,j.db.settings.trailContrast,segment.to.flight)
+                local r,g,b,alpha,heat=A.TrailColor(cutoff,segment.to.at,j.db.settings.trailContrast,segment.to.flight,segment.to.mount)
                 line:SetColorTexture(r,g,b,alpha)
                 line:SetDrawLayer('ARTWORK',heat>=0.5 and 1 or 0)
             end
@@ -637,6 +646,9 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
                 local other=member.point.event;local rank,selected=priority[other.kind] or 0,priority[event.kind] or 0
                 if rank>selected or (rank==selected and (other.at>event.at or (other.at==event.at and (other.sequence or 0)>(event.sequence or 0)))) then event=other end
             end
+            local alpha=0
+            for _,member in ipairs(pin.group) do alpha=math.max(alpha,member.point.alpha or 1) end
+            pin:SetAlpha(alpha)
             self:SetPinIcon(pin,A.icons[event.kind]);pin.icon:SetVertexColor(1,1,1)
             A.InstanceDirection(pin,pin.icon,event)
             pin:SetScript('OnClick',function(p,button)

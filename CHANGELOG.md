@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.24.1 - 2026-10-04
+
+- Annals: add Rare-blue 60% and Epic-purple 100% mounted trails, 256x and custom numeric playback speeds, and a mirrored filter button at the map top right.
+- Limit Journey trails to the selected duration behind playback; show the latest 15 located event icons, fading the oldest five.
+- Show a scrollbar for the Annals timeline when more than seven entries are available; retain the detail pane overflow scrollbar.
+- Add regression coverage for mount capture and transitions, time-window clipping, icon fading, custom playback speeds, and timeline/detail scrollbar visibility; document the controls and live mount-speed validation.
+
 ## v0.24.0 - 2026-10-04
 
 Release-channel update covering all changes since v0.23.0-beta and previous-push

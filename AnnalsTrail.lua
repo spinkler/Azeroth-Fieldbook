@@ -29,7 +29,7 @@ function A.Decode(s)
             state=s.flight==true and 'flight' or (type(s.context)=='string' and s.context:match(':true$') and 'dead / ghost')
                 or (type(s.context)=='string' and s.context:match(':false$') and 'alive') or nil
         end
-        out[#out+1]={x=x,y=y,at=t,anchor=flag=='1',mapID=s.mapID,level=A.Int(s.level,1,1000) and s.level or nil,flight=s.flight==true,state=state}
+        out[#out+1]={x=x,y=y,at=t,anchor=flag=='1',mapID=s.mapID,level=A.Int(s.level,1,1000) and s.level or nil,flight=s.flight==true,mount=(s.mount==60 or s.mount==100) and s.mount or nil,state=state}
     end
     if s.finish~=nil and (not A.Int(s.finish,s.at,9999999999) or s.finish~=t) then return nil,'Trail time header mismatch.' end
     return out
@@ -108,6 +108,7 @@ function ns.CreateAnnalsTrail(j,options)
         local joinFrom
         if current then
             if p.flight==nil then p.flight=current.flight==true end
+            if p.mount==nil then p.mount=current.mount end
             if p.state==nil then p.state=current.state end
             local gap=p.at-(lastPoll and lastPoll.at or current.finish)
             if p.at<current.finish or gap>12 then self:Break('observation gap')
@@ -123,6 +124,8 @@ function ns.CreateAnnalsTrail(j,options)
             elseif lastPoll and distance(lastPoll,p)>(self.options.jump or 1000) then self:Break('discontinuous movement')
             elseif p.flight~=nil and p.flight~=(current.flight==true) then
                 joinFrom=#j.db.segments;self:Break('flight state')
+            elseif p.mount~=current.mount then
+                joinFrom=#j.db.segments;self:Break('mount state')
             elseif p.state and current.state and p.state~=current.state then self:Break('player state')
             elseif (anchor or distance(points[#points],p)>=(self.options.minimum or 40) or (idlePoint and distance(lastPoll,p)>0)) and
                 (p.at-current.at>1800 or #points>=A.MAX_POINTS-1) then
@@ -130,7 +133,7 @@ function ns.CreateAnnalsTrail(j,options)
             end
         end
         if not current then
-            current={v=1,mapID=p.mapID,at=p.at,finish=p.at,level=p.level,reason=self.reason,context=p.context,joinFrom=joinFrom,flight=p.flight==true or nil,state=p.state,data=''}
+            current={v=1,mapID=p.mapID,at=p.at,finish=p.at,level=p.level,reason=self.reason,context=p.context,joinFrom=joinFrom,flight=p.flight==true or nil,mount=p.mount,state=p.state,data=''}
             j.db.segments[#j.db.segments+1]=current;points={};write(p);lastPoll=p;idlePoint=p;return
         end
         -- Retain arrival/departure times once a stop is confirmed. No periodic

@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.24.0 (Release)
+# Azeroth Fieldbook 0.24.1 (Release)
 
 **New in this Beta:** Adventurer's Annals adds an eighth journal for
 this character's quest history and Journey Trail. It is independent of account

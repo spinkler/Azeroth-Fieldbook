@@ -8,7 +8,7 @@ acceptance remain pending.
 
 Open **Adventurer's Annals** using the pocket-watch tab. Journey stays in the right
 pane, and the timeline opens on the left. The timeline is oldest first,
-with seven reusable rows, local dates/times, page buttons, mouse-wheel paging,
+with seven reusable rows, local dates/times, page buttons, mouse-wheel paging, an overflow-only scrollbar,
 type filters, an optional character level and explicit date fields. The shared
 styled **Search** field supports case-insensitive partial words across quest
 titles, event details, dates, places and all recorded reward lists (including
@@ -19,7 +19,7 @@ quality, descriptions and readable tooltip text; a sword need not have â€œswordâ
 its name. Missing item data is requested once per search cache, and successful
 loads refresh results. Search is debounced and cached only in memory; clearing it
 or hiding Annals releases the cache. It never rewrites historical observations.
-The standard funnel beside Search opens the event-type filter menu and glows
+Matching funnels beside Search and at the map top right open the event-type filter menu and glow
 when any types are excluded. Search combines with date/type/level filters. Journey markers respect the search;
 the historical arrow, follow lookup and trail geometry remain unfiltered.
 **Now / reset** returns to the current timestamp, clears search/date/level/event filters, selects the
@@ -53,9 +53,9 @@ event, with the exact range when a selection is available.
 **Choose zone** sits above the map's top left.
 **Legend** toggles an overlay of the actual event icons, player arrows
 and trail swatches, including the current age-contrast setting. Move the time
-slider using **Full range / 3 hours / 1 hour / 15 minutes**. The clock reports the selected
+slider using **Full range / 3 hours / 1 hour / 15 minutes**. This also clips the trail to that duration behind the playback time, including edges crossing the cutoff. The clock reports the selected
 time and historical position, with estimates between connected samples labelled.
-Playback offers 1x/8x/32x/64x/128x and play/pause symbols. **Follow player** keeps
+Playback offers 1x/8x/32x/64x/128x/256x and play/pause symbols. The styled **Custom speed (x)** field accepts 0.1-4096; Enter applies it, Escape restores the current rate, and invalid input leaves playback unchanged. **Follow player** keeps
 the arrow in view, switches recorded zone/continent maps and jumps at observed
 teleport/hearth arrivals. It never uses the character's live position for playback.
 Both **Legend** and **Follow player** use the shared yellow toggle glow while
@@ -71,8 +71,7 @@ not receive relabelled child coordinates or invented connecting lines.
 
 Date and level filters affect both events and trail chunks; event-type filters
 affect markers, not unrelated route geometry. Dense views show at most 64 recent
-chunks and 2,048 edges at the scrubbed time, plus 512 recent event candidates
-(the Atlas renderer groups at most 192 visible pins). A visible notice asks you
+chunks and 2,048 edges at the scrubbed time, plus the latest 15 located events on the selected map. The newest ten retain full opacity; the next five fade to 5/6, 4/6, 3/6, 2/6 and 1/6 opacity. Overlapping groups use their newest member's opacity. A visible notice asks you
 to scrub earlier or narrow the dates. This is a display bound, not retention.
 
 Uncheck **Record Journey** and answer **Yes** to stop future breadcrumbs. **No**
@@ -521,3 +520,9 @@ between retained points may be lost with balanced retention. Anchors and boundar
 can add points beyond the ordinary 15-second minimum interval. No destructive
 retention policy has been added to hide this cost. Runtime indexing and SavedVariables
 loading cost at multi-million-point histories also need real-client measurement.
+
+### Mounted trail validation
+
+New trail headers retain a mount tier inferred from the mounted player's reported maximum ground speed (including while stationary): 60% uses Rare blue (#0070dd), 100% uses Epic purple (#a335ee). Mount changes start joined chunks; flight green takes priority. Older recordings remain readable without invented mount observations. The client speed value includes movement modifiers, so verify classification in-game with both mount tiers, speed bonuses and slows, along with mount/dismount transitions.
+
+Verify the mirrored map filter opens at its own button and stays highlighted with the original. Check both timeline and long-detail scrollbars, custom decimal speeds, 256x playback, and the 15-minute trail cutoff while scrubbing and playing.

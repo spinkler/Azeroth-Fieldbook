@@ -22,6 +22,11 @@ function A.Location()
     elseif dead==true or dead==1 then p.state='dead'
     elseif taxi==true or taxi==1 then p.state='flight'
     elseif dead==false or dead==0 then p.state='alive' end
+    local mounted=A.Read(IsMounted)
+    if mounted==true or mounted==1 then
+        local speed=A.Read(function() local _,run=GetUnitSpeed('player');return run end)
+        if type(speed)=='number' and speed>=11 then p.mount=speed>=14 and 100 or 60 end
+    elseif mounted==false or mounted==0 then p.mount=0 end
     if not A.Text(p.zone,160) then p.zone=nil end
     if not A.Text(p.subzone,160) then p.subzone=nil end
     if not A.Int(p.level,1,1000) then p.level=nil end

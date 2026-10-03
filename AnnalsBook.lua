@@ -1,6 +1,6 @@
 local _,ns=...
 local A,U=ns.Annals,ns.AtlasUI
-local HELP="Your character writes this history automatically: quest acceptance, removal and confirmed turn-in, plus deaths, flight departures, Hearthstone/teleport casts, cross-continent crossings, battleground transfers, dungeon/raid visits and lightweight links to Fieldbook discoveries. Existing quests are not backfilled. Removed does not always mean abandoned.\n\nJourney Trail is a separate approximate route. Uncheck Record Journey and choose Yes to stop future breadcrumbs; No keeps recording. Re-enabling is immediate; events and their locations remain. No history is erased. Balanced recording checks every two seconds but keeps ordinary points roughly 15–60 seconds apart while moving; stationary players add no periodic points. Events, confirmed stops and segment endpoints are exceptions. Stop arrival/departure times are retained without periodic idle samples. Loading and missing positions leave gaps. Successful Hearthstone, Astral Recall, Classic capital teleports and Moonglade casts record departures. Loading transitions record arrivals, battleground entry/exit and cross-continent travel with separate icons. Ship icons indicate observed continent crossings, not a confirmed vessel. Login/reload do not invent journeys. Ordinary same-continent loading does not create travel events. Dungeon, raid and scenario visits record entry/exit and hold the arrow at the last observed outdoor entrance while inside, including across reloads. Interior events remain in the timeline but do not move the outdoor arrow or create route lines. Exits and hearths out jump to the observed outdoor arrival. If the entrance was not observed, its position remains unknown. Unrecognized portal uses are not automatically identified. Subzone names do not interrupt flights.\n\nSearch matches partial words without case sensitivity across quest names, event details, dates, places and offered/received rewards. Multiple words can match different fields: sword Westfall finds recorded sword rewards in Westfall. Client item types, equipment slots, descriptions and readable tooltip text are included when available; results refresh when item data loads. Search combines with date/level/event filters and filters map markers without hiding the historical route or arrow. Clear it with the red cross or Now / reset. Enter dates as YYYY-MM-DD, optionally a character level, then Apply. Dates use your computer's local calendar. Select an event and Around event to inspect its surrounding hour, or Quest interval for discoveries during its observed acceptance-to-removal/turn-in period. Temporal overlap never means a quest caused those discoveries.\n\nThe timeline runs oldest to newest. Use Latest, page buttons or the mouse wheel. Journey opens by default on the right for the selected dates, with the timeline on the left. Selecting a timeline event pauses and seeks its recorded time and map. Show detail sits in the left pane and glows while its scrollable detail overlay covers the timeline. Turn it off to restore the same timeline page and selection. The Journey map and playback remain available while details are open. Around selected event, recorded level, Trail age contrast and Map icon size are in the right pane. Hover the contrast slider for an explanation. Choose zone above the map selects a historical map. The Legend button toggles an overlay with the actual event icons, player arrows and trail colours. Legend and Follow player glow while active. Instance icons show a green entry arrow or an orange exit arrow. Drag the time slider to browse. Play advances one recorded second per real second at 1x; choose 8x, 32x, 64x or 128x to speed up. Use the arrow / pause symbol to start or stop playback. Pause, scrub or leave Journey to stop playback. Playback stops at the range end; Play there restarts from the beginning. Now / reset returns to the current time, clears search/date/level/event filters, restores full-range timing and 1x speed, disables Follow player, and returns to the current map (or the known outdoor entrance during an instance visit). Choose Full range, 3 hours, 1 hour or 15 minutes to change slider resolution. The mouse wheel makes precise second-by-second adjustments. Find player pauses at the selected time and centers its historical position, switching to the recorded map if needed. It keeps a closer zoom or zooms in to locate the arrow. Follow player keeps the historical arrow in view during playback, switching recorded zones and continents and jumping directly to observed hearth/teleport arrivals. Turn it off to pan freely while playback continues. Playback estimates movement between connected samples using their timestamps, with smooth arrow updates and a progressively revealed route. Estimates are labelled; no new positions are saved. Routes and markers also project onto continent and world maps where the client supplies map rectangles. Existing saved gaps are preserved. The clock uses recorded timestamps; the arrow moves between connected samples and holds at the last known position through gaps. Old recordings may lack stop timing; new recordings preserve it during simplification. Its heading follows recorded movement, not camera facing. Green means flight, red means dead, blue means ghost and white means alive or unknown. Event filter checkboxes combine types without hiding the arrow. Map icon size adjusts markers and the arrow.\n\nLarge map ranges display at most 64 recent chunks, 2,048 lines and 512 events at the selected time (Atlas groups at most 192 visible pins). Scrub earlier or narrow dates for older geometry. The timeline always retains all matching events.\n\nAccepted quests retain the potential item choices and guaranteed rewards observed in the quest dialogue, plus readable XP, money, currency and spell offers. If accepted before reward data loads, the new entry waits up to ten seconds for the matching quest log rewards; its original time and location stay fixed. The selected quest is restored after reads. Missing data stays explicitly unknown after the retry window or quest removal, and older entries are not backfilled. Completed quests show the chosen reward when the reward request and turn-in were observed; guaranteed items are separate. Hover reward icons or names for tooltips. Reward names are enlarged and use quality colours; single items omit the count. Timeline icons have drop shadows. Money uses gold, silver and copper units. Actual XP and money come from the turn-in event. Currency and spell offers are not proof of balance changes or learned spells. Reputation rewards are not captured. Older entries and unreadable offers remain explicitly unknown; opening them does not rewrite history. Source inspection and mock tests still require in-game API validation.\n\nAll history is local and character-specific, regardless of account tracking. SavedVariables persist on a successful logout or /reload; a client crash may lose the current session, as with other journals."
+local HELP="Your character writes this history automatically: quest acceptance, removal and confirmed turn-in, plus deaths, flight departures, Hearthstone/teleport casts, cross-continent crossings, battleground transfers, dungeon/raid visits and lightweight links to Fieldbook discoveries. Existing quests are not backfilled. Removed does not always mean abandoned.\n\nJourney Trail is a separate approximate route. Uncheck Record Journey and choose Yes to stop future breadcrumbs; No keeps recording. Re-enabling is immediate; events and their locations remain. No history is erased. Balanced recording checks every two seconds but keeps ordinary points roughly 15–60 seconds apart while moving; stationary players add no periodic points. Events, confirmed stops and segment endpoints are exceptions. Stop arrival/departure times are retained without periodic idle samples. Loading and missing positions leave gaps. Successful Hearthstone, Astral Recall, Classic capital teleports and Moonglade casts record departures. Loading transitions record arrivals, battleground entry/exit and cross-continent travel with separate icons. Ship icons indicate observed continent crossings, not a confirmed vessel. Login/reload do not invent journeys. Ordinary same-continent loading does not create travel events. Dungeon, raid and scenario visits record entry/exit and hold the arrow at the last observed outdoor entrance while inside, including across reloads. Interior events remain in the timeline but do not move the outdoor arrow or create route lines. Exits and hearths out jump to the observed outdoor arrival. If the entrance was not observed, its position remains unknown. Unrecognized portal uses are not automatically identified. Subzone names do not interrupt flights.\n\nSearch matches partial words without case sensitivity across quest names, event details, dates, places and offered/received rewards. Multiple words can match different fields: sword Westfall finds recorded sword rewards in Westfall. Client item types, equipment slots, descriptions and readable tooltip text are included when available; results refresh when item data loads. Search combines with date/level/event filters and filters map markers without hiding the historical route or arrow. Clear it with the red cross or Now / reset. Enter dates as YYYY-MM-DD, optionally a character level, then Apply. Dates use your computer's local calendar. Select an event and Around event to inspect its surrounding hour, or Quest interval for discoveries during its observed acceptance-to-removal/turn-in period. Temporal overlap never means a quest caused those discoveries.\n\nThe timeline runs oldest to newest. Use Latest, page buttons or the mouse wheel. Journey opens by default on the right for the selected dates, with the timeline on the left. Selecting a timeline event pauses and seeks its recorded time and map. Show detail sits in the left pane and glows while its scrollable detail overlay covers the timeline. Turn it off to restore the same timeline page and selection. The Journey map and playback remain available while details are open. Around selected event, recorded level, Trail age contrast and Map icon size are in the right pane. Hover the contrast slider for an explanation. Choose zone above the map selects a historical map. The Legend button toggles an overlay with the actual event icons, player arrows and trail colours. Legend and Follow player glow while active. Instance icons show a green entry arrow or an orange exit arrow. Drag the time slider to browse. Play advances one recorded second per real second at 1x; choose 8x, 32x, 64x, 128x or 256x to speed up, or enter a Custom speed (0.1-4096x) and press Enter. Use the arrow / pause symbol to start or stop playback. Pause, scrub or leave Journey to stop playback. Playback stops at the range end; Play there restarts from the beginning. Now / reset returns to the current time, clears search/date/level/event filters, restores full-range timing and 1x speed, disables Follow player, and returns to the current map (or the known outdoor entrance during an instance visit). Choose Full range, 3 hours, 1 hour or 15 minutes to change slider resolution and show only that duration of trail behind the selected playback time. The mouse wheel makes precise second-by-second adjustments. Find player pauses at the selected time and centers its historical position, switching to the recorded map if needed. It keeps a closer zoom or zooms in to locate the arrow. Follow player keeps the historical arrow in view during playback, switching recorded zones and continents and jumping directly to observed hearth/teleport arrivals. Turn it off to pan freely while playback continues. Playback estimates movement between connected samples using their timestamps, with smooth arrow updates and a progressively revealed route. Estimates are labelled; no new positions are saved. Routes and markers also project onto continent and world maps where the client supplies map rectangles. Existing saved gaps are preserved. The clock uses recorded timestamps; the arrow moves between connected samples and holds at the last known position through gaps. Old recordings may lack stop timing; new recordings preserve it during simplification. Its heading follows recorded movement, not camera facing. Mount trails use Rare blue for 60% and Epic purple for 100%; these require newly recorded mount observations. Green means flight, red means dead, blue means ghost and white means alive or unknown. Event filter checkboxes combine types without hiding the arrow. Map icon size adjusts markers and the arrow.\n\nLarge map ranges display at most 64 recent chunks, 2,048 lines and the latest 15 located events at the selected time; the oldest five icons progressively fade. Scrub earlier or narrow dates for older geometry. The timeline always retains all matching events.\n\nAccepted quests retain the potential item choices and guaranteed rewards observed in the quest dialogue, plus readable XP, money, currency and spell offers. If accepted before reward data loads, the new entry waits up to ten seconds for the matching quest log rewards; its original time and location stay fixed. The selected quest is restored after reads. Missing data stays explicitly unknown after the retry window or quest removal, and older entries are not backfilled. Completed quests show the chosen reward when the reward request and turn-in were observed; guaranteed items are separate. Hover reward icons or names for tooltips. Reward names are enlarged and use quality colours; single items omit the count. Timeline icons have drop shadows. Money uses gold, silver and copper units. Actual XP and money come from the turn-in event. Currency and spell offers are not proof of balance changes or learned spells. Reputation rewards are not captured. Older entries and unreadable offers remain explicitly unknown; opening them does not rewrite history. Source inspection and mock tests still require in-game API validation.\n\nAll history is local and character-specific, regardless of account tracking. SavedVariables persist on a successful logout or /reload; a client crash may lose the current session, as with other journals."
 function A.ParseDate(text,ending)
     if not A.Text(text,10) then return end
     local y,m,d=text:match('^(%d%d%d%d)%-(%d%d)%-(%d%d)$');y,m,d=tonumber(y),tonumber(m),tonumber(d)
@@ -131,7 +131,9 @@ function ns.CreateAnnalsBook(j,shell)
         button.tooltipText=self.playing and 'Pause playback' or 'Play journey'
     end
     function c:SetPlaybackSpeed(rate)
+        if not ns.Atlas.Number(rate,0.1,4096) then return false end
         self.playbackSpeed=rate
+        if self.main and self.main.customSpeed then self.main.customSpeed:SetText(tostring(rate)) end
         if self.main then for value,button in pairs(self.main.speeds) do button:SetEnabled(value~=rate) end end
     end
     function c:PausePlayback()
@@ -274,6 +276,7 @@ function ns.CreateAnnalsBook(j,shell)
         end
         self.mapID=self.mapID or (self:Maps()[1] or {}).mapID
         if not self.index or self.index.mapID~=self.mapID then self.index=A.JourneyIndex(j,self.first,self.last,self.mapID,self.filter,self.level,self.query,self.searchCache) end
+        self.index.trailSpan=self.sliderSpan
         local cursor,limited,invalid=self.main.map:ShowJourney(self.index,self.at or self.last)
         if followPosition then self.main.map:CenterHistoricalPlayer(zoom) end
         local stamp=math.floor(self.at or self.last)
@@ -298,7 +301,11 @@ function ns.CreateAnnalsBook(j,shell)
         local m=self.main
         local filtered=false
         for _,kind in ipairs(eventKinds) do if not self.filter[kind] then filtered=true;break end end
-        m.filter:SetSelected(filtered)
+        m.filter:SetSelected(filtered);m.mapFilter:SetSelected(filtered)
+        m.timelineScroll.syncing=true
+        m.timelineScroll:SetMinMaxValues(0,math.max(0,math.floor((#self.rows-1)/7)))
+        m.timelineScroll:SetValue(self.offset/7);m.timelineScroll:SetShown(#self.rows>7)
+        m.timelineScroll.syncing=false
         if self.follow then
             m.from:SetText(date and date('%Y-%m-%d',self.first) or '');m.to:SetText(date and date('%Y-%m-%d',self.last) or '')
         end
@@ -347,10 +354,10 @@ function ns.CreateAnnalsBook(j,shell)
             c.level=level;c:SetRange(first,last)
         end)
         m.now=U.Button(m,'Now / reset',814,-91,106,function() c:ResetNow() end)
-        m.filter=ns.FieldbookUI.FilterButton(m,270,-96,function()
+        local function showFilters(owner)
             m.search:ClearFocus()
             if not MenuUtil then return end
-            MenuUtil.CreateContextMenu(m.filter,function(_,root)
+            MenuUtil.CreateContextMenu(owner,function(_,root)
                 local function allSelected()
                     for _,key in ipairs(eventKinds) do if not c.filter[key] then return false end end;return true
                 end
@@ -361,7 +368,8 @@ function ns.CreateAnnalsBook(j,shell)
                     item:SetResponse(MenuResponse.Refresh)
                 end
             end)
-        end)
+        end
+        m.filter=ns.FieldbookUI.FilterButton(m,270,-96,showFilters)
         U.StyleSelection(m.filter)
         m.filter:SetScript('OnEnter',function(self)
             if GameTooltip then GameTooltip:SetOwner(self,'ANCHOR_RIGHT');GameTooltip:SetText('Filter events');GameTooltip:Show() end
@@ -369,23 +377,32 @@ function ns.CreateAnnalsBook(j,shell)
         m.filter:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         m.show=U.Button(m,'Show detail',42,-126,250,function() c.showDetail=not c.showDetail;c:SyncDetailOverlay() end)
         U.StyleSelection(m.show)
-        m.timeline=CreateFrame('Frame',nil,m);m.timeline:SetPoint('TOPLEFT',42,-155);m.timeline:SetSize(250,455)
+        m.timeline=CreateFrame('Frame',nil,m);m.timeline:SetPoint('TOPLEFT',42,-155);m.timeline:SetSize(228,455)
         m.detailPane=CreateFrame('Frame',nil,m);m.detailPane:SetPoint('TOPLEFT',42,-155);m.detailPane:SetSize(250,455)
         m.detailPane:SetFrameLevel(m.timeline:GetFrameLevel()+5);m.detailPane:EnableMouse(true);m.detailPane:Hide()
         m.journey=CreateFrame('Frame',nil,m);m.journey:SetAllPoints()
         m.emptySearch=U.Label(m.timeline,'',0,-5,250,'GameFontDisableSmall');m.emptySearch:SetWordWrap(true);m.emptySearch:Hide()
         for i=1,7 do
-            local row=CreateFrame('Button',nil,m.timeline);row:SetPoint('TOPLEFT',0,-(i-1)*65);row:SetSize(250,60)
+            local row=CreateFrame('Button',nil,m.timeline);row:SetPoint('TOPLEFT',0,-(i-1)*65);row:SetSize(228,60)
             row:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight')
             row.icon=row:CreateTexture(nil,'ARTWORK');row.icon:SetSize(22,22);row.icon:SetPoint('TOPLEFT',2,-5)
             row.iconShadow=row:CreateTexture(nil,'BACKGROUND');row.iconShadow:SetSize(22,22);row.iconShadow:SetPoint('TOPLEFT',row.icon,'TOPLEFT',2,-2);row.iconShadow:SetVertexColor(0,0,0,0.6)
-            row.label=U.Label(row,'',32,-2,214,'GameFontNormal');row.label:SetWordWrap(false)
-            row.status=U.Label(row,'',32,-20,214,'GameFontHighlightSmall');row.status:SetWordWrap(true);row.status:SetHeight(27)
-            row.location=U.Label(row,'',32,-48,214,'GameFontHighlightSmall');row.location:SetWordWrap(false)
+            row.label=U.Label(row,'',32,-2,192,'GameFontNormal');row.label:SetWordWrap(false)
+            row.status=U.Label(row,'',32,-20,192,'GameFontHighlightSmall');row.status:SetWordWrap(true);row.status:SetHeight(27)
+            row.location=U.Label(row,'',32,-48,192,'GameFontHighlightSmall');row.location:SetWordWrap(false)
             row:SetScript('OnClick',function(self) if self.record then c:Select(self.record.id) end end)
             m.rows[i]=row
         end
         m.timeline:EnableMouseWheel(true);m.timeline:SetScript('OnMouseWheel',function(_,delta) c.offset=c.offset+(delta<0 and 7 or -7);c:Refresh() end)
+        m.timelineScroll=CreateFrame('Slider',nil,m.timeline,'UIPanelScrollBarTemplate')
+        m.timelineScroll.scrollStep=1;m.timelineScroll:ClearAllPoints()
+        m.timelineScroll:SetPoint('TOPLEFT',m.timeline,'TOPRIGHT',3,-16);m.timelineScroll:SetSize(16,423)
+        m.timelineScroll:SetValueStep(1);m.timelineScroll:SetObeyStepOnDrag(true)
+        ns.StyleScrollBarTrack(m.timelineScroll,0.4)
+        m.timelineScroll:SetScript('OnValueChanged',function(self,value)
+            if self.syncing then return end
+            c.offset=math.floor(value+0.5)*7;c:Refresh()
+        end)
         m.detail=detailArea(m.detailPane)
         U.Button(m.detailPane,'Around event',0,-377,112,function() c:Around(false) end)
         U.Button(m.detailPane,'Quest interval',118,-377,132,function() c:Around(true) end)
@@ -400,10 +417,14 @@ function ns.CreateAnnalsBook(j,shell)
         U.Button(m.paging,'Latest',162,0,80,function() c.offset=math.max(0,math.floor((#c.rows-1)/7)*7);c:Refresh() end)
         m.page=U.Label(m.paging,'',0,-26,250,'GameFontHighlightSmall')
         m.map=ns.CreateAnnalsMap(m.journey,j,function(id) c:Select(id,true);c.showDetail=true;c:SyncDetailOverlay() end,function(id) c.mapID=id;c.index=nil;c:Journey() end)
+        m.mapFilter=ns.FieldbookUI.FilterButton(m.map,0,0,showFilters)
+        m.mapFilter:ClearAllPoints();m.mapFilter:SetPoint('TOPRIGHT',m.map,'TOPRIGHT',-8,-8)
+        m.mapFilter:SetFrameLevel(m.map:GetFrameLevel()+25);U.StyleSelection(m.mapFilter)
+        m.mapFilter:SetScript('OnEnter',m.filter:GetScript('OnEnter'));m.mapFilter:SetScript('OnLeave',m.filter:GetScript('OnLeave'))
         m.map:SetPoint('TOP',m.journey,'TOPLEFT',632,-205)
         m.zoneMenu=U.ZoneMenu(m.journey,0,0,256,function() return c:Maps() end,function(id) c.mapID=id;c.index=nil;c:Journey() end)
         m.zoneMenu:ClearAllPoints();m.zoneMenu:SetPoint('TOPLEFT',m.journey,'TOPLEFT',342,-174)
-        m.legend=CreateFrame('Frame',nil,m.map,'BackdropTemplate');m.legend:SetSize(500,326)
+        m.legend=CreateFrame('Frame',nil,m.map,'BackdropTemplate');m.legend:SetSize(500,348)
         m.legend:SetPoint('TOP',m.map,'TOP',0,-8);m.legend:SetFrameLevel(m.map:GetFrameLevel()+20);m.legend:EnableMouse(true)
         m.legend:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\DialogFrame\\UI-DialogBox-Border',edgeSize=16})
         m.legend:SetBackdropColor(0.06,0.045,0.025,0.97);m.legend:Hide()
@@ -426,15 +447,15 @@ function ns.CreateAnnalsBook(j,shell)
             icon:SetSize(20,20);icon:SetPoint('TOPLEFT',270,-46-(i-1)*26);m.legend.arrows[i]=icon
             U.Label(m.legend,entry[1],299,-49-(i-1)*26,178,'GameFontHighlightSmall')
         end
-        for i,entry in ipairs({{'Recent trail',0,false},{'Older trail (1 hour)',3600,false},{'Flight trail',0,true}}) do
+        for i,entry in ipairs({{'Recent trail',0,false},{'Older trail (1 hour)',3600,false},{'Flight trail',0,true},{'60% mount (Rare)',0,false,60},{'100% mount (Epic)',0,false,100}}) do
             local line=m.legend:CreateTexture(nil,'ARTWORK');line:SetSize(25,3);line:SetPoint('TOPLEFT',267,-178-(i-1)*26)
-            m.legend.trails[i]={texture=line,age=entry[2],flight=entry[3]}
+            m.legend.trails[i]={texture=line,age=entry[2],flight=entry[3],mount=entry[4]}
             U.Label(m.legend,entry[1],299,-173-(i-1)*26,178,'GameFontHighlightSmall')
         end
-        U.Label(m.legend,'Instance visits hold the arrow at the observed entrance.',270,-260,208,'GameFontDisableSmall'):SetWordWrap(true)
+        U.Label(m.legend,'Instance visits hold the arrow at the observed entrance.',270,-302,208,'GameFontDisableSmall'):SetWordWrap(true)
         function m.legend:RefreshTrails()
             for _,entry in ipairs(m.legend.trails) do
-                local r,g,b,alpha=A.TrailColor(entry.age,0,j.db.settings.trailContrast,entry.flight);entry.texture:SetColorTexture(r,g,b,alpha)
+                local r,g,b,alpha=A.TrailColor(entry.age,0,j.db.settings.trailContrast,entry.flight,entry.mount);entry.texture:SetColorTexture(r,g,b,alpha)
             end
         end
         m.legendButton=U.Button(m.journey,'Legend',0,0,65,function()
@@ -489,21 +510,30 @@ function ns.CreateAnnalsBook(j,shell)
         m.play:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         c:SyncPlayButton()
         m.speeds={}
-        for i,speed in ipairs({1,8,32,64,128}) do local rate=speed
+        for i,speed in ipairs({1,8,32,64,128,256}) do local rate=speed
             m.speeds[rate]=U.Button(m.journey,tostring(rate)..'x',400+(i-1)*43,-671,41,function() c:SetPlaybackSpeed(rate) end)
         end
         m.speeds[1]:SetEnabled(false)
-        m.timeZoom=U.MenuButton(m.journey,'Full range',619,-671,115,function()
+        m.timeZoom=U.MenuButton(m.journey,'Full range',665,-671,115,function()
             if not MenuUtil then return end
             MenuUtil.CreateContextMenu(m.timeZoom,function(_,root)
                 for _,choice in ipairs({{'Full range',false},{'3 hours',10800},{'1 hour',3600},{'15 minutes',900}}) do
                     local label,span=choice[1],choice[2]
-                    root:CreateButton(label,function() c.sliderSpan=span or nil;c.sliderStart=nil;m.timeZoom:SetText(label);c:SyncSlider() end)
+                    root:CreateButton(label,function() c.sliderSpan=span or nil;c.sliderStart=nil;m.timeZoom:SetText(label);c:SyncSlider();c:Journey() end)
                 end
             end)
         end)
-        m.clock=U.Label(m.journey,'',350,-641,558,'GameFontHighlightSmall')
-        m.levelAt=U.Label(m.journey,'',746,-677,174,'GameFontNormalSmall');m.levelAt:SetWordWrap(false)
+        m.customSpeed=U.Field(m.journey,'Custom speed (x)',792,-650,128,7)
+        m.customSpeed:SetText('1')
+        m.customSpeed:SetScript('OnEnterPressed',function(self)
+            if c:SetPlaybackSpeed(tonumber(self:GetText()))==false then
+                c:Message('Enter a playback speed from 0.1 to 4096.');self:SetText(tostring(c.playbackSpeed))
+            end
+            self:ClearFocus()
+        end)
+        m.customSpeed:SetScript('OnEscapePressed',function(self) self:SetText(tostring(c.playbackSpeed));self:ClearFocus() end)
+        m.clock=U.Label(m.journey,'',350,-641,430,'GameFontHighlightSmall')
+        m.levelAt=U.Label(m.journey,'',746,-154,174,'GameFontNormalSmall');m.levelAt:SetWordWrap(false)
         U.Label(m.journey,'Map icon size',646,-594,92,'GameFontNormalSmall'):SetWordWrap(false)
         m.iconSize=CreateFrame('Slider',nil,m.journey,'OptionsSliderTemplate')
         m.iconSize:SetPoint('TOPLEFT',746,-591);m.iconSize:SetSize(110,18)
