@@ -246,6 +246,7 @@ function ns.CreateAtlasJournal(saved)
         -- Editing a received record never silently upgrades its knowledge source.
         if store[id] and not expedition then out.provenance=A.Copy(store[id].provenance or out.provenance) end
         store[id]=out;A.EnsureReferences(saved);if newlyCreated then out.referenceLegacy=nil end
+        if newlyCreated and not expedition and ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("atlas",out,self) end
         self.revision=self.revision+1;return id
     end
     function j:Delete(id,expedition)

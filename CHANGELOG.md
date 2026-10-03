@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.23.0-beta - 2026-10-03
+
+Beta-channel update covering all changes since v0.22.0 and previous-push
+baseline b3c760af71a2114a65407fe3990b74786a35295a.
+
+- Shade journey lines from warm gold to faint cool blue as they age relative to
+  the scrubber, with a saved 0–100% Trail age contrast slider (75% default).
+- Give the Annals tab a combined gold ?! icon using the native quest markers.
+- Add an eighth character-specific journal with append-only quest history, observed
+  reward choices, automatic rewards, currency offer snapshots and linked discoveries
+  from all seven existing journals. Keep repeat quest cycles and missing references.
+- Add date/type/level browsing, surrounding-quest journey selection, independent
+  Atlas maps, bounded historical geometry and a timestamp scrubber.
+- Record adaptive compact trail segments with preserved event anchors, explicit
+  breaks, geometric simplification and an independent recording control.
+- Use balanced journey retention with a 15-second minimum ordinary-point interval,
+  larger movement/bend thresholds and less storage for long play histories.
+- Keep flights continuous across subzone names, record confirmed departures with
+  flight-master icons, and project trails/events onto continent and world maps.
+  Preserve genuine loading gaps and original coordinates; add a black scrubber track.
+- Include Annals in whole-Fieldbook backups; older backups preserve existing Annals.
+- Add deterministic capture, codec, lifecycle, UI and storage tests, a reproducible
+  300-day storage report, API evidence and an in-game acceptance checklist.
+- Refresh storage measurements for current segment context and document balanced
+  retention, flight events, map projection, bounded drawing and the age gradient.
+- Annals remains subject to native API and visual acceptance in this Beta build.
+
 ## v0.22.0 - 2026-10-03
 
 Release-channel update covering all changes since v0.21.0 and previous-push

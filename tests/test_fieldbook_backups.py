@@ -84,7 +84,7 @@ def reload_client(lua, initialize=True):
     saves = '\n'.join(name+'='+lua.eval('disk('+name+')') for name in [
         'AzerothFieldbookDB','AzerothFieldbookAccountDB','AzerothFieldbookGatheringDB',
         'AzerothFieldbookAtlasDB','AzerothFieldbookAnglingDB','AzerothFieldbookLedgerDB',
-        'AzerothFieldbookTreasureDB','AzerothFieldbookLoreDB','AzerothFieldbookBackupDB'])
+        'AzerothFieldbookTreasureDB','AzerothFieldbookLoreDB','AzerothFieldbookAnnalsDB','AzerothFieldbookBackupDB'])
     fresh = client(initialize=False)
     fresh.execute(saves)
     if initialize:

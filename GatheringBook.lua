@@ -741,6 +741,14 @@ function ns.CreateGatheringBook(journal,shell)
         choose(id)
         return true
     end
+    function controller:Select(id)
+        if not journal.entries[id] then return false end
+        selected=id;category=nil;offset=0
+        for zone in pairs(locationFilters) do locationFilters[zone]=nil end
+        shell:ShowSection("gathering");book.search:SetText("")
+        for i,entry in ipairs(currentRows()) do if entry.id==id then offset=math.max(0,i-PAGE_SIZE);break end end
+        choose(id);return true
+    end
     function controller:Refresh() refresh() end
     return controller
 end

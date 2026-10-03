@@ -551,6 +551,7 @@ local function initializeImpl()
             if title then announceBestiary(entry, title, amount, observation, killTitles[reason] ~= nil,journal:GetPointAnnouncements()) end
         end)
         journal:SetEntryAddedCallback(function(entry, discovered, observation, previouslyCredited)
+            if ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("bestiary",entry,journal) end
             local chatEnabled=journal:GetCreatureAnnouncement()
             local title=discovered and "New discovery!" or (previouslyCredited and "Entry restored" or "Entry observed")
             announceBestiary(entry,title,nil,observation,false,chatEnabled)
@@ -580,14 +581,18 @@ local function initializeImpl()
                 .. " |cff999999(" .. details .. ")|r")
         end
     end
-    local atlasBook,anglingBook,treasureBook
+    local atlasBook,anglingBook,treasureBook,loreBook
     if fieldbook and ns.InitializeAtlas then atlasBook=ns.InitializeAtlas(fieldbook,journal) end
     if fieldbook and ns.InitializeAngling then anglingBook=ns.InitializeAngling(fieldbook) end
     if fieldbook and ns.InitializeLedger then ledgerBook=ns.InitializeLedger(fieldbook) end
     if fieldbook and ns.InitializeTreasure then treasureBook=ns.InitializeTreasure(fieldbook) end
     if fieldbook and ns.InitializeLore then
-        ns.InitializeLore(fieldbook,db,{bestiary=journal,gathering=gatheringBook,atlas=atlasBook,
+        loreBook=ns.InitializeLore(fieldbook,db,{bestiary=journal,gathering=gatheringBook,atlas=atlasBook,
             angling=anglingBook,merchants=ledgerBook,treasure=treasureBook})
+    end
+    if fieldbook and ns.InitializeAnnals then
+        ns.InitializeAnnals(fieldbook,{bestiary=journal,gathering=gatheringBook,atlas=atlasBook,
+            angling=anglingBook,merchants=ledgerBook,treasure=treasureBook,lore=loreBook})
     end
     if ns.MapBrightness then
         ns.MapBrightness:Initialize(db,atlasBook and atlasBook.journal and atlasBook.journal.saved or AzerothFieldbookAtlasDB,

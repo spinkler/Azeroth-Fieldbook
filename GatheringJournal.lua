@@ -151,6 +151,7 @@ function ns.CreateGatheringJournal(saved,getBrightness)
             newLocation=newLocation or cleanName(map.name)
         end
         if changed then self:Changed() end
+        if isNew and ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("gathering",entry,self) end
         if self.onDiscovery and (isNew or newLocation) then
             self.onDiscovery(entry,isNew and "New node type" or "New observed location",newLocation)
         end

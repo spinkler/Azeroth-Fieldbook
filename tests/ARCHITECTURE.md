@@ -255,3 +255,14 @@ existing character settings root only when absent. `BestiaryPages.lua` presents
 the two controls in the shared Options page; `BestiaryJournal.lua` preserves
 their explicit values during Bestiary reset. Other section data, tracking,
 appearance and navigation contracts remain independent.
+
+## Adventurer's Annals
+
+The eighth section is character-only, using `AzerothFieldbookAnnalsDB`. Its six
+modules keep immutable quest/discovery events separate from compact trail chunks.
+A narrow optional publication bus links newly observed/deliberate source entries;
+existing source storage, account migration and Atlas geometry remain unchanged.
+The Annals map is a separate `CreateAtlasMap` instance. Whole-Fieldbook backups
+include the ninth loaded root; older archives preserve Annals when the slot is
+absent. See [Annals architecture and acceptance](ANNALS.md) and
+[measured storage](ANNALS_STORAGE.md).

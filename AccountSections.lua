@@ -491,6 +491,7 @@ end
 -- Compare selected stores, not the option (which may await reload). Deferred
 -- migrations can still use a retained character journal in account mode.
 function ns.GetActiveStorageScope(section,bestiaryStore)
+    if section=="annals" and not ns.InitializationBlocked then return "Character-specific", "Adventure history belongs only to this character." end
     if section=="merchants" then section="ledger" end
     local store=section=="bestiary" and bestiaryStore or ns.ActiveSectionStores[section]
     if not store or ns.InitializationBlocked then return "Storage unavailable", "This journal has no active storage." end

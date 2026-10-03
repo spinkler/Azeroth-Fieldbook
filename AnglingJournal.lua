@@ -196,6 +196,7 @@ function ns.CreateAnglingJournal(saved)
         if method and e.removed then e.removed=nil;self:Changed() end
         if method and not e.origin then e.origin=newOrigin(db,e.id,method,A.Player()) end
         touch(e,stamp,method)
+        if method and ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("angling",e,self) end
         return e
     end
     function j:Remember(input)
@@ -217,6 +218,7 @@ function ns.CreateAnglingJournal(saved)
         if not e.origin then e.origin=newOrigin(db,e.id,"recorded",A.Player()) end
         touch(e,stamp,"recorded")
         self:Log("Recorded",(pool and "Recorded pool sighting: " or "Remembered spot: ")..e.name.." — "..water.name)
+        if ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("angling",e,self) end
         self:Changed();return e
     end
     function j:ObservePool(input,location)

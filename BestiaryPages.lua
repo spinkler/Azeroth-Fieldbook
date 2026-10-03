@@ -434,7 +434,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     end
     if ns.OpenFieldbookBackups then
         optionHeading("Whole-Fieldbook backup and recovery",1900)
-        label(optionsBody,"Protect all seven journals, including private notes, the account journals and this character's retained journals. Export a copy outside the game. Reports are not backups.",35,-1934,510,"GameFontHighlightSmall")
+        label(optionsBody,"Protect all eight journals, including private notes, the account journals and this character's Annals. Export a copy outside the game. Reports are not backups.",35,-1934,510,"GameFontHighlightSmall")
         options.fieldbookBackups=button(optionsBody,"Fieldbook backups",30,-2012,200,function() ns.OpenFieldbookBackups() end)
         label(optionsBody,"Also available with /fieldbook backups, even if normal startup is blocked.",35,-2050,510,"GameFontHighlightSmall")
     end

@@ -191,6 +191,7 @@ function ns.CreateLedgerJournal(saved)
         e.personal=true;touch(e,at)
         for role in pairs(roles or {}) do if L.roles[role] then e.roles[role]=self:Origin(e,"role:"..role,at) end end
         self:Sighting(e,L.Location(v.location,near),at);self:Changed(e.id)
+        if ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("merchants",e,self) end
         if newMerchant and self.onMerchantDiscovered then self.onMerchantDiscovered(e) end
         return e
     end
@@ -199,6 +200,7 @@ function ns.CreateLedgerJournal(saved)
         local e,err=self:New(v.name);if not e then return nil,err end
         e.recorded=true;e.identityOrigin=self:Origin(e,"identity",L.Now(),"recorded")
         e.sublabel=L.Name(v.sublabel) or "";e.sublabelOrigin=self:Origin(e,"sublabel",L.Now(),"recorded")
+        if ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("merchants",e,self) end
         self:Changed(e.id);return e
     end
     function j:Annotate(id,note,role,speciality)

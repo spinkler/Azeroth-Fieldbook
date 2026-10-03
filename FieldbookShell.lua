@@ -244,6 +244,7 @@ function ns.CreateFieldbookShell(settings)
                 tab=CreateFrame("Frame",nil,navigation,"LargeSideTabButtonTemplate")
                 tab:SetFillToInterior(true,50)
                 tab.Icon:SetTexture(section.definition.icon or "Interface\\Icons\\INV_Misc_Book_02")
+                if section.definition.buildTabIcon then section.definition.buildTabIcon(tab) end
                 tab.tooltipText=section.definition.title
                 tab:SetCustomOnMouseUpHandler(function(_,button,upInside)
                     if button~="LeftButton" or not upInside then return end

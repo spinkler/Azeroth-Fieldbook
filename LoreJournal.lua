@@ -314,6 +314,7 @@ function ns.CreateLoreJournal(saved)
         return true
     end
     function j:Recorded(e)
+        if e.origin~='reported' and ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("lore",e,self) end
         if self.onRecorded then self.onRecorded(e) end
     end
     function j:Create(kind,value,deferRecorded,dryRun)

@@ -7,7 +7,7 @@ local B={VERSION=1,MAX_BYTES=256*1024*1024,MAX_NODES=4000000,MAX_DEPTH=64,
 ns.FieldbookBackups=B
 B.roots={"AzerothFieldbookDB","AzerothFieldbookAccountDB","AzerothFieldbookGatheringDB",
     "AzerothFieldbookAtlasDB","AzerothFieldbookAnglingDB","AzerothFieldbookLedgerDB",
-    "AzerothFieldbookTreasureDB","AzerothFieldbookLoreDB"}
+    "AzerothFieldbookTreasureDB","AzerothFieldbookLoreDB","AzerothFieldbookAnnalsDB"}
 local sections={gathering=3,atlas=4,angling=5,ledger=6,treasure=7,lore=8}
 local rootSet={};for _,name in ipairs(B.roots) do rootSet[name]=true end
 local function public(v) return not (issecretvalue and issecretvalue(v)) end
@@ -47,8 +47,9 @@ local function envelope(v)
         and (v.owner.guid==nil or label(v.owner.guid)),"Invalid backup owner.")
     fields(v.present,rootSet);fields(v.stores,rootSet)
     for _,name in ipairs(B.roots) do
-        need(type(v.present[name])=="boolean","The backup is missing a saved-variable slot.")
-        need(v.present[name]==(v.stores[name]~=nil),"The backup has an incomplete saved-variable slot.")
+        -- Pre-Annals AFBWB1 archives have no ninth slot. Absence preserves live Annals.
+        need((name=="AzerothFieldbookAnnalsDB" and v.present[name]==nil) or type(v.present[name])=="boolean","The backup is missing a saved-variable slot.")
+        need((name=="AzerothFieldbookAnnalsDB" and v.present[name]==nil and v.stores[name]==nil) or v.present[name]==(v.stores[name]~=nil),"The backup has an incomplete saved-variable slot.")
         local root=v.stores[name]
         need(not plain(root) or root.bestiaryBackups==nil,"Nested backup archives are not supported.")
     end
@@ -350,6 +351,11 @@ function B.CanRestore(snapshot)
         for key,index in pairs(sections) do
             local value=snapshot.stores[B.roots[index]];if value~=nil then section(key,value) end
         end
+        local annals=snapshot.stores.AzerothFieldbookAnnalsDB
+        if annals~=nil then
+            need(plain(annals) and (annals.schema==nil or annals.schema==1),"Unsupported Annals schema; preserve the raw backup.")
+            tables(annals,{"events","segments","quests","pending","settings","seen"})
+        end
         return true
     end)
 end
@@ -515,7 +521,9 @@ function B.ApplyPending()
         -- All fallible work is complete. No callbacks or migrations in the commit.
         applied={previous=previous,pending=a.pending,archive=a}
         a.recovery=recovery
-        for _,name in ipairs(B.roots) do _G[name]=snapshot.stores[name] end
+        for _,name in ipairs(B.roots) do
+            if name~="AzerothFieldbookAnnalsDB" or snapshot.present[name]~=nil then _G[name]=snapshot.stores[name] end
+        end
         a.pending=nil
         return true
     end)
@@ -562,7 +570,7 @@ function B.AddPart(session,text)
     end)
 end
 function B.Summary(snapshot)
-    local lines={"All seven journals: account data + "..snapshot.owner.name.."'s retained character data.",
+    local lines={"Fieldbook journals: account data + "..snapshot.owner.name.."'s retained character data.",
         "Created "..(read(date,"%d %b %Y, %H:%M:%S",snapshot.created) or tostring(snapshot.created)).." • addon "..snapshot.addonVersion}
     local function count(v) local n=0;if plain(v) then for _ in pairs(v) do n=n+1 end end;return n end
     local main,account=snapshot.stores[B.roots[1]],snapshot.stores[B.roots[2]]
@@ -581,5 +589,8 @@ function B.Summary(snapshot)
         end
         lines[#lines+1]=spec[2]..": "..shared.." / "..personal
     end
+    local annals=snapshot.stores.AzerothFieldbookAnnalsDB
+    lines[#lines+1]=snapshot.present.AzerothFieldbookAnnalsDB==nil and "Annals: absent from this older backup; existing history will be preserved."
+        or ("Adventurer's Annals (character only): "..entries(annals,"events").." events / "..entries(annals,"segments").." trail segments")
     return table.concat(lines,"\n")
 end

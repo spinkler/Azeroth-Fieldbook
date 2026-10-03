@@ -64,13 +64,13 @@ class StorageScopeTests(unittest.TestCase):
         lua.execute("""
             AzerothFieldbookDB.accountWideTracking=false
             for _,id in ipairs(shell.order) do
-                shell:ShowSection(id);assert(AzerothFieldbookOptions.scopeLabel:GetText()=='Account-wide')
+                shell:ShowSection(id);assert(AzerothFieldbookOptions.scopeLabel:GetText()==(id=='annals' and 'Character-specific' or 'Account-wide'))
             end
         """)
         # Fresh Lua namespace, copying SavedVariables exactly as a UI reload.
         names=['AzerothFieldbookDB','AzerothFieldbookAccountDB','AzerothFieldbookGatheringDB',
                'AzerothFieldbookAtlasDB','AzerothFieldbookAnglingDB','AzerothFieldbookLedgerDB',
-               'AzerothFieldbookTreasureDB','AzerothFieldbookLoreDB']
+               'AzerothFieldbookTreasureDB','AzerothFieldbookLoreDB','AzerothFieldbookAnnalsDB']
         lua.execute("""
             function serialize(v)
                 if type(v)=='string' then return string.format('%q',v) end

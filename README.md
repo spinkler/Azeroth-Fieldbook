@@ -1,16 +1,20 @@
-# Azeroth Fieldbook 0.22.0 (Release)
+# Azeroth Fieldbook 0.23.0 (Beta)
 
-Version 0.22.0 extends spell-ID portraits with manual ability assignment and
+**New in this Beta:** Adventurer's Annals adds an eighth journal for
+this character's quest history and Journey Trail. It is independent of account
+tracking. See [usage, API evidence and in-game acceptance](tests/ANNALS.md) and
+the [measured long-term storage report](tests/ANNALS_STORAGE.md). Annals remains subject to native API and visual acceptance.
+
+The preceding 0.22.0 release extended spell-ID portraits with manual ability assignment and
 Ctrl+Click navigation to the captured creature. Chronicle, Ledger, Almanac and
 Treasure now group filters into compact menus, with matching sort controls where
 available, alongside clearer journal headings and layout refinements.
 Whole-Fieldbook backup and recovery remains available through
 **Options → Whole-Fieldbook backups** or `/fieldbook backups`.
 
-This is the recommended Release-channel build of a pre-1.0 project. Remaining
+This is a Beta-channel build for public testing of Adventurer's Annals. Remaining
 native acceptance work includes full mineral-catalog framing, tutorial placement,
-traced sub-zone outlines and the level-cap-gated Beast Lore milestone. Release
-channel availability does not mean those checks are complete.
+traced sub-zone outlines and the level-cap-gated Beast Lore milestone. Those checks remain pending for this Beta.
 
 Saved-data protections cover initialization, Lore consolidation and
 report validation boundaries. An unsupported or malformed main save disables
@@ -126,9 +130,9 @@ or explicitly accepted shared information. It does not ship with creature or
 spell databases. Version 0.19.2 includes sharing, addon-version compatibility
 checks, account-wide tracking and a separate Rumours review window.
 
-The main window now has seven native icon tabs down its outside right edge:
+The main window now has eight native icon tabs down its outside right edge:
 **Bestiary**, **Gatherer's Compendium**, **Traveller’s Atlas**, **Angler’s Almanac**,
-**Merchant’s Ledger**, **Treasure Journal**, and **Lorekeeper's Chronicle**.
+**Merchant’s Ledger**, **Treasure Journal**, **Lorekeeper's Chronicle**, and **Adventurer's Annals**.
 Bestiary is selected on first opening. **Gatherer's Compendium** is a personal gathering
 journal; **Traveller’s Atlas** is a personal geographical journal, and **Angler’s
 Almanac** records personal fishing knowledge. **Merchant’s Ledger** remembers
@@ -480,7 +484,7 @@ Both pages share the last top-left position, so dragging either page also sets
 where the other opens. Help includes a separate **Knowledge** block with sections
 for earning knowledge through discovery and kills, and using it to share creature information.
 
-**Fieldbook backups** in Options, or `/fieldbook backups`, protects all seven
+**Fieldbook backups** in Options, or `/fieldbook backups`, protects all eight
 journals. Choose **Save Fieldbook**, review the date, source character and record
 counts, then **Export selected**. Copy every numbered part into a separate text
 file. To check or restore that file, choose **New import**, paste each part and
@@ -525,7 +529,7 @@ the client's **WTF** folder to a separate location. For focused copies, keep the
 account's `SavedVariables/AzerothFieldbook.lua` and each realm/character's
 `SavedVariables/AzerothFieldbook.lua` together, including available `.lua.bak`
 files. The account file contains the shared journals and the whole-backup archive;
-each character file contains its settings and seven retained journals. To recover,
+each character file contains its settings and eight retained journals. To recover,
 close WoW, preserve the damaged/current files separately, and replace the matching
 files from the same backup set. Then start WoW and inspect both tracking scopes.
 Do not edit or replace these files while WoW is running. A copy of the addon
@@ -600,10 +604,10 @@ ambiguous or unavailable map may need another observation in that zone. Close
 with Escape or the window's X; closing
 the Bestiary also closes its Locations window.
 
-**Account-wide tracking** is enabled by default in Options and applies to all seven
+**Account-wide tracking** is enabled by default in Options and applies to the seven shared
 journals: Bestiary, Herbs & Minerals, Traveller’s Atlas, Angler’s Almanac,
 Merchant’s Ledger, Treasure Journal and Lorekeeper's Chronicle. Turning it off uses
-this character’s separate journals.
+this character’s separate journals. Annals always remains character-specific.
 Changes apply after `/reload`. Shell appearance and Bestiary display options
 remain character preferences; each other section keeps its browsing state with
 its active journal.

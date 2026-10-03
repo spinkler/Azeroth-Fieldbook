@@ -292,3 +292,15 @@ package or publication is authorized or performed here.
   this is not a native-client responsiveness measurement).
 - `git diff --check` passed. The final runtime/docs diff and new files were
   reviewed. All native checkboxes above remain pending for the combined batch.
+
+## Annals prototype extension
+
+Whole backups now include a ninth root, per-character `AzerothFieldbookAnnalsDB`,
+containing durable events, capture-state indexes, settings and compact trail chunks.
+It never enters AccountSections imports. A pre-Annals AFBWB1 archive with no ninth
+presence slot retains the currently loaded Annals during restore. A new archive
+with an explicit ninth slot restores that slot atomically, including explicit
+absence. The recovery snapshot and rollback include Annals. This extends the
+root allowlist without changing the existing wire codec or bypassing owner,
+staging, size/depth, startup or rollback checks. Older addon versions reject
+the additional root rather than silently discarding it.

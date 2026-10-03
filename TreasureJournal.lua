@@ -185,6 +185,7 @@ function ns.CreateTreasureJournal(saved)
         encounter.recordedAt=T.Now()
         if method=="observed" or not v.timeUnknown then encounter.origin.at=encounter.recordedAt end
         self.encounters[encounter.id]=encounter;db.encounters[encounter.id]=encounter
+        if ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("treasure",e,self) end
         self:Changed(e.id);return e,encounter
     end
     function j:History(id)

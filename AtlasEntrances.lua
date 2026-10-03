@@ -133,6 +133,7 @@ function E.Attach(j)
         e.latest={direction=o.direction,at=o.at,exterior=A.Copy(o.exterior),interior=A.Copy(o.interior),
             coordinateSource=o.coordinateSource,metric=metric or (C.ValidWorld(o.world) and "world" or "map-size")}
         self.revision=self.revision+1
+        if created and ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("atlas",e,self) end
         if created and self.onRecorded then self.onRecorded(A.Copy(e)) end
         return id
     end
