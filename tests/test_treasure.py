@@ -156,6 +156,155 @@ class TreasureCaptureTests(unittest.TestCase):
     def setUp(self):
         self.lua = new_treasure()
 
+    def world_fixture(self):
+        self.lua.execute("""
+            Enum={TooltipDataType={Object=4}}
+            worldData={type=4,id=99,lines={{leftText='Weapon Crate'}}}
+            C_TooltipInfo={GetWorldCursor=function() return worldData end}
+            function openworld(guid)
+                loot={lootrow(2001,1,guid or 'GameObject-0-1-2-3-99-ABC')}
+                fire('LOOT_READY');fire('LOOT_OPENED',false,false)
+            end
+        """)
+
+    def test_food_crate_without_tooltip_id_after_completed_opening(self):
+        self.world_fixture()
+        self.lua.execute("""
+            worldData.id=nil;worldData.lines[1].leftText='Food Crate'
+            t:ObserveWorldCursor();assert(t.world and not t.world.objectID)
+            fire('UNIT_SPELLCAST_SENT','player','Food Crate','Cast-1',3365)
+            worldData=nil;now=now+5
+            fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-1',3365)
+            loot={lootrow(3770,3,'GameObject-0-1-2-3-99-ABC')}
+            fire('LOOT_READY');loot={};fire('LOOT_OPENED',true)
+            local v=assert(j.encounters[t.active.id]);local e=j:Get(v.kindID)
+            assert(e.name=='Food Crate' and e.objectID==99)
+            assert(v.items[1].itemID==3770 and v.items[1].quantity==3)
+            assert(v.items[1].recovered==nil and v.capture=='partial')
+        """)
+
+    def test_idless_hover_requires_world_click_and_expires(self):
+        self.world_fixture()
+        self.lua.execute("""
+            worldData.id=nil;worldData.lines[1].leftText='Food Crate'
+            openworld();assert(T.Count(j.kinds)==0)
+            assert(t.status:find('no matching container',1,true))
+            GetMouseFoci=function() return {CreateFrame('Button')} end
+            fire('GLOBAL_MOUSE_DOWN','RightButton');openworld();assert(T.Count(j.kinds)==0)
+            GetMouseFoci=function() return {WorldFrame} end
+            t:ObserveWorldCursor();fire('GLOBAL_MOUSE_DOWN','RightButton')
+            worldData=nil;now=now+4;openworld();assert(T.Count(j.kinds)==0)
+            worldData={type=4,lines={{leftText='Food Crate'}}}
+            fire('GLOBAL_MOUSE_DOWN','RightButton');worldData=nil
+            openworld();assert(T.Count(j.encounters)==1)
+        """)
+
+    def test_opening_failure_unrelated_cast_and_wrong_source_cancel_fallback(self):
+        self.world_fixture()
+        self.lua.execute("""
+            worldData=nil
+            fire('UNIT_SPELLCAST_SENT','player','Food Crate','Cast-1',3365)
+            fire('UNIT_SPELLCAST_INTERRUPTED','player','Cast-1',3365)
+            openworld();assert(T.Count(j.kinds)==0)
+            fire('UNIT_SPELLCAST_SENT','player','Food Crate','Cast-2',3365)
+            fire('UNIT_SPELLCAST_SENT','player','Copper Vein','Cast-3',2575)
+            fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-2',3365)
+            openworld();assert(T.Count(j.kinds)==0)
+            fire('UNIT_SPELLCAST_SENT','player','Food Crate','Cast-4',3365)
+            fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-4',3365)
+            openworld('Creature-0-1-2-3-99-ABC');assert(T.Count(j.kinds)==0)
+            fire('LOOT_CLOSED');openworld();assert(T.Count(j.kinds)==0)
+        """)
+
+    def test_exact_bag_source_accepts_missing_or_false_origin_flag(self):
+        self.lua.execute("""
+            local e=carried()
+            for i=1,2 do
+                local guid='Clam-exact-'..i
+                bags[0]={bagitem(1001,guid)};fire('BAG_UPDATE_DELAYED');flush()
+                loot={lootrow(2001,1,guid)};fire('LOOT_READY')
+                if i==1 then loot={};fire('LOOT_OPENED',true)
+                else fire('LOOT_OPENED',false,false) end
+                local v=assert(j.encounters[t.active.id])
+                assert(v.kindID==e.id and v.items[1].quantity==1)
+                fire('LOOT_SLOT_CHANGED');fire('LOOT_CLOSED')
+            end
+            assert(#j:History(e.id)==3,'carriage plus two distinct clam openings')
+            loot={lootrow(2001,1,'Unknown-item')}
+            fire('LOOT_READY');fire('LOOT_OPENED',false,false)
+            assert(#j:History(e.id)==3,'flag alone never identifies a bag container')
+        """)
+
+    def test_world_crate_capture_identity_reuse_and_reload(self):
+        self.world_fixture()
+        self.lua.execute("""
+            openworld();assert(T.Count(j.kinds)==1 and T.Count(j.encounters)==1)
+            local v=j.encounters[t.active.id];local e=j:Get(v.kindID)
+            assert(e.name=='Weapon Crate' and e.objectID==99 and e.form=='world')
+            assert(v.context=='world' and v.capture=='partial' and v.facts.inspected)
+            assert(v.location.precision=='player' and v.items[1].recovered==nil)
+            fire('LOOT_SLOT_CHANGED');assert(T.Count(j.encounters)==1)
+            fire('LOOT_CLOSED');openworld();assert(T.Count(j.encounters)==1)
+            fire('LOOT_CLOSED');openworld('GameObject-0-1-2-3-99-DEF')
+            assert(T.Count(j.kinds)==1 and T.Count(j.encounters)==2)
+            local restored=ns.CreateTreasureJournal(saved)
+            assert(restored:Get(e.id).objectID==99)
+        """)
+
+    def test_contents_chat_respects_setting_and_deduplicates_captures(self):
+        self.world_fixture()
+        self.lua.execute("""
+            local chatEnabled=false;local messages={}
+            DEFAULT_CHAT_FRAME={AddMessage=function(_,message) messages[#messages+1]=message end}
+            local book=ns.InitializeTreasure(ns.CreateFieldbookShell(),{
+                GetCreatureAnnouncement=function() return chatEnabled end})
+            j=book.journal;t=book.tracking
+            -- Drive only the initialized tracker, without the fixture's old frame.
+            function fire(event,...) t:Event(event,...) end
+            openworld();assert(#messages==0)
+            fire('LOOT_CLOSED');chatEnabled=true
+            openworld('GameObject-0-1-2-3-99-DEF')
+            assert(#messages==1 and messages[1]:find('[Contents recorded]',1,true))
+            assert(messages[1]:find('Weapon Crate',1,true))
+            fire('LOOT_SLOT_CHANGED');fire('LOOT_CLOSED')
+            openworld('GameObject-0-1-2-3-99-DEF');assert(#messages==1)
+            carried();assert(#messages==1,'carriage has no recorded contents')
+            openitem();assert(#messages==2 and messages[2]:find('Container 1001',1,true))
+            chatEnabled=false;fire('LOOT_CLOSED')
+            openworld('GameObject-0-1-2-3-99-EEE');assert(#messages==2)
+        """)
+
+    def test_world_autoloot_retains_ready_snapshot(self):
+        self.world_fixture()
+        self.lua.execute("""
+            loot={lootrow(2001,1,'GameObject-0-1-2-3-99-ABC')}
+            fire('LOOT_READY');worldData=nil;loot={};fire('LOOT_OPENED',true,false)
+            assert(T.Count(j.encounters)==1 and j.encounters[t.active.id].items[1].itemID==2001)
+        """)
+
+    def test_world_rejects_wrong_source_stale_tooltip_and_noncontainers(self):
+        self.world_fixture()
+        self.lua.execute("""
+            openworld('GameObject-0-1-2-3-100-ABC');assert(T.Count(j.kinds)==0)
+            worldData.guid='GameObject-0-1-2-3-99-DEF';openworld();assert(T.Count(j.kinds)==0)
+            worldData.guid=nil;worldData.lines[1].leftText='Copper Vein'
+            openworld();assert(T.Count(j.kinds)==0)
+            worldData.lines[1].leftText='Weapon Crate';t:ObserveWorldCursor()
+            worldData=nil;now=now+16;openworld();assert(T.Count(j.kinds)==0)
+        """)
+
+    def test_world_rejects_fishing_mixed_sources_and_item_context(self):
+        self.world_fixture()
+        self.lua.execute("""
+            fishing=true;openworld();assert(T.Count(j.kinds)==0);fishing=false
+            loot={lootrow(2001,1,'GameObject-0-1-2-3-99-ABC'),lootrow(2002,1,'Creature-0-1-2-3-99-ABC')}
+            fire('LOOT_READY');fire('LOOT_OPENED',false,false);assert(T.Count(j.kinds)==0)
+            loot={lootrow(2001,1,'GameObject-0-1-2-3-99-ABC')}
+            fire('LOOT_READY');fire('LOOT_OPENED',false,true);assert(T.Count(j.kinds)==0)
+            fire('LOOT_READY');fire('PLAYER_ENTERING_WORLD');loot={};worldData=nil
+            fire('LOOT_OPENED',true,false);assert(T.Count(j.kinds)==0)
+        """)
+
     def test_ordinary_loot_fishing_gathering_and_inventory_do_not_become_treasure(self):
         self.lua.execute('''
             bags[0]={{itemID=55,itemName='Ordinary herb',hasLoot=false}};fire('BAG_UPDATE_DELAYED');flush()
@@ -450,7 +599,7 @@ class TreasureUITests(unittest.TestCase):
     def test_arriving_observations_preserve_top_row_and_selection(self):
         self.lua.execute('''
             for i=1,20 do record(string.format('Chest %02d',i)) end;c:Refresh()
-            c:Select(c.rows[12].entry.id);c.state.offset=7;c:Refresh();local top=m.rows[1].id;local selected=c.state.selected
+            c:Select(c.rows[12].entry.id);m.list.scripts.OnMouseWheel(m.list,-7);m.list.scripts.OnVerticalScroll(m.list,m.list:GetVerticalScroll());assert(not m.previous and not m.next);local top=m.rows[1].id;local selected=c.state.selected
             record('AAA newest');flush();assert(m.rows[1].id==top and c.state.selected==selected)
         ''')
 

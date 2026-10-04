@@ -48,7 +48,7 @@ class FieldbookTabsTests(unittest.TestCase):
             local t=lore.tracking;t:Event('ITEM_TEXT_BEGIN');t:Event('ITEM_TEXT_READY')
             assert(not shell:GetFrame() and not lore.main,'Automatic capture never opens the archive')
             local e=assert(lore.journal:List({kind='writing'})[1])
-            local expected="Lorekeeper's Chronicle recorded: Captured book |cff80d0ff[A]|r (Writing)."
+            local expected="|cffffd100[Recorded]|r |cff80d0ffLorekeeper's Chronicle:|r |cffffffffCaptured book |cff80d0ff[A]|r|r |cff999999(Writing)|r"
             assert(#chat==1 and chat[1]=='|cff80d0ffAFB:|r '..expected)
             assert(#events==before+1 and events[#events].message==expected and events[#events].details.automatic)
             assert(not chat[1]:find(words[1],1,true),'Chat contains the title, never source text')
@@ -73,11 +73,11 @@ class FieldbookTabsTests(unittest.TestCase):
             local e=assert(lore.journal:Create('landmark',{title='Old tower',notes='Private annotation'}))
             assert(#chat==1 and #entries==before+1)
             local event=entries[#entries]
-            assert(event.message=="Lorekeeper's Chronicle recorded: Old tower (Landmark).")
+            assert(event.message=="|cffffd100[Recorded]|r |cff80d0ffLorekeeper's Chronicle:|r |cffffffffOld tower|r |cff999999(Landmark)|r")
             assert(chat[1]:find(event.message,1,true) and not chat[1]:find('Private annotation',1,true))
             assert(event.timestamp and event.details.kind=='lore-recorded' and event.details.loreID==e.id)
             lore.journal:Update(e.id,{notes='Changed'});assert(#chat==1 and #entries==before+1)
-            local currentMessage=event.message
+            local currentMessage="Lorekeeper's Chronicle recorded: Old tower (Landmark)."
             event.message='Lore recorded: Old tower (Landmark).'
             shell:ShowSection('lore');local root=shell:GetFrame()
             assert(root.eventLogButton:IsShown() and root.eventLogButton.enabled)
@@ -360,6 +360,15 @@ class FieldbookTabsTests(unittest.TestCase):
                 assert(shell.sections[id].frame:GetHeight()==740 and shell:GetFrame():GetHeight()==740,id..': standard section height')
                 assert(title and title.point[1]=='TOPLEFT' and title.point[2]==37 and title.point[3]==-60,id)
                 assert(title:GetText()==shell.sections[id].definition.title,id)
+                local count=page.entryCount or page.count
+                assert(count.point[2]==70 and count.point[3]==-88,id..': count below title')
+                assert(count:GetText():match('^%d+ entries • %d+ shown$'),id..': consistent count text')
+                assert(page.search.point[2]==70 and page.search.point[3]==-110,id..': shared search row')
+                local filter=page.listFilterButton or page.filters
+                if filter then assert(filter.point[2]==244 and filter.point[3]==-110,id..': filter beside search') end
+                local sort=page.sortButton or page.sort
+                if sort then assert(sort.point[2]==270 and sort.point[3]==-110,id..': sort beside filter') end
+
             end
             local b=shell.sections.bestiary.frame
             local g=shell.sections.gathering.frame

@@ -24,6 +24,12 @@ local function label(parent, text, x, y, width, size)
     font:SetText(text)
     return font
 end
+local function entryCount(parent)
+    local count=label(parent,"",70,-88,222,"GameFontHighlightSmall")
+    count:SetTextColor(0.55,0.58,0.58);count:SetWordWrap(false)
+    function count:SetCounts(total,shown) self:SetText(total.." entries • "..shown.." shown") end
+    return count
+end
 local function sectionTitle(parent,text)
     local title=label(parent,text,37,-60,260,"GameFontNormalLarge")
     title:SetTextColor(1,0.82,0.14);title:SetWordWrap(false);title:SetJustifyH("CENTER")
@@ -138,7 +144,7 @@ end
 local function shareButton(parent,action)
     return button(parent,"Share",42,-672,120,action)
 end
-ns.FieldbookUI = {Label=label, SectionTitle=sectionTitle, Button=button, ShareButton=shareButton, MenuButton=menuButton, FilterButton=filterButton, DismissOnOutsideClick=dismissOnOutsideClick, StyleMenuArrow=styleMenuArrow, Close=cornerClose, Edit=edit, Search=search, StyleMenuRow=styleMenuRow}
+ns.FieldbookUI = {Label=label, SectionTitle=sectionTitle, EntryCount=entryCount, Button=button, ShareButton=shareButton, MenuButton=menuButton, FilterButton=filterButton, DismissOnOutsideClick=dismissOnOutsideClick, StyleMenuArrow=styleMenuArrow, Close=cornerClose, Edit=edit, Search=search, StyleMenuRow=styleMenuRow}
 
 -- Entry deletion follows the Ledger's left-page warning/action/back layout.
 function ns.FieldbookUI.DeletePanel(parent,shell,title,typed)

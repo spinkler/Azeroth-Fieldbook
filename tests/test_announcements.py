@@ -8,7 +8,7 @@ PREFIX = '|cff80d0ffAFB:|r '
 
 def announcement(title, details, points=1):
     reward = '' if points is None else f'+{points} knowledge: '
-    return f'{PREFIX}|cffffd100[{reward}{title}]|r Bestiary: Forest Lurker |cff999999({details})|r'
+    return f'{PREFIX}|cffffd100[{reward}{title}]|r |cff80d0ffBestiary:|r |cffffffffForest Lurker|r |cff999999({details})|r'
 
 
 class AnnouncementTests(unittest.TestCase):

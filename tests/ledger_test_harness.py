@@ -68,7 +68,7 @@ def new_ledger(ui=False):
         end
         L=ns.Ledger;R=ns.LedgerReports;saved={};j=ns.CreateLedgerJournal(saved);t=ns.CreateLedgerTracking(j)
         shell=ns.CreateFieldbookShell();shell:RegisterSection('other',{title='Other',build=function() end})
-        c=ns.CreateLedgerBook(j,t,shell)
+        chatEnabled=true;c=ns.CreateLedgerBook(j,t,shell,{GetCreatureAnnouncement=function() return chatEnabled end})
         function visit(id,guid,goods)
             vendorNPC=id or 42;targetNPC=vendorNPC;spawn=guid or 'ABC';targetSpawn=spawn;items=goods or {item(1001,3,250)}
             fire('MERCHANT_SHOW');return j:Get(t.visits.merchant.contact)

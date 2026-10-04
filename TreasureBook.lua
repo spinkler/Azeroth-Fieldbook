@@ -1,6 +1,7 @@
 local _, ns = ...
 local T,U=ns.Treasure,ns.AtlasUI
-local PAGE=7
+local ROW_HEIGHT,LIST_HEIGHT=55,440
+local VISIBLE_ROWS=math.ceil(LIST_HEIGHT/ROW_HEIGHT)+1
 local HISTORY_PAGE=8
 local categories={world="World finds",portable="Portable",salvage="Salvage"}
 local knowledge={personal="Personal",reported="Reported only",missing="No contents",contents="Has contents"}
@@ -20,6 +21,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     local state=journal.state
     state.query=T.Text(state.query,200,true) and state.query or ""
     state.offset=T.Integer(state.offset,0,T.MAX_KINDS) and state.offset or 0
+    state.indexScroll=T.Number(state.indexScroll,0,1000000) and state.indexScroll or state.offset*ROW_HEIGHT
     state.detail=({summary=true,contents=true,history=true,notes=true})[state.detail] and state.detail or "summary"
     state.detailScroll=T.Number(state.detailScroll,0,1000000) and state.detailScroll or 0
     state.historyOffset=T.Integer(state.historyOffset,0,T.MAX_ENCOUNTERS) and state.historyOffset or 0
@@ -33,7 +35,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     function c:Menu(button,build)
         if MenuUtil and type(MenuUtil.CreateContextMenu)=="function" then MenuUtil.CreateContextMenu(button,build) end
     end
-    function c:Filter() state.offset=0;self:Refresh() end
+    function c:Filter() state.offset=0;state.indexScroll=0;self:Refresh() end
     function c:ResetFilters()
         state.category=nil;state.zone=nil;state.knowledge=nil;state.bookmarks=false;state.query="";state.sort=nil
         self.main.search:SetText("");self:Filter()
@@ -151,14 +153,19 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     end
     function c:Refresh(preserveTop)
         if not self.main then return end
-        local m=self.main;local top=preserveTop and self.rows and self.rows[state.offset+1]
+        local m=self.main;local top=preserveTop and self.rows and self.rows[math.floor(state.indexScroll/ROW_HEIGHT)+1]
         local rows,total=journal:List(state);self.rows=rows
-        if top then for i,row in ipairs(rows) do if row.entry.id==top.entry.id then state.offset=i-1;break end end end
-        state.offset=math.min(state.offset,math.max(0,#rows-1))
-        m.count:SetText(#rows.." / "..total.." container kinds")
+        if top then for i,row in ipairs(rows) do if row.entry.id==top.entry.id then state.indexScroll=(i-1)*ROW_HEIGHT+state.indexScroll%ROW_HEIGHT;break end end end
+        local scroll=math.max(0,math.min(state.indexScroll,math.max(0,#rows*ROW_HEIGHT-LIST_HEIGHT)))
+        state.indexScroll=scroll
+        m.updatingList=true;m.listBody:SetHeight(math.max(LIST_HEIGHT,#rows*ROW_HEIGHT))
+        m.list:SetVerticalScroll(scroll);m.list:UpdateScrollChildRect();m.list:RefreshScrollBar();m.updatingList=nil
+        local first=math.floor(scroll/ROW_HEIGHT)
+        m.count:SetCounts(total,#rows)
         m.empty:SetShown(#rows==0);m.empty:SetText(total==0 and "Your Treasure Journal begins empty.\n\nRecord a find, or carry an openable container. All locations describe past encounters." or "No entries match these filters.\nUse Filters > Clear to browse all known finds.")
         for i,row in ipairs(m.rows) do
-            local found=rows[state.offset+i];row:SetShown(found~=nil);row.id=found and found.entry.id
+            local found=rows[first+i];row:SetShown(found~=nil);row.id=found and found.entry.id
+            row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-(first+i-1)*ROW_HEIGHT)
             if found then
                 local e,s=found.entry,found.summary;row.name:SetText((e.bookmark and U.SavedIcon(true) or "")..T.Safe(found.title));row.icon:SetTexture(icon(e))
                 row.kind:SetText(T.Safe((e.form=="world" and "World" or "Portable").." / "..e.category.." • "..found.zone))
@@ -166,7 +173,6 @@ function ns.CreateTreasureBook(journal,tracking,shell)
                 row:SetSelected(e.id==state.selected)
             end
         end
-        m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+PAGE<#rows)
         m.filters:SetSelected(state.category~=nil or state.zone~=nil or state.knowledge~=nil or state.bookmarks==true)
         local e=journal:Get(state.selected);local s=e and journal:Summary(e)
         m.name:SetText(e and T.Safe(journal:Title(e)) or "Treasure Journal")
@@ -191,9 +197,9 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Treasure Journal")
         m.directory=CreateFrame("Frame",nil,m);m.directory:SetAllPoints();local d=m.directory
-        m.search=U.Search(d,47,-92,188,200);m.search:SetText(state.query)
+        m.search=U.Search(d,70,-110,168,200);m.search:SetText(state.query)
         m.search:HookScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
-        m.filters=ns.FieldbookUI.FilterButton(d,244,-92,function(button)
+        m.filters=ns.FieldbookUI.FilterButton(d,244,-110,function(button)
             m.search:ClearFocus()
             c:Menu(button,function(_,root)
                 local function checkbox(parent,label,key,value)
@@ -225,7 +231,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             end)
         end)
         U.StyleSelection(m.filters)
-        m.sort=U.Button(d,"",270,-92,22,function(button)
+        m.sort=U.Button(d,"",270,-110,22,function(button)
             m.search:ClearFocus()
             c:Menu(button,function(_,root)
                 root:CreateTitle("Sort by")
@@ -245,14 +251,23 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             end)
             item[1]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         end
-        m.notes=U.Button(d,"Kind notes",170,-121,122,function() c:Notes() end)
-        m.count=U.Label(d,"",42,-155,250,"GameFontHighlightSmall");m.rows={}
-        for i=1,PAGE do
-            local row=CreateFrame("Button",nil,d,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-177-(i-1)*55);row:SetSize(250,54)
+        m.notes=U.Button(d,"Kind notes",170,-142,122,function() c:Notes() end)
+        m.count=ns.FieldbookUI.EntryCount(d);m.rows={}
+        m.list,m.listBody=U.Scroll(d,42,-177,228,LIST_HEIGHT)
+        m.list:HookScript("OnVerticalScroll",function(self,value)
+            if not m.updatingList then state.indexScroll=value or self:GetVerticalScroll();c:Refresh() end
+        end)
+        local function scrollList(_,delta)
+            m.list:SetVerticalScroll(math.max(0,math.min(m.listBody:GetHeight()-LIST_HEIGHT,m.list:GetVerticalScroll()-delta*ROW_HEIGHT)))
+        end
+        m.list:EnableMouseWheel(true);m.list:SetScript("OnMouseWheel",scrollList)
+        for i=1,VISIBLE_ROWS do
+            local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*ROW_HEIGHT);row:SetSize(228,54)
+            row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",scrollList)
             ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",6,-6);row.icon:SetSize(19,19)
-            row.name=U.Label(row,"",29,-6,214,"GameFontHighlightSmall")
-            row.kind=U.Label(row,"",7,-22,236,"GameFontDisableSmall");row.knowledge=U.Label(row,"",7,-36,236,"GameFontHighlightSmall")
+            row.name=U.Label(row,"",29,-6,192,"GameFontHighlightSmall")
+            row.kind=U.Label(row,"",7,-22,214,"GameFontDisableSmall");row.knowledge=U.Label(row,"",7,-36,214,"GameFontHighlightSmall")
             row.name:SetWordWrap(false);row.kind:SetWordWrap(false);row.knowledge:SetWordWrap(false)
             row:SetScript("OnClick",function(self) c:Select(self.id) end)
             row:SetScript("OnEnter",function(self)
@@ -266,8 +281,6 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end);m.rows[i]=row
         end
         m.empty=U.Label(d,"",49,-203,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
-        m.previous=U.Button(d,"Previous",42,-604,121,function() state.offset=math.max(0,state.offset-PAGE);c:Refresh() end)
-        m.next=U.Button(d,"Next",170,-604,122,function() state.offset=state.offset+PAGE;c:Refresh() end)
         m.manual=U.Button(d,"Record a find",42,-638,250,function() c:Manual() end)
         m.name=U.Label(m,"",342,-60,426,"GameFontNormalLarge");m.name:SetWordWrap(false)
         m.name:SetShadowColor(0,0,0,0.85);m.name:SetShadowOffset(1,-1)
@@ -312,10 +325,10 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         help=T.VISION.."\n\n|cffffd100Historical knowledge|r\nEach entry groups a kind of treasure or container; History lists its past sightings, access attempts and inspections. A recorded past find is not evidence that a container is currently present. Matching names do not automatically combine different kinds.\n\n"..
             "|cffffd100Record and correct|r\nUse Record a find to choose an existing kind or create one, then record what happened. Leave the location unknown if unsure. Use player position supplies approximate coordinates for review. Enter contents only if inspected, and distinguish what you saw from what you personally recovered.\n\nSelect an encounter in History or on the map, then use Correct or Remove. Automatic encounters allow corrections to location, access details and notes while retaining their original contents evidence. Kind notes edits the kind's label, category and notes; Look for again bookmarks it.\n\n"..
             "|cffffd100Maps and browsing|r\nSearch names, locations, items and notes. Known maps chooses a recorded map; Selected kind switches to All finds in zone. Click a marker to review a past encounter, or click again to cycle overlapping finds. Expand gives the details more reading space.\n\nMap pins come from positioned world finds and recorded acquisitions. Seeing or opening a container in your bags does not establish where you acquired it.\n\n"..
-            "|cffffd100Automatic capture|r\nRecognizable openable bag items can be recorded automatically. When opened, their contents are captured only if the addon can reliably identify the source. Captures are partial and do not confirm that you recovered the items. Uncertain sources are skipped.\n\nUse Record a find for world finds, acquisition details, access methods and recovered quantities. Seeing an item in the journal does not establish that you still own it.\n\n"..
+            "|cffffd100Automatic capture|r\nRecognizable openable bag items and world containers can be recorded automatically. World capture matches a recent object tooltip to the actual loot source; recognized English names include chests, crates, coffers, strongboxes, footlockers, lockboxes, caches, barrels and sacks. When the tooltip has no object ID, a recent world click or completed opening cast can establish the name; the loot window must still identify one world-object source. Locations are approximate player positions. When opened, contents are captured only if the addon can reliably identify the source. Captures are partial and do not confirm that you recovered the items. Uncertain sources are skipped; the page status explains why a recognized container could not be captured.\n\nUse Record a find for unrecognized world finds, acquisition details, access methods and recovered quantities. Seeing an item in the journal does not establish that you still own it.\n\n"..
             "|cffffd100Reports|r\nTreasure currently has no player-facing report sending, import or export. Bestiary Share does not send Treasure records.\n\n"..
             "|cffffd100Your journal|r\nTreasure follows Account-wide tracking in Options. It starts on; turn it off to use this character's separate journal after /reload. Existing character history imports once; later changes in the two scopes stay separate.",
-        onOpen=function() if c.main then c:Refresh();c.main.details:SetVerticalScroll(state.detailScroll) end end})
+        onOpen=function() if c.main then c:Message(tracking.status);c:Refresh();c.main.details:SetVerticalScroll(state.detailScroll) end end})
     journal.onChange=function()
         if not c.main or shell.active~="treasure" or not shell:GetFrame():IsShown() or c.refreshQueued then return end
         c.refreshQueued=true
@@ -327,11 +340,17 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     end
     return c
 end
-function ns.InitializeTreasure(shell)
+function ns.InitializeTreasure(shell,eventJournal)
     if ns.InitializationBlocked then return end
     if AzerothFieldbookTreasureDB==nil then AzerothFieldbookTreasureDB={} end
     local store=AzerothFieldbookTreasureDB
     if ns.SelectSectionStorage then store=ns.SelectSectionStorage("treasure",store) end
     local journal=ns.CreateTreasureJournal(store)
-    return ns.CreateTreasureBook(journal,ns.CreateTreasureTracking(journal),shell)
+    local tracking=ns.CreateTreasureTracking(journal)
+    tracking.onContentsRecorded=function(entry)
+        if eventJournal and eventJournal:GetCreatureAnnouncement() and DEFAULT_CHAT_FRAME then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cffffd100[Contents recorded]|r |cff80d0ffTreasure Journal:|r |cffffffff"..T.Safe(entry.name).."|r")
+        end
+    end
+    return ns.CreateTreasureBook(journal,tracking,shell)
 end

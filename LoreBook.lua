@@ -1,6 +1,8 @@
 local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local L,U=ns.Lore,ns.AtlasUI
+local ROW_HEIGHT,LIST_HEIGHT=50,430
+local VISIBLE_ROWS=math.ceil(LIST_HEIGHT/ROW_HEIGHT)+1
 local icons={writing="Interface\\Icons\\INV_Misc_Book_09",landmark="Interface\\Icons\\INV_Misc_Map_01",person="Interface\\Icons\\INV_Misc_GroupLooking",mystery="Interface\\Icons\\INV_Misc_QuestionMark"}
 local statusNames={partial="Partial archive",complete="Complete archive",interrupted="Capture interrupted",failed="Partial archive",unsupported="Automatic full-book capture unavailable"}
 local mysteryNames={open="Open",investigating="Investigating",resolved="Resolved by me"}
@@ -66,6 +68,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
     local state=journal.state
     state.query=type(state.query)=="string" and state.query or ""
     state.offset=L.Integer(state.offset,0,L.MAX_ENTRIES) and state.offset or 0
+    state.indexScroll=L.Integer(state.indexScroll,0,1000000) and state.indexScroll or state.offset*ROW_HEIGHT
     state.view="entry"
     state.reading=type(state.reading)=="table" and state.reading or {}
     state.location=L.Integer(state.location,1,L.MAX_LOCATIONS) and state.location or 1
@@ -80,7 +83,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         local r=state.reading[state.selected]
         if r then r.scroll=self.main.reader:GetVerticalScroll() end
     end
-    function c:Filter() state.offset=0;self:Refresh() end
+    function c:Filter() state.offset=0;state.indexScroll=0;self:Refresh() end
     function c:ResetFilters()
         state.kind=nil;state.zone=nil;state.origin=nil;state.revisit=nil;state.status=nil;state.completeness=nil;state.sort=nil
         state.query="";self.main.search:SetText("");self:Filter()
@@ -192,9 +195,14 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         if not self.main then return end
         local m=self.main;self:Remember()
         local rows=journal:List(state);self.rows=rows
-        state.offset=math.max(0,math.min(state.offset,math.floor(math.max(0,#rows-1)/8)*8))
+        local scroll=math.max(0,math.min(state.indexScroll,math.max(0,#rows*ROW_HEIGHT-LIST_HEIGHT)))
+        state.indexScroll=scroll
+        m.updatingList=true;m.listBody:SetHeight(math.max(LIST_HEIGHT,#rows*ROW_HEIGHT))
+        m.list:SetVerticalScroll(scroll);m.list:UpdateScrollChildRect();m.list:RefreshScrollBar();m.updatingList=nil
+        local first=math.floor(scroll/ROW_HEIGHT)
         for i,row in ipairs(m.rows) do
-            local e=rows[state.offset+i];row.id=e and e.id;row:SetShown(e~=nil)
+            local e=rows[first+i];row.id=e and e.id;row:SetShown(e~=nil)
+            row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-(first+i-1)*ROW_HEIGHT)
             if e then
                 row.name:SetText(L.AutomaticLabel(journal:Title(e),L.IsAutomatic(e)));row.icon:SetTexture(icons[e.kind]);row:SetSelected(e.id==state.selected)
                 local text=L.kinds[e.kind]
@@ -208,8 +216,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         m.empty:SetShown(#rows==0);m.empty:SetText(next(journal.entries) and "No matching entries.\nTry clearing the filters." or
             "Your archive begins empty.\n\nOpen supported readable lore to preserve it, or record a writing, landmark, person or mystery.")
         local usage=journal:StorageStatus();m.capacity:SetText(usage)
-        m.count:SetText(#rows.." entries"..(state.zone and " • "..L.Safe(tostring(state.zone)) or ""))
-        m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+8<#rows)
+        m.count:SetCounts(#journal:List(),#rows)
         local filters=0;for _,key in ipairs({"kind","zone","origin","revisit","status","completeness"}) do if state[key] then filters=filters+1 end end
         m.filters:SetSelected(filters>0)
         local e=journal:Get(state.selected);m.name:SetText(e and L.AutomaticLabel(journal:Title(e),L.IsAutomatic(e)) or "Your personal archive")
@@ -253,9 +260,9 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         c.frame=content;local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Lorekeeper's Chronicle")
-        m.search=U.Search(m,47,-92,188,200);m.search:SetText(state.query)
+        m.search=U.Search(m,70,-110,168,200);m.search:SetText(state.query)
         m.search:HookScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
-        m.filters=ns.FieldbookUI.FilterButton(m,244,-92,function(button)
+        m.filters=ns.FieldbookUI.FilterButton(m,244,-110,function(button)
             m.search:ClearFocus()
             c:Menu(button,function(_,root)
                 -- Each submenu owns one state key; other groups retain their selection.
@@ -296,7 +303,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             end)
         end)
         U.StyleSelection(m.filters)
-        m.sort=U.Button(m,"",270,-92,22,function(button)
+        m.sort=U.Button(m,"",270,-110,22,function(button)
             m.search:ClearFocus()
             c:Menu(button,function(_,root)
                 root:CreateTitle("Sort by")
@@ -317,12 +324,21 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             item[1]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         end
         m.rows={}
-        for i=1,8 do
-            local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-173-(i-1)*50);row:SetSize(250,49)
+        m.list,m.listBody=U.Scroll(m,42,-173,228,LIST_HEIGHT)
+        m.list:HookScript("OnVerticalScroll",function(self,value)
+            if not m.updatingList then state.indexScroll=value or self:GetVerticalScroll();c:Refresh() end
+        end)
+        local function scrollList(_,delta)
+            m.list:SetVerticalScroll(math.max(0,math.min(m.listBody:GetHeight()-LIST_HEIGHT,m.list:GetVerticalScroll()-delta*ROW_HEIGHT)))
+        end
+        m.list:EnableMouseWheel(true);m.list:SetScript("OnMouseWheel",scrollList)
+        for i=1,VISIBLE_ROWS do
+            local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*ROW_HEIGHT);row:SetSize(228,49)
+            row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",scrollList)
             ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",7,-9);row.icon:SetSize(20,20)
-            row.name=U.Label(row,"",33,-7,210,"GameFontHighlightSmall");row.name:SetWordWrap(false)
-            row.context=U.Label(row,"",33,-28,210,"GameFontDisableSmall");row.context:SetWordWrap(false)
+            row.name=U.Label(row,"",33,-7,188,"GameFontHighlightSmall");row.name:SetWordWrap(false)
+            row.context=U.Label(row,"",33,-28,188,"GameFontDisableSmall");row.context:SetWordWrap(false)
             row:SetScript("OnClick",function(self) if self.id then c:Select(self.id) end end);m.rows[i]=row
         end
         m.empty=U.Label(m,"",46,-184,242,"GameFontHighlight");m.empty:SetWordWrap(true)
@@ -337,9 +353,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             end
         end)
         m.capacityHover:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
-        m.count=U.Label(m,"",42,-582,250,"GameFontHighlightSmall")
-        m.previous=U.Button(m,"Previous",42,-604,120,function() state.offset=math.max(0,state.offset-8);c:Refresh() end)
-        m.next=U.Button(m,"Next",173,-604,119,function() state.offset=state.offset+8;c:Refresh() end)
+        m.count=ns.FieldbookUI.EntryCount(m)
         m.new=U.MenuButton(m,"Record…",42,-638,120,function(button)
             c:Menu(button,function(_,root)
                 for _,row in ipairs({{"writing","Transcribe writing"},{"landmark","Record Landmark"},{"person","Manual person"},{"mystery","Create Mystery"}}) do root:CreateButton(row[2],function() c:Edit(row[1]) end) end

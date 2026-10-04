@@ -191,7 +191,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
                 row.icon:SetTexture(e.kind=="item" and itemIcon(e) or "Interface\\Icons\\Trade_Fishing")
             end
         end
-        m.count:SetText(#rows.." recorded "..(state.view=="catches" and "items" or state.view=="pools" and "pool types" or "waters & spots"))
+        m.count:SetCounts(#journal:List(state.view,{status=s.status=="removed" and "removed" or "all"}),#rows)
         m.empty:SetShown(#rows==0);m.empty:SetText("No matching fishing knowledge.\n\nRemember a spot, record a sighting, or catch something to begin.")
         m.filters:SetSelected(s.currentZone==true or s.knowledge~="all" or s.source~="all" or s.status~="all")
         for key,b in pairs(m.views) do b:SetEnabled(key~=state.view) end
@@ -357,11 +357,11 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Angler’s Almanac")
         m.views={}
         for i,view in ipairs({"waters","pools","catches"}) do
-            local key=view;m.views[key]=U.Button(m,({waters="Waters",pools="Pool Types",catches="Catches"})[key],42+(i-1)*84,-94,82,function() c:SetView(key) end)
+            local key=view;m.views[key]=U.Button(m,({waters="Waters",pools="Pool Types",catches="Catches"})[key],42+(i-1)*84,-146,82,function() c:SetView(key) end)
         end
-        m.search=U.Search(m,47,-126,214,200);m.search:SetText(c:State().query)
+        m.search=U.Search(m,70,-110,168,200);m.search:SetText(c:State().query)
         m.search:HookScript("OnTextChanged",function() if not c.rendering then local s=c:State();s.query=m.search:GetText();s.offset=0;s.indexScroll=0;c:Refresh() end end)
-        m.filters=ns.FieldbookUI.FilterButton(m,270,-126,function(button)
+        m.filters=ns.FieldbookUI.FilterButton(m,244,-110,function(button)
             m.search:ClearFocus()
             if not MenuUtil or type(MenuUtil.CreateContextMenu)~="function" then return end
             MenuUtil.CreateContextMenu(button,function(_,root)
@@ -394,7 +394,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Filter fishing records");GameTooltip:Show() end
         end)
         m.filters:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
-        m.count=U.Label(m,"",42,-157,250,"GameFontHighlightSmall");m.rows={}
+        m.count=ns.FieldbookUI.EntryCount(m);m.rows={}
         m.list,m.listBody=U.Scroll(m,42,-180,228,LIST_HEIGHT)
         m.list:HookScript("OnVerticalScroll",function(self,value)
             if not m.updatingList then c:State().indexScroll=value or self:GetVerticalScroll();c:Refresh() end
@@ -445,10 +445,10 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         end,function(id,name)
             local s=c:State();s.mapID,s.mapZone=id,name;m.map:Invalidate();c:Refresh()
         end)
-        m.current=U.Button(m,"Current Zone",794,-60,128,function()
+        m.current=U.Button(m,"Current Zone",342,-146,128,function()
             local p=A.Location(A.CurrentLocation());local s=c:State();s.mapID,s.mapZone=p.mapID,p.zone;m.map:Invalidate();c:Refresh()
         end)
-        m.session=U.ReadArea(m,342,-125,555,41)
+        m.session=U.ReadArea(m,480,-125,442,41)
         m.assign=U.Button(m,"Assign selected pool",342,-91,172,function()
             local e=journal:Get(c:State().selected);local source=e and e.kind=="spot" and not e.poolID and "unclassified" or "pool"
             local ok,err=tracking:Assign(source,c:State().selected);c:Message(ok and tracking.status or err);c:Refresh()

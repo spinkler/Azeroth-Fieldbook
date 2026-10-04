@@ -238,6 +238,30 @@ class AtlasUITests(unittest.TestCase):
     def setUp(self):
         self.lua = new_atlas(ui=True)
 
+    def test_scrollable_index_and_current_map_toggle(self):
+        self.lua.execute('''
+            assert(j.state.all and not m.scope.afbSelected and m.scope:GetText()=='Current map')
+            assert(not m.previous and not m.next)
+            for i=1,30 do j:Save(fixture(string.format('Discovery %02d',i),'cave',i<=15 and 101 or 102)) end
+            c:Refresh()
+            assert(m.listBody:GetHeight()==900 and m.list:GetVerticalScroll()==0)
+            m.rows[1].scripts.OnMouseWheel(m.rows[1],-3)
+            m.list.scripts.OnVerticalScroll(m.list,m.list:GetVerticalScroll())
+            assert(j.state.indexScroll==90 and m.rows[1].name:GetText()=='Discovery 04')
+            m.list:SetVerticalScroll(510);m.list.scripts.OnVerticalScroll(m.list,510)
+            assert(m.rows[13].name:GetText()=='Discovery 30')
+            local first=c.entries:List('',101,true)[1].id
+            c:Select(first);assert(m.list:GetVerticalScroll()==0 and m.rows[1].id==first)
+            click(m.scope)
+            assert(not j.state.all and m.scope.afbSelected and m.scope:GetText()=='Current map')
+            assert(m.listBody:GetHeight()==450 and j.state.indexScroll==0)
+            m.list:SetVerticalScroll(60)
+            m.search:SetText('Discovery 01')
+            assert(m.list:GetVerticalScroll()==0 and m.listBody:GetHeight()==390)
+            assert(m.rows[1].name:GetText()=='Discovery 01' and not m.rows[2]:IsShown())
+            click(m.scope);assert(j.state.all and not m.scope.afbSelected)
+        ''')
+
     def test_discovery_hover_and_safe_text_return_only_one_value(self):
         self.lua.execute(r'''
             assert(select('#',A.Safe('Plain name'))==1,'Safe text leaked gsub replacement count')
@@ -294,7 +318,7 @@ class AtlasUITests(unittest.TestCase):
             assert(j.state.iconSize==6 and m.map.pins[1]:GetWidth()==10)
             assert(c.entries.borderlessPins and m.map.pins[1].icon.texture==A.category.cave.icon)
             assert(m.autoEntrances.point[3]==-91 and m.automaticMapping.point[3]==-119)
-            assert(m.layerMenu.point[3]==-146 and m.cleanPoints.point[3]==-146 and m.zone.point[3]==-174)
+            assert(m.layerMenu.parent==m.map and m.layerMenu.point[1]=="TOPLEFT" and m.layerMenu.point[4]==8 and m.layerMenu.point[5]==-8 and m.cleanPoints.point[2]==754 and m.cleanPoints.point[3]==-60 and m.current.point[2]==342 and m.current.point[3]==-146 and m.zone.point[3]==-174)
             m.layerPanel.IsMouseOver=function() return true end
             m.layerPanel.scripts.OnEvent(m.layerPanel,'GLOBAL_MOUSE_DOWN')
             assert(m.layerPanel:IsShown(),'Clicks inside must keep layer choices open')
@@ -627,7 +651,7 @@ class AtlasUITests(unittest.TestCase):
                 assert(owner==m.zone);generate(owner,description())
             end}
             local before=#j:List('',nil,true)
-            assert(m.continent==nil and m.zone:GetWidth()==m.layerMenu:GetWidth()+m.cleanPoints:GetWidth()+8)
+            assert(m.continent==nil and m.zone:GetWidth()==306 and m.layerMenu:GetWidth()==m.layerMenu:GetHeight())
             m.zone.scripts.OnClick(m.zone);assert(chosen);chosen()
             assert(j.state.mapID==102 and #j:List('',nil,true)==before)
         ''')

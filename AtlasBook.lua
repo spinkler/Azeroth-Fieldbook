@@ -1,6 +1,8 @@
 local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A,U=ns.Atlas,ns.AtlasUI
+local ROW_HEIGHT,LIST_HEIGHT=30,390
+local VISIBLE_ROWS=math.ceil(LIST_HEIGHT/ROW_HEIGHT)+1
 local function categoryInfo(id) return A.category[id] or ns.AtlasEntrances.Category(id) end
 function ns.CreateAtlasBook(journal,shell,adapters)
     local c={journal=journal,shell=shell,adapters=adapters,pages={}}
@@ -26,7 +28,8 @@ function ns.CreateAtlasBook(journal,shell,adapters)
     local state=journal.state
     state.query=type(state.query)=="string" and state.query or ""
     state.offset=A.Integer(state.offset,0,5000) and state.offset or 0
-    state.all=state.all==true
+    state.indexScroll=A.Number(state.indexScroll,0,1000000) and state.indexScroll or state.offset*ROW_HEIGHT
+    state.all=state.all~=false
     function c:Show(page)
         for _,v in pairs(self.pages) do v:Hide() end
         self.activePage=page or self.main;self.activePage:Show()
@@ -35,7 +38,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
     end
     function c:Message(text) self.main.message:SetText(A.Safe(text or "")) end
     function c:SetZone(mapID,zone)
-        state.mapID,state.zone=mapID,zone or "Unknown zone";state.offset=0
+        state.mapID,state.zone=mapID,zone or "Unknown zone";state.offset=0;state.indexScroll=0
         if self.main then self.main.map:Invalidate() end
         self:Refresh()
     end
@@ -63,7 +66,11 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             rows=entries:List("",state.mapID,state.all)
             for i,r in ipairs(rows) do if r.id==id then found=i;break end end
         end
-        if found then state.offset=math.floor((found-1)/12)*12 end
+        if found then
+            local top=(found-1)*ROW_HEIGHT;local scroll=state.indexScroll
+            if top<scroll then state.indexScroll=top
+            elseif top+ROW_HEIGHT>scroll+LIST_HEIGHT then state.indexScroll=top+ROW_HEIGHT-LIST_HEIGHT end
+        end
         self.main.details:SetVerticalScroll(0);self:Refresh()
     end
     function c:Picker(config)
@@ -128,17 +135,22 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         if not self.main then return end
         local m=self.main
         local rows=entries:List(state.query,state.mapID,state.all)
-        state.offset=math.max(0,math.min(state.offset,math.floor(math.max(0,#rows-1)/12)*12))
+        local scroll=math.max(0,math.min(state.indexScroll,math.max(0,#rows*ROW_HEIGHT-LIST_HEIGHT)))
+        state.indexScroll=scroll
+        m.updatingList=true;m.listBody:SetHeight(math.max(LIST_HEIGHT,#rows*ROW_HEIGHT))
+        m.list:SetVerticalScroll(scroll);m.list:UpdateScrollChildRect();m.list:RefreshScrollBar();m.updatingList=nil
+        local first=math.floor(scroll/ROW_HEIGHT)
         if m.automaticMapping then m.automaticMapping:SetChecked(state.automaticMapping~=false) end
         if m.autoEntrances then
             m.autoEntrances:SetChecked(state.autoEntrances==true)
         end
-        m.scope:SetText(state.all and "Scope: All recorded zones" or "Scope: Current map")
+        m.scope:SetSelected(not state.all)
         m.zone:SetText(state.zone and state.zone~="" and state.zone or "Choose zone")
         for i,row in ipairs(m.rows) do
-            local data=rows[state.offset+i];row.id=data and data.id;row:SetShown(data~=nil)
+            local data=rows[first+i];row.id=data and data.id;row:SetShown(data~=nil)
+            row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-(first+i-1)*ROW_HEIGHT)
             if data then
-                row.name:SetText((data.id==state.selected and "> " or "")..A.AutomaticLabel(data.name,data.entrance));row.zone:SetText(A.Safe(data.zone~="" and data.zone or "Unpositioned / unknown zone"))
+                row.name:SetText(A.AutomaticLabel(data.name,data.entrance));row.zone:SetText(A.Safe(data.zone~="" and data.zone or "Unpositioned / unknown zone"))
                 row.icon:SetTexture(categoryInfo(data.category).icon)
                 local selected=data.id==state.selected;row:SetSelected(selected)
                 row.name:SetTextColor(selected and 1 or 0.75,selected and 0.82 or 0.8,selected and 0.14 or 0.8)
@@ -146,9 +158,8 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end
         m.empty:SetShown(#rows==0)
         m.empty:SetText((next(journal.records) or (journal.entrances and next(journal.entrances.records))) and "No matching discoveries.\nTry all zones or clear your search." or "Your atlas starts empty.\n\nChoose Add Discovery to record a place at your current position, or enable entrance discovery as you explore.")
-        m.count:SetText(#rows.." discoveries • "..(state.all and "all zones" or "displayed map"))
+        m.count:SetCounts(#entries:List("",nil,true),#rows)
         m.cancelPlace:SetShown(m.map.placing==true)
-        m.previous:SetEnabled(state.offset>0);m.next:SetEnabled(state.offset+12<#rows)
         m.subzones:SetChecked(state.showSubzones==true)
         m.subzoneLabels:SetChecked(state.showSubzoneLabels==true)
         m.subzonePoints:SetChecked(state.showSubzonePoints==true)
@@ -200,17 +211,27 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         spine:SetColorTexture(0.25,0.13,0.055,0.35)
         spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Traveller’s Atlas")
-        m.search=U.Search(m,48,-113,240,200);m.search:SetText(state.query)
-        m.search:HookScript("OnTextChanged",function() state.query=m.search:GetText();state.offset=0;c:Refresh() end)
-        m.scope=U.Button(m,"",42,-146,250,function() state.all=not state.all;state.offset=0;c:Refresh() end)
-        m.count=U.Label(m,"",42,-179,250,"GameFontHighlightSmall")
+        m.search=U.Search(m,70,-110,222,200);m.search:SetText(state.query)
+        m.search:HookScript("OnTextChanged",function() state.query=m.search:GetText();state.offset=0;state.indexScroll=0;c:Refresh() end)
+        m.scope=U.Button(m,"Current map",42,-146,250,function() state.all=not state.all;state.offset=0;state.indexScroll=0;c:Refresh() end)
+        U.StyleSelection(m.scope)
+        m.count=ns.FieldbookUI.EntryCount(m)
         m.rows={}
-        for i=1,12 do
-            local row=CreateFrame("Button",nil,m,"BackdropTemplate");row:SetPoint("TOPLEFT",42,-204-(i-1)*30);row:SetSize(250,29)
+        m.list,m.listBody=U.Scroll(m,42,-204,228,LIST_HEIGHT)
+        m.list:HookScript("OnVerticalScroll",function(self,value)
+            if not m.updatingList then state.indexScroll=value or self:GetVerticalScroll();c:Refresh() end
+        end)
+        local function scrollList(_,delta)
+            m.list:SetVerticalScroll(math.max(0,math.min(m.listBody:GetHeight()-LIST_HEIGHT,m.list:GetVerticalScroll()-delta*ROW_HEIGHT)))
+        end
+        m.list:EnableMouseWheel(true);m.list:SetScript("OnMouseWheel",scrollList)
+        for i=1,VISIBLE_ROWS do
+            local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*ROW_HEIGHT);row:SetSize(228,29)
+            row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",scrollList)
             ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",3,-6);row.icon:SetSize(20,20)
-            row.name=U.Label(row,"",28,-2,217,"GameFontHighlightSmall");row.name:SetWordWrap(false)
-            row.zone=U.Label(row,"",28,-17,217,"GameFontDisableSmall");row.zone:SetWordWrap(false)
+            row.name=U.Label(row,"",28,-2,195,"GameFontHighlightSmall");row.name:SetWordWrap(false)
+            row.zone=U.Label(row,"",28,-17,195,"GameFontDisableSmall");row.zone:SetWordWrap(false)
             row:SetScript("OnClick",function(self) if self.id then c:Select(self.id) end end)
             row:SetScript("OnEnter",function(self)
                 local e=entries:Get(self.id)
@@ -220,8 +241,6 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             m.rows[i]=row
         end
         m.empty=U.Label(m,"",50,-228,233,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(4)
-        m.previous=U.Button(m,"Previous",42,-574,118,function() state.offset=math.max(0,state.offset-12);c:Refresh() end)
-        m.next=U.Button(m,"Next",174,-574,118,function() state.offset=state.offset+12;c:Refresh() end)
         -- Center the 580-pixel control rows between the divider and inner right edge.
         U.Button(m,"Add Discovery",342,-60,140,function() c:OpenEditor(nil,false,A.CurrentLocation()) end)
         U.Button(m,"Expeditions",488,-60,116,function() c:Expeditions() end)
@@ -239,13 +258,13 @@ function ns.CreateAtlasBook(journal,shell,adapters)
                 return ok,"Could not delete this entry."
             end)
         end)
-        U.Button(m,"Current Zone",794,-60,128,function()
+        m.current=U.Button(m,"Current Zone",342,-146,128,function()
             local location=A.CurrentLocation();c:SetZone(location.mapID,location.zone);c:Message(location.mapID and "Showing your current zone." or "Current map unavailable; you can still record notes.")
         end)
         m.zone=U.ZoneMenu(m,342,-174,306,function()
             local ids={state.mapID};for _,row in ipairs(A.MapCatalog(entries)) do ids[#ids+1]=row.mapID end;return ids
         end,function(id,name) c:SetZone(id,name) end)
-        m.layerMenu=U.MenuButton(m,"Map Layers",342,-146,130,function()
+        m.layerMenu=ns.FieldbookUI.FilterButton(m,0,0,function()
             m.layerPanel:SetShown(not m.layerPanel:IsShown())
         end)
         m.layerPanel=CreateFrame("Frame",nil,m,"BackdropTemplate")
@@ -294,17 +313,17 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.automaticMapping:SetChecked(state.automaticMapping~=false)
         m.automaticMapping:SetEnabled(not journal.readOnly)
         U.Tip(m.automaticMapping,"Automatically record sub-zone crossings and interior survey points. Pauses in The Great Sea, on flight paths and while flying. City mapping is enabled. Manual survey-point keybindings remain available when this is off.")
-        m.cleanPoints=U.Button(m,"Clean Redundant Points",480,-146,168,function()
+        m.cleanPoints=U.Button(m,"Clean Redundant Points",754,-60,168,function()
             local allMaps=A.Read(IsControlKeyDown)==true
             local function done(count,message)
                 m.cleanPoints:SetEnabled(not journal.readOnly)
                 c:Refresh()
-                if message and DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r "..message) end
+                if message and DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r "..message) end
                 c:Message(message or ("Removed "..count.." redundant interior sample"..(count==1 and "." or "s.")))
             end
             local function progress(message)
                 c:Message(message)
-                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r "..message) end
+                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r "..message) end
             end
             local started
             if allMaps then started=ns.AtlasSubzones.CleanAllInterior(journal,done,progress)
@@ -319,10 +338,12 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         group:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8})
         group:SetBackdropColor(0.055,0.04,0.022,0.6);group:SetBackdropBorderColor(0.45,0.30,0.13,0.75)
         U.Label(group,"Sub-zones",12,-7,80,"GameFontNormalSmall")
-        m.labelSize=U.SmallSlider(group,"Label size",100,-68,56,2,24,1,function(v) return tostring(v) end,function(value)
+        m.labelSize=U.SmallSlider(group,"",96,-68,0,2,24,1,function(v) return tostring(v) end,function(value)
             if not journal.readOnly then state.subzoneLabelSize=value end
             c:Refresh()
         end)
+        m.labelSize:SetWidth(120)
+        m.labelSize.valueLabel:ClearAllPoints();m.labelSize.valueLabel:SetPoint("LEFT",m.labelSize,"RIGHT",5,0)
         U.Tip(m.labelSize,"Sub-zone label text size (2–24, default 4). Applies immediately; map zoom also scales labels.")
         m.legacySubzones=U.Check(group,"Legacy Fill",98,-3,100,function(on)
             if not journal.readOnly then state.subzoneFillMethod=on and "convex" or "traced" end
@@ -344,7 +365,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.subzoneLabels=U.Check(group,"Labels",10,-63,65,function(on)
             if not journal.readOnly then state.showSubzoneLabels=on end;c:Refresh()
         end)
-        U.Tip(m.subzoneLabels,"Show discovered sub-zone names independently of boundary shading. Names try two lines before hiding for lack of space. Adjust their text with Label size.")
+        U.Tip(m.subzoneLabels,"Show discovered sub-zone names independently of boundary shading. Names try two lines before hiding for lack of space. Adjust their text size with the slider to the right.")
         m.hideZoneAreas=U.Check(group,"Hide zone-name areas",10,-83,218,function(on)
             if not journal.readOnly then state.hideZoneNameSubzones=on end;c:Refresh()
         end)
@@ -360,6 +381,9 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end,function(id,name) c:SetZone(id,name) end)
         m.brightness=m.map.brightness
         m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
+        m.layerMenu:SetParent(m.map);m.layerMenu:ClearAllPoints()
+        m.layerMenu:SetPoint("TOPLEFT",m.map,"TOPLEFT",8,-8)
+        m.layerMenu:SetFrameLevel(m.map:GetFrameLevel()+25)
         m.map.weatherText=U.Label(m,"",342,-587,580,"GameFontHighlightSmall")
         m.map.weatherText:SetWordWrap(false)
         m.details=U.ReadArea(m,342,-606,555,64)
@@ -389,7 +413,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end)
         local initial=A.CurrentLocation()
         if initial.mapID then
-            state.mapID,state.zone,state.continent=initial.mapID,initial.zone,nil;state.offset=0
+            state.mapID,state.zone,state.continent=initial.mapID,initial.zone,nil;state.offset=0;state.indexScroll=0
         end
         c:Show();c:Refresh()
         if journal.readOnly then c:Message("Newer Atlas schema: this journal is read-only; saved data is untouched.") end
@@ -422,8 +446,8 @@ function ns.InitializeAtlas(shell,bestiary)
         local name=entry.name:gsub("[\r\n]+"," ")
         local zone=A.Text(entry.interior.zone,160) and entry.interior.zone or ("Map "..entry.exterior.mapID)
         zone=A.Safe(zone):gsub("[\r\n]+"," ")
-        local message=shell.sections.atlas.definition.title.." recorded: "..A.AutomaticLabel(name,true).." ("..zone..
-            string.format(" • %.1f, %.1f).",entry.exterior.x/100,entry.exterior.y/100)
+        local message="|cffffd100[Recorded]|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r |cffffffff"..A.AutomaticLabel(name,true).."|r |cff999999("..zone..
+            string.format(" • %.1f, %.1f)|r",entry.exterior.x/100,entry.exterior.y/100)
         if bestiary and bestiary.RecordEvent then
             bestiary:RecordEvent(message,{kind="atlas-recorded",entranceID=entry.id,mapID=entry.exterior.mapID,automatic=true})
         end
@@ -431,7 +455,7 @@ function ns.InitializeAtlas(shell,bestiary)
     end end
     function AzerothFieldbookRecordAtlasPoint()
         local added,message=journal.subzones:RecordPoint()
-        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("AFB: "..message) end
+        if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r "..message) end
         return added
     end
     local adapters=ns.CreateAtlasReferences(bestiary,function() return ns.ActiveSectionStores and ns.ActiveSectionStores.gathering or AzerothFieldbookGatheringDB end,shell)

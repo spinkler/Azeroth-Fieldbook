@@ -144,8 +144,8 @@ local function announceBestiary(entry, title, amount, observation, categoryOnly,
         if publicString(observation.location) then details[#details + 1] = observation.location end
     end
     local reward = amount and ("+" .. amount .. " knowledge: ") or ""
-    local text="|cffffd100[" .. reward .. title .. "]|r Bestiary: " .. name
-        .. " |cff999999(" .. table.concat(details, " • ") .. ")|r"
+    local text="|cffffd100[" .. reward .. title .. "]|r |cff80d0ffBestiary:|r |cffffffff" .. name
+        .. "|r |cff999999(" .. table.concat(details, " • ") .. ")|r"
     if not skipLog then journal:RecordEvent(text,{creatureID=entry.id,title=title,points=amount,level=observation.level,location=observation.location}) end
     if chatEnabled then say(text) end
 end
@@ -577,15 +577,15 @@ local function initializeImpl()
             if not journal:GetCreatureAnnouncement() then return end
             local details=ns.GatheringKinds[entry.kind].title
             if location then details=details .. " • " .. location end
-            say("|cffffd100[" .. title .. "]|r " .. fieldbook.sections.gathering.definition.title .. ": " .. entry.name
+            say("|cffffd100[" .. title .. "]|r |cff80d0ff" .. fieldbook.sections.gathering.definition.title .. ":|r |cffffffff" .. entry.name .. "|r"
                 .. " |cff999999(" .. details .. ")|r")
         end
     end
     local atlasBook,anglingBook,treasureBook,loreBook
     if fieldbook and ns.InitializeAtlas then atlasBook=ns.InitializeAtlas(fieldbook,journal) end
     if fieldbook and ns.InitializeAngling then anglingBook=ns.InitializeAngling(fieldbook) end
-    if fieldbook and ns.InitializeLedger then ledgerBook=ns.InitializeLedger(fieldbook) end
-    if fieldbook and ns.InitializeTreasure then treasureBook=ns.InitializeTreasure(fieldbook) end
+    if fieldbook and ns.InitializeLedger then ledgerBook=ns.InitializeLedger(fieldbook,journal) end
+    if fieldbook and ns.InitializeTreasure then treasureBook=ns.InitializeTreasure(fieldbook,journal) end
     if fieldbook and ns.InitializeLore then
         loreBook=ns.InitializeLore(fieldbook,db,{bestiary=journal,gathering=gatheringBook,atlas=atlasBook,
             angling=anglingBook,merchants=ledgerBook,treasure=treasureBook})

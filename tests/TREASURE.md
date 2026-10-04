@@ -86,15 +86,42 @@ create portable knowledge. The first observed carriage of a kind is recorded
 once in the retained history; ordinary bag movements add no new encounter and
 never imply recovery, acquisition source or current possession.
 
-For contents, every readable loot slot must identify the **same single exact
+For portable contents, every readable loot slot must identify the **same single exact
 GUID** previously returned by `C_Item.GetItemGUID` for an observed openable bag
 item. The code compares opaque GUIDs without parsing them. It also requires
-`LOOT_OPENED`'s `isFromItem == true` and readable `IsFishingLoot() == false`.
-No current target, recent mouseover, spell outcome or loot-chat text supplies an
-identity. World-object/creature/fishing/gathering loot therefore cannot enter this
-automatic path merely by opening a loot window. Purchases, trades, mail, quest
+readable `IsFishingLoot() == false`. A missing/false `isFromItem` flag does not
+override an exact observed bag GUID; restricted or malformed flags still reject.
+No current target, spell outcome or loot-chat text supplies portable identity.
+World objects use the separate guarded path below; creature/fishing/gathering
+loot cannot enter the portable path merely by opening a loot window. Purchases, trades, mail, quest
 rewards and generic inventory changes cannot become recovered contents. They
 may expose an openable item as carried; its acquisition source remains unknown.
+
+World containers use a fresh `C_TooltipInfo.GetWorldCursor` Object tooltip,
+retained for at most 15 seconds to survive its dismissal during opening. Its
+observed GUID (when supplied) or numeric object ID must match the GameObject
+source GUID of every loot slot. Names must contain an English whole word:
+chest, crate, coffer, strongbox, footlocker, lockbox, cache, barrel or sack.
+Unrecognized/localized names remain manual. If the tooltip lacks an object ID,
+a world right-click on that tooltip or a matching completed player opening cast
+provides a three-second correlation window. The object ID then comes from the
+single GameObject loot source. Hover alone never enables this fallback. Cast
+failure/interruption, unrelated casts, other clicks, window close and world entry
+clear the relevant interaction. A missing isFromItem flag is accepted only for
+world-object samples and exact observed bag-item samples. The page status
+reports attribution failures even when the page was closed during looting.
+Fishing, creature sources, mixed sources,
+and item-origin windows are rejected. Autoloot retains the bounded READY snapshot.
+World records use `context=world`, approximate player coordinates and partial
+contents with receipt unconfirmed. The optional local `objectID` kind field
+survives reload and groups subsequent spawns; manual name-only kinds stay separate.
+The existing report format does not transmit this local identity field.
+
+Live verification still required: reload, open a Weapon Crate normally and with
+autoloot, verify its name, item contents and approximate map marker, then reopen
+it to check deduplication. Check a creature, fishing loot, herb and mineral node
+produce no Treasure entry. Test another crate of the same type groups under the
+same kind. The previously looted crate cannot be reconstructed from loot chat.
 
 The bounded lifecycle is:
 

@@ -77,16 +77,34 @@ class LedgerTests(unittest.TestCase):
             fire('UPDATE_MOUSEOVER_UNIT');assert(next(saved.contacts)==nil)
         ''')
 
+    def test_all_contact_announcements_obey_chat_setting(self):
+        self.lua.execute("""
+            local messages={}
+            DEFAULT_CHAT_FRAME={AddMessage=function(_,text) messages[#messages+1]=text end}
+            for i,role in ipairs({'trainer','innkeeper','banker','auctioneer','stable','transport','repair'}) do
+                local v={name='Contact '..i,guid='Creature-0-1-2-3-'..i..'-ABC',npcID=i}
+                local e=j:Encounter(v,{[role]=true},false)
+                assert(e and #messages==i and messages[i]:find(e.name,1,true))
+                if role=='trainer' then assert(messages[i]:find('|cff999999(Trainer)|r',1,true)) end
+                j:Encounter(v,{[role]=true},false);assert(#messages==i)
+            end
+            j:Manual({name='Manual contact'});assert(#messages==8 and messages[8]:find('|cff999999(Contact)|r',1,true))
+            chatEnabled=false
+            j:Manual({name='Silent manual contact'})
+            j:Encounter({name='Silent trainer',guid='Creature-0-1-2-3-99-ABC',npcID=99},{trainer=true},false)
+            assert(#messages==8)
+        """)
+
     def test_merchant_discovery_message_once_per_contact(self):
         self.lua.execute(r'''
             local messages={}
             DEFAULT_CHAT_FRAME={AddMessage=function(_,text) messages[#messages+1]=text end}
             local e=visit()
-            assert(#messages==1 and messages[1]:find(e.name,1,true) and messages[1]:find('Merchant’s Ledger — Merchant discovered',1,true))
+            assert(#messages==1 and messages[1]=='|cff80d0ffAFB:|r |cffffd100[New discovery!]|r |cff80d0ffMerchant’s Ledger:|r |cffffffff'..e.name..'|r |cff999999(Merchant)|r')
             fire('MERCHANT_UPDATE');fire('MERCHANT_CLOSED');visit()
             assert(#messages==1,'Repeat visits cannot spam discovery messages')
             local reloaded=ns.CreateLedgerJournal(saved)
-            reloaded.onMerchantDiscovered=j.onMerchantDiscovered
+            reloaded.onContactDiscovered=j.onContactDiscovered
             reloaded:Encounter(L.Unit('npc'),{merchant=true},true)
             assert(#messages==1,'Saved merchant role prevents duplicate notices after reload')
             fire('MERCHANT_CLOSED');t:Forget(e.id);assert(j:Remove(e.id));visit()
@@ -362,7 +380,8 @@ class LedgerTests(unittest.TestCase):
             assert(m.sightings.point[3]==-174)
             assert(m.link.parent==m.directory and m.link.point[2]+m.link:GetWidth()<306)
             assert(m.search.point[3]-m.search:GetHeight()>m.link.point[3])
-            assert(m.link.point[3]-m.link:GetHeight()>m.count.point[3] and m.count.point[3]>m.contactList.point[3])
+            assert(m.count.point[3]>m.search.point[3])
+            assert(m.link.point[3]-m.link:GetHeight()>m.contactList.point[3])
             assert(not m.details.text:GetText():find('Access notes',1,true))
             e.note='Upstairs';c:Refresh();assert(m.details.text:GetText():find('Upstairs',1,true))
         ''')
@@ -410,6 +429,37 @@ class LedgerTests(unittest.TestCase):
             assert(one(a.goods).stock.state=='finite' and one(b.goods).stock.state=='soldout')
             assert(one(a.goods).last<one(b.goods).last and one(a.goods).bundle==5)
             assert(a.merchantInspection.complete and b.merchantInspection.complete)
+        ''')
+
+    def test_nearby_identity_fallback_across_sessions_and_ambiguity(self):
+        self.lua.execute('''
+            local function encounter(book,guid,x,y,title,near)
+                return book:Encounter({guid=guid,npcID=42,name='Stationary service',sublabel=title,
+                    location={mapID=101,zone='Town',subzone='Square',x=x,y=y}},
+                    {transport=true},near~=false)
+            end
+            local a=encounter(j,'old',7123,7236,'Gryphon Master')
+            a.note='Keep my notes';local ref=a.reference
+            local loaded=ns.CreateLedgerJournal(saved)
+            local b=encounter(loaded,'new',7132,7243,'Gryphon Master')
+            assert(a==b and L.Count(saved.contacts)==1 and b.note=='Keep my notes')
+            assert(loaded:Reference(ref)==b and saved.aliases.new==b.id)
+            assert(encounter(loaded,'new',8000,8000,'Gryphon Master')==b,'Known GUID must follow movement')
+            local separate=encounter(loaded,'other',7132,7243,'Gryphon Master')
+            assert(separate~=b,'Same-session GUIDs must stay distinct')
+            loaded=ns.CreateLedgerJournal(saved)
+            assert(encounter(loaded,'ambiguous',7130,7240,'Gryphon Master')~=b,'Multiple candidates must not auto-match')
+            local function isolated(x,y,title,near)
+                local db={};local book=ns.CreateLedgerJournal(db)
+                local first=encounter(book,'first',1000,1000,'Trainer')
+                book=ns.CreateLedgerJournal(db)
+                return first,encounter(book,'second',x,y,title,near)
+            end
+            local a,b=isolated(1015,1020,'Trainer');assert(a==b,'Radius boundary must match across grid cells')
+            a,b=isolated(1020,1020,'Trainer');assert(a~=b,'Diagonal beyond radius must not match')
+            a,b=isolated(1000,1000,'Different title');assert(a~=b)
+            a,b=isolated(1000,1000,nil);assert(a==b,'Missing title must not create a duplicate')
+            a,b=isolated(1000,1000,'Trainer',false);assert(a~=b,'No coordinates means no fallback')
         ''')
 
     def test_guid_context_identity_motion_reload_and_ambiguity(self):
@@ -953,14 +1003,18 @@ class LedgerUITests(unittest.TestCase):
 
     def test_training_requires_personal_or_reported_lessons(self):
         self.lua.execute('''
-            assert(m.detailButtons.training.enabled==false)
+            assert(m.detailButtons.training.enabled==false and not m.detailButtons.training:IsShown())
             c:Catalogue('training');assert(c.panel==nil)
             local e=visit();flush();c:Select(e.id)
             assert(m.detailButtons.goods.enabled==true and m.detailButtons.training.enabled==false)
+            assert(m.detailButtons.goods:IsShown() and not m.detailButtons.training:IsShown())
+            assert(m.detailButtons.goods.point[2]+m.detailButtons.goods:GetWidth()==922)
             c:Catalogue('training');assert(c.panel==nil)
             trainer={{name='Sword lesson',status='available',rank='',category='',price=10}}
             fire('TRAINER_SHOW');flush()
             assert(m.detailButtons.training.enabled==true)
+            assert(m.detailButtons.goods:IsShown() and m.detailButtons.training:IsShown())
+            assert(m.detailButtons.goods.point[2]==654 and m.detailButtons.training.point[2]==776)
             c:Catalogue('training');assert(c.panel==c.panels.catalogue and c.panel.kind=='training')
             c:ClosePanel()
             local report=reportFor(e);assert(j:Remove(e.id));flush()
@@ -969,15 +1023,15 @@ class LedgerUITests(unittest.TestCase):
             assert(m.detailButtons.training.enabled==true)
             c:Catalogue('training');assert(c.panel==c.panels.catalogue)
             c:ClosePanel();local empty=assert(j:Manual({name='Empty contact'}));flush();c:Select(empty.id)
-            assert(m.detailButtons.training.enabled==false)
+            assert(m.detailButtons.training.enabled==false and not m.detailButtons.training:IsShown())
         ''')
 
     def test_known_goods_requires_personal_or_reported_offerings(self):
         self.lua.execute('''
-            assert(m.detailButtons.goods.enabled==false)
+            assert(m.detailButtons.goods.enabled==false and not m.detailButtons.goods:IsShown())
             c:Catalogue('goods');assert(c.panel==nil)
             local empty=assert(j:Manual({name='Empty merchant',role='merchant'}));flush();c:Select(empty.id)
-            assert(m.detailButtons.goods.enabled==false)
+            assert(m.detailButtons.goods.enabled==false and not m.detailButtons.goods:IsShown())
             c:Catalogue('goods');assert(c.panel==nil)
             local stocked=visit();flush();c:Select(stocked.id)
             assert(m.detailButtons.goods.enabled==true)
@@ -990,7 +1044,7 @@ class LedgerUITests(unittest.TestCase):
             assert(m.detailButtons.goods.enabled==true)
             c:Catalogue('goods');assert(c.panel==c.panels.catalogue)
             c:ClosePanel();c:Select(empty.id)
-            assert(m.detailButtons.goods.enabled==false)
+            assert(m.detailButtons.goods.enabled==false and not m.detailButtons.goods:IsShown())
         ''')
 
     def test_current_zone_checkbox_tracks_travel_and_excludes_fixed_zone_filters(self):

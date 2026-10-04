@@ -1,5 +1,47 @@
 # Changelog
 
+## Unreleased
+
+- Use blue book-section labels across Bestiary, Ledger, Gatherer, Treasure, Atlas and Chronicle chat announcements, with yellow event tags, white names and grey contextual details.
+
+- Format Ledger discovery chat as “AFB: [New discovery!] Merchant’s Ledger: Name (Role)”, with blue book labels, a yellow discovery tag, white name and grey role.
+
+- Announce all newly recorded Ledger contacts using their service role (including trainers), gated by discovery chat logging; repeat visits remain silent.
+
+- Fix skipped clam contents when the loot-origin flag is missing or false despite an exact observed bag-container GUID; retain source matching and separate encounters for distinct clams.
+
+- Announce “Contents recorded” with the container name after automatic Treasure captures when discovery chat messages are enabled; repeated loot-window updates do not repeat the announcement.
+
+- Fix skipped world-container captures when tooltips lack an object ID: correlate a fresh world click or completed opening cast with a single GameObject loot source, support omitted world-loot origin flags, and show capture failure reasons in Treasure status.
+
+- Automatically record recognized world containers such as Weapon Crates when the observed tooltip identity matches the loot source. Preserve autoloot contents, group matching object types, and record approximate player locations; uncertain sources remain manual.
+
+- Standardize the seven entry journals on grey “X entries • Y shown” counts beneath their titles, with aligned search/filter/sort rows. Move Gatherer and Chronicle counts into the header and keep page-specific controls below search.
+
+- Colour Annals Journey trails crimson while dead or a ghost, distinct from walking, flight and mounted trails, including older death-state recordings and rounded corners.
+
+- Reuse a unique nearby personal Ledger contact after a spawn GUID changes between sessions, requiring matching NPC template/name, compatible title and location precision within 0.25 map-coordinate units. Keep ambiguous and same-session identities separate; existing duplicates retain explicit identity linking.
+
+- Extend the Treasure Journal list and replace Previous/Next with mouse-wheel scrolling and an automatic scrollbar, preserving the visible entry when records update.
+
+- Extend the Chronicle list and replace Previous/Next buttons with mouse-wheel scrolling and a scrollbar shown only when needed.
+
+- Double the Atlas label-size slider width for finer control. Hide Ledger offering buttons without recorded goods/training and align the available buttons to the right.
+
+- Remove the Atlas Label size caption and position its slider immediately to the right of Labels.
+
+- Move Atlas and Almanac Current Zone buttons directly above their zone selectors; move Atlas Clean Redundant Points to the former top-right button position.
+
+- Make the Atlas discovery list scrollable with a scrollbar and mouse wheel, replacing Previous/Next buttons and keeping selected entries in view.
+
+- Replace the Atlas scope label with a themed Current map toggle: off shows all recorded zones by default; on filters to the current map. Preserve saved scope choices.
+
+- Remove the redundant > prefix from selected Atlas list entries, retaining their selection highlight.
+
+- Enlarge player arrows on Fieldbook maps by 50% while preserving map and icon scaling.
+- Set Annals Journey icons to 60% opacity, retaining the additional fade for older events; scale dungeon entry/exit badges with icon size.
+- Place Atlas Map Layers in a square funnel button at the map top-left, and move the Annals map filter to the same corner.
+
 ## v0.24.1 - 2026-10-04
 
 - Annals: add Rare-blue 60% and Epic-purple 100% mounted trails, 256x and custom numeric playback speeds, and a mirrored filter button at the map top right.

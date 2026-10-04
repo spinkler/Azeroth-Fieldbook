@@ -8,7 +8,68 @@ local function returns(fn,...)
     return unpack(values,2)
 end
 function ns.CreateTreasureTracking(journal)
-    local t={journal=journal,bagGUIDs={},recent={},status="World finds and uncertain loot sources require Record a find."}
+    local t={journal=journal,bagGUIDs={},recent={},status="Recognized world containers and portable contents record automatically; uncertain sources require Record a find."}
+    -- Match observed tooltip identity to the actual loot source, never to the
+    -- current target or loot-chat text. Unknown object types stay manual.
+    local function objectID(guid)
+        if not T.Text(guid,160) then return end
+        local id=guid:match("^GameObject%-%d+%-%d+%-%d+%-%d+%-(%d+)%-%x+$")
+        id=tonumber(id);return T.Integer(id,1,2147483647) and id or nil
+    end
+    local function containerName(value)
+        local name=T.Name(value);if not name then return end
+        name=name:gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r","")
+        for _,word in ipairs({"chest","crate","coffer","strongbox","footlocker","lockbox","cache","barrel","sack"}) do
+            if name:lower():find("%f[%a]"..word.."%f[%A]") then return name end
+        end
+    end
+    local function fresh(value,limit)
+        return value and clock()>=value.at and clock()-value.at<=limit
+    end
+    local function worldFocus()
+        local foci=T.Read(GetMouseFoci)
+        if type(foci)=="table" then
+            for _,focus in ipairs(foci) do if not T.Public(focus) or (focus~=WorldFrame and focus~=UIParent) then return false end end
+            return true
+        end
+        local focus=T.Read(GetMouseFocus)
+        return focus~=nil and (focus==WorldFrame or focus==UIParent)
+    end
+    function t:ObserveWorldCursor()
+        if ns.InitializationBlocked or journal.readOnly then return end
+        local data=T.Read(C_TooltipInfo and C_TooltipInfo.GetWorldCursor)
+        local objectType=Enum and Enum.TooltipDataType and Enum.TooltipDataType.Object
+        if type(data)~="table" then return end
+        self.world=nil
+        if not objectType or not T.Public(data.type) or data.type~=objectType
+            or not T.Public(data.lines) or type(data.lines)~="table" then return end
+        local first=data.lines[1]
+        local name=T.Public(first) and type(first)=="table" and containerName(first.leftText)
+        if not name then return end
+        local guid=T.Text(data.guid,160) and objectID(data.guid) and data.guid or nil
+        local id=guid and objectID(guid) or (T.Integer(data.id,1,2147483647) and data.id)
+        self.world={name=name,objectID=id,guid=guid,at=clock()}
+    end
+    function t:WorldSource(guid)
+        local id=objectID(guid);if not id then return end
+        -- Once a window is attributed, asynchronous slot updates retain its
+        -- identity even if the mouse moves to another tooltip.
+        local active=self.active and self.active.guid==guid and journal.encounters[self.active.id]
+        local existing=active and journal:Get(active.kindID)
+        if existing and existing.form=="world" then return {kindID=existing.id,world=true} end
+        local seen=self.world
+        if not fresh(seen,15) or not seen.objectID then
+            seen=fresh(self.interaction,3) and self.interaction or nil
+        end
+        if not seen then return end
+        if seen.objectID and seen.objectID~=id or seen.guid and seen.guid~=guid then return end
+        if not seen.objectID and not fresh(self.interaction,3) then return end
+        local kindID
+        for _,e in pairs(journal.kinds) do
+            if e.form=="world" and e.objectID==id then kindID=e.id;break end
+        end
+        return {kindID=kindID,kind={name=seen.name,form="world",category="container",objectID=id},world=true}
+    end
     function t:Status(message)
         if self.status==message then return end;self.status=message
         if self.onStatus then self.onStatus(message) end
@@ -17,6 +78,9 @@ function ns.CreateTreasureTracking(journal)
         local now=clock()
         for guid,v in pairs(self.bagGUIDs) do if v.absentAt and now-v.absentAt>60 then self.bagGUIDs[guid]=nil end end
         for guid,v in pairs(self.recent) do if now-v.at>120 then self.recent[guid]=nil end end
+        if self.world and now-self.world.at>15 then self.world=nil end
+        if self.interaction and not fresh(self.interaction,3) then self.interaction=nil end
+        if self.cast and not fresh(self.cast,30) then self.cast=nil end
         if self.pending and now-self.pending.at>3 then self.pending=nil end
         if self.active and now-self.active.at>60 then self.active=nil end
     end
@@ -56,17 +120,18 @@ function ns.CreateTreasureTracking(journal)
     end
     function t:ReadLoot()
         self:Expire()
-        if T.Read(IsFishingLoot)~=false then return end
-        local n=T.Read(GetNumLootItems);if not T.Integer(n,1,T.MAX_ITEMS) then return end
+        self:ObserveWorldCursor()
+        if T.Read(IsFishingLoot)~=false then return nil,"Fishing context unavailable or fishing loot." end
+        local n=T.Read(GetNumLootItems);if not T.Integer(n,1,T.MAX_ITEMS) then return nil,"No readable loot slots." end
         local sample={items={},at=clock()};local byItem={}
         for slot=1,n do
             local sources={returns(GetLootSourceInfo,slot)}
-            -- Require one exact GUID supplied by the item API. Never parse an
-            -- object/creature GUID or attach the target/recent hover to loot.
-            if #sources~=2 or not T.Text(sources[1],160) or not T.Integer(sources[2],1,1000000) then return end
-            local guid=sources[1];local known=self.bagGUIDs[guid]
-            if not known or (sample.guid and sample.guid~=guid) then return end
-            sample.guid,sample.kindID=guid,known.kindID
+            -- Every slot must agree on one source; mixed/area loot is rejected.
+            if #sources~=2 or not T.Text(sources[1],160) or not T.Integer(sources[2],1,1000000) then return nil,"Loot source missing or mixed." end
+            local guid=sources[1];local known=self.bagGUIDs[guid] or self:WorldSource(guid)
+            if not known then return nil,objectID(guid) and "World loot has no matching container tooltip or recent opening interaction." or "Loot source is not a recognized container." end
+            if sample.guid and sample.guid~=guid then return nil,"Loot slots have different sources." end
+            sample.guid,sample.kindID,sample.kind,sample.world=guid,known.kindID,known.kind,known.world
             local link=T.Read(GetLootSlotLink,slot)
             local id=type(link)=="string" and tonumber(link:match("item:(%d+)"))
             local _,name,quantity=returns(GetLootSlotInfo,slot)
@@ -78,8 +143,8 @@ function ns.CreateTreasureTracking(journal)
         end
         for _,row in pairs(byItem) do sample.items[#sample.items+1]=row end
         table.sort(sample.items,function(a,b) return a.itemID<b.itemID end)
-        if #sample.items==0 then return end
-        sample.location=T.CurrentLocation("opened");return sample
+        if #sample.items==0 then return nil,"Container identified, but item links or quantities are unreadable." end
+        sample.location=T.CurrentLocation(sample.world and "world" or "opened");return sample
     end
     function t:Capture(sample)
         if not sample or journal.readOnly then return end
@@ -87,8 +152,9 @@ function ns.CreateTreasureTracking(journal)
         if previous and previous.suppressed then return end
         if not previous and T.Count(self.recent)>=128 then self:Status("Automatic correlation buffer is full; use Record a find.");return end
         local encounter=previous and journal.encounters[previous.id]
+        local newlyRecorded=not encounter
         if not encounter then
-            local _,v=journal:Record(sample.kindID,nil,{context="opened",location=sample.location,
+            local _,v=journal:Record(sample.kindID,sample.kind,{context=sample.world and "world" or "opened",location=sample.location,
                 facts={inspected=true},capture="partial",items=sample.items},"observed")
             if type(v)~="table" then self:Status(type(v)=="string" and v or "Capture unavailable.");return end
             encounter=v
@@ -103,26 +169,65 @@ function ns.CreateTreasureTracking(journal)
         end
         self.recent[sample.guid]={id=encounter.id,at=clock()}
         self.active={guid=sample.guid,id=encounter.id,at=clock()}
-        self:Status("Portable contents captured (partial); personal receipt unconfirmed.")
+        if newlyRecorded and self.onContentsRecorded then self.onContentsRecorded(journal:Get(encounter.kindID),encounter) end
+        self:Status((sample.world and "World container" or "Portable").." contents captured (partial); personal receipt unconfirmed.")
     end
     function t:Event(event,...)
         if ns.InitializationBlocked then return end
         self:Expire()
-        if event=="PLAYER_ENTERING_WORLD" then self.active=nil;self.pending=nil;self.bagGUIDs={};self.recent={} end
+        if event=="GLOBAL_MOUSE_DOWN" then
+            self.interaction=nil;self.cast=nil;self.pending=nil
+            local button=...
+            if not T.Public(button) or button~="RightButton" or not worldFocus() then self.world=nil;return end
+            self:ObserveWorldCursor()
+            if fresh(self.world,0.5) then self.interaction=T.Copy(self.world);self.interaction.at=clock() end
+            return
+        elseif event=="UNIT_SPELLCAST_SENT" then
+            local unit,target,castGUID,spellID=...
+            if not T.Public(unit) or unit~="player" then return end
+            self.cast=nil;self.interaction=nil;self.pending=nil
+            local name=containerName(target)
+            if name and T.Text(castGUID,160) and T.Integer(spellID,1,2147483647) then
+                self:ObserveWorldCursor()
+                local seen=fresh(self.world,0.5) and self.world.name==name and self.world or nil
+                self.world=seen
+                self.cast={name=name,guid=seen and seen.guid,objectID=seen and seen.objectID,
+                    castGUID=castGUID,spellID=spellID,at=clock()}
+            else self.world=nil end
+            return
+        elseif event=="UNIT_SPELLCAST_SUCCEEDED" or event=="UNIT_SPELLCAST_FAILED" or event=="UNIT_SPELLCAST_FAILED_QUIET" or event=="UNIT_SPELLCAST_INTERRUPTED" then
+            local unit,castGUID,spellID=...
+            if T.Public(unit) and unit=="player" and self.cast and T.Public(castGUID) and T.Public(spellID)
+                and self.cast.castGUID==castGUID and self.cast.spellID==spellID then
+                if event=="UNIT_SPELLCAST_SUCCEEDED" then self.interaction=self.cast;self.interaction.at=clock()
+                else self.interaction=nil;self.world=nil;self.pending=nil end
+                self.cast=nil
+            end
+            return
+        end
+        if event=="PLAYER_ENTERING_WORLD" then self.active=nil;self.pending=nil;self.world=nil;self.interaction=nil;self.cast=nil;self.bagGUIDs={};self.recent={} end
         if event=="BAG_UPDATE_DELAYED" or event=="PLAYER_ENTERING_WORLD" then
             if self.bagQueued then return end;self.bagQueued=true
             local function scan() self.bagQueued=false;self:ScanBags() end
             if C_Timer and type(C_Timer.After)=="function" then C_Timer.After(0.25,scan) else scan() end
         elseif event=="LOOT_READY" then
-            self.active=nil;self.pending=self:ReadLoot()
+            self.active=nil;self.pending,self.pendingReason=self:ReadLoot()
         elseif event=="LOOT_OPENED" then
             local _,isFromItem=...
-            if not T.Public(isFromItem) or isFromItem~=true or T.Read(IsFishingLoot)~=false then self.pending=nil;self.active=nil;return end
-            local current=self:ReadLoot()
+            if not T.Public(isFromItem) or (isFromItem~=nil and type(isFromItem)~="boolean") or T.Read(IsFishingLoot)~=false then
+                self.pending=nil;self.active=nil;self:Status("Capture skipped: fishing or unreadable loot context.");return
+            end
+            local current,reason=self:ReadLoot()
             -- A nonempty but unreadable/different window must not inherit the
             -- READY snapshot. Only an autoloot-cleared window can use it alone.
             local sample=current or (T.Read(GetNumLootItems)==0 and self.pending)
-            if current and self.pending and current.guid~=self.pending.guid then self.pending=nil;self.active=nil;return end
+            -- Exact bag GUID attribution is stronger than the optional origin
+            -- flag, which can be absent/false for opened clams on this client.
+            -- ReadLoot already requires every slot to match that observed item.
+            if sample and sample.world and isFromItem==true then
+                self.pending=nil;self.active=nil;self:Status("Capture skipped: container and loot-window type disagree.");return
+            end
+            if current and self.pending and current.guid~=self.pending.guid then self.pending=nil;self.active=nil;self:Status("Capture skipped: loot source changed while opening.");return end
             if current and self.pending then
                 local seen={};for _,row in ipairs(current.items) do seen[row.itemID]=row end
                 for _,row in ipairs(self.pending.items) do
@@ -130,12 +235,15 @@ function ns.CreateTreasureTracking(journal)
                     elseif #current.items<T.MAX_ITEMS then current.items[#current.items+1]=row end
                 end
             end
-            self.pending=nil;self:Capture(sample)
+            if not sample and (self.world or self.interaction or self.cast or isFromItem==true) then
+                self:Status("Capture skipped: "..(reason or self.pendingReason or "Source unavailable."))
+            end
+            self.pending=nil;self.pendingReason=nil;self:Capture(sample)
         elseif event=="LOOT_SLOT_CHANGED" then
             local sample=self.active and self:ReadLoot()
             if sample and sample.guid==self.active.guid then self:Capture(sample) end
         elseif event=="LOOT_CLOSED" then
-            self.active=nil;self.pending=nil
+            self.active=nil;self.pending=nil;self.interaction=nil;self.cast=nil
             for guid,v in pairs(self.recent) do if v.suppressed then self.recent[guid]=nil end end
         elseif event=="GET_ITEM_INFO_RECEIVED" or event=="ITEM_DATA_LOAD_RESULT" then
             local id=...;if T.Integer(id,1,2147483647) and journal.requested[id] then
@@ -154,9 +262,20 @@ function ns.CreateTreasureTracking(journal)
         end end
         if t.active and t.active.id==id then t.active=nil;t.pending=nil end
     end
-    for _,event in ipairs({"PLAYER_ENTERING_WORLD","BAG_UPDATE_DELAYED","LOOT_READY","LOOT_OPENED","LOOT_SLOT_CHANGED","LOOT_CLOSED","GET_ITEM_INFO_RECEIVED","ITEM_DATA_LOAD_RESULT"}) do
+    for _,event in ipairs({"GLOBAL_MOUSE_DOWN","UNIT_SPELLCAST_SENT","UNIT_SPELLCAST_SUCCEEDED","UNIT_SPELLCAST_FAILED","UNIT_SPELLCAST_FAILED_QUIET","UNIT_SPELLCAST_INTERRUPTED","PLAYER_ENTERING_WORLD","BAG_UPDATE_DELAYED","LOOT_READY","LOOT_OPENED","LOOT_SLOT_CHANGED","LOOT_CLOSED","GET_ITEM_INFO_RECEIVED","ITEM_DATA_LOAD_RESULT"}) do
         pcall(frame.RegisterEvent,frame,event)
     end
     frame:SetScript("OnEvent",function(_,event,...) t:Event(event,...) end)
+    local objectType=Enum and Enum.TooltipDataType and Enum.TooltipDataType.Object
+    if objectType and TooltipDataProcessor and type(TooltipDataProcessor.AddTooltipPostCall)=="function" then
+        TooltipDataProcessor.AddTooltipPostCall(objectType,function(tooltip) if tooltip==GameTooltip then t:ObserveWorldCursor() end end)
+    end
+    if GameTooltip and type(GameTooltip.SetWorldCursor)=="function" and type(hooksecurefunc)=="function" then
+        hooksecurefunc(GameTooltip,"SetWorldCursor",function() t:ObserveWorldCursor() end)
+    end
+    local elapsed=0
+    frame:SetScript("OnUpdate",function(_,dt)
+        elapsed=elapsed+dt;if elapsed>=0.2 then elapsed=0;t:ObserveWorldCursor() end
+    end)
     return t
 end

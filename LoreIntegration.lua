@@ -77,7 +77,7 @@ function ns.InitializeLore(shell,settings,sources)
     journal.onRecorded=function(entry)
         local title=entry.title:gsub("[\r\n]+"," ")
         local automatic=L.IsAutomatic(entry)
-        local message=shell.sections.lore.definition.title.." recorded: "..L.AutomaticLabel(title,automatic).." ("..(kindNames[entry.kind] or "Lore")..")."
+        local message="|cffffd100[Recorded]|r |cff80d0ff"..shell.sections.lore.definition.title..":|r |cffffffff"..L.AutomaticLabel(title,automatic).."|r |cff999999("..(kindNames[entry.kind] or "Lore")..")|r"
         if eventJournal and eventJournal.RecordEvent then
             eventJournal:RecordEvent(message,{kind="lore-recorded",loreID=entry.id,loreKind=entry.kind,origin=entry.origin,automatic=automatic})
         end

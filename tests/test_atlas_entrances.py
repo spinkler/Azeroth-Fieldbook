@@ -563,7 +563,7 @@ class EntranceTests(unittest.TestCase):
             inside=true;mapID=201;px=.252;f.scripts.OnEvent(f,'ZONE_CHANGED_INDOORS');advance(.4)
             local id=assert(next(j.entrances.records))
             assert(not j.entrances:Layer('entrance') and not c.main and not shell:GetFrame())
-            local expected='Traveller’s Atlas recorded: Quiet Hollow entrance |cff80d0ff[A]|r (Coast 101 • 25.0, 25.0).'
+            local expected='|cffffd100[Recorded]|r |cff80d0ffTraveller’s Atlas:|r |cffffffffQuiet Hollow entrance |cff80d0ff[A]|r|r |cff999999(Coast 101 • 25.0, 25.0)|r'
             assert(#chat==1 and chat[1]=='|cff80d0ffAFB:|r '..expected)
             assert(#log==1 and log[1].message==expected and log[1].details.kind=='atlas-recorded')
             assert(log[1].details.entranceID==id and log[1].details.mapID==101 and log[1].details.automatic)

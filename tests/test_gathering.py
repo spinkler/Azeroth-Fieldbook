@@ -960,7 +960,7 @@ class GatheringUITests(unittest.TestCase):
             local journal=bootGathering.journal
             AzerothFieldbookDB.creatureAnnouncements=true
             journal:Discover('mineral','Copper Vein',42,'Elwynn',{mapID=37,name='Elwynn'})
-            assert(#messages==1 and messages[1]=="|cff80d0ffAFB:|r |cffffd100[New node type]|r Gatherer's Compendium: Copper Vein |cff999999(Mineral • Elwynn)|r")
+            assert(#messages==1 and messages[1]=="|cff80d0ffAFB:|r |cffffd100[New node type]|r |cff80d0ffGatherer's Compendium:|r |cffffffffCopper Vein|r |cff999999(Mineral • Elwynn)|r")
             journal:Discover('mineral','Copper Vein',43,'Elwynn',{mapID=37,name='Elwynn'})
             assert(#messages==1,'repeat hover stays quiet')
             journal:Discover('mineral','Copper Vein',44,'Westfall',{mapID=52,name='Westfall'})

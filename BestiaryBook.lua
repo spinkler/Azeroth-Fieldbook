@@ -468,7 +468,7 @@ local ink = { 0.75, 0.8, 0.8 }
             else row:Hide() end
         end
         local entryCount, points = journal:GetTotals()
-        book.entryCount:SetText(entryCount .. " entries")
+        book.entryCount:SetCounts(entryCount,#rows)
         book.pointsCount:SetText(points .. " knowledge")
         local e = selected and journal.entries[selected]
         local hasLoot=book.lootMode and e and e.loot and next(e.loot.items or {})~=nil
@@ -846,13 +846,10 @@ local ink = { 0.75, 0.8, 0.8 }
         styleSelection(book.locationsButton,true)
         book.ranksButton = button(book, "Ranks", 42, -511, 88, function() book.rankFrame:SetShown(not book.rankFrame:IsShown()) end)
         styleSelection(book.ranksButton,true)
-        book.entryCount=label(book,"9999 entries",70,-88,110,"GameFontHighlightSmall")
-        local countWidth=math.max(80,math.ceil(book.entryCount:GetStringWidth())+4)
-        book.entryCount:SetWidth(countWidth)
-        book.entryCount:SetWordWrap(false)
-        book.pointsCount=label(book,"",70+countWidth+6,-88,216-countWidth,"GameFontHighlightSmall")
-        book.pointsCount:SetWordWrap(false)
-        book.pointsCount:SetJustifyH("RIGHT")
+        book.entryCount=ui.EntryCount(book)
+        book.pointsCount=label(book,"",174,-628,118,"GameFontHighlightSmall")
+        book.pointsCount:SetWordWrap(false);book.pointsCount:SetJustifyH("RIGHT")
+        book.pointsCount:SetTextColor(0.55,0.58,0.58)
         book.search = ui.Search(book,70,-110,168,100)
         book.searchClear=book.search.clearButton
         book.search:HookScript("OnTextChanged", function() offset=0;refresh() end)

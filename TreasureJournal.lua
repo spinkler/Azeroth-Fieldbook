@@ -65,6 +65,10 @@ function T.Kind(v)
         if v.form~="portable" or not T.Integer(v.itemID,1,2147483647) then return nil,"Item identities belong only to portable containers." end
         e.itemID=v.itemID
     end
+    if v.objectID~=nil then
+        if v.form~="world" or not T.Integer(v.objectID,1,2147483647) then return nil,"Invalid world-container identity." end
+        e.objectID=v.objectID
+    end
     for _,key in ipairs({"label","note","bookmarkNote"}) do
         if not T.Text(v[key] or "",key=="label" and 160 or 4000,true) then return nil,"Use plain labels/notes (160 / 4,000 bytes)." end
         e[key]=v[key] or ""

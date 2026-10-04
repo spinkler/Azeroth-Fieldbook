@@ -144,9 +144,12 @@ class LoreUITests(unittest.TestCase):
     def test_filter_controls_search_sort_revisit_and_position(self):
         self.lua.execute('''
             for i=1,20 do now=now+1;j:Create('person',{title=string.format('Person %02d',i),notes='Needle '..i}) end
-            flush();click(m.next);assert(c.state.offset==8);local first=m.rows[1].id
-            j:Changed();flush();assert(c.state.offset==8 and m.rows[1].id==first)
+            flush();assert(not m.previous and not m.next)
+            m.list.scripts.OnMouseWheel(m.list,-8);m.list.scripts.OnVerticalScroll(m.list,m.list:GetVerticalScroll())
+            assert(c.state.indexScroll==400);local first=m.rows[1].id
+            j:Changed();flush();assert(c.state.indexScroll==400 and m.rows[1].id==first)
             m.search:SetText('Needle 18');assert(#c.rows==1 and c.rows[1].title=='Person 18')
+            assert(m.list:GetVerticalScroll()==0 and not m.list.ScrollBar:IsShown())
             click(m.rows[1]);click(m.revisit);choose(openMenu(m.filters),'Only revisit / follow up');assert(#c.rows==1)
             choose(openMenu(m.filters),'Clear');assert(c.state.query=='' and #c.rows==20 and c.state.selected)
             choose(openMenu(m.sort),'Recently added');assert(m.rows[1].name:GetText()=='Person 20')

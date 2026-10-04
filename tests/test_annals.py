@@ -24,6 +24,31 @@ LOG_REWARDS = '''
 
 
 class AnnalsTests(unittest.TestCase):
+    def test_dead_trail_colour_and_rounded_state(self):
+        l=client();l.execute('''
+            local A=ns.Annals
+            for _,state in ipairs({'dead','ghost','dead / ghost'}) do
+                for _,age in ipairs({0,1800,99999}) do
+                    local r,g,b,alpha,heat=A.TrailColor(age,0,1,true,100,state)
+                    assert(r==0.9 and g==0.15 and b==0.25)
+                    local _,_,_,normalAlpha,normalHeat=A.TrailColor(age,0,1)
+                    assert(alpha==normalAlpha and heat==normalHeat)
+                    for _,travel in ipairs({{}, {flight=true}, {mount=60}, {mount=100}}) do
+                        local nr,ng,nb=A.TrailColor(age,0,1,travel.flight,travel.mount)
+                        assert(math.abs(r-nr)+math.abs(g-ng)+math.abs(b-nb)>0.3)
+                    end
+                end
+                local a={x=0,y=0,at=0,state=state}
+                local b={x=5000,y=0,at=100,state=state}
+                local c={x=5000,y=5000,at=200,state=state}
+                local lines=A.SmoothTrail({{from=a,to=b},{from=b,to=c}},500,500)
+                assert(#lines>2)
+                for _,edge in ipairs(lines) do assert(edge.from.state==state and edge.to.state==state) end
+                c.state='alive'
+                assert(#A.SmoothTrail({{from=a,to=b},{from=b,to=c}},500,500)==2)
+            end
+        ''')
+
     def test_recent_trail_window_and_marker_fading(self):
         l=client();l.execute('''
             local A=ns.Annals
@@ -329,6 +354,12 @@ class AnnalsTests(unittest.TestCase):
             c.mapID=101;c.at=100;c:Refresh()
             local pin=m.map.pins[1];assert(pin.instanceArrow:IsShown() and pin.instanceArrow.vertexColor[2]==1)
             c.at=200;c:Journey();assert(pin.instanceArrow.vertexColor[2]==0.6,'grouped icon did not switch to observed exit')
+            m.iconSize.scripts.OnValueChanged(m.iconSize,40)
+            assert(pin.instanceArrow:GetWidth()==22 and pin.instanceArrow:GetHeight()==26)
+            assert(pin.instanceArrowShadow:GetWidth()==22 and pin.instanceArrow.point[4]==6)
+            m.iconSize.scripts.OnValueChanged(m.iconSize,6)
+            assert(math.abs(pin.instanceArrow:GetWidth()-3.3)<0.00001)
+            assert(m.mapFilter.point[1]=='TOPLEFT' and m.mapFilter.point[4]==8 and m.mapFilter.point[5]==-8)
         ''')
 
     def test_search_matches_partial_quest_reward_text_and_item_types(self):
@@ -937,7 +968,7 @@ class AnnalsTests(unittest.TestCase):
             c:SetEventFilter('all',false)
             assert(map.playerArrow:IsShown() and map.historicalPlayer.state=='dead')
             c.main.iconSize.scripts.OnValueChanged(c.main.iconSize,32)
-            assert(j.db.settings.iconSize==32 and map.playerArrow:GetWidth()==32)
+            assert(j.db.settings.iconSize==32 and map.playerArrow:GetWidth()==48)
             c:SetEventFilter('death',true);assert(map.pins[1]:GetWidth()==32)
             j:Append('death','Second death',nil,{mapID=101,x=3000,y=3000,state='dead'},110)
             c.index=nil;c:Journey()

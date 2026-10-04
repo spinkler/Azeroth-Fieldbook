@@ -293,8 +293,7 @@ function ns.CreateGatheringBook(journal,shell)
                 row:SetSelected(active)
             end
         end
-        book.entryCount:SetText(#journal:List().." entries")
-        book.indexCount:SetText(#rows==0 and "No matching entries." or (#rows.." shown"))
+        book.entryCount:SetCounts(#journal:List(),#rows)
         book.noMatches:SetShown(#rows==0)
         book.noMatches:SetText(journal.readOnly and "Saved by a newer addon version.\nUpdate Azeroth Fieldbook to view this journal.\nYour data has been left untouched."
             or next(journal.entries) and "No matching entries.\nTry clearing your filters."
@@ -414,7 +413,7 @@ function ns.CreateGatheringBook(journal,shell)
         local spine=book:CreateTexture(nil,"ARTWORK")
         spine:SetColorTexture(0.25,0.13,0.055,0.35)
         spine:SetPoint("TOPLEFT",306,-53);book.spine=spine;spine:SetSize(3,661)
-        book.entryCount=label(book,"",70,-88,222,"GameFontHighlightSmall")
+        book.entryCount=ui.EntryCount(book)
         local filterMenu=CreateFrame("Frame",nil,book,"BackdropTemplate");book.listFilterMenu=filterMenu
         filterMenu:SetSize(190,154);filterMenu:SetFrameLevel(book:GetFrameLevel()+40);filterMenu:EnableMouse(true)
         filterMenu:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,insets={left=2,right=2,top=2,bottom=2}})
@@ -534,7 +533,6 @@ function ns.CreateGatheringBook(journal,shell)
                 return nil,"Could not delete this entry."
             end)
         end)
-        book.indexCount=label(book,"",42,-638,250,"GameFontHighlightSmall");book.indexCount:SetTextColor(0.55,0.58,0.58)
         book.title=label(book,"Gatherer's Compendium",342,-60,494,"GameFontNormalLarge")
         book.title:SetTextColor(1,0.82,0.14);book.title:SetWordWrap(false)
         book.title:SetShadowColor(0,0,0,0.85);book.title:SetShadowOffset(1,-1)

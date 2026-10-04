@@ -23,7 +23,7 @@ local function goodsMoney(n)
     return table.concat(parts," ")
 end
 local function sortedKeys(t) local keys={};for k in pairs(t) do keys[#keys+1]=k end;table.sort(keys);return keys end
-function ns.CreateLedgerBook(journal,tracking,shell)
+function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
     local state=journal.state
     state.query=L.Text(state.query,200,true) and state.query or "";state.roles=type(state.roles)=="table" and state.roles or {}
     state.currentZone=state.currentZone==true or nil
@@ -651,7 +651,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         for i=1,#rows do if tops[i]<=scroll then state.offset=i-1 else break end end
         m.updatingList=true;m.listBody:SetHeight(math.max(listHeight,fullHeight));m.contactList:SetVerticalScroll(scroll)
         m.contactList:UpdateScrollChildRect();m.contactList:RefreshScrollBar();m.updatingList=nil
-        m.count:SetText(#rows.." / "..total.." contacts")
+        m.count:SetCounts(total,#rows)
         m.empty:SetText(total==0 and "Your Ledger begins empty.\n\nMeet a service provider and open its interface, record a contact manually, or import a labelled report." or "No matching contacts.\nUse Filters > Clear to show your known directory.")
         m.empty:SetShown(#rows==0)
         local rowTop=tops[state.offset+1] or 0
@@ -717,8 +717,15 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         m.sightings:SetText((locationCount==1 and "NPC Location" or "NPC Locations").." ("..locationCount..")");m.sightings:SetEnabled(locationCount>0)
         m.favourite:SetSaved(e and e.favourite,e~=nil);m.favourite:SetEnabled(e~=nil)
         for key,button in pairs(m.detailButtons) do button:SetEnabled(e~=nil) end
-        m.detailButtons.goods:SetEnabled(self:HasOfferings(e,"goods"))
-        m.detailButtons.training:SetEnabled(self:HasOfferings(e,"training"))
+        local right=922
+        for _,kind in ipairs({"training","goods"}) do
+            local button=m.detailButtons[kind];local available=self:HasOfferings(e,kind)
+            button:SetEnabled(available);button:SetShown(available)
+            if available then
+                button:ClearAllPoints();button:SetPoint("TOPLEFT",right-button:GetWidth(),-89)
+                right=right-button:GetWidth()-6
+            end
+        end
         self:UpdateDetailToggles()
         m.details:SetText(self:Details(e,false,"services"));m.map:Render()
         if self.panel==self.panels.catalogue and self.panel then self.panel.read:SetContact(e,false,self.panel.kind) end
@@ -728,9 +735,9 @@ function ns.CreateLedgerBook(journal,tracking,shell)
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Merchant’s Ledger")
         m.directory=CreateFrame("Frame",nil,m);m.directory:SetAllPoints();local d=m.directory
-        m.search=U.Search(d,47,-92,188,200);m.search:SetText(state.query)
+        m.search=U.Search(d,70,-110,168,200);m.search:SetText(state.query)
         m.search:HookScript("OnTextChanged",function() state.query=m.search:GetText();c:Filter() end)
-        m.filters=ns.FieldbookUI.FilterButton(d,244,-92,function(button)
+        m.filters=ns.FieldbookUI.FilterButton(d,244,-110,function(button)
             m.search:ClearFocus()
             c:Menu(button,function(_,root)
                 local function checkbox(parent,label,checked,action)
@@ -770,7 +777,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             end)
         end)
         U.StyleSelection(m.filters)
-        m.sort=U.Button(d,"",270,-92,22,function(button)
+        m.sort=U.Button(d,"",270,-110,22,function(button)
             m.search:ClearFocus()
             c:Menu(button,function(_,root)
                 root:CreateTitle("Sort by")
@@ -791,7 +798,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             item[1]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         end
         m.reports=U.ShareButton(d,function() c:Reports() end)
-        m.count=U.Label(d,"",42,-150,250,"GameFontHighlightSmall");m.rows={}
+        m.count=ns.FieldbookUI.EntryCount(d);m.rows={}
         m.contactList,m.listBody=U.Scroll(d,42,-170,228,462)
         m.contactList:HookScript("OnVerticalScroll",function(self,value)
             if not m.updatingList then state.contactScroll=value or self:GetVerticalScroll();c:Refresh() end
@@ -873,7 +880,7 @@ function ns.CreateLedgerBook(journal,tracking,shell)
                 end
             end)
         end)
-        m.link=U.Button(d,"Link identity",42,-120,250,function() c:Identity() end)
+        m.link=U.Button(d,"Link identity",42,-142,250,function() c:Identity() end)
         m.link:SetScript("OnEnter",function(self)
             if not GameTooltip then return end
             GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText("Link identity")
@@ -915,10 +922,16 @@ function ns.CreateLedgerBook(journal,tracking,shell)
             "|cffffd100Share|r\nSelect a contact and open Share. Choose what to include, then Prepare text for copying. When preparing your own observations, the current search limits included offerings. Notes start excluded. To import, use Preview pasted data, review it, then Accept reported facts. Received facts remain Reported with their original source and observation dates; receiving them is not a personal encounter. Reports use copy and paste and cost no Knowledge.\n\n"..
             "|cffffd100Your journal|r\nContacts, notes and browsing settings follow the global Account-wide tracking option. It starts on in Options; turn it off to use this character's separate journal after /reload. Existing character records import once; later changes in the two scopes stay separate.",
         onOpen=function() if c.main then c:Refresh();c.main.details:SetVerticalScroll(state.detailScroll or 0) end end})
-    journal.onMerchantDiscovered=function(entry)
-        if DEFAULT_CHAT_FRAME then
-            DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r "..shell.sections.merchants.definition.title.." — Merchant discovered: |cffffd100"..
-                L.Safe(entry.name).."|r.")
+    journal.onContactDiscovered=function(entry)
+        if eventJournal and eventJournal:GetCreatureAnnouncement() and DEFAULT_CHAT_FRAME then
+            local role=entry.roles.trainer and "Trainer" or entry.roles.merchant and "Merchant"
+            if not role then
+                for _,key in ipairs(L.roleOrder) do
+                    if entry.roles[key] then role=key=="repair" and "Repairer" or L.roles[key];break end
+                end
+            end
+            DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cffffd100[New discovery!]|r |cff80d0ff"..shell.sections.merchants.definition.title..":|r |cffffffff"..
+                L.Safe(entry.name).."|r |cff999999("..(role or "Contact")..")|r")
         end
     end
     journal.onChange=function()
@@ -929,9 +942,9 @@ function ns.CreateLedgerBook(journal,tracking,shell)
     end
     return c
 end
-function ns.InitializeLedger(shell)
+function ns.InitializeLedger(shell,eventJournal)
     if type(AzerothFieldbookLedgerDB)~="table" then AzerothFieldbookLedgerDB={} end
     local storage=ns.SelectSectionStorage and ns.SelectSectionStorage("ledger",AzerothFieldbookLedgerDB) or AzerothFieldbookLedgerDB
     local journal=ns.CreateLedgerJournal(storage)
-    return ns.CreateLedgerBook(journal,ns.CreateLedgerTracking(journal),shell)
+    return ns.CreateLedgerBook(journal,ns.CreateLedgerTracking(journal),shell,eventJournal)
 end

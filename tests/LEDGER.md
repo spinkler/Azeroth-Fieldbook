@@ -54,15 +54,18 @@ Names and localized sublabels are display/search data, never merge keys.
 At most eight observed GUID aliases correlate known individuals with stable
 local contacts, including movement and reloads while that GUID remains valid.
 
-A new GUID is not assumed to be the same individual as an existing record of
-the same template, even at similar coordinates. Such records are flagged
-ambiguous. The **Link identity** panel asks the player to select the other
-record, shows the consequence, and requires an explicit same-individual
-confirmation. It combines positive knowledge/notes, retaining first and latest
-observations, and redirects old stable references. GUID expiry, respawns and
-cross-realm copies can consequently leave duplicates until this review; nearby
-coordinates alone cannot establish durable identity. A travelling individual
-with a recognizable GUID does not create a new record at each location.
+An unfamiliar GUID can reuse exactly one personally encountered contact with the
+same NPC template and name, compatible titles (missing titles do not conflict),
+and a personal sighting within a circular 0.25 map-coordinate-unit radius.
+Map, zone, subzone and coordinate precision must agree. This is a map-relative
+radius, not yards. A contact with another GUID already seen during this journal
+session is excluded to keep concurrently encountered individuals separate.
+Known GUIDs continue to follow travelling contacts regardless of distance.
+
+Missing positions, conflicting titles and multiple eligible contacts do not
+trigger this fallback. It never merges existing records or matches report-only
+contacts. Existing duplicates still use **Link identity**, which preserves
+notes, observations and stable references after explicit confirmation.
 
 Each contact separately owns goods, lessons, roles, manual annotations and
 sightings. Goods use item/currency/spell identity plus purchase bundle and

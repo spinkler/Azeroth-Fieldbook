@@ -6,20 +6,25 @@ A.icons={accepted='Interface\\GossipFrame\\AvailableQuestIcon',removed='Interfac
     hearth='Interface\\Icons\\INV_Misc_Rune_01',teleport='Interface\\Icons\\Spell_Arcane_TeleportStormWind',
     crossing='Interface\\Icons\\Creatureportrait_Darkshoreboat',battleground='Interface\\Icons\\Achievement_BG_winWSG',instance='Interface\\Icons\\INV_Misc_Key_10'}
 A.eventColours={discovery='55ddee',accepted='55ddee',completed='77dd88',removed='eeaa66',flight='77dd88',death='ee7777',hearth='bb99ff',teleport='bb99ff',crossing='55ddee',battleground='eeaa66',instance='bb99ff'}
-function A.InstanceDirection(parent,icon,e,shadowAlpha)
+function A.InstanceDirection(parent,icon,e,shadowAlpha,scale)
+    scale=scale or 1
     local action=e.kind=='instance' and e.instanceAction
     if action and not parent.instanceArrow then
         parent.instanceArrowShadow=parent:CreateTexture(nil,'OVERLAY',nil,5)
         parent.instanceArrow=parent:CreateTexture(nil,'OVERLAY',nil,6)
         for _,arrow in ipairs({parent.instanceArrowShadow,parent.instanceArrow}) do
-            arrow:SetTexture('Interface\\ChatFrame\\ChatFrameExpandArrow');arrow:SetSize(11,13)
+            arrow:SetTexture('Interface\\ChatFrame\\ChatFrameExpandArrow')
         end
-        parent.instanceArrowShadow:SetPoint('BOTTOMRIGHT',icon,'BOTTOMRIGHT',4,-3);parent.instanceArrowShadow:SetVertexColor(0,0,0,shadowAlpha or 0.95)
-        parent.instanceArrow:SetPoint('BOTTOMRIGHT',icon,'BOTTOMRIGHT',3,-2)
+        parent.instanceArrowShadow:SetVertexColor(0,0,0,shadowAlpha or 0.95)
     end
     if parent.instanceArrow then
         parent.instanceArrow:SetShown(action~=nil and action~=false);parent.instanceArrowShadow:SetShown(action~=nil and action~=false)
         if action then
+            for _,arrow in ipairs({parent.instanceArrowShadow,parent.instanceArrow}) do
+                arrow:SetSize(11*scale,13*scale);arrow:ClearAllPoints()
+            end
+            parent.instanceArrowShadow:SetPoint('BOTTOMRIGHT',icon,'BOTTOMRIGHT',4*scale,-3*scale)
+            parent.instanceArrow:SetPoint('BOTTOMRIGHT',icon,'BOTTOMRIGHT',3*scale,-2*scale)
             local rotation=action=='exit' and math.pi or 0
             parent.instanceArrow:SetRotation(rotation);parent.instanceArrowShadow:SetRotation(rotation)
             if action=='exit' then parent.instanceArrow:SetVertexColor(1,0.6,0.25) else parent.instanceArrow:SetVertexColor(0.3,1,0.4) end
@@ -425,12 +430,13 @@ function A.JourneyFrame(index,at)
     -- Marker limits are intentional; the timeline retains every event.
     return lines,markers,cursor,limited,invalid,motion
 end
-function A.TrailColor(at,stamp,strength,flight,mount)
+function A.TrailColor(at,stamp,strength,flight,mount,state)
     strength=ns.Atlas.Number(strength,0,1) and strength or 0.75
     -- Thirty minutes behind the scrubber is halfway cooled. Keep an opacity
     -- floor so old travel remains discoverable, without altering stored history.
     local heat=2^(-math.max(0,at-stamp)/1800)
     local fade=(1-heat)*strength
+    if state=='dead' or state=='ghost' or state=='dead / ghost' then return 0.9,0.15,0.25,0.8-0.68*fade,heat end
     if flight then return 0.2-0.1*fade,1-0.35*fade,0.3+0.15*fade,0.8-0.68*fade,heat end
     if mount==60 then return 0,112/255,221/255,0.8-0.68*fade,heat end
     if mount==100 then return 163/255,53/255,238/255,0.8-0.68*fade,heat end
@@ -454,12 +460,12 @@ function A.SmoothTrail(lines,width,height)
     local budget=math.max(0,2048-#lines)
     local function between(a,b,t)
         return {x=a.x+(b.x-a.x)*t,y=a.y+(b.y-a.y)*t,
-            at=a.at+(b.at-a.at)*t,mapID=a.mapID,level=a.level,flight=b.flight,mount=b.mount}
+            at=a.at+(b.at-a.at)*t,mapID=a.mapID,level=a.level,flight=b.flight,mount=b.mount,state=b.state}
     end
     -- Prefer recent corners when the existing geometry approaches its budget.
     for i=#lines,1,-1 do
         local edge=lines[i];local p=edge.to;local nextEdge=outgoing[p]
-        if budget>=2 and incoming[p]==edge and nextEdge and edge.from.flight==p.flight and p.flight==nextEdge.to.flight and edge.from.mount==p.mount and p.mount==nextEdge.to.mount then
+        if budget>=2 and incoming[p]==edge and nextEdge and edge.from.flight==p.flight and p.flight==nextEdge.to.flight and edge.from.mount==p.mount and p.mount==nextEdge.to.mount and edge.from.state==p.state and p.state==nextEdge.to.state then
             local dx,dy=(p.x-edge.from.x)*width/10000,(p.y-edge.from.y)*height/10000
             local ex,ey=(nextEdge.to.x-p.x)*width/10000,(nextEdge.to.y-p.y)*height/10000
             local before,after=math.sqrt(dx*dx+dy*dy),math.sqrt(ex*ex+ey*ey)
@@ -589,7 +595,7 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         self.playerCoordinates:SetText('Historical journey • No recorded position')
         if not p or not self.available then return end
         local size=ns.Atlas.Number(j.db.settings.iconSize,6,40) and j.db.settings.iconSize or 20
-        arrow:SetSize(size,size);arrow:ClearAllPoints()
+        arrow:SetSize(size*1.5,size*1.5);arrow:ClearAllPoints()
         arrow:SetPoint('CENTER',self.canvas,'TOPLEFT',p.x/10000*self:GetWidth(),-p.y/10000*self:GetHeight())
         local state=p.state or (p.flight and 'flight') or 'unknown'
         arrow:SetVertexColor(A.PlayerColor(state))
@@ -634,7 +640,7 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         for i,segment in ipairs(adapter.lines) do
             local line=self.lines and self.lines[i]
             if line then
-                local r,g,b,alpha,heat=A.TrailColor(cutoff,segment.to.at,j.db.settings.trailContrast,segment.to.flight,segment.to.mount)
+                local r,g,b,alpha,heat=A.TrailColor(cutoff,segment.to.at,j.db.settings.trailContrast,segment.to.flight,segment.to.mount,segment.to.state)
                 line:SetColorTexture(r,g,b,alpha)
                 line:SetDrawLayer('ARTWORK',heat>=0.5 and 1 or 0)
             end
@@ -648,9 +654,9 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
             end
             local alpha=0
             for _,member in ipairs(pin.group) do alpha=math.max(alpha,member.point.alpha or 1) end
-            pin:SetAlpha(alpha)
+            pin:SetAlpha(alpha*0.6)
             self:SetPinIcon(pin,A.icons[event.kind]);pin.icon:SetVertexColor(1,1,1)
-            A.InstanceDirection(pin,pin.icon,event)
+            A.InstanceDirection(pin,pin.icon,event,nil,pin:GetWidth()/20)
             pin:SetScript('OnClick',function(p,button)
                 if map:FinishPan() then return end
                 if button=='RightButton' then map:Navigate(button);return end

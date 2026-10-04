@@ -133,7 +133,7 @@ function ns.CreateLedgerJournal(saved)
     for _,k in ipairs({"contacts","state","aliases","reportKeys","references"}) do if type(db[k])~="table" then db[k]={} end end
     db.schema=L.SCHEMA;db.serial=L.Integer(db.serial,0,999999999) and db.serial or 0
     if not L.Text(db.origin,100) then db.origin=tostring(L.Now())..'-'..math.random(1,999999999) end
-    local j={db=db,state=db.state,readOnly=readOnly,revision=0,cache={}}
+    local j={db=db,state=db.state,readOnly=readOnly,revision=0,cache={},sessionGUIDs={}}
     function j:Changed(id)
         local e=id and self:Get(id);id=e and e.id or id
         self.revision=self.revision+1;self.cache[id or false]=nil;if self.onChange then self.onChange(id) end
@@ -174,6 +174,32 @@ function ns.CreateLedgerJournal(saved)
         table.sort(e.sightings,function(a,b) return a.last>b.last end)
         while #e.sightings>L.MAX_SIGHTINGS do table.remove(e.sightings) end
     end
+    -- A new session may expose a different spawn GUID for a stationary service.
+    -- Only one personal candidate may qualify; never combine saved records here.
+    function j:NearbyContact(v,p)
+        if not L.Position(p) then return end
+        local candidate
+        for _,e in pairs(db.contacts) do
+            if e.personal and e.npcID==v.npcID and e.name==v.name
+                and (not L.Name(v.sublabel) or not L.Name(e.sublabel) or v.sublabel==e.sublabel) then
+                local seen=false
+                for guid in pairs(e.aliases or {}) do if self.sessionGUIDs[guid] then seen=true;break end end
+                if not seen then
+                    for _,old in ipairs(e.sightings) do
+                        if old.mapID==p.mapID and old.zone==p.zone and old.subzone==p.subzone
+                            and old.precision==p.precision and L.Position(old) then
+                            local dx,dy=old.x-p.x,old.y-p.y
+                            if dx*dx+dy*dy<=25*25 then
+                                if candidate and candidate~=e then return end
+                                candidate=e;break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        return candidate
+    end
     function j:Encounter(v,roles,near,selected)
         if self.readOnly or not v or not L.Name(v.name) or not L.Text(v.guid,160) or not L.Integer(v.npcID,1,10000000) then return end
         local e=self:Get(db.aliases[v.guid]);local at=L.Now()
@@ -181,18 +207,20 @@ function ns.CreateLedgerJournal(saved)
             e=self:Get(selected)
             if not e or (e.npcID and e.npcID~=v.npcID) then return nil,"NPC template does not match the selected contact." end
         end
+        local location=L.Location(v.location,near)
+        if not e then e=self:NearbyContact(v,location) end
+        local newlyAdded=not e
         if not e then
             e=self:New(v.name);if not e then return end
             for _,other in pairs(db.contacts) do if other~=e and other.npcID==v.npcID then e.ambiguous=true;break end end
         end
-        local newMerchant=roles and roles.merchant and not e.roles.merchant
-        self:Bind(e,v.guid);e.npcID=v.npcID;e.name=v.name;e.identityOrigin=self:Origin(e,"identity",at)
+        self:Bind(e,v.guid);self.sessionGUIDs[v.guid]=true;e.npcID=v.npcID;e.name=v.name;e.identityOrigin=self:Origin(e,"identity",at)
         if L.Name(v.sublabel) then e.sublabel=v.sublabel;e.sublabelOrigin=self:Origin(e,"sublabel",at) end
         e.personal=true;touch(e,at)
         for role in pairs(roles or {}) do if L.roles[role] then e.roles[role]=self:Origin(e,"role:"..role,at) end end
-        self:Sighting(e,L.Location(v.location,near),at);self:Changed(e.id)
+        self:Sighting(e,location,at);self:Changed(e.id)
         if ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("merchants",e,self) end
-        if newMerchant and self.onMerchantDiscovered then self.onMerchantDiscovered(e) end
+        if newlyAdded and self.onContactDiscovered then self.onContactDiscovered(e) end
         return e
     end
     function j:Manual(v)
@@ -201,7 +229,9 @@ function ns.CreateLedgerJournal(saved)
         e.recorded=true;e.identityOrigin=self:Origin(e,"identity",L.Now(),"recorded")
         e.sublabel=L.Name(v.sublabel) or "";e.sublabelOrigin=self:Origin(e,"sublabel",L.Now(),"recorded")
         if ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("merchants",e,self) end
-        self:Changed(e.id);return e
+        self:Changed(e.id)
+        if self.onContactDiscovered then self.onContactDiscovered(e) end
+        return e
     end
     function j:Annotate(id,note,role,speciality)
         local e=self:Get(id);if self.readOnly or not e or not L.Text(note,4000,true) then return nil,"Use plain notes, up to 4,000 bytes." end
