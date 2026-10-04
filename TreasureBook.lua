@@ -61,7 +61,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     function c:DetailRows(detail)
         detail=detail or state.detail
         local e=journal:Get(state.selected);local rows={}
-        local function add(text,item,encounter) rows[#rows+1]={text=text,item=item,encounter=encounter} end
+        local function add(text,item,encounter,style,title) rows[#rows+1]={text=text,item=item,encounter=encounter,style=style,title=title} end
         if not e then
             add("Your journal begins with finds you record or openable items observed in your bags. Use Record a find for world containers and salvage. No undiscovered finds are included.")
             return rows
@@ -69,21 +69,21 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         local all=journal:History(e.id);local history={};local summary=journal:Summary(e)
         state.historyOffset=math.min(state.historyOffset,math.max(0,math.floor((#all-1)/HISTORY_PAGE)*HISTORY_PAGE))
         for i=state.historyOffset+1,math.min(#all,state.historyOffset+HISTORY_PAGE) do history[#history+1]=all[i] end
-        if #all>HISTORY_PAGE then add("Showing encounters "..(state.historyOffset+1).."–"..math.min(#all,state.historyOffset+HISTORY_PAGE).." of "..#all..". Use Newer / Older above the map.") end
+        if #all>HISTORY_PAGE then add("Showing encounters "..(state.historyOffset+1).."–"..math.min(#all,state.historyOffset+HISTORY_PAGE).." of "..#all..". Use Newer / Older above the map.",nil,nil,"guidance") end
         if detail=="summary" then
             add((e.form=="world" and "World find" or "Portable container").." • "..e.category.."\n"..
                 (e.itemID and "Item identity: "..e.itemID or "Provisional kind: "..e.id..". Matching names do not prove matching kinds."))
             add(summary.knowledge.." • "..summary.personal.." personal recorded encounters • "..summary.reported.." reported encounters\n"..
-                summary.inspections.." personal inspections • "..summary.recoveries.." items explicitly recorded as recovered")
-            add(summary.contents==0 and "Contents not recorded. This does not mean the container was empty." or "Contents observations retain their own encounter, location and source. Missing items in partial captures are not confirmed absences.")
+                summary.inspections.." personal inspections • "..summary.recoveries.." items explicitly recorded as recovered",nil,nil,"body","Recorded encounters")
+            add(summary.contents==0 and "Contents not recorded. This does not mean the container was empty." or "Contents observations retain their own encounter, location and source. Missing items in partial captures are not confirmed absences.",nil,nil,"guidance","Contents evidence")
             for _,v in ipairs(history) do if v.access~="" then
                 add("Access ("..(v.reported and "reported / " or "")..v.accessMethod.."): "..v.access.."\n"..T.Date(v.origin.at).." • "..T.LocationText(v.location),nil,v.id)
             end end
-            add("Automatic capture records readable openable bag items and strictly matched portable inspections. It never confirms receipt. World identity, acquisition context, access requirements and recovery claims can be recorded manually.")
+            add("Automatic capture records readable openable bag items and strictly matched portable inspections. It never confirms receipt. World identity, acquisition context, access requirements and recovery claims can be recorded manually.",nil,nil,"guidance","Recording finds")
         elseif detail=="notes" then
-            add("General notes (private):\n"..(e.note~="" and e.note or "No notes yet. Use Edit."))
-            add("Look for again: "..(e.bookmark and "Bookmarked" or "Not bookmarked").."\n"..(e.bookmarkNote~="" and e.bookmarkNote or "No reason recorded."))
-            add("Bookmarks describe your intention to look again. They make no claim that a particular container remains available.")
+            add("General notes (private):\n"..(e.note~="" and e.note or "No notes yet. Use Edit."),nil,nil,"notes")
+            add("Look for again: "..(e.bookmark and "Bookmarked" or "Not bookmarked").."\n"..(e.bookmarkNote~="" and e.bookmarkNote or "No reason recorded."),nil,nil,"notes")
+            add("Bookmarks describe your intention to look again. They make no claim that a particular container remains available.",nil,nil,"guidance")
             for _,v in ipairs(history) do if v.reportNote and v.reportNote~="" then add("Reported kind note — "..v.origin.source..": "..v.reportNote,nil,v.id) end end
         elseif detail=="contents" then
             local any=false
@@ -110,7 +110,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
                 if v.reported then text=text.." • received "..T.Date(v.received) end
                 if v.access~="" then text=text.."\nAccess ("..v.accessMethod.."): "..v.access end
                 if v.note~="" then text=text.."\nEncounter note: "..v.note end
-                add(text,nil,v.id)
+                add(text,nil,v.id,"encounter")
             end
         end
         return rows
@@ -134,13 +134,30 @@ function ns.CreateTreasureBook(journal,tracking,shell)
                 end)
                 pool[i]=row
             end
-            if data.divider and not row.divider then
-                row.divider=ns.FieldbookUI.EntryDivider(row,8)
+            local divider=detail=="contents" and data.divider or (detail~="contents" and i>1)
+            if divider and not row.divider then
+                row.divider=detail=="contents" and ns.FieldbookUI.EntryDivider(row,8) or U.DetailDivider(row,8,width)
             end
-            if row.divider then for _,line in ipairs(row.divider) do line:SetShown(data.divider==true) end end
-            if data.divider then y=y+14 end
+            if row.divider then for _,line in ipairs(row.divider) do line:SetShown(divider==true) end end
+            if divider then y=y+14 end
             row.data=data;row.text:ClearAllPoints();row.text:SetPoint("TOPLEFT",data.item and 31 or 0,0)
             row.text:SetWidth(width-(data.item and 31 or 0));row.text:SetText(T.Safe(data.text));row.text:SetTextColor(0.75,0.8,0.8)
+            if detail~="contents" then
+                local formatted={}
+                for line in (data.text.."\n"):gmatch("(.-)\n") do
+                    local label,value=line:match("^([^:]+:)(.*)$")
+                    if data.style=="guidance" then formatted[#formatted+1]=U.DetailPaint(line,"9ba7ad")
+                    elseif data.title or (data.style=="notes" and #formatted>0) then formatted[#formatted+1]=U.DetailPaint(line,"c5cdcf")
+                    elseif #formatted==0 then
+                        local name,stamp
+                        if data.style=="encounter" then name,stamp=line:match("^(.*) • ([^•]+)$") end
+                        formatted[#formatted+1]=name and (U.DetailPaint(name,"ffd100").."\n"..U.DetailPaint(stamp,"9ba7ad")) or U.DetailPaint(line,"ffd100")
+                    elseif label then formatted[#formatted+1]=U.DetailPaint(label,"74c7d5")..U.DetailPaint(value,"c5cdcf")
+                    elseif line==T.captures.partial or line==T.captures.failed then formatted[#formatted+1]=U.DetailPaint(line,"cfad64")
+                    else formatted[#formatted+1]=U.DetailPaint(line,"9ba7ad") end
+                end
+                row.text:SetText((data.title and U.DetailPaint(data.title,"ffd100").."\n\n" or "")..table.concat(formatted,"\n"))
+            end
             if data.item and data.item.itemID then
                 local quality=T.Read(C_Item and C_Item.GetItemQualityByID,data.item.itemID)
                 local color=T.Integer(quality,0,8) and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
@@ -166,6 +183,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     function c:Expand()
         local m=self.main
         m.notesExpanded=not m.notesExpanded
+        m.expand:SetSelected(m.notesExpanded)
         local from=m.notesProgress or 0
         local target=m.notesExpanded and 1 or 0
         for row,stroke in ipairs(m.notesArrow) do
@@ -372,7 +390,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         shell:AddBackgroundLayer(m.notesPaper,0.17,0.17,0.17,true)
         for _,edge in ipairs({{"TOPLEFT","TOPRIGHT",true},{"BOTTOMLEFT","BOTTOMRIGHT",true},{"TOPLEFT","BOTTOMLEFT",false},{"TOPRIGHT","BOTTOMRIGHT",false}}) do
             local border=m.notesOverlay:CreateTexture(nil,"OVERLAY")
-            border:SetColorTexture(0.45,0.30,0.13,1)
+            border:SetColorTexture(unpack(U.DetailGold))
             border:SetPoint(edge[1],m.notesPaper,edge[1]);border:SetPoint(edge[2],m.notesPaper,edge[2])
             if edge[3] then border:SetHeight(1) else border:SetWidth(1) end
         end
@@ -385,6 +403,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         end
         m.expand=U.Button(m.notesOverlay,"",438,0,22,function() c:Expand() end);m.expand:SetSize(22,22)
         m.expand:ClearAllPoints();m.expand:SetPoint("TOPRIGHT",m.notesPaper,"TOPRIGHT",-4,-4)
+        U.StyleSelection(m.expand)
         m.notesArrow={}
         for row=0,4 do
             local stroke=m.expand:CreateTexture(nil,"OVERLAY")

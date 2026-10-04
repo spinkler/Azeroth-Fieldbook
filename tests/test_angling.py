@@ -670,6 +670,7 @@ class AnglingReportTests(unittest.TestCase):
 class AnglingUITests(unittest.TestCase):
     def setUp(self):
         self.lua = new_angling(ui=True)
+
         self.lua.execute('''
         MenuResponse={Refresh=2}
         function openMenu(button)
@@ -710,11 +711,25 @@ class AnglingUITests(unittest.TestCase):
             assert(m.notesOverlay.scripts.OnUpdate==nil and m.notesPaper:IsShown())
         """)
 
+    def test_detail_blocks_preserve_data_and_hide_unused_rows(self):
+        self.lua.execute('''
+            observe('formatted',nil,nil,nil,nil,{{itemID=1001,name='Fish',quantity=2}})
+            c:SetView('catches');local e=j:Get(m.rows[1].id);c:Select(e.id)
+            local before=snapshot(j.db)
+            assert(#m.detailRows>=3 and not m.details.text:IsShown())
+            assert(m.detailRows[1].text:GetText():find('|cffffd100Fishing summary|r',1,true))
+            assert(m.detailRows[2].text:GetText():find('|cff74c7d5',1,true))
+            local line=m.detailRows[2].divider[16]
+            assert(line:IsShown() and line.colorTexture[1]==ns.AtlasUI.DetailGold[1])
+            c:Refresh();assert(snapshot(j.db)==before)
+            c:State().selected=nil;c:Refresh()
+            assert(m.detailRows[1]:IsShown() and not m.detailRows[2]:IsShown())
+        ''')
     def test_scrolling_index_and_context_actions(self):
         self.lua.execute("""
             for i=1,40 do spot(string.format('Spot %02d',i)) end
             local rows=j:List('waters',c:Filters())
-            assert(not m.previous and not m.next and #m.rows==11)
+            assert(not m.previous and not m.next and #m.rows==13)
             assert(m.merge:IsShown() and not m.restore:IsShown())
             m.list.scripts.OnMouseWheel(m.list,-4)
             -- The widget harness does not dispatch native scroll events.
@@ -725,7 +740,7 @@ class AnglingUITests(unittest.TestCase):
             c:SetView('catches');assert(not m.merge:IsShown())
             c:SetView('waters');assert(c:State().indexScroll==before)
             c:Select(rows[#rows].id)
-            assert(m.list:GetVerticalScroll()==#rows*38-380)
+            assert(m.list:GetVerticalScroll()==#rows*38-440)
             local visible=false
             for _,row in ipairs(m.rows) do if row.id==rows[#rows].id then visible=true end end
             assert(visible)

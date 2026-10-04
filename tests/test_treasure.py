@@ -558,6 +558,21 @@ class TreasureUITests(unittest.TestCase):
     def setUp(self):
         self.lua = new_treasure(True)
 
+    def test_formatted_detail_views_preserve_encounters_and_notes(self):
+        self.lua.execute('''
+            local e=record();inspect(e.id,{{itemID=555,quantity=2}});c:Select(e.id)
+            local before=snapshot({j.db.kinds,j.db.encounters})
+            for _,key in ipairs({'history','summary','notes'}) do
+                c.state.detail=key;c:Refresh()
+                assert(m.detailRows[1].text:GetText():find('|cffffd100',1,true))
+                assert(m.detailRows[2].divider[16]:IsShown())
+                assert(m.detailRows[2].divider[16].colorTexture[1]==ns.AtlasUI.DetailGold[1])
+            end
+            assert(snapshot({j.db.kinds,j.db.encounters})==before)
+            c.state.detail='history';c:Refresh()
+            local count=#m.detailRows;c:Refresh();assert(#m.detailRows==count)
+        ''')
+
     def test_empty_states_and_fixed_atlas_geometry_with_independent_instances(self):
         self.lua.execute('''
             assert(m.empty:IsShown() and m.empty:GetText():find('begins empty',1,true))

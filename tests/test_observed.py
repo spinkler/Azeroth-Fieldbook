@@ -356,9 +356,13 @@ check(entry.category=='Humanoid' and entry.levelMin==9,'main records creature me
 frames[5].handler(frames[5], 'PARTY_KILL', playerGUID, guid)
 dead=true; frames[5].handler(frames[5], 'UNIT_HEALTH', 'target'); frames[5].handler(frames[5], 'UNIT_HEALTH', 'target')
 check(entry.kills==1,'observed creature death increments kill counter once per GUID')
+entry.kills=0
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==0,'zero kills and unconfirmed abilities add no tooltip lines')
+entry.kills=1
 dead=false
 GameTooltip.lines={}; tooltipHook(GameTooltip)
-check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Kills: 1','kill count is shown by default without exposing unconfirmed abilities')
+check(#GameTooltip.lines==1 and GameTooltip.lines[1]=='Kills: 1','kill count is shown by default without exposing unconfirmed abilities')
 AzerothFieldbookDB.showKillCountTooltips=false
 GameTooltip.lines={}; tooltipHook(GameTooltip)
 check(#GameTooltip.lines==0,'disabling kill counts restores the ability-only tooltip')
@@ -366,11 +370,11 @@ AzerothFieldbookDB.showKillCountTooltips=true
 entry.confirmed=true; entry.abilities['Observed trap'].state='confirmed'
 AzerothFieldbookDB.bestiary.creatures={}
 GameTooltip.lines={}; tooltipHook(GameTooltip)
-check(GameTooltip.lines[2]=='Observed trap','manual journal abilities work without automatic DB')
-check(GameTooltip.lines[3]=='Kills: 1','locked entries include the same kill count')
+check(GameTooltip.lines[1]=='Observed trap','manual journal abilities work without automatic DB')
+check(GameTooltip.lines[2]=='Kills: 1','locked entries include the same kill count')
 AzerothFieldbookDB.showKillCountTooltips=false
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Observed trap','kill toggle leaves confirmed abilities visible')
+check(#GameTooltip.lines==1 and GameTooltip.lines[1]=='Observed trap','kill toggle leaves confirmed abilities visible')
 AzerothFieldbookDB.showKillCountTooltips=true
 
 -- Behaviour tooltip opt-in is independent of abilities, kills and disposition.
@@ -381,27 +385,27 @@ entry.rumours={{kind='behaviour',value='Summons'}}
 AzerothFieldbookDB.showKillCountTooltips=false
 entry.abilities['Observed trap'].showInTooltip=false
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Flees at low health, Melee, Patrols','behaviour tooltip option defaults on')
+check(#GameTooltip.lines==1 and GameTooltip.lines[1]=='Flees at low health, Melee, Patrols','behaviour tooltip option defaults on')
 AzerothFieldbookDB.showBehaviourTooltips=true
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Flees at low health, Melee, Patrols',
+check(#GameTooltip.lines==1 and GameTooltip.lines[1]=='Flees at low health, Melee, Patrols',
     'checked traits display alone on locked entries; dispositions, unchecked marks and rumours stay excluded')
 entry.behaviours.Melee=false;entry.disposition='Neutral'
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(GameTooltip.lines[2]=='Flees at low health, Patrols','unchecked traits disappear without exposing disposition')
+check(GameTooltip.lines[1]=='Flees at low health, Patrols','unchecked traits disappear without exposing disposition')
 entry.abilities['Observed trap'].showInTooltip=true
 AzerothFieldbookDB.showKillCountTooltips=true
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(#GameTooltip.lines==4 and GameTooltip.lines[2]=='Observed trap'
-    and GameTooltip.lines[3]=='Flees at low health, Patrols' and GameTooltip.lines[4]=='Kills: 1',
+check(#GameTooltip.lines==3 and GameTooltip.lines[1]=='Observed trap'
+    and GameTooltip.lines[2]=='Flees at low health, Patrols' and GameTooltip.lines[3]=='Kills: 1',
     'behaviour traits coexist with selected abilities and kill count')
 AzerothFieldbookDB.showBehaviourTooltips=false
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(#GameTooltip.lines==3 and entry.behaviours.Patrols,'turning off display preserves knowledge and other tooltip facts')
+check(#GameTooltip.lines==2 and entry.behaviours.Patrols,'turning off display preserves knowledge and other tooltip facts')
 entry.behaviours={};entry.rumours={};entry.disposition=nil
 AzerothFieldbookDB.showBehaviourTooltips=true
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(#GameTooltip.lines==3,'no empty behaviour line')
+check(#GameTooltip.lines==2,'no empty behaviour line')
 AzerothFieldbookDB.showBehaviourTooltips=false
 
 -- Resolved abilities render icons and optional public spell descriptions.
@@ -424,30 +428,30 @@ function GameTooltip:AddLine(text,r,g,b,wrap)
     self.colours=self.colours or {};self.colours[#self.lines]={r,g,b,wrap}
 end
 GameTooltip:SetUnit('mouseover')
-check(GameTooltip.lines[2]=='|T12345:16:16:0:0|t Observed trap','icon precedes resolved name')
-check(GameTooltip.lines[3]=='(Ctrl for details)' and GameTooltip.colours[3][1]==0.6,'available details have grey hint')
+check(GameTooltip.lines[1]=='|T12345:16:16:0:0|t Observed trap','icon precedes resolved name')
+check(GameTooltip.lines[2]=='(Ctrl for details)' and GameTooltip.colours[2][1]==0.6,'available details have grey hint')
 ctrl=true;frames[5].handler(frames[5],'MODIFIER_STATE_CHANGED','LCTRL',1)
-check(GameTooltip.lines[3]==descriptionValue and #GameTooltip.lines==4,'Ctrl expands in place without duplicate lines')
+check(GameTooltip.lines[2]==descriptionValue and #GameTooltip.lines==3,'Ctrl expands in place without duplicate lines')
 ctrl=false;frames[5].handler(frames[5],'MODIFIER_STATE_CHANGED','LCTRL',0)
-check(GameTooltip.lines[3]=='(Ctrl for details)' and #GameTooltip.lines==4,'Ctrl release collapses in place')
+check(GameTooltip.lines[2]=='(Ctrl for details)' and #GameTooltip.lines==3,'Ctrl release collapses in place')
 shown=false;ctrl=true;frames[5].handler(frames[5],'MODIFIER_STATE_CHANGED','LCTRL',1)
-check(GameTooltip.lines[3]=='(Ctrl for details)','hidden tooltip is not rebuilt')
+check(GameTooltip.lines[2]=='(Ctrl for details)','hidden tooltip is not rebuilt')
 shown=true;ctrl=false
 for _,value in ipairs({secret,''}) do
     descriptionValue=value;GameTooltip:SetUnit('mouseover')
-    check(#GameTooltip.lines==3,'secret or empty description has no hint')
+    check(#GameTooltip.lines==2,'secret or empty description has no hint')
 end
 iconValue=secret;descriptionValue=secret;GameTooltip:SetUnit('mouseover')
-check(GameTooltip.lines[2]=='Observed trap','secret metadata falls back to saved name')
+check(GameTooltip.lines[1]=='Observed trap','secret metadata falls back to saved name')
 C_Spell.GetSpellDescription=function() error('unavailable') end
-GameTooltip:SetUnit('mouseover');check(#GameTooltip.lines==3,'description API errors are safe')
+GameTooltip:SetUnit('mouseover');check(#GameTooltip.lines==2,'description API errors are safe')
 local callsBefore=metadataCalls
 ability.showInTooltip=false;GameTooltip:SetUnit('mouseover')
-check(#GameTooltip.lines==2 and metadataCalls==callsBefore,'unchecked ability has no metadata lookup or hint')
+check(#GameTooltip.lines==1 and metadataCalls==callsBefore,'unchecked ability has no metadata lookup or hint')
 ability.showInTooltip=true;ability.state='pending';GameTooltip:SetUnit('mouseover')
-check(#GameTooltip.lines==2 and metadataCalls==callsBefore,'pending ability has no metadata lookup')
+check(#GameTooltip.lines==1 and metadataCalls==callsBefore,'pending ability has no metadata lookup')
 ability.state='confirmed';ability.spellID=nil;GameTooltip:SetUnit('mouseover')
-check(GameTooltip.lines[2]=='Observed trap' and #GameTooltip.lines==3 and metadataCalls==callsBefore,'unresolved ability remains name only')
+check(GameTooltip.lines[1]=='Observed trap' and #GameTooltip.lines==2 and metadataCalls==callsBefore,'unresolved ability remains name only')
 ability.showInTooltip=nil;C_Spell.GetSpellTexture=nil;C_Spell.GetSpellDescription=nil
 ctrl=false;entry.confirmed=true
 

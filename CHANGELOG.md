@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.27.0 - 2026-10-05
+
+Release-channel update covering the complete batch since v0.26.1 and previous-push baseline b7561e13c592b86db530daa50a8a48be9737eeac.
+
+- Add matching event icons beside Annals filter labels in both timeline and map filter menus.
+- Record Annals Login and Logout events with separate timeline/map icons, filters and Journey legend entries. Preserve the observed logout time and location until the next real login confirms it; discard provisional logout markers on UI reload and keep offline gaps disconnected. Crashes and forced disconnects may leave no logout marker.
+- Add the red Dead / ghost trail swatch to the Annals Journey legend, using the actual trail colour and fitting all six trail examples within the existing overlay.
+- Use the existing button highlight outline on Almanac and Treasure expand/collapse arrows only while expanded. Darken the shared footer gold and apply it consistently to their detail borders/dividers and the Ledger and Annals dark footers.
+- Show recorded quest text and objectives for Annals Completed Quests as for Accepted Quests. When turn-in text is unavailable, preserve text from the same observed acceptance cycle; older missing records remain explicitly unknown.
+- Format Almanac details and Treasure summary, history and notes with gold headings, cyan labels, muted guidance and metadata, and fading dark gold entry dividers. Match both detail-window borders to the dividers and retain scrolling, selection and provenance.
+- Hide zero kill counts and remove the AFB: Bestiary heading from creature tooltips.
+- Replace the Almanac's ambiguous list help text with guidance on the Waters, Pool Types and Catches tabs. Extend the list and align Merge spot and Restore with the other journals' lower button row.
+- Extend regression coverage for detail formatting and data preservation, completed quest text and cycle boundaries, session recording/reload suppression, event filter icons and legend colours; document session capture and remaining native acceptance checks.
+
 ## v0.26.1 - 2026-10-04
 
 Release-channel update covering the complete batch since v0.26.0 and previous-push baseline 3891a81bfef0d8b3c3cffa02dfc020bbb6a58a9e.

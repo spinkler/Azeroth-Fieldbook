@@ -42,7 +42,7 @@ function A.Location()
     elseif A.Int(mapID,1,2147483647) then p.mapID=mapID end
     return p
 end
-local kinds={accepted=true,removed=true,completed=true,discovery=true,flight=true,death=true,hearth=true,teleport=true,crossing=true,battleground=true,instance=true}
+local kinds={accepted=true,removed=true,completed=true,discovery=true,flight=true,death=true,hearth=true,teleport=true,crossing=true,battleground=true,instance=true,login=true,logout=true}
 local function validItem(v)
     return type(v)=='table' and (A.Int(v.itemID,1,2147483647) or A.Int(v.currencyID,1,2147483647) or A.Int(v.spellID,1,2147483647)) and A.Int(v.quantity,0,2147483647)
         and (v.name==nil or A.Text(v.name,240)) and (v.icon==nil or A.Int(v.icon,1,2147483647))

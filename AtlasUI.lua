@@ -5,6 +5,13 @@ local ui=ns.FieldbookUI
 U.Button=ui.Button;U.Edit=ui.Edit;U.Search=ui.Search
 U.ShareButton=ui.ShareButton
 U.MenuButton=ui.MenuButton
+U.DetailGold={0.46,0.36,0.13}
+function U.DetailDivider(parent,y,width)
+    return ui.EntryDivider(parent,y,width,U.DetailGold)
+end
+function U.DetailPaint(text,colour)
+    return "|cff"..colour..ns.Atlas.Safe(text).."|r"
+end
 function U.ZoneMenu(parent,x,y,width,getMaps,onSelect,onCurrentZone)
     local button
     button=U.MenuButton(parent,"Choose zone",x,y,width,function()
@@ -196,7 +203,7 @@ function U.FooterBackground(parent,shell)
     shell:AddBackgroundLayer(paper,0.17,0.17,0.17,true)
     for _,edge in ipairs({{"TOPLEFT","TOPRIGHT",true},{"BOTTOMLEFT","BOTTOMRIGHT",true},{"TOPLEFT","BOTTOMLEFT",false},{"TOPRIGHT","BOTTOMRIGHT",false}}) do
         local border=parent:CreateTexture(nil,"BORDER")
-        border:SetColorTexture(0.45,0.30,0.13,1)
+        border:SetColorTexture(unpack(U.DetailGold))
         border:SetPoint(edge[1],paper,edge[1]);border:SetPoint(edge[2],paper,edge[2])
         if edge[3] then border:SetHeight(1) else border:SetWidth(1) end
     end

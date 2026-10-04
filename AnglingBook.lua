@@ -1,7 +1,7 @@
 local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A,U,R=ns.Angling,ns.AtlasUI,ns.AnglingReports
-local ROW_HEIGHT,LIST_HEIGHT=38,380
+local ROW_HEIGHT,LIST_HEIGHT=38,440
 local VISIBLE_ROWS=math.ceil(LIST_HEIGHT/ROW_HEIGHT)+1
 local function dateLabel(stamp) return U.Date(stamp) end
 local function itemIcon(e)
@@ -40,13 +40,14 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         m.notesOverlay:ClearAllPoints();m.notesOverlay:SetPoint("TOPLEFT",342,-588+414*progress)
         m.notesOverlay:SetHeight(113+414*progress)
         m.details:SetHeight(61+414*progress)
-        m.detailBody:SetHeight(math.max(m.details:GetHeight(),m.details.text:GetStringHeight()+12))
+        m.detailBody:SetHeight(math.max(m.details:GetHeight(),m.detailHeight or 0))
         m.details:UpdateScrollChildRect();m.details:RefreshScrollBar()
         m.notesOverlay:EnableMouse(progress>0)
     end
     function c:Expand()
         local m=self.main
         m.notesExpanded=not m.notesExpanded
+        m.expand:SetSelected(m.notesExpanded)
         local from=m.notesProgress or 0
         local target=m.notesExpanded and 1 or 0
         for row,stroke in ipairs(m.notesArrow) do
@@ -156,8 +157,8 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         if summary.events==0 then
             lines[#lines+1]=e.kind=="pool" and "No catches recorded from this pool type." or "No personal catches recorded here."
         else
-            lines[#lines+1]=e.kind=="item" and (summary.events.." obtained events across this item's recorded sources ("..summary.recordedEvents.." player-recorded).")
-                or (summary.events.." personal catch events ("..summary.recordedEvents.." player-recorded); "..A.Count(summary.items).." different items recorded.")
+            lines[#lines+1]="Catch events: "..summary.events..(e.kind=="item" and " obtained across this item's recorded sources" or " personal").." ("..summary.recordedEvents.." player-recorded)."
+            if e.kind~="item" then lines[#lines+1]="Recorded items: "..A.Count(summary.items).." different items." end
             local items={};for id,value in pairs(summary.items) do items[#items+1]={entry=journal:Get(id),value=value} end
             table.sort(items,function(a,b) return a.entry.name<b.entry.name end)
             for _,item in ipairs(items) do
@@ -174,10 +175,12 @@ function ns.CreateAnglingBook(journal,tracking,shell)
                 or (fact.originUnknown and "Historical catches; original observer not recorded")
                 or ((fact.method=="recorded" and "Player-recorded catches by " or "Catches observed by ")..fact.origin.source)
             lines[#lines+1]="\n"..w.name.." • "..A.SourceLabels[fact.source]..(fact.poolID and ": "..journal:Get(fact.poolID).name or "")
-            lines[#lines+1]=provenance.."; source association: "..fact.association..". "..fact.events.." catch events."
+            lines[#lines+1]=provenance
+            lines[#lines+1]="Source association: "..fact.association.." • "..fact.events.." catch events."
             if fact.lastPosition then lines[#lines+1]="Latest "..A.PositionLabel(fact.lastPosition) end
             local localItems={};for id,value in pairs(fact.items) do localItems[#localItems+1]=journal:Get(id).name.." ×"..value.quantity.." ("..value.occurrences.." events)" end
-            table.sort(localItems);lines[#lines+1]=table.concat(localItems,", ")
+            table.sort(localItems)
+            for _,item in ipairs(localItems) do lines[#lines+1]=item end
             if fact.lowestSkill then
                 lines[#lines+1]=(row.reported and "Lowest successful skill reported: " or "Lowest successful effective skill personally observed: ")..fact.lowestSkill.effective
             end
@@ -202,6 +205,51 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             end
         end
         return lines
+    end
+    function c:RenderDetails(e)
+        local m=self.main;local lines=self:Details(e)
+        -- Retain the plain text for readers of the complete detail content.
+        m.details.text:SetText(A.Safe(table.concat(lines,"\n")));m.details.text:Hide()
+        local blocks={{title=e and "Fishing summary" or "Your fishing field notes",lines={}}}
+        for _,line in ipairs(lines) do
+            if line:sub(1,1)=="\n" then
+                blocks[#blocks+1]={title=line:sub(2),lines={}}
+            else
+                local block=blocks[#blocks]
+                local text
+                if block.title:match("^Recent personal history") then
+                    local stamp,catch=line:match("^(.-) — (.*)$")
+                    text=stamp and U.DetailPaint(stamp.." — ","9ba7ad")..U.DetailPaint(catch,"c5cdcf") or U.DetailPaint(line,"c5cdcf")
+                elseif line:match("^Denominator:") or line:match("^Requirements unknown") or line:match("^Last seen ") or line:match("^First ") then
+                    text=U.DetailPaint(line,"9ba7ad")
+                elseif line:match("^Latest cast skill snapshot") then
+                    text=U.DetailPaint("Latest cast skill", "74c7d5")..U.DetailPaint(line:sub(#"Latest cast skill snapshot"+1),"c5cdcf")
+                else
+                    local label,value=line:match("^([^:]+:)(.*)$")
+                    local item,counts=line:match("^(.-)( — %d+ items;.*)$")
+                    if label then text=U.DetailPaint(label,"74c7d5")..U.DetailPaint(value,"c5cdcf")
+                    elseif item then text=U.DetailPaint(item,"74c7d5")..U.DetailPaint(counts,"c5cdcf")
+                    else text=U.DetailPaint(line,"c5cdcf") end
+                end
+                block.lines[#block.lines+1]=text
+            end
+        end
+        m.detailRows=m.detailRows or {};local y=0
+        for i,block in ipairs(blocks) do
+            local row=m.detailRows[i]
+            if not row then
+                row=CreateFrame("Frame",nil,m.detailBody);row:SetWidth(550)
+                row.text=U.Label(row,"",0,0,550,"GameFontHighlightSmall");row.text:SetWordWrap(true);row.text:SetSpacing(3)
+                row.divider=U.DetailDivider(row,9,550);m.detailRows[i]=row
+            end
+            for _,line in ipairs(row.divider) do line:SetShown(i>1) end
+            if i>1 then y=y+20 end
+            row.text:SetText(U.DetailPaint(block.title,"ffd100")..(#block.lines>0 and "\n\n"..table.concat(block.lines,"\n") or ""))
+            local height=math.ceil(row.text:GetStringHeight()+8)
+            row:SetHeight(height);row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-y);row:Show();y=y+height+8
+        end
+        for i=#blocks+1,#m.detailRows do m.detailRows[i]:Hide() end
+        m.detailHeight=y
     end
     function c:Refresh()
         if not self.main or self.refreshing then return end;self.refreshing=true
@@ -228,7 +276,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         if not tracking.observingHover then m.map:Render(s.mapID,s.selected) end
         m.zone:SetText(A.Safe(s.mapZone or "Choose zone"));m.session:SetText(A.Safe(tracking:SessionText()))
         m.heading:SetText(e and A.Safe(e.name) or "Your fishing field notes")
-        m.details:SetText(table.concat(self:Details(e),"\n"))
+        self:RenderDetails(e)
         self:LayoutDetails(m.notesProgress or 0)
         for _,b in ipairs(m.entryButtons) do b:SetEnabled(e~=nil) end
         m.deleteButton:SetEnabled(e~=nil and not e.removed and not journal.readOnly)
@@ -386,8 +434,20 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Angler’s Almanac")
         m.views={}
+        local viewHelp={
+            waters="Browse recorded waters and remembered fishing spots. Select a place to see its map location and observations.",
+            pools="Browse observed pool types. Select a type to see its recorded catches and fishing spots.",
+            catches="Browse recorded catch items. Select an item to see where and how it was caught.",
+        }
         for i,view in ipairs({"waters","pools","catches"}) do
             local key=view;m.views[key]=U.Button(m,({waters="Waters",pools="Pool Types",catches="Catches"})[key],42+(i-1)*84,-146,82,function() c:SetView(key) end)
+            m.views[key]:SetScript("OnEnter",function(self)
+                if GameTooltip then
+                    GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(self:GetText())
+                    GameTooltip:AddLine(viewHelp[key],1,1,1,true);GameTooltip:Show()
+                end
+            end)
+            m.views[key]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         end
         m.search=U.Search(m,70,-110,168,200);m.search:SetText(c:State().query)
         m.search:HookScript("OnTextChanged",function() if not c.rendering then local s=c:State();s.query=m.search:GetText();s.offset=0;s.indexScroll=0;c:Refresh() end end)
@@ -452,7 +512,6 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end);m.rows[i]=row
         end
         m.empty=U.Label(m,"",50,-195,233,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(4)
-        U.Label(m,"Waters & Spots remembers places.\nPool Types and Catches follow the same observations.",42,-615,250,"GameFontHighlightSmall")
         m.remember=U.Button(m,"Remember spot",342,-60,145,function() c:OpenForm("spot") end)
         m.sighting=U.Button(m,"Pool sighting",493,-60,136,function() c:OpenForm("sighting") end)
         m.manual=U.Button(m,"Record catch",794,-174,128,function() c:OpenForm("catch") end)
@@ -505,7 +564,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         shell:AddBackgroundLayer(m.notesPaper,0.17,0.17,0.17,true)
         for _,edge in ipairs({{"TOPLEFT","TOPRIGHT",true},{"BOTTOMLEFT","BOTTOMRIGHT",true},{"TOPLEFT","BOTTOMLEFT",false},{"TOPRIGHT","BOTTOMRIGHT",false}}) do
             local border=m.notesOverlay:CreateTexture(nil,"OVERLAY")
-            border:SetColorTexture(0.45,0.30,0.13,1)
+            border:SetColorTexture(unpack(U.DetailGold))
             border:SetPoint(edge[1],m.notesPaper,edge[1]);border:SetPoint(edge[2],m.notesPaper,edge[2])
             if edge[3] then border:SetHeight(1) else border:SetWidth(1) end
         end
@@ -521,6 +580,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         end)
         m.expand=U.Button(m.notesOverlay,"",450,0,22,function() c:Expand() end);m.expand:SetSize(22,22)
         m.expand:ClearAllPoints();m.expand:SetPoint("TOPRIGHT",m.notesPaper,"TOPRIGHT",-4,-4)
+        U.StyleSelection(m.expand)
         m.notesArrow={}
         for row=0,4 do
             local stroke=m.expand:CreateTexture(nil,"OVERLAY")
@@ -534,11 +594,11 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         U.AlignFooterScrollBar(m.details,m.notesPaper,m.expand)
         U.FooterFades(m.details,shell,56)
         c:LayoutDetails(0)
-        m.merge=U.Button(m,"Merge spot",42,-574,118,function()
+        m.merge=U.Button(m,"Merge spot",42,-638,120,function()
             local e=c:SelectedEntry()
             if state.view=="waters" and e and e.kind=="spot" and not e.removed and not journal.readOnly then c:OpenLinks("merge") end
         end)
-        m.restore=U.Button(m,"Restore",174,-574,118,function()
+        m.restore=U.Button(m,"Restore",174,-638,118,function()
             local e=c:SelectedEntry();if not e or journal.readOnly then return end
             if e.removed then
                 local ok,err=journal:SetEntryRemoved(e.id,false)

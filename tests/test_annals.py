@@ -24,6 +24,40 @@ LOG_REWARDS = '''
 
 
 class AnnalsTests(unittest.TestCase):
+    def test_session_events_distinguish_login_reload_and_zone_changes(self):
+        l=client();l.execute('''
+            t:Event('PLAYER_ENTERING_WORLD',true,false)
+            assert(#db.events==1 and db.events[1].kind=='login')
+            t:Event('PLAYER_ENTERING_WORLD',true,false)
+            t:Event('PLAYER_ENTERING_WORLD',false,false)
+            assert(#db.events==1)
+            now=now+60;t:Event('PLAYER_LEAVING_WORLD');t:Event('PLAYER_LOGOUT')
+            local exit=snapshot(db.sessionLogout);local at=db.sessionLogout.at
+            t:Event('PLAYER_LOGOUT');assert(snapshot(db.sessionLogout)==exit)
+            reset(db);now=now+3600;t:Event('PLAYER_ENTERING_WORLD',true,false)
+            assert(#db.events==3 and db.events[2].kind=='logout' and db.events[2].at==at)
+            assert(db.events[3].kind=='login' and not db.sessionLogout)
+            t:Event('PLAYER_LOGOUT');assert(db.sessionLogout)
+            reset(db);t:Event('PLAYER_ENTERING_WORLD',false,true)
+            assert(#db.events==3 and not db.sessionLogout)
+            t:Event('PLAYER_ENTERING_WORLD',false,false);assert(#db.events==3)
+            local stored=snapshot(db.events);reset(db);assert(snapshot(db.events)==stored)
+        ''')
+
+    def test_session_icons_filters_and_legend(self):
+        l=full_client();l.execute(ENV);l.execute('''
+            local c=ns.AnnalsController;local A=ns.Annals
+            c.journal:Append('login','Logged in',nil,{mapID=101,x=2000,y=2000},100)
+            c.journal:Append('logout','Logged out',nil,{mapID=101,x=3000,y=2000},110)
+            c.shell:ShowSection('annals');c:SetRange(100,120)
+            assert(c.main.legend.icons.login.texture==A.icons.login)
+            assert(c.main.legend.icons.logout.texture==A.icons.logout and A.icons.login~=A.icons.logout)
+            c:SetEventFilter('all',false);c:SetEventFilter('login',true)
+            assert(#c.rows==1 and c.rows[1].event.kind=='login')
+            c:SetEventFilter('login',false);c:SetEventFilter('logout',true)
+            assert(#c.rows==1 and c.rows[1].event.kind=='logout')
+        ''')
+
     def test_dead_trail_colour_and_rounded_state(self):
         l=client();l.execute('''
             local A=ns.Annals
@@ -209,7 +243,7 @@ class AnnalsTests(unittest.TestCase):
             local A=ns.Annals;local kind='none';local instanceID=0
             function IsInInstance() return kind~='none',kind end
             function GetInstanceInfo() return kind=='raid' and 'Test Raid' or 'Test Dungeon',kind,1,'Normal',5,0,false,instanceID end
-            local start=now;t:Event('PLAYER_ENTERING_WORLD',true,false);t:Poll()
+            local start=now;t:Event('PLAYER_ENTERING_WORLD',false,true);t:Poll()
             advance(2);px=0.3;t:Event('PLAYER_LEAVING_WORLD')
             kind='party';instanceID=36;mapID=501;px=0.9
             advance(2);t:Event('PLAYER_ENTERING_WORLD',false,false);advance(1)
@@ -245,7 +279,7 @@ class AnnalsTests(unittest.TestCase):
             local A=ns.Annals;local kind='none'
             function IsInInstance() return kind~='none',kind end
             function GetInstanceInfo() return 'Test Raid',kind,1,'Normal',40,0,false,409 end
-            t:Event('PLAYER_ENTERING_WORLD',true,false);trail:SetEnabled(false);t:Poll();t:Event('PLAYER_LEAVING_WORLD')
+            t:Event('PLAYER_ENTERING_WORLD',false,true);trail:SetEnabled(false);t:Poll();t:Event('PLAYER_LEAVING_WORLD')
             kind='raid';mapID=501;px=0.9;t:Event('PLAYER_ENTERING_WORLD',false,false);advance(1)
             local entrance=db.events[1];assert(entrance.instanceID==409)
             reset(db);t:Event('PLAYER_ENTERING_WORLD',false,true);advance(1);t:Poll()
@@ -269,12 +303,12 @@ class AnnalsTests(unittest.TestCase):
             function GetInstanceInfo() return 'Test Dungeon',kind,1,'Normal',5,0,false,36 end
             j:Append('accepted','Old outdoor event',nil,{mapID=101,x=2000,y=3000},now-100)
             mapID=501;t:Event('PLAYER_ENTERING_WORLD',true,false);advance(1);t:Poll()
-            assert(db.events[2].instanceAction=='enter' and not db.events[2].mapID)
+            assert(db.events[2].kind=='login' and db.events[3].instanceAction=='enter' and not db.events[3].mapID)
             assert(not A.JourneyPosition(A.JourneyIndex(j,now-200,now,nil),now),'invented an entrance from unrelated old position')
             assert(not select(3,A.JourneyFrame(A.JourneyIndex(j,now-200,now,101),now)))
             reset(db);kind='none';mapID=101;px=0.6;advance(20)
             t:Event('PLAYER_ENTERING_WORLD',true,false)
-            assert(db.events[3].instanceAction=='exit' and db.events[3].x==6000)
+            assert(db.events[4].kind=='login' and db.events[5].instanceAction=='exit' and db.events[5].x==6000)
             assert(A.JourneyPosition(A.JourneyIndex(j,now-200,now,nil),now).x==6000)
         ''')
 
@@ -314,7 +348,10 @@ class AnnalsTests(unittest.TestCase):
             assert(-my+m.map:GetHeight()<-m.contrast.point[3],'map overlaps display settings')
             m.legendButton.scripts.OnClick();assert(m.legend:IsShown() and m.legendButton.afbSelected)
             for kind,icon in pairs(m.legend.icons) do assert(icon.texture==ns.Annals.icons[(kind=='enter' or kind=='exit') and 'instance' or kind]) end
-            assert(#m.legend.arrows==4 and #m.legend.trails==5)
+            assert(#m.legend.arrows==4 and #m.legend.trails==6)
+            m.legend:RefreshTrails()
+            local dead=m.legend.trails[6]
+            assert(dead.state=='dead' and dead.texture.colorTexture[1]==0.9 and dead.texture.colorTexture[2]==0.15)
             assert(not m.legend.close)
             m.legendButton.scripts.OnClick();assert(not m.legend:IsShown() and not m.legendButton.afbSelected)
             c:ToggleFollowPlayer();assert(m.followPlayer:GetText()=='Follow player' and m.followPlayer.afbSelected)
@@ -832,7 +869,7 @@ class AnnalsTests(unittest.TestCase):
                 if id==200 then return {mapID=200,mapType=2,parentMapID=0} end
                 return original(id)
             end
-            t:Event('PLAYER_ENTERING_WORLD',true,false);advance(1);assert(#db.events==0)
+            t:Event('PLAYER_ENTERING_WORLD',false,true);advance(1);assert(#db.events==0)
             db.settings.trail=false
             t:Event('PLAYER_LEAVING_WORLD');mapID=201;px=0.6
             t:Event('PLAYER_ENTERING_WORLD',false,false);advance(1)
@@ -855,7 +892,7 @@ class AnnalsTests(unittest.TestCase):
         l=client();l.execute('''
             local instance='none'
             function IsInInstance() return instance~='none',instance end
-            t:Event('PLAYER_ENTERING_WORLD',true,false);t:Poll()
+            t:Event('PLAYER_ENTERING_WORLD',false,true);t:Poll()
             t:Event('PLAYER_LEAVING_WORLD');instance='pvp';px=0.8
             local position=ns.AtlasEnvironment.Position
             ns.AtlasEnvironment.Position=function() return nil end
@@ -1018,7 +1055,9 @@ class AnnalsTests(unittest.TestCase):
             MenuResponse={Refresh=1};local items={}
             MenuUtil={CreateContextMenu=function(_,build)
                 build(nil,{CreateCheckbox=function(_,label,checked,click)
-                    local item={checked=checked,click=click,SetResponse=function() end};items[label]=item;return item
+                    local plain=label:gsub('^|T.-|t ','')
+                    if plain~='All events' then assert(label:find('|TInterface',1,true)) end
+                    local item={checked=checked,click=click,SetResponse=function() end};items[plain]=item;return item
                 end})
             end}
             c.main.filter.scripts.OnClick(c.main.filter)
@@ -1362,6 +1401,35 @@ class AnnalsTests(unittest.TestCase):
             quest=43;t:Event('QUEST_DETAIL');t:Event('QUEST_ACCEPTED',7,43)
             assert(#db.events==6 and db.events[6].questID==43,'reused slot suppressed another quest')
             assert(not db.quests[7] and not db.quests[8])
+        ''')
+
+    def test_completed_quest_text_capture_fallback_and_cycle_boundaries(self):
+        l=client();l.execute(r'''
+            ns.AtlasUI={Date=tostring}
+            function GetQuestText() return 'Original description.\n\nSecond paragraph.' end
+            function GetObjectiveText() return 'Recorded objectives.' end
+            t:Event('QUEST_DETAIL');t:Event('QUEST_ACCEPTED',42)
+            local accepted=snapshot(db.events[1])
+            GetQuestText=nil;GetObjectiveText=nil
+            t:Event('QUEST_COMPLETE');t:RewardRequested(2)
+            t:Event('QUEST_TURNED_IN',42,100,25);advance(1)
+            local completed=db.events[2]
+            assert(completed.reward.questText=='Original description.\n\nSecond paragraph.')
+            assert(completed.reward.objectiveText=='Recorded objectives.')
+            assert(snapshot(db.events[1])==accepted and completed.reward.chosen.itemID==102)
+            local text=ns.Annals.EventText(completed,false)
+            assert(text:find(completed.reward.questText,1,true) and text:find('Recorded objectives.',1,true))
+            reset(db);assert(db.events[2].reward.questText==completed.reward.questText)
+            t:Event('QUEST_DETAIL');t:Event('QUEST_ACCEPTED',42)
+            t:Event('QUEST_COMPLETE');t:Event('QUEST_TURNED_IN',42);advance(1)
+            assert(not db.events[4].reward.questText,'text leaked from an earlier quest cycle')
+            assert(ns.Annals.EventText(db.events[4],false):find('Quest text was not recorded.',1,true))
+            quest=43
+            function GetQuestText() return 'Turn-in description.' end
+            function GetObjectiveText() return 'Turn-in objectives.' end
+            t:Event('QUEST_COMPLETE');t:Event('QUEST_TURNED_IN',43);advance(1)
+            assert(db.events[5].reward.questText=='Turn-in description.')
+            assert(db.events[5].reward.objectiveText=='Turn-in objectives.')
         ''')
 
     def test_accept_abandon_reacquire_complete_repeat_reload(self):

@@ -148,7 +148,7 @@ local function styleMenuRow(row)
 end
 
 -- A fixed page-relative footer keeps Share stationary across unequal panes.
-local function entryDivider(parent,y,width)
+local function entryDivider(parent,y,width,colour)
     local segmentWidth=(width or 224)/32
     local segments={}
     for segment=1,32 do
@@ -157,7 +157,8 @@ local function entryDivider(parent,y,width)
         if line.SetSnapToPixelGrid then line:SetSnapToPixelGrid(false) end
         if line.SetTexelSnappingBias then line:SetTexelSnappingBias(0) end
         local fade=math.min(1,(segment-0.5)/8,(32.5-segment)/8)
-        line:SetColorTexture(0.25,0.13,0.055,0.35*fade)
+        if colour then line:SetColorTexture(colour[1],colour[2],colour[3],fade)
+        else line:SetColorTexture(0.25,0.13,0.055,0.35*fade) end
         segments[#segments+1]=line
     end
     -- A one-unit line can straddle different pixel rows as scrolling or layout

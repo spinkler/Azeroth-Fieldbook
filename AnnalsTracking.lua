@@ -273,6 +273,21 @@ function ns.CreateAnnalsTracking(j)
             if p.snapshot then
                 r=A.Copy(p.snapshot);r.questID,r.at,r.title,r.count,r.choices=nil,nil,nil,nil,nil
             end
+            -- The turn-in dialogue may no longer expose the original quest text.
+            -- Reuse only this quest cycle's observed acceptance, never an older one.
+            if not r.questText or not r.objectiveText then
+                for i=#db.events,1,-1 do
+                    local previous=db.events[i]
+                    if A.ValidEvent(previous) and previous.questID==id then
+                        if previous.kind=='accepted' then
+                            local accepted=previous.reward or {}
+                            r.questText=r.questText or accepted.questText
+                            r.objectiveText=r.objectiveText or accepted.objectiveText
+                            break
+                        elseif previous.kind=='removed' or previous.kind=='completed' then break end
+                    end
+                end
+            end
             r.xp=p.xp;r.money=p.money
         end
         j:Quest(p.kind,id,p.title,r,p.location,p.at,p.token,p.sequence,p.kind=='accepted')
@@ -352,6 +367,18 @@ function ns.CreateAnnalsTracking(j)
             return
         end
         if event=='PLAYER_ENTERING_WORLD' then
+            if not t.sessionStarted and (id==true or xp==true) then
+                t.sessionStarted=true
+                local exit=db.sessionLogout
+                if id==true and xp~=true then
+                    if A.ValidEvent(exit) and exit.kind=='logout' then
+                        j:Append('logout',exit.title,{sequence=exit.sequence},exit,exit.at,true)
+                    end
+                    j.trail:Break('login')
+                    j:Append('login','Logged in',nil,A.Location(),A.Now())
+                end
+                db.sessionLogout=nil
+            end
             t.travelPosition=nil
             if id==true or xp==true then t.beforeWorld=nil;t.worldTransfer=nil;t.lastTravel=nil;t.travelCast=nil end
             if t.beforeWorld then t.worldTransfer=t.beforeWorld;t.worldTransfer.readyAt=A.Now();t.beforeWorld=nil end
@@ -364,6 +391,7 @@ function ns.CreateAnnalsTracking(j)
             return
         end
         if event=='PLAYER_LEAVING_WORLD' or event=='PLAYER_LOGOUT' then
+            local logoutLocation=event=='PLAYER_LOGOUT' and t.beforeWorld and t.beforeWorld.from.location
             if event=='PLAYER_LEAVING_WORLD' and not t.loading then
                 local context=travelContext()
                 -- The map may already have switched when leaving-world fires.
@@ -372,7 +400,15 @@ function ns.CreateAnnalsTracking(j)
                 t.beforeWorld={from=context,at=A.Now()};t.worldTransfer=nil
             elseif event=='PLAYER_LOGOUT' then t.beforeWorld=nil;t.worldTransfer=nil;t.lastTravel=nil end
             t.travelPosition=nil
-            if event=='PLAYER_LOGOUT' then t.travelCast=nil end
+            if event=='PLAYER_LOGOUT' then
+                t.travelCast=nil
+                if not t.sessionEnded then
+                    t.sessionEnded=true
+                    local location=logoutLocation or A.Location()
+                    local exit=A.Copy(location);exit.kind='logout';exit.title='Logged out';exit.at=A.Now();exit.sequence=j:Sequence()
+                    if A.ValidEvent(exit) then db.sessionLogout=exit end
+                end
+            end
             t.loading=true;j.trail:Break('loading')
             for key in pairs(db.pending) do t:Flush(key) end;return
         end

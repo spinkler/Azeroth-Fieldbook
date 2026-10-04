@@ -1,8 +1,11 @@
-# Azeroth Fieldbook 0.26.1 (Release)
+# Azeroth Fieldbook 0.27.0 (Release)
 
 Adventurer's Annals adds an eighth journal for
 this character's quest history and Journey Trail. It is independent of account
-tracking. See [usage, API evidence and in-game acceptance](tests/ANNALS.md) and
+tracking. Login and normal logout events have separate icons, filters and legend
+entries; logout is confirmed on the next real login, and UI reloads create neither
+event. Completed quests show recorded quest text and objectives. See
+[usage, API evidence and in-game acceptance](tests/ANNALS.md) and
 the [measured long-term storage report](tests/ANNALS_STORAGE.md). Annals remains subject to native API and visual acceptance.
 
 The preceding 0.22.0 release extended spell-ID portraits with manual ability assignment and
@@ -12,9 +15,9 @@ available, alongside clearer journal headings and layout refinements.
 Whole-Fieldbook backup and recovery remains available through
 **Options → Whole-Fieldbook backups** or `/fieldbook backups`.
 
-This is a Beta-channel build for public testing of Adventurer's Annals. Remaining
+This is a Release-channel build. Remaining
 native acceptance work includes full mineral-catalog framing, tutorial placement,
-traced sub-zone outlines and the level-cap-gated Beast Lore milestone. Those checks remain pending for this Beta.
+traced sub-zone outlines and the level-cap-gated Beast Lore milestone. Those checks remain pending.
 
 Saved-data protections cover initialization, Lore consolidation and
 report validation boundaries. An unsupported or malformed main save disables

@@ -1,7 +1,17 @@
-# Adventurer's Annals Beta
+# Adventurer's Annals
+
+Login and Logout are separate event types with timeline/map icons, filters and
+Journey legend entries. The first `PLAYER_ENTERING_WORLD(true, false)` records
+login once per loaded session. `PLAYER_LOGOUT` also fires for UI reloads, so its
+time, location and sequence are saved provisionally in `sessionLogout`. The next
+real login confirms that logout at its original time; an entering-world reload
+discards it. Zone loads do neither. Offline time remains a trail gap. Events
+remain enabled when Journey recording is off. Crashes and forced disconnects
+may leave no logout marker; earlier sessions are not backfilled. This still
+needs native acceptance with a logout/login, `/reload`, and instance loading.
 
 Annals is the fourth native right-edge tab, following Traveller's Atlas. Its purpose is a character's
-historical record, not quest tracking or quest guidance. The addon version is **0.23.0** (Beta tag `v0.23.0-beta`) for public testing. Native API and visual
+historical record, not quest tracking or quest guidance. The addon version is **0.27.0** (Release tag `v0.27.0`). Native API and visual
 acceptance remain pending.
 
 ## Using Annals

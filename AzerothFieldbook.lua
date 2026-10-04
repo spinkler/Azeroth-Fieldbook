@@ -363,9 +363,9 @@ local function addTooltip(tooltip)
         journal:ObserveTameability(unit)
         local names = journal:ConfirmedNames(id)
         local behaviours = journal:GetBehaviourTooltips() and journal:TooltipBehaviours(id) or {}
-        local showKills=journal:GetKillCountTooltips() and journal.entries[id]~=nil
+        local _,_,kills=journal:GetKillReward(id)
+        local showKills=journal:GetKillCountTooltips() and journal.entries[id]~=nil and kills>0
         if #names == 0 and #behaviours == 0 and not showKills then tooltipStatus = "No selected tooltip facts: review this entry in /fieldbook."; return end
-        tooltip:AddLine("AFB: Bestiary", 0.5, 0.82, 1)
         local expanded = readTrue(IsControlKeyDown)
         local hasDetails = false
         for _, name in ipairs(names) do
@@ -385,7 +385,6 @@ local function addTooltip(tooltip)
             tooltip:AddLine(table.concat(behaviours, ", "),0.72,0.80,0.72,true)
         end
         if showKills then
-            local _,_,kills=journal:GetKillReward(id)
             tooltip:AddLine("Kills: " .. kills,1,0.82,0.14)
         end
         tooltipStatus = "Added " .. #names .. " confirmed ability names and " .. #behaviours .. " behaviour traits" .. (showKills and " and kill count." or ".")
