@@ -419,9 +419,14 @@ function ns.CreateAnglingBook(journal,tracking,shell)
                 clear:SetResponse(MenuResponse.Refresh)
             end)
         end)
+        m.filters.ResetFilters=function()
+            local s=c:State()
+            s.currentZone=false;s.knowledge="all";s.source="all";s.status="all";s.query="";s.offset=0;s.indexScroll=0
+            m.search:SetText("");c:Refresh()
+        end
         U.StyleSelection(m.filters)
         m.filters:SetScript("OnEnter",function(self)
-            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Filter fishing records");GameTooltip:Show() end
+            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Filter fishing records\nRight-click to reset filters.");GameTooltip:Show() end
         end)
         m.filters:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         m.count=ns.FieldbookUI.EntryCount(m);m.rows={}
@@ -477,7 +482,8 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         end,function()
             local p=A.Location(A.CurrentLocation());local s=c:State();s.mapID,s.mapZone=p.mapID,p.zone;m.map:Invalidate();c:Refresh()
         end)
-        m.session=U.ReadArea(m,480,-125,442,41)
+        m.session=U.ReadArea(m,342,-125,580,41)
+        m.session.text:SetJustifyH("LEFT")
         m.assign=U.Button(m,"Assign selected pool",342,-91,172,function()
             local e=journal:Get(c:State().selected);local source=e and e.kind=="spot" and not e.poolID and "unclassified" or "pool"
             local ok,err=tracking:Assign(source,c:State().selected);c:Message(ok and tracking.status or err);c:Refresh()

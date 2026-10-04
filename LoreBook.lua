@@ -50,7 +50,8 @@ local function sourceReader(parent)
     local text=U.Label(body,"",0,0,width,"GameFontHighlight")
     text:SetWordWrap(true);text:SetSpacing(4)
     local path,size,flags=text:GetFont()
-    function reader:SetText(content,metadata,lore)
+    reader.overviewRows={}
+    function reader:SetText(content,metadata,lore,blocks)
         local hasSource=metadata~=nil
         header:SetText(L.Safe(metadata or ""));header:SetShown(hasSource)
         local top=hasSource and header:GetStringHeight()+20 or 0
@@ -58,7 +59,27 @@ local function sourceReader(parent)
         if path and type(size)=="number" then text:SetFont(path,size+(hasSource and 4 or 0),flags) end
         if hasSource then text:SetTextColor(1,1,1) else text:SetTextColor(0.75,0.8,0.8) end
         text:SetText(L.Safe(hasSource and lore or content))
-        body:SetHeight(math.max(height,top+text:GetStringHeight()+12))
+        text:SetShown(not blocks)
+        for _,row in ipairs(self.overviewRows) do row:Hide() end
+        local contentHeight=top+text:GetStringHeight()+12
+        if blocks then
+            local y=0
+            for i,block in ipairs(blocks) do
+                local row=self.overviewRows[i]
+                if not row then row=U.Label(body,"",0,0,width,"GameFontHighlight");self.overviewRows[i]=row end
+                local style=block.style
+                local font=style=="title" and "GameFontNormalLarge" or style=="heading" and "GameFontNormal" or "GameFontHighlight"
+                row:SetFontObject(textFont(font));row:SetWordWrap(true);row:SetSpacing(4)
+                if style=="title" then row:SetTextColor(1,0.82,0.14)
+                elseif style=="heading" then row:SetTextColor(0.33,0.87,0.93)
+                elseif style=="metadata" then row:SetTextColor(0.6,0.63,0.63)
+                else row:SetTextColor(0.85,0.85,0.8) end
+                row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-y);row:SetText(L.Safe(block.text));row:Show()
+                y=y+row:GetStringHeight()+(style=="heading" and 6 or 14)
+            end
+            contentHeight=y
+        end
+        body:SetHeight(math.max(height,contentHeight))
         self:UpdateScrollChildRect();self:RefreshScrollBar()
     end
     reader.text=text;reader.header=header
@@ -156,7 +177,20 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             end
             lines[#lines+1]=table.concat(links,"\n")
         end
-        return table.concat(lines,"\n\n")
+        local blocks={}
+        local headings={
+            ["Your description / observations (private)"]=true,["Your working theory (private)"]=true,
+            ["Next step (private)"]=true,["Your personal notes (private)"]=true,
+            ["Locations"]=true,["Related entries — open / manage with Related"]=true,
+        }
+        for i,value in ipairs(lines) do
+            local heading,body=value:match("^([^\n]+)\n(.*)$")
+            if heading and headings[heading] then
+                blocks[#blocks+1]={text=heading,style="heading"}
+                blocks[#blocks+1]={text=body,style="body"}
+            else blocks[#blocks+1]={text=value,style=i==1 and "title" or "metadata"} end
+        end
+        return table.concat(lines,"\n\n"),nil,nil,blocks
     end
     function c:SourceText(e,row)
         if row.overview then return self:Overview(e) end
@@ -229,7 +263,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         for _,control in ipairs({m.reader,m.sourceMenu,m.pagePrevious,m.pageNext}) do control:SetShown(state.view=="entry") end
         for _,control in ipairs({m.map,m.locationMenu,m.addLocation,m.place,m.locationDescription,m.mapZone}) do control:SetShown(state.view=="location") end
         if state.view=="entry" then
-            local content,key,scroll,metadata,lore
+            local content,key,scroll,metadata,lore,blocks
             if e then
                 local sources=self:Sources(e);self.sources=sources
                 local r=state.reading[e.id]
@@ -237,13 +271,13 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
                 local selected,index
                 for i,v in ipairs(sources) do if v.id==r.source then selected=v;index=i;break end end
                 if not selected then index=e.kind=="writing" and #sources>1 and 2 or 1;selected=sources[index];r.source=selected.id;r.scroll=0 end
-                content,metadata,lore=self:SourceText(e,selected);key=e.id..":"..selected.id;scroll=type(r.scroll)=="number" and r.scroll or 0
+                content,metadata,lore,blocks=self:SourceText(e,selected);key=e.id..":"..selected.id;scroll=type(r.scroll)=="number" and r.scroll or 0
                 m.sourceMenu:SetText(L.Safe(selected.label));m.pagePrevious:SetEnabled(index>1);m.pageNext:SetEnabled(index<#sources)
             else
                 content="The Atlas remembers where something is. Lorekeeper's Chronicle remembers what you found out about it—and what you still don't understand.\n\nEncounter a source, preserve its words, add your thoughts, connect your evidence and leave yourself a reason to return.\n\nAutomatic book capture works in the background. It never opens this window or changes your selected entry."
                 m.sourceMenu:SetText("Preserved sources & personal notes");m.pagePrevious:SetEnabled(false);m.pageNext:SetEnabled(false);scroll=0
             end
-            if m.readerContent~=content or m.readerKey~=key then m.reader:SetText(content,metadata,lore);m.readerContent=content;m.readerKey=key;m.reader:SetVerticalScroll(scroll) end
+            if m.readerContent~=content or m.readerKey~=key then m.reader:SetText(content,metadata,lore,blocks);m.readerContent=content;m.readerKey=key;m.reader:SetVerticalScroll(scroll) end
         else
             local locations=L.VisibleLocations(e);local p=locations[state.location]
             if not p and #locations>0 then state.location=1;p=locations[1] end
@@ -302,6 +336,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
                 clear:SetResponse(MenuResponse.Refresh)
             end)
         end)
+        m.filters.ResetFilters=function() c:ResetFilters() end
         U.StyleSelection(m.filters)
         m.sort=U.Button(m,"",270,-110,22,function(button)
             m.search:ClearFocus()
@@ -317,7 +352,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             local stroke=m.sort:CreateTexture(nil,"OVERLAY")
             stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,2-row);stroke:SetColorTexture(1,0.82,0.14,1)
         end
-        for _,item in ipairs({{m.filters,"Filter entries"},{m.sort,"Sort"}}) do
+        for _,item in ipairs({{m.filters,"Filter entries\nRight-click to reset filters."},{m.sort,"Sort"}}) do
             item[1]:SetScript("OnEnter",function(self)
                 if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(item[2]);GameTooltip:Show() end
             end)

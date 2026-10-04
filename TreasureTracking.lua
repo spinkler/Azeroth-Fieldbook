@@ -126,10 +126,20 @@ function ns.CreateTreasureTracking(journal)
         local sample={items={},at=clock()};local byItem={}
         for slot=1,n do
             local sources={returns(GetLootSourceInfo,slot)}
-            -- Every slot must agree on one source; mixed/area loot is rejected.
-            if #sources~=2 or not T.Text(sources[1],160) or not T.Integer(sources[2],1,1000000) then return nil,"Loot source missing or mixed." end
+            -- Coin rows can report zero quantity. They still need the same
+            -- exact source as every item; never let coins mask mixed loot.
+            local moneyType=Enum and Enum.LootSlotType and Enum.LootSlotType.Money or LOOT_SLOT_MONEY
+            local coin=moneyType~=nil and T.Read(GetLootSlotType,slot)==moneyType
+            if #sources~=2 or not T.Text(sources[1],160) or not T.Integer(sources[2],coin and 0 or 1,1000000) then return nil,"Loot source missing or mixed." end
             local guid=sources[1];local known=self.bagGUIDs[guid] or self:WorldSource(guid)
-            if not known then return nil,objectID(guid) and "World loot has no matching container tooltip or recent opening interaction." or "Loot source is not a recognized container." end
+            if not known then
+                if objectID(guid) then return nil,"World loot has no matching container tooltip or recent opening interaction." end
+                -- Retain the rejected readable identity so native client
+                -- differences can be diagnosed after the loot window closes.
+                local seen=self.interaction or self.world or self.cast
+                return nil,"Loot source is not a recognized container. Source: "..guid
+                    .."; observed container: "..(seen and seen.name or "none").."."
+            end
             if sample.guid and sample.guid~=guid then return nil,"Loot slots have different sources." end
             sample.guid,sample.kindID,sample.kind,sample.world=guid,known.kindID,known.kind,known.world
             local link=T.Read(GetLootSlotLink,slot)
@@ -236,7 +246,7 @@ function ns.CreateTreasureTracking(journal)
                 end
             end
             if not sample and (self.world or self.interaction or self.cast or isFromItem==true) then
-                self:Status("Capture skipped: "..(reason or self.pendingReason or "Source unavailable."))
+                self:Status("Capture skipped: "..((T.Read(GetNumLootItems)==0 and self.pendingReason) or reason or self.pendingReason or "Source unavailable."))
             end
             self.pending=nil;self.pendingReason=nil;self:Capture(sample)
         elseif event=="LOOT_SLOT_CHANGED" then

@@ -98,6 +98,28 @@ class AnnalsTests(unittest.TestCase):
             assert(not A.Decode(j.db.segments[3])[1].mount)
         ''')
 
+    def test_chronology_toggle_defaults_to_latest_and_preserves_history(self):
+        l=full_client();l.execute(ENV);l.execute('''
+            local c=ns.AnnalsController;local j=c.journal
+            for i=1,16 do j:Append('accepted','Event '..i,nil,{mapID=101,x=2000,y=2000,level=i},100+math.floor(i/2)) end
+            local before=snapshot(j.db.events)
+            c.shell:ShowSection('annals');local m=c.main
+            assert(c.newestFirst and c.offset==0 and m.rows[1].record.id==16 and m.rows[2].record.id==15)
+            m.rows[1].scripts.OnClick(m.rows[1]);local at=c.at
+            m.sort.scripts.OnClick(m.sort)
+            assert(not c.newestFirst and c.offset==0 and m.rows[1].record.id==1)
+            assert(c.selected==16 and c.at==at and m.detail.event==j.db.events[16])
+            c.offset=c:LatestOffset();c:Refresh();assert(c.offset==14 and m.rows[2].record.id==16)
+            m.sort.scripts.OnClick(m.sort);assert(c.newestFirst and c.offset==0 and m.rows[1].record.id==16)
+            m.timeline.scripts.OnMouseWheel(m.timeline,-1);assert(c.offset==7 and m.rows[1].record.id==9)
+            c:ResetNow();assert(c.offset==0 and m.rows[1].record.id==16)
+            c:SetEventFilter('all',false);m.sort.scripts.OnClick(m.sort);assert(#c.rows==0 and c.offset==0)
+            c:SetEventFilter('all',true);assert(m.rows[1].record.id==1)
+            c.shell:ShowSection('bestiary');c.shell:ShowSection('annals')
+            assert(not c.newestFirst and m.rows[1].record.id==1,'same-session order was lost')
+            assert(snapshot(j.db.events)==before,'sorting rewrote history')
+        ''')
+
     def test_custom_playback_and_timeline_scrollbar(self):
         l=full_client();l.execute(ENV);l.execute('''
             local c=ns.AnnalsController;local j=c.journal
@@ -106,7 +128,7 @@ class AnnalsTests(unittest.TestCase):
             local m=c.main
             assert(m.timelineScroll:IsShown())
             m.timelineScroll.scripts.OnValueChanged(m.timelineScroll,2)
-            assert(c.offset==14 and m.rows[1].record.event.title=='Event 15')
+            assert(c.offset==14 and m.rows[1].record.event.title=='Event 6')
             m.customSpeed:SetText('2.5');m.customSpeed.scripts.OnEnterPressed(m.customSpeed)
             assert(c.playbackSpeed==2.5)
             c:Seek(100);c:TogglePlayback();c:TickPlayback(2)
@@ -310,7 +332,7 @@ class AnnalsTests(unittest.TestCase):
             for i=1,9 do
                 j:Append('flight','Shared timeline '..i,nil,{mapID=i==8 and 102 or 101,x=3000,y=4000,level=20},100+i)
             end
-            c.shell:ShowSection('annals');c:SetRange(101,109);local m=c.main
+            c.shell:ShowSection('annals');c:SetRange(101,109);c:ToggleSort();local m=c.main
             assert(m.journey:IsVisible() and m.timeline:IsVisible())
             assert(not m.detailPane:IsShown() and not m.show.afbSelected and m.show:GetText()=='Show detail')
             assert(m.rows[1]:IsVisible() and m.rows[1].record.event.title=='Shared timeline 1')
@@ -330,7 +352,7 @@ class AnnalsTests(unittest.TestCase):
             m.show.scripts.OnClick(m.show)
             assert(not c.showDetail and c.playing and not m.show.afbSelected and m.show:GetText()=='Show detail')
             assert(m.rows[1]:IsVisible() and m.paging:IsVisible() and m.journey:IsVisible() and c.offset==7 and c.at==108.25)
-            for _,control in ipairs({m.around,m.levelAt,m.contrast,m.iconSize}) do
+            for _,control in ipairs({m.around,m.contrast,m.iconSize}) do
                 assert(control.parent==m.journey and control.point[2]>309,'Journey control occupies timeline pane')
             end
             m.search:SetText('Shared timeline 8');c:Refresh(true)
@@ -346,7 +368,7 @@ class AnnalsTests(unittest.TestCase):
             j:Append('instance','Entry',{instanceAction='enter',instanceName='Dungeon'},{mapID=101,x=3000,y=4000},100)
             j:Append('instance','Exit',{instanceAction='exit',instanceName='Dungeon'},{mapID=101,x=3000,y=4000},200)
             j:Append('accepted','Quest',nil,{mapID=101,x=6000,y=4000},220)
-            c.shell:ShowSection('annals');c:SetRange(100,250)
+            c.shell:ShowSection('annals');c:SetRange(100,250);c:ToggleSort()
             local m=c.main
             assert(m.rows[1].instanceArrow.vertexColor[2]==1 and m.rows[2].instanceArrow.vertexColor[2]==0.6)
             assert(m.rows[1].iconShadow.texture==m.rows[1].icon.texture and m.rows[3].iconShadow.texture==ns.Annals.icons.accepted)
@@ -503,6 +525,22 @@ class AnnalsTests(unittest.TestCase):
             assert(#all.order<=64)
         ''')
 
+    def test_acceptance_quest_text_survives_reload(self):
+        l=client();l.execute(r'''
+            ns.AtlasUI={Date=tostring}
+            function GetQuestText() return 'First paragraph.\n\nSecond paragraph.' end
+            function GetObjectiveText() return 'Collect the supplies.' end
+            t:Event('QUEST_DETAIL');quest=0;t:Event('QUEST_ACCEPTED',42)
+            local e=db.events[1];local before=snapshot(e)
+            assert(e.reward.questText==GetQuestText() and e.reward.objectiveText==GetObjectiveText())
+            assert(ns.Annals.EventText(e,true):find('Second paragraph.',1,true))
+            assert(ns.Annals.EventText(e,true):find('Collect the supplies.',1,true))
+            reset(db);assert(snapshot(db.events[1])==before and #j.events==1)
+            assert(ns.Annals.EventText({kind='accepted',title='Old',at=100},true):find('not recorded',1,true))
+            assert(not ns.Annals.QuestText(string.char(0)))
+            assert(not ns.Annals.QuestText(string.rep('a',16385)))
+        ''')
+
     def test_acceptance_reward_choices_and_completion_selection_are_separate(self):
         l=client()
         l.execute('''
@@ -555,6 +593,34 @@ class AnnalsTests(unittest.TestCase):
             local before=snapshot(db);ns.InitializationBlocked=true
             t:Event('QUEST_DETAIL');t:Event('QUEST_ITEM_UPDATE');t:Event('QUEST_ACCEPTED',44)
             assert(snapshot(db)==before)
+        ''')
+
+    def test_filter_right_click_and_map_footer(self):
+        l=full_client();l.execute(ENV)
+        l.execute('''
+            local c=ns.AnnalsController;local j=c.journal
+            j:Append('accepted','Quest',{reward={questText='Unique quest description.',objectiveText='Distinct objective.'}},{mapID=101,x=2000,y=2000,level=23,state='alive'},100)
+            c.shell:ShowSection('annals');c:SetRange(100,120)
+            local m=c.main
+            for _,button in ipairs({m.filter,m.mapFilter}) do
+                c:SetEventFilter('all',false);c.level=99;c.query='absent'
+                button.scripts.OnClick(button,'RightButton')
+                assert(c.level==nil and c.query=='' and #c.rows==1)
+                for _,on in pairs(c.filter) do assert(on) end
+            end
+            c:Select(1);c.showDetail=true;c:SyncDetailOverlay()
+            local descriptions,objectives=0,0
+            for _,row in ipairs(m.detail.rows) do if row:IsShown() then
+                local text=row.label:GetText()
+                if text:find('Unique quest description.',1,true) then descriptions=descriptions+1 end
+                if text:find('Distinct objective.',1,true) then objectives=objectives+1 end
+            end end
+            assert(descriptions==1 and objectives==1,'quest text was rendered more than once')
+            c:Seek(100)
+            local text=m.map.playerCoordinates:GetText()
+            assert(text:find('\\nRecorded:',1,true) and text:find(' • Level 23',1,true) and not m.levelAt)
+            local rewards=ns.Annals.EventText({kind='completed',title='Quest',at=100,reward={xp=100,money=100}},true)
+            assert(rewards:find('100 XP',1,true) and not rewards:find('Experience:',1,true) and not rewards:find('Money:',1,true))
         ''')
 
     def test_now_resets_time_filters_and_symbol_controls(self):
@@ -1277,6 +1343,25 @@ class AnnalsTests(unittest.TestCase):
             trail:SetEnabled(false);C_Timer=nil;t:Event('QUEST_REMOVED',42);now=now+3;t:Poll()
             assert(#db.events==1 and db.events[1].kind=='removed' and #db.segments==0)
             reset(db);t:Event('PLAYER_ENTERING_WORLD');assert(#db.events==1)
+        ''')
+
+    def test_classic_acceptance_uses_quest_id_and_allows_reacceptance(self):
+        l=client();l.execute('''
+            function GetQuestText() return 'Recorded quest description.' end
+            t:Event('QUEST_DETAIL');t:Event('QUEST_ACCEPTED',7,42)
+            assert(#db.events==1 and db.events[1].questID==42,'quest-log slot was stored as quest ID')
+            assert(db.events[1].reward.questText==GetQuestText())
+            t:Event('QUEST_ACCEPTED',7,42);assert(#db.events==1)
+            t:Event('QUEST_REMOVED',42)
+            t:Event('QUEST_DETAIL');t:Event('QUEST_ACCEPTED',7,42)
+            assert(#db.events==3 and db.events[2].kind=='removed' and db.events[3].kind=='accepted')
+            advance(3);assert(#db.events==3)
+            t:Event('QUEST_REMOVED',42);advance(3)
+            reset(db);t:Event('QUEST_DETAIL');t:Event('QUEST_ACCEPTED',8,42)
+            assert(#db.events==5 and db.events[5].questID==42)
+            quest=43;t:Event('QUEST_DETAIL');t:Event('QUEST_ACCEPTED',7,43)
+            assert(#db.events==6 and db.events[6].questID==43,'reused slot suppressed another quest')
+            assert(not db.quests[7] and not db.quests[8])
         ''')
 
     def test_accept_abandon_reacquire_complete_repeat_reload(self):

@@ -424,7 +424,7 @@ function ns.CreateGatheringBook(journal,shell)
         end)
         styleSelection(book.listFilterButton,nil,true)
         book.listFilterButton:SetScript("OnEnter",function(self)
-            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Filter resources");GameTooltip:Show() end
+            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Filter resources\nRight-click to reset filters.");GameTooltip:Show() end
         end)
         book.listFilterButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         filterMenu:SetPoint("TOPLEFT",book.listFilterButton,"BOTTOMLEFT",0,0)
@@ -442,11 +442,15 @@ function ns.CreateGatheringBook(journal,shell)
             refreshLocationFilter();book.locationFrame:Show();refresh()
         end)
         styleSelection(book.locationsButton,true)
-        book.clearFilters=button(filterMenu,"Clear filters",10,-118,170,function()
+        local function resetFilters()
             category=nil;offset=0
             for zone in pairs(locationFilters) do locationFilters[zone]=nil end
             book.search:SetText("");refreshLocationFilter();refresh()
-        end)
+        end
+        book.clearFilters=button(filterMenu,"Clear filters",10,-118,170,resetFilters)
+        book.listFilterButton.ResetFilters=function()
+            resetFilters();filterMenu:Hide();book.locationFrame:Hide();refresh()
+        end
         book.search=ui.Search(book,70,-110,168,100)
         book.searchClear=book.search.clearButton
         book.searchPlaceholder=book.search.placeholder

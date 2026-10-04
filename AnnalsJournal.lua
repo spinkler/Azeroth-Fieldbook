@@ -3,6 +3,10 @@ local A={SCHEMA=1,MAX_POINTS=256};ns.Annals=A
 function A.Public(v) return not (issecretvalue and issecretvalue(v)) end
 function A.Int(v,lo,hi) return A.Public(v) and type(v)=='number' and v==math.floor(v) and v>=lo and v<=hi end
 function A.Text(v,n) return A.Public(v) and type(v)=='string' and #v<=n and not v:find('%c') end
+function A.QuestText(v)
+    return A.Public(v) and type(v)=='string' and #v>0 and #v<=16384
+        and not v:gsub('[\r\n\t]',''):find('%c')
+end
 function A.Read(fn,...)
     if type(fn)~='function' then return end
     local ok,v=pcall(fn,...);if ok and A.Public(v) then return v end
@@ -66,6 +70,7 @@ function A.ValidEvent(e)
         if r.currencyOffers~=nil and type(r.currencyOffers)~='table' then return false end
         if r.count~=nil and not A.Int(r.count,0,64) then return false end
         if r.automaticCount~=nil and not A.Int(r.automaticCount,0,64) then return false end
+        for _,key in ipairs({'questText','objectiveText'}) do if r[key]~=nil and not A.QuestText(r[key]) then return false end end
         if r.captureSource~=nil and not A.Text(r.captureSource,80) then return false end
         if r.capturedAt~=nil and not A.Int(r.capturedAt,e.at,9999999999) then return false end
         for _,key in ipairs({'choices','spellOffers'}) do

@@ -927,10 +927,16 @@ local ink = { 0.75, 0.8, 0.8 }
             book.listFilterMenu:SetShown(not book.listFilterMenu:IsShown())
             book.RefreshFilters()
         end)
+        book.listFilterButton.ResetFilters=function()
+            category=nil;initial=nil;reviewOnly=false;offset=0
+            for key in pairs(locationFilters) do locationFilters[key]=nil end
+            for key in pairs(rankFilters) do rankFilters[key]=nil end
+            book.search:SetText("");book.listFilterMenu:Hide();book.HideFilterSubmenus();refresh()
+        end
         local listFilter=book.listFilterButton
         styleSelection(listFilter,nil,true)
         listFilter:SetScript("OnEnter",function(self)
-            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Filter creatures");GameTooltip:Show() end
+            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Filter creatures\nRight-click to reset filters.");GameTooltip:Show() end
         end)
         listFilter:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         local filterMenu=CreateFrame("Frame",nil,book,"BackdropTemplate");book.listFilterMenu=filterMenu
@@ -1348,7 +1354,7 @@ local ink = { 0.75, 0.8, 0.8 }
         local filter=book.lootFilter
         filter:ClearAllPoints();filter:SetPoint("TOPRIGHT",-6,-4);filter:SetSize(24,24)
         filter:SetScript("OnEnter",function(self)
-            GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Filter loot quality");GameTooltip:Show()
+            GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Filter loot quality\nRight-click to reset filters.");GameTooltip:Show()
         end)
         filter:SetScript("OnLeave",function() GameTooltip:Hide() end)
         styleSelection(filter,nil,true)
@@ -1363,6 +1369,10 @@ local ink = { 0.75, 0.8, 0.8 }
         local function updateFilter()
             filter:SetSelected(next(book.lootQualityHidden)~=nil or qualityMenu:IsShown())
             book.damageScroll:SetVerticalScroll(0);refresh()
+        end
+        filter.ResetFilters=function()
+            book.lootQualityHidden={};for _,check in ipairs(checks) do check:SetChecked(true) end
+            qualityMenu:Hide();updateFilter()
         end
         for quality=-1,5 do
             local value=quality

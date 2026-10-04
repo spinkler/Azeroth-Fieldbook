@@ -1067,7 +1067,7 @@ class AnglingUITests(unittest.TestCase):
             local e=spot(string.rep('Long spot ',16),string.rep('Long pool ',16));c:Select(e.id);click(m.assign)
             catch('long-name');c:Refresh()
             assert(m.session:GetHeight()==41 and m.session.text:GetStringHeight()>41)
-            assert(m.session.point[2]==480 and m.session.point[3]==-125)
+            assert(m.session.point[2]==342 and m.session.point[3]==-125)
             assert(m.assign.point[3]==-91 and m.map.point[5]==-205)
             assert(m.current==nil)
         ''')

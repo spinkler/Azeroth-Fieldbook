@@ -73,6 +73,15 @@ function A.RewardSnapshot(questID)
     local snapshotTitle
     if questID then snapshotTitle=A.Read(C_QuestLog and C_QuestLog.GetTitleForQuestID,id) else snapshotTitle=A.Read(GetTitleText) end
     local s={questID=id,at=A.Now(),title=snapshotTitle,choices={},automatic={},status='observed',choiceStatus='unknown'}
+    local description,objective
+    if questID then
+        description=A.Read(GetQuestLogQuestText)
+        objective=A.Read(function() local _,text=GetQuestLogQuestText();return text end)
+    else
+        description=A.Read(GetQuestText);objective=A.Read(GetObjectiveText)
+    end
+    s.questText=A.QuestText(description) and description or nil
+    s.objectiveText=A.QuestText(objective) and objective or nil
     s.offeredXP=A.Int(xp,0,2147483647) and xp or nil;s.offeredMoney=A.Int(money,0,2147483647) and money or nil
     if not A.Int(choices,0,64) or not A.Int(rewards,0,64) then s.status='incomplete';return s end
     s.count=choices;s.automaticCount=rewards;if choices==0 then s.choiceStatus='none' end
@@ -152,7 +161,7 @@ local function recoverRewards(original,candidate)
         end
         if not found then return end
     end
-    for _,key in ipairs({'offeredXP','offeredMoney','currencyOffers','currencyStatus','spellOffers','otherRewards'}) do
+    for _,key in ipairs({'questText','objectiveText','offeredXP','offeredMoney','currencyOffers','currencyStatus','spellOffers','otherRewards'}) do
         if original[key]~=nil then result[key]=A.Copy(original[key]) end
     end
     result.questID,result.at,result.title=nil,nil,nil
@@ -310,6 +319,9 @@ function ns.CreateAnnalsTracking(j)
     end
     function t:Event(event,id,xp,money)
         if j.readOnly or ns.InitializationBlocked then return end
+        -- Classic sends (questLogIndex, questID); other clients send only
+        -- questID. Never use a reusable log slot as a historical identity.
+        if event=='QUEST_ACCEPTED' and xp~=nil then id=xp end
         if event=='QUEST_LOG_UPDATE' or event=='QUEST_DATA_LOAD_RESULT' or event=='GET_ITEM_INFO_RECEIVED' then
             if next(db.pending) then t:RetryAcceptances() end;return
         end

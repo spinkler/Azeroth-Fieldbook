@@ -273,6 +273,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
                 clear:SetResponse(MenuResponse.Refresh)
             end)
         end)
+        m.filters.ResetFilters=function() c:ResetFilters() end
         U.StyleSelection(m.filters)
         m.sort=U.Button(d,"",270,-110,22,function(button)
             m.search:ClearFocus()
@@ -288,7 +289,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             local stroke=m.sort:CreateTexture(nil,"OVERLAY")
             stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,2-row);stroke:SetColorTexture(1,0.82,0.14,1)
         end
-        for _,item in ipairs({{m.filters,"Filter finds"},{m.sort,"Sort"}}) do
+        for _,item in ipairs({{m.filters,"Filter finds\nRight-click to reset filters."},{m.sort,"Sort"}}) do
             item[1]:SetScript("OnEnter",function(self)
                 if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(item[2]);GameTooltip:Show() end
             end)
@@ -358,7 +359,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         end)
         m.scope=U.Button(m,"Selected kind",604,-174,146,function() state.allZone=not state.allZone;c:Refresh() end)
         m.edit=U.Button(m,"Correct",756,-174,78,function() c:Manual(state.encounter) end)
-        m.notes=U.Button(d,"Edit",42,-672,118,function() c:Notes() end)
+        m.notes=U.Button(d,"Edit",42,-672,120,function() c:Notes() end)
         m.remove=U.Button(d,"Delete",174,-672,118,function() c:RemoveEncounter() end)
         m.map=ns.CreateTreasureMap(m,journal,state,function(id) c:Encounter(id) end)
         m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)

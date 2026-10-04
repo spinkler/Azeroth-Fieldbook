@@ -77,6 +77,27 @@ actual item rows or an explicit full manual capture. There are no drop rates,
 gold estimates, current-possession indicators, completion flags or exhaustion
 states. Acquisition history does not assert that the item is still owned.
 
+## Pending live observation — 2026-10-04
+
+A Battered Chest looted in Redridge did not appear in Treasure Journal.
+The supplied loot screenshot showed Minor Mana Potion ×2, Lesser Healing
+Potion ×3, Linen Cloth ×2 and 98 Copper. Autoloot usage was not confirmed.
+The journal reported: “Capture skipped: Loot source is not a recognized container.”
+The source-identification cause remains unresolved; do not mark this fixed.
+
+Diagnostics now include the rejected readable source GUID and observed container
+name, and preserve the original failure reason if autoloot clears the window.
+A separate zero-quantity coin-slot rejection was corrected and passed the
+Treasure tests, but is not established as the cause of this encounter.
+
+When the player naturally encounters another chest, after loading these changes
+with `/reload`, open/loot it and check Treasure Journal. If capture fails, retain
+the complete bottom status message (especially `Source:` and `observed container:`),
+chest name, zone and whether autoloot was enabled. Use that evidence to diagnose
+source recognition. The player does not know another chest location; wait for an
+opportunistic observation rather than asking them to find one. No scheduled
+reminder or active monitor is requested. Previously missed loot is not backfilled.
+
 ## Automatic observation and exact limitations
 
 The observer is initialized before any page UI exists. It performs a debounced

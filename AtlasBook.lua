@@ -325,6 +325,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             for _,check in ipairs(layers.checks) do entries:SetLayer(check.layerID,visible);check:SetChecked(visible) end
             c:Refresh()
         end
+        m.layerMenu.ResetFilters=function() all(true);layers:Hide() end
         U.Button(layers,"Show all",12,y,106,function() all(true) end)
         U.Button(layers,"Hide all",124,y,106,function() all(false) end)
         y=y-34
@@ -341,7 +342,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end)
         m:HookScript("OnHide",function() layers:Hide() end)
         layers:Hide()
-        U.Tip(m.layerMenu,"Choose which discovery markers appear on the map. Check several layers or use Show all / Hide all. The discovery index and sub-zone controls are unchanged.")
+        U.Tip(m.layerMenu,"Right-click to reset filters. Choose which discovery markers appear on the map. Check several layers or use Show all / Hide all. The discovery index and sub-zone controls are unchanged.")
         if journal.entrances then
             m.autoEntrances=U.Check(m,"Auto-discover entrances",342,-91,148,function(on) c.entranceObserver:SetEnabled(on) end)
             m.autoEntrances:SetEnabled(not journal.entrances.readOnly)

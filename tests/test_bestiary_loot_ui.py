@@ -114,6 +114,8 @@ lua.execute(r"""
     eq(b.lootFilter.point[4],-6);eq(b.damageHeading:GetWidth(),296)
 
     assert(b.lootFilter:IsShown(),'Recorded drops keep the filter available even when all qualities are hidden')
+    b.lootFilter.scripts.OnClick(b.lootFilter,'RightButton');eq(shown(),3)
+    b.listFilterButton.scripts.OnClick(b.listFilterButton,'RightButton')
     eq(e.loot.samples,10);eq(e.loot.items[100].quantity,3);eq(e.loot.items[102].drops,2)
     b.lootButton.scripts.OnClick();assert(not b.lootFilter:IsShown() and not b.lootFilterMenu:IsShown())
     b.lootButton.scripts.OnClick();assert(b.lootFilter:IsShown())

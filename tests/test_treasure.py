@@ -274,6 +274,28 @@ class TreasureCaptureTests(unittest.TestCase):
             openworld('GameObject-0-1-2-3-99-EEE');assert(#messages==2)
         """)
 
+    def test_world_chest_coin_slot_does_not_discard_item_contents(self):
+        self.world_fixture()
+        self.lua.execute("""
+            worldData.lines[1].leftText='Battered Chest'
+            LOOT_SLOT_MONEY=2;LOOT_SLOT_ITEM=1
+            function GetLootSlotType(slot) return loot[slot].coin and LOOT_SLOT_MONEY or LOOT_SLOT_ITEM end
+            local guid='GameObject-0-1-2-3-99-ABC'
+            loot={{coin=true,name='98 Copper',quantity=0,sources={guid,0}},
+                lootrow(2455,2,guid),lootrow(858,3,guid),lootrow(2589,2,guid)}
+            fire('LOOT_READY');loot={};fire('LOOT_OPENED',true)
+            local v=assert(t.active and j.encounters[t.active.id],t.status)
+            assert(j:Get(v.kindID).name=='Battered Chest' and #v.items==3)
+            local quantities={};for _,item in ipairs(v.items) do quantities[item.itemID]=item.quantity end
+            assert(quantities[2455]==2 and quantities[858]==3 and quantities[2589]==2)
+            fire('LOOT_CLOSED')
+            loot={{coin=true,quantity=0,sources={'Creature-0-1-2-3-99-ABC',0}},lootrow(2455,2,guid)}
+            fire('LOOT_READY');fire('LOOT_OPENED',false)
+            assert(not t.active and T.Count(j.encounters)==1,'mixed-source money was accepted')
+            loot={lootrow(2455,0,guid)};fire('LOOT_READY');fire('LOOT_OPENED',false)
+            assert(not t.active and T.Count(j.encounters)==1,'zero-count item was accepted')
+        """)
+
     def test_world_autoloot_retains_ready_snapshot(self):
         self.world_fixture()
         self.lua.execute("""

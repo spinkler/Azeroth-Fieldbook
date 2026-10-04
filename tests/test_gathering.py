@@ -761,7 +761,7 @@ class GatheringUITests(unittest.TestCase):
             function b.locationFrame:IsMouseOver() return false end
             b.listFilterMenu.scripts.OnEvent(b.listFilterMenu,'GLOBAL_MOUSE_DOWN')
             assert(not b.listFilterMenu:IsShown() and not b.locationFrame:IsShown())
-            b.listFilterButton.scripts.OnClick();b.clearFilters.scripts.OnClick()
+            b.listFilterButton.scripts.OnClick();b.listFilterButton.scripts.OnClick(b.listFilterButton,'RightButton')
             assert(b.typeButtons.all.afbSelected and b.search:GetText()=='')
             shell:Hide();assert(not b.listFilterMenu:IsShown())
         """)

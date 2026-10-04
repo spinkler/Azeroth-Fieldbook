@@ -25,7 +25,8 @@ local function label(parent, text, x, y, width, size)
     return font
 end
 local function entryCount(parent)
-    local count=label(parent,"",70,-88,222,"GameFontHighlightSmall")
+    local count=label(parent,"",37,-88,260,"GameFontHighlightSmall")
+    count:SetJustifyH("CENTER")
     count:SetTextColor(0.55,0.58,0.58);count:SetWordWrap(false)
     function count:SetCounts(total,shown) self:SetText(total.." entries • "..shown.." shown") end
     return count
@@ -66,6 +67,12 @@ local function menuButton(parent,text,x,y,width,action)
 end
 local function filterButton(parent,x,y,action)
     local control=button(parent,"",x,y,22,action);control:SetSize(22,22)
+    control:RegisterForClicks("LeftButtonUp","RightButtonUp")
+    control:SetScript("OnClick",function(self,mouseButton)
+        if mouseButton=="RightButton" then
+            if self.ResetFilters then self.ResetFilters() end
+        elseif action then action(self,mouseButton) end
+    end)
     for shadow=1,0,-1 do
         for row=0,10 do
             local width=row<6 and (12-row*1.6) or 3

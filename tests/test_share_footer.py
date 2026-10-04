@@ -21,15 +21,15 @@ FOOTER = '''
 
 class ShareFooterTests(unittest.TestCase):
     def test_delete_footers_match_across_journals(self):
-        for factory, button in (
-            (new_atlas, 'm.deleteButton'), (new_angling, 'm.deleteButton'),
-            (new_ledger, 'm.remove'), (new_treasure, 'm.remove'),
+        for factory, button, width in (
+            (new_atlas, 'm.deleteButton', 118), (new_angling, 'm.deleteButton', 118),
+            (new_ledger, 'm.remove', 120), (new_treasure, 'm.remove', 118),
         ):
             lua = factory(ui=True)
             lua.execute(f'''
                 local b={button}
                 assert(b:GetText()=='Delete' and b.point[2]==174 and b.point[3]==-672)
-                assert(b:GetWidth()==118 and b:GetHeight()==24 and not b.enabled)
+                assert(b:GetWidth()=={width} and b:GetHeight()==24 and not b.enabled)
             ''')
         lua = new_lore_ui()
         lua.execute("assert(m.deleteButton:GetText()=='Delete' and m.deleteButton.point[2]==174 and m.deleteButton.point[3]==-672 and not m.deleteButton.enabled)")

@@ -837,6 +837,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                 clear:SetResponse(MenuResponse.Refresh)
             end)
         end)
+        m.filters.ResetFilters=function() c:Reset() end
         U.StyleSelection(m.filters)
         m.sort=U.Button(d,"",270,-110,22,function(button)
             m.search:ClearFocus()
@@ -852,7 +853,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             local stroke=m.sort:CreateTexture(nil,"OVERLAY")
             stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,2-row);stroke:SetColorTexture(1,0.82,0.14,1)
         end
-        for _,item in ipairs({{m.filters,"Filter contacts"},{m.sort,"Sort"}}) do
+        for _,item in ipairs({{m.filters,"Filter contacts\nRight-click to reset filters."},{m.sort,"Sort"}}) do
             item[1]:SetScript("OnEnter",function(self)
                 if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(item[2]);GameTooltip:Show() end
             end)
@@ -882,8 +883,8 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             row:SetScript("OnClick",function(self) c:Select(self.id,self.match) end);m.rows[i]=row
         end
         m.empty=U.Label(d,"",49,-197,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
-        m.manual=U.Button(d,"Record contact",174,-638,118,function() c:Manual() end)
-        m.remove=U.Button(d,"Delete",174,-672,118,function() c:RemoveContact() end)
+        m.manual=U.Button(d,"Record contact",174,-638,120,function() c:Manual() end)
+        m.remove=U.Button(d,"Delete",174,-672,120,function() c:RemoveContact() end)
         createPortrait(m,m,342,-60,1)
         m.name=U.Label(m,"",392,-60,376,"GameFontNormalLarge");m.name:SetWordWrap(false)
         m.name:SetShadowColor(0,0,0,0.85);m.name:SetShadowOffset(1,-1)
@@ -919,11 +920,11 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         m.map=ns.CreateLedgerMap(m,journal,function() return state.selected,state.sighting end,function(index) c:Sighting(index) end)
         m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
         m.detailButtons={}
-        for _,v in ipairs({{"goods","Known Goods",654,116},{"training","Observed Training",776,146},{"services","Edit",42,121}}) do
+        for _,v in ipairs({{"goods","Known Goods",654,116},{"training","Observed Training",776,146},{"services","Edit",42,120}}) do
             local key=v[1];local button=U.Button(m,v[2],v[3],-89,v[4],function()
                 if key=="services" then c:Notes() else c:Catalogue(key) end
             end)
-            if key=="services" then button:SetParent(d);button:ClearAllPoints();button:SetPoint("TOPLEFT",42,-638);button:SetWidth(121) end
+            if key=="services" then button:SetParent(d);button:ClearAllPoints();button:SetPoint("TOPLEFT",42,-638);button:SetWidth(120) end
             m.detailButtons[key]=button
             U.StyleSelection(button)
         end

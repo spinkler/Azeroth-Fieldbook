@@ -64,6 +64,20 @@ function A.RewardPresentation(v,recordedOnly)
     return name or ((v.itemID and 'Item #' or v.currencyID and 'Currency #' or 'Spell #')..tostring(v.itemID or v.currencyID or v.spellID)),
         colours[quality] or 'dddddd',icon or 134400,link
 end
+function A.QuestTextBlocks(e,coloured)
+    local rows={}
+    if e.kind~='accepted' then return rows end
+    local r=e.reward or {}
+    local function add(text,kind,colour)
+        rows[#rows+1]={text=coloured and A.Paint(text,colour) or text,kind=kind}
+    end
+    add('Quest text','heading','55ddee')
+    add(r.questText or 'Quest text was not recorded.','text','dddddd')
+    if r.objectiveText then
+        add('Objectives','heading','55ddee');add(r.objectiveText,'text','dddddd')
+    end
+    return rows
+end
 function A.RewardBlocks(e,coloured,recordedOnly)
     local rows={};local r=e.reward
     local function paint(text,colour) return coloured and A.Paint(text,colour) or tostring(text) end
@@ -92,8 +106,8 @@ function A.RewardBlocks(e,coloured,recordedOnly)
     local money=e.kind=='accepted' and r.offeredMoney or r.money
     if xp~=nil or money~=nil then
         heading(e.kind=='accepted' and 'Offered XP & money' or 'XP & money received')
-        if xp~=nil then add(paint('Experience: ','dddddd')..paint(xp..' XP','bb99ff')) end
-        if money~=nil then add(paint('Money: ','dddddd')..A.MoneyText(money,coloured)) end
+        if xp~=nil then add(paint(xp..' XP','bb99ff')) end
+        if money~=nil then add(A.MoneyText(money,coloured)) end
     end
     if r.status=='incomplete' or r.status=='unknown' then add(paint('Some reward details were not captured.','999999')) end
     return rows
@@ -110,6 +124,7 @@ function A.EventText(e,coloured,recordedOnly)
     if A.Int(e.x,0,10000) and A.Int(e.y,0,10000) then text=text..paint(string.format(' • %.1f, %.1f',e.x/100,e.y/100),'999999') end
     if e.removal=='abandoned' then text=text..'\nAbandon request observed.' end
     local instanceNote=A.InstanceNote(e);if instanceNote then text=text..'\n'..paint(instanceNote,'999999') end
+    for _,row in ipairs(A.QuestTextBlocks(e,coloured)) do text=text..(row.kind=='heading' and '\n\n' or '\n')..row.text end
     for _,row in ipairs(A.RewardBlocks(e,coloured,recordedOnly)) do text=text..(row.kind=='heading' and '\n\n' or '\n')..row.text end
     if e.link then text=text..'\n'..paint(e.link.section,'55ddee') end
     return text
@@ -592,7 +607,9 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
     end
     function map:ShowHistoricalPlayer()
         local p=self.historicalPlayer;local arrow=self.playerArrow;arrow:Hide()
-        self.playerCoordinates:SetText('Historical journey • No recorded position')
+        self.playerCoordinates:SetWidth(self:GetWidth()-16)
+        self.playerCoordinates:SetSpacing(1)
+        self.playerCoordinates:SetText('Historical journey • No recorded position • '..(self.recordedLevel and ('Level '..self.recordedLevel) or 'Level unknown'))
         if not p or not self.available then return end
         local size=ns.Atlas.Number(j.db.settings.iconSize,6,40) and j.db.settings.iconSize or 20
         arrow:SetSize(size*1.5,size*1.5);arrow:ClearAllPoints()
@@ -602,8 +619,11 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         local previous=p.previous
         local angle=previous and math.atan2(-(p.headingX or (p.x-previous.x))*self:GetWidth(),-(p.headingY or (p.y-previous.y))*self:GetHeight()) or 0
         arrow:SetRotation(angle);arrow:Show()
-        self.playerCoordinates:SetText(p.instanceName and ('At entrance • '..ns.Atlas.Safe(p.instanceName)) or
-            (string.format('%s: %.1f, %.1f • %s • %s',p.interpolated and 'Estimated' or 'Recorded',p.x/100,p.y/100,state,ns.AtlasUI.Date(math.floor(p.at)))..(previous and '' or ' • heading unknown')))
+        local level=p.level or self.recordedLevel
+        local position=p.instanceName and ('At entrance • '..ns.Atlas.Safe(p.instanceName)) or
+            string.format('%s: %.1f, %.1f • %s',p.interpolated and 'Estimated' or 'Recorded',p.x/100,p.y/100,state)
+        self.playerCoordinates:SetText(ns.AtlasUI.Date(math.floor(p.at))..'\n'
+            ..position..' • '..(level and ('Level '..level) or 'Level unknown'))
     end
     function map:AdvanceHistoricalPlayer(at)
         local motion=self.playerMotion

@@ -360,7 +360,7 @@ class FieldbookTabsTests(unittest.TestCase):
                 assert(title and title.point[1]=='TOPLEFT' and title.point[2]==37 and title.point[3]==-60,id)
                 assert(title:GetText()==shell.sections[id].definition.title,id)
                 local count=page.entryCount or page.count
-                assert(count.point[2]==70 and count.point[3]==-88,id..': count below title')
+                assert(count.point[2]==37 and count.point[3]==-88 and count:GetWidth()==260,id..': count below title')
                 assert(count:GetText():match('^%d+ entries • %d+ shown$'),id..': consistent count text')
                 assert(page.search.point[2]==70 and page.search.point[3]==-110,id..': shared search row')
                 local filter=page.listFilterButton or page.filters

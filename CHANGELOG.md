@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.26.1 - 2026-10-04
+
+Release-channel update covering the complete batch since v0.26.0 and previous-push baseline 3891a81bfef0d8b3c3cffa02dfc020bbb6a58a9e.
+
+- Show recorded quest descriptions and objectives once in Annals Accepted Quest details alongside location and reward data. Preserve paragraphs and observed text through reward retries and reloads; older entries explicitly indicate missing text.
+- Fix Classic acceptance events using the quest-log slot instead of the quest ID, which could suppress reaccepted quests and associate acceptance data with the wrong quest. Simplify XP and money display by removing redundant labels.
+- Add an Annals chronology toggle beside the filter, defaulting to newest first at the top each session. Keep paging, Latest and Now consistent with the selected order while preserving historical data, selection and playback.
+- Put date/time above position, state and level in the Annals map footer with 1-pixel line spacing. Expand Details by 72 pixels and align Around event, Quest interval and Open linked journal above Refresh on the shared 34-pixel button rows.
+- Add right-click reset and tooltip guidance to all ten journal filter funnels, including Bestiary loot, Atlas layers and both Annals event filters. Centre entry counts beneath journal headings.
+- Match Treasure Edit and Ledger Edit, Record contact, Share and Delete to the Almanac/Chronicle Share button dimensions (120 × 24). Left-align the Almanac session status with the right pane.
+- Style Chronicle Entry & personal notes with a gold title, cyan section headings, muted metadata and spaced body text while retaining distinct source readers.
+- Accept zero-quantity coin slots from a confirmed Treasure loot source without discarding accompanying item contents. Preserve the original capture failure reason after autoloot clears the window and include rejected source identities for diagnosis. The reported Redridge Battered Chest source-identification failure remains unresolved; retain it in validation notes for the next opportunistic observation.
+- Extend regression checks for quest capture/reacceptance, text deduplication, chronology, filter resets and mixed coin/item loot, and update layout expectations and Treasure validation guidance.
+
 ## v0.26.0 - 2026-10-04
 
 Release-channel update covering the complete batch since v0.25.0 and previous-push baseline 0a3c5121ecf9db331a2cc3aa680542eaead2a7a7.
