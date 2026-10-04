@@ -1,6 +1,6 @@
-# Azeroth Fieldbook 0.24.1 (Release)
+# Azeroth Fieldbook 0.25.0 (Release)
 
-**New in this Beta:** Adventurer's Annals adds an eighth journal for
+Adventurer's Annals adds an eighth journal for
 this character's quest history and Journey Trail. It is independent of account
 tracking. See [usage, API evidence and in-game acceptance](tests/ANNALS.md) and
 the [measured long-term storage report](tests/ANNALS_STORAGE.md). Annals remains subject to native API and visual acceptance.
@@ -73,7 +73,10 @@ or remove individual encounters. Its independent map uses the Atlas viewport:
 Readable openable bag items are recorded in the background as **Observed
 carried**. Strictly matched portable loot can record a partial contents
 inspection; neither bag changes nor loot visibility prove personal recovery.
-World identity, acquisition context and recovery claims require manual input.
+Recognized world containers can also record partial contents automatically when
+a recent tooltip or opening interaction matches a single world-object loot source.
+Their locations are approximate player positions. Uncertain world finds,
+acquisition context and recovery claims still require manual input.
 Treasure follows Account-wide tracking, retaining `AzerothFieldbookTreasureDB` for
 character mode. Sharing has tested
 report-builder, validator, preview and merge hooks; delivery/import/export UI

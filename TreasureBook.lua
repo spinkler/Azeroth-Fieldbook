@@ -22,7 +22,8 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     state.query=T.Text(state.query,200,true) and state.query or ""
     state.offset=T.Integer(state.offset,0,T.MAX_KINDS) and state.offset or 0
     state.indexScroll=T.Number(state.indexScroll,0,1000000) and state.indexScroll or state.offset*ROW_HEIGHT
-    state.detail=({summary=true,contents=true,history=true,notes=true})[state.detail] and state.detail or "summary"
+    state.showContents=state.showContents==true or state.detail=="contents"
+    state.detail=({summary=true,history=true,notes=true})[state.detail] and state.detail or "summary"
     state.detailScroll=T.Number(state.detailScroll,0,1000000) and state.detailScroll or 0
     state.historyOffset=T.Integer(state.historyOffset,0,T.MAX_ENCOUNTERS) and state.historyOffset or 0
     state.bookmarks=state.bookmarks==true;state.allZone=state.allZone==true
@@ -43,7 +44,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     function c:Select(id)
         local e=journal:Get(id);if not e then return end
         if state.selected~=id then
-            state.selected=id;state.encounter=nil;state.detailScroll=0;state.historyOffset=0;self.main.details:SetVerticalScroll(0)
+            state.selected=id;state.encounter=nil;state.detailScroll=0;state.historyOffset=0;self.main.details:SetVerticalScroll(0);self.main.contents:SetVerticalScroll(0)
             local history=journal:History(id);local chosen=history[1]
             for _,v in ipairs(history) do if (v.context=="world" or v.context=="acquired") and v.location.mapID then chosen=v;break end end
             state.encounter=chosen and chosen.id;state.mapID=chosen and chosen.location.mapID
@@ -57,7 +58,8 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         if v.location.mapID then state.mapID=v.location.mapID end
         self.main.details:SetVerticalScroll(0);self:Refresh()
     end
-    function c:DetailRows()
+    function c:DetailRows(detail)
+        detail=detail or state.detail
         local e=journal:Get(state.selected);local rows={}
         local function add(text,item,encounter) rows[#rows+1]={text=text,item=item,encounter=encounter} end
         if not e then
@@ -68,7 +70,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         state.historyOffset=math.min(state.historyOffset,math.max(0,math.floor((#all-1)/HISTORY_PAGE)*HISTORY_PAGE))
         for i=state.historyOffset+1,math.min(#all,state.historyOffset+HISTORY_PAGE) do history[#history+1]=all[i] end
         if #all>HISTORY_PAGE then add("Showing encounters "..(state.historyOffset+1).."–"..math.min(#all,state.historyOffset+HISTORY_PAGE).." of "..#all..". Use Newer / Older above the map.") end
-        if state.detail=="summary" then
+        if detail=="summary" then
             add((e.form=="world" and "World find" or "Portable container").." • "..e.category.."\n"..
                 (e.itemID and "Item identity: "..e.itemID or "Provisional kind: "..e.id..". Matching names do not prove matching kinds."))
             add(summary.knowledge.." • "..summary.personal.." personal recorded encounters • "..summary.reported.." reported encounters\n"..
@@ -78,16 +80,17 @@ function ns.CreateTreasureBook(journal,tracking,shell)
                 add("Access ("..(v.reported and "reported / " or "")..v.accessMethod.."): "..v.access.."\n"..T.Date(v.origin.at).." • "..T.LocationText(v.location),nil,v.id)
             end end
             add("Automatic capture records readable openable bag items and strictly matched portable inspections. It never confirms receipt. World identity, acquisition context, access requirements and recovery claims can be recorded manually.")
-        elseif state.detail=="notes" then
+        elseif detail=="notes" then
             add("General notes (private):\n"..(e.note~="" and e.note or "No notes yet. Use Kind notes."))
             add("Look for again: "..(e.bookmark and "Bookmarked" or "Not bookmarked").."\n"..(e.bookmarkNote~="" and e.bookmarkNote or "No reason recorded."))
             add("Bookmarks describe your intention to look again. They make no claim that a particular container remains available.")
             for _,v in ipairs(history) do if v.reportNote and v.reportNote~="" then add("Reported kind note — "..v.origin.source..": "..v.reportNote,nil,v.id) end end
-        elseif state.detail=="contents" then
+        elseif detail=="contents" then
             local any=false
             for _,v in ipairs(history) do if v.facts.inspected or #v.items>0 then
-                any=true;add(T.Date(v.origin.at).." • "..(v.reported and "Reported by " or "Personal / "..v.origin.method..": ")..v.origin.source..
+                add(T.Date(v.origin.at).." • "..(v.reported and "Reported by " or "Personal / "..v.origin.method..": ")..v.origin.source..
                     "\n"..T.LocationText(v.location).."\n"..T.captures[v.capture],nil,v.id)
+                rows[#rows].divider=any;any=true
                 for _,item in ipairs(v.items) do
                     local receipt=item.recovered and (v.reported and "Source reports recovering " or "Personally recovered (manual): ")..item.recovered or "Receipt unconfirmed"
                     add(journal:ItemName(item).." × "..item.quantity.." observed\n"..receipt,item,v.id)
@@ -112,12 +115,12 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         end
         return rows
     end
-    function c:RenderDetails(scroll,body,pool,width)
-        local y=0;local rows=self:DetailRows()
+    function c:RenderDetails(scroll,body,pool,width,detail)
+        local y=0;local rows=self:DetailRows(detail)
         for i,data in ipairs(rows) do
             local row=pool[i]
             if not row then
-                row=CreateFrame("Button",nil,body);row:SetWidth(width);row:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+                row=CreateFrame("Button",nil,body);row:SetWidth(width);row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
                 row.text=U.Label(row,"",0,0,width,"GameFontHighlightSmall");row.text:SetWordWrap(true);row.text:SetSpacing(3)
                 row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",0,-1);row.icon:SetSize(24,24)
                 row:SetScript("OnEnter",function(self) if self.data and self.data.item then itemTooltip(self,self.data.item,journal) end end)
@@ -131,6 +134,11 @@ function ns.CreateTreasureBook(journal,tracking,shell)
                 end)
                 pool[i]=row
             end
+            if data.divider and not row.divider then
+                row.divider=ns.FieldbookUI.EntryDivider(row,8)
+            end
+            if row.divider then for _,line in ipairs(row.divider) do line:SetShown(data.divider==true) end end
+            if data.divider then y=y+14 end
             row.data=data;row.text:ClearAllPoints();row.text:SetPoint("TOPLEFT",data.item and 31 or 0,0)
             row.text:SetWidth(width-(data.item and 31 or 0));row.text:SetText(T.Safe(data.text));row.text:SetTextColor(0.75,0.8,0.8)
             if data.item and data.item.itemID then
@@ -138,7 +146,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
                 local color=T.Integer(quality,0,8) and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
                 if type(color)=="table" and T.Number(color.r,0,1) and T.Number(color.g,0,1) and T.Number(color.b,0,1) then row.text:SetTextColor(color.r,color.g,color.b) end
             end
-            local height=math.max(data.item and 28 or 18,row.text:GetStringHeight()+8)
+            local height=math.ceil(math.max(data.item and 28 or 18,row.text:GetStringHeight()+8))
             row:SetHeight(height);row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-y);row.icon:SetShown(data.item~=nil)
             if data.item then row.icon:SetTexture(icon(data.item)) end
             row:Show();y=y+height+6
@@ -174,6 +182,18 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             end
         end
         m.filters:SetSelected(state.category~=nil or state.zone~=nil or state.knowledge~=nil or state.bookmarks==true)
+        m.showContents:SetSelected(state.showContents)
+        m.list:SetShown(not state.showContents);m.empty:SetShown(not state.showContents and #rows==0)
+        m.contents:SetShown(state.showContents)
+        m.contentsHeader:SetShown(state.showContents)
+        local selected=journal:Get(state.selected)
+        m.contentsHeader.name:SetText(selected and T.Safe(journal:Title(selected)) or "No container selected")
+        m.contentsHeader.icon:SetTexture(icon(selected))
+        m.contentsHeader:SetSelected(selected~=nil)
+        local headerHeight=math.ceil(math.max(36,m.contentsHeader.name:GetStringHeight()+12))
+        m.contentsHeader:SetHeight(headerHeight);m.contents:SetHeight(LIST_HEIGHT-headerHeight-8)
+        if state.showContents then self:RenderDetails(m.contents,m.contentsBody,m.contentsRows,224,"contents") end
+        for key,button in pairs(m.detailButtons) do button:SetSelected(state.detail==key) end
         local e=journal:Get(state.selected);local s=e and journal:Summary(e)
         m.name:SetText(e and T.Safe(journal:Title(e)) or "Treasure Journal")
         m.summary:SetText(e and ((e.form=="world" and "World find" or "Portable container").." • "..e.category.." • "..s.knowledge) or "A personal guide to temporary discoveries")
@@ -251,8 +271,19 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             end)
             item[1]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         end
-        m.notes=U.Button(d,"Kind notes",170,-142,122,function() c:Notes() end)
+        m.showContents=U.Button(d,"Observed contents",42,-142,250,function()
+            state.showContents=not state.showContents;c:Refresh()
+        end)
+        U.StyleSelection(m.showContents)
         m.count=ns.FieldbookUI.EntryCount(d);m.rows={}
+        m.contentsHeader=CreateFrame("Button",nil,d,"BackdropTemplate");m.contentsHeader:SetPoint("TOPLEFT",42,-177);m.contentsHeader:SetSize(228,36)
+        ns.FieldbookUI.StyleMenuRow(m.contentsHeader);m.contentsHeader:EnableMouse(false)
+        m.contentsHeader.icon=m.contentsHeader:CreateTexture(nil,"ARTWORK")
+        m.contentsHeader.icon:SetPoint("TOPLEFT",6,-6);m.contentsHeader.icon:SetSize(24,24)
+        m.contentsHeader.name=U.Label(m.contentsHeader,"",37,-6,185,"GameFontNormal")
+        m.contentsHeader.name:SetWordWrap(true)
+        m.contents,m.contentsBody=U.Scroll(d,42,-211,228,LIST_HEIGHT-34);m.contentsRows={}
+        m.contents:ClearAllPoints();m.contents:SetPoint("TOPLEFT",m.contentsHeader,"BOTTOMLEFT",0,-8)
         m.list,m.listBody=U.Scroll(d,42,-177,228,LIST_HEIGHT)
         m.list:HookScript("OnVerticalScroll",function(self,value)
             if not m.updatingList then state.indexScroll=value or self:GetVerticalScroll();c:Refresh() end
@@ -307,10 +338,15 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         m.map=ns.CreateTreasureMap(m,journal,state,function(id) c:Encounter(id) end)
         m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
         m.detailButtons={}
-        for i,v in ipairs({{"summary","Summary / access"},{"contents","Observed contents"},{"history","Encounter history"},{"notes","Personal notes"}}) do
+        for i,v in ipairs({{"summary","Summary / access"},{"history","Encounter history"},{"kind","Kind notes"},{"notes","Personal notes"}}) do
+            if v[1]=="kind" then
+                m.notes=U.Button(m,v[2],342+(i-1)*146,-588,140,function() c:Notes() end)
+            else
             local key=v[1];m.detailButtons[key]=U.Button(m,v[2],342+(i-1)*146,-588,140,function()
                 state.detail=key;state.detailScroll=0;m.details:SetVerticalScroll(0);c:Refresh()
             end)
+            U.StyleSelection(m.detailButtons[key])
+            end
         end
         m.details,m.detailBody=U.Scroll(m,342,-621,555,80);m.detailRows={}
         m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall");m.message:SetWordWrap(false)

@@ -141,10 +141,42 @@ local function styleMenuRow(row)
 end
 
 -- A fixed page-relative footer keeps Share stationary across unequal panes.
+local function entryDivider(parent,y)
+    local segments={}
+    for segment=1,32 do
+        local line=parent:CreateTexture(nil,"ARTWORK")
+        line:SetSize(7,1);line:SetPoint("TOPLEFT",(segment-1)*7,y)
+        if line.SetSnapToPixelGrid then line:SetSnapToPixelGrid(false) end
+        if line.SetTexelSnappingBias then line:SetTexelSnappingBias(0) end
+        local fade=math.min(1,(segment-0.5)/8,(32.5-segment)/8)
+        line:SetColorTexture(0.25,0.13,0.055,0.35*fade)
+        segments[#segments+1]=line
+    end
+    -- A one-unit line can straddle different pixel rows as scrolling or layout
+    -- moves its parent. Align its absolute top and thickness to physical pixels.
+    local lastTop,lastScale
+    local function align()
+        local top,scale=parent:GetTop(),parent:GetEffectiveScale()
+        if type(top)~="number" or type(scale)~="number" or scale<=0 then return end
+        if top==lastTop and scale==lastScale then return end
+        lastTop,lastScale=top,scale
+        local offset=math.floor((top+y)*scale+0.5)/scale-top
+        local height=math.max(1,math.floor(scale+0.5))/scale
+        for segment,line in ipairs(segments) do
+            line:SetHeight(height);line:ClearAllPoints()
+            line:SetPoint("TOPLEFT",(segment-1)*7,offset)
+        end
+    end
+    parent:HookScript("OnUpdate",align)
+    parent:HookScript("OnShow",align)
+    return segments
+end
+
 local function shareButton(parent,action)
     return button(parent,"Share",42,-672,120,action)
 end
 ns.FieldbookUI = {Label=label, SectionTitle=sectionTitle, EntryCount=entryCount, Button=button, ShareButton=shareButton, MenuButton=menuButton, FilterButton=filterButton, DismissOnOutsideClick=dismissOnOutsideClick, StyleMenuArrow=styleMenuArrow, Close=cornerClose, Edit=edit, Search=search, StyleMenuRow=styleMenuRow}
+ns.FieldbookUI.EntryDivider=entryDivider
 
 -- Entry deletion follows the Ledger's left-page warning/action/back layout.
 function ns.FieldbookUI.DeletePanel(parent,shell,title,typed)

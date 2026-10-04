@@ -330,6 +330,10 @@ loads Ledger and still checks all seven tabs and auxiliary/window behaviour.
    scrolling at each text size. Toggle Known Goods and Training to check reused
    rows and icons; report-only lessons must keep their source labels.
    Check banker, stable, auctioneer, taxi and inn bind-confirmation events.
+   Learn a new flight path: its Transport contact and discovery announcement
+   should appear immediately, before opening the flight map. Opening the map
+   afterward must not repeat the announcement; already learned paths must still
+   discover their contact when the map opens.
    Unsupported identities/events must remain manual/unknown, without errors.
 6. **Identity and search:** Compare same-name or same-template NPCs with different
    stock. Revisit and follow a moving NPC. Review ambiguous respawns with Link

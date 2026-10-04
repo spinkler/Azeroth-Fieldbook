@@ -657,12 +657,33 @@ class TreasureUITests(unittest.TestCase):
 
     def test_tooltips_and_link_input_use_only_observed_item_identity(self):
         self.lua.execute('''
-            local e=record();inspect(e.id,{{itemID=555,quantity=2}});c:Select(e.id);c.state.detail='contents';c:Refresh()
+            local e=record();inspect(e.id,{{itemID=555,quantity=2}});c:Select(e.id);click(m.showContents)
             function GameTooltip:SetHyperlink(link) self.link=link end
-            local itemRow;for _,row in ipairs(m.detailRows) do if row.data and row.data.item then itemRow=row;break end end
+            local itemRow;for _,row in ipairs(m.contentsRows) do if row.data and row.data.item then itemRow=row;break end end
             itemRow.scripts.OnEnter(itemRow);assert(GameTooltip.link=='item:555')
             local parsed=assert(T.ParseItems('|cff00ff00|Hitem:777|h[Test]|h|r;2;1'))
             assert(parsed[1].itemID==777 and parsed[1].quantity==2 and parsed[1].recovered==1)
+        ''')
+
+    def test_contents_overlay_is_independent_of_footer_selection(self):
+        self.lua.execute('''
+            local e,v=record();inspect(e.id,{{itemID=555,quantity=2}});c:Select(e.id)
+            m.list:SetVerticalScroll(0);m.details:SetVerticalScroll(14)
+            click(m.showContents)
+            assert(c.state.detail=='summary' and m.details:GetVerticalScroll()==14)
+            assert(m.showContents.afbSelected and m.contents:IsShown() and not m.list:IsShown())
+            for _,key in ipairs({'history','notes','summary'}) do
+                click(m.detailButtons[key])
+                assert(c.state.showContents and m.contents:IsShown())
+                for other,button in pairs(m.detailButtons) do assert(button.afbSelected==(other==key)) end
+            end
+            c:Encounter(v.id)
+            assert(m.detailButtons.history.afbSelected and m.showContents.afbSelected)
+            click(m.showContents)
+            assert(c.state.detail=='history' and not m.contents:IsShown() and m.list:IsShown())
+            assert(not m.showContents.afbSelected)
+            click(m.notes);assert(c.panel==c.panels.notes)
+            c:ClosePanel();assert(m.list:IsShown())
         ''')
 
     def test_editors_and_map_stay_inside_existing_shell_bounds(self):

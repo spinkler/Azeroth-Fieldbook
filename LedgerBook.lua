@@ -680,6 +680,12 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             state.selected=rows[1].contact.id;state.sighting=1;state.sightingKey=nil;e=rows[1].contact;if m.rows[1].id==e.id then m.rows[1]:SetSelected(true) end
             state.detail=self:DefaultDetail(e)
         end
+        for i,row in ipairs(m.rows) do
+            local previous=rows[state.offset+i-1]
+            local show=row.id~=nil and state.offset+i>1 and row.id~=state.selected
+                and not (previous and previous.contact.id==state.selected)
+            for _,line in ipairs(row.divider) do line:SetShown(show) end
+        end
         m.remove:SetEnabled(e~=nil and not journal.readOnly)
         self:RefreshPortrait(e)
         m.name:SetText(L.Safe(e and e.name or "Merchant’s Ledger"))
@@ -806,6 +812,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         for i=1,10 do
             local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*77);row:SetSize(228,76)
             ns.FieldbookUI.StyleMenuRow(row)
+            row.divider=ns.FieldbookUI.EntryDivider(row,1)
             row.name=U.Label(row,"",7,-5,214,"GameFontNormalSmall")
             local namePath,nameSize,nameFlags=row.name:GetFont()
             if namePath and type(nameSize)=="number" then row.name:SetFont(namePath,nameSize+4,nameFlags) end

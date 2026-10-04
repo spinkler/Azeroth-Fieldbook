@@ -1,6 +1,36 @@
 # Changelog
 
-## Unreleased
+## v0.25.0 - 2026-10-04
+
+Release-channel update covering all changes since v0.24.1 and previous-push
+baseline e619c7242777ab754f88a06243563fcf5cffbf6a.
+
+- Update the Treasure documentation to describe automatic world-container capture and its attribution limits; remove the stale Beta label from the README introduction.
+- Add regression coverage for container attribution and autoloot, Ledger identity reuse and flight-path discovery, journal scrolling and selection, world-map label controls, chat announcements and Annals death-state trails. Update Ledger and Treasure validation guidance.
+
+- Discover Merchant's Ledger Transport contacts when a flight path is learned, without waiting for the flight map to open.
+
+- Match shared entry dividers to the vertical page divider's warm brown colour and 35% opacity, preserving their fading edges.
+
+- Align shared entry dividers to physical pixel rows and a consistent pixel thickness so scrolling and selection changes do not alter their apparent weight.
+
+- Hide the dividers directly above and below selected Ledger and Annals entries so they do not clash with the gold selection border; restore them when selection changes.
+
+- Show the shared gold selection border on the selected Annals timeline entry, updating it as selection and visible rows change.
+
+- Add matching fading dividers between Ledger contacts and give Annals timeline text more top and bottom padding inside its highlight rows.
+
+- Make world-map sub-zone labels follow map zoom and default to size 14, with an independently saved Label size slider shown only while Labels is enabled. Place the background-free control at the map's top-right with edge padding, shadowed text and a black slider track. Traveller's Atlas keeps its own label-size setting.
+
+- Soften Treasure's fading dividers slightly and reuse them between Annals timeline entries. Increase Atlas list-row padding for easier reading.
+
+- Give the observed-container header the journal list's gold selection outline and standardize contents dividers to fixed dimensions, colour and edge fades.
+
+- Identify the selected container above Treasure's observed contents and separate encounter groups with thin, dark dividers that fade at the edges.
+
+- Move Treasure's Observed contents into an independently toggled left-pane view, highlight the selected right-footer view, and place Kind notes between Encounter history and Personal notes.
+
+- Match Treasure Journal detail-row hover highlights to the gold highlight used by journal lists, including expanded details.
 
 - Use blue book-section labels across Bestiary, Ledger, Gatherer, Treasure, Atlas and Chronicle chat announcements, with yellow event tags, white names and grey contextual details.
 

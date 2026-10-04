@@ -95,6 +95,23 @@ class LedgerTests(unittest.TestCase):
             assert(#messages==8)
         """)
 
+    def test_transport_discovery_when_path_learned_before_flight_map(self):
+        self.lua.execute('''
+            local messages={}
+            DEFAULT_CHAT_FRAME={AddMessage=function(_,text) messages[#messages+1]=text end}
+            targetNPC=99
+            fire('NEW_TAXI_PATH')
+            local e=one(saved.contacts)
+            assert(e and e.npcID==42 and e.personal and e.roles.transport)
+            assert(#messages==1 and messages[1]:find('(Transport)',1,true))
+            fire('NEW_TAXI_PATH');fire('TAXIMAP_OPENED')
+            assert(L.Count(saved.contacts)==1 and #messages==1,'Flight map must not repeat discovery')
+            vendorNPC=nil;fire('NEW_TAXI_PATH')
+            assert(L.Count(saved.contacts)==1,'Missing interaction identity must not use target')
+            vendorNPC=100;fire('TAXIMAP_OPENED')
+            assert(L.Count(saved.contacts)==2 and #messages==2,'Already learned paths still discover contacts')
+        ''')
+
     def test_merchant_discovery_message_once_per_contact(self):
         self.lua.execute(r'''
             local messages={}

@@ -4,6 +4,38 @@ from atlas_test_harness import new_atlas
 
 
 class SubzoneTests(unittest.TestCase):
+    def test_world_label_size_is_independent_persistent_and_follows_zoom(self):
+        self.lua.execute('''
+            C_Timer=nil
+            WorldMapFrame=CreateFrame('Frame');WorldMapFrame:Show()
+            local canvas=CreateFrame('Frame',nil,WorldMapFrame);canvas:SetSize(1000,800)
+            function WorldMapFrame:GetCanvas() return canvas end
+            function WorldMapFrame:GetCanvasScale() return canvas:GetScale() end
+            function WorldMapFrame:GetMapID() return 101 end
+            j.state.showSubzonesOnWorldMap=true;j.state.worldSubzoneLabels=true
+            j.state.subzoneLabelSize=7
+            s.store[101]={{kind='interior',mapID=101,name='Meadow',x=5000,y=5000,at=100}}
+            s:Changed(101)
+            local control=c.worldSubzones;control:Refresh();settle()
+            local panel=assert(control.labelControl);local slider=panel.slider
+            assert(panel:IsShown() and slider:GetValue()==14)
+            slider.scripts.OnValueChanged(slider,12);settle()
+            assert(j.state.worldSubzoneLabelSize==12 and j.state.subzoneLabelSize==7)
+            local overlay=control.overlay
+            assert(overlay.subzoneLabels[1]:GetHeight()==16)
+            canvas:SetScale(2);control:Refresh();settle()
+            assert(overlay.subzoneLabels[1]:GetHeight()==28,'World labels grow with zoom')
+            canvas:SetScale(1);control:Refresh();settle()
+            assert(overlay.subzoneLabels[1]:GetHeight()==16,'World labels shrink with zoom')
+            local reload=ns.CreateAtlasJournal(j.saved)
+            assert(reload.state.worldSubzoneLabelSize==12 and reload.state.subzoneLabelSize==7)
+            j.state.worldSubzoneLabels=false;control:Refresh();assert(not panel:IsShown())
+            j.state.worldSubzoneLabels=true;control:Refresh();assert(panel:IsShown())
+            j.readOnly=true;control:Refresh();slider.scripts.OnValueChanged(slider,20)
+            assert(j.state.worldSubzoneLabelSize==12,'Read-only journals cannot write preferences')
+            j.state.showSubzonesOnWorldMap=false;control:Refresh();assert(not panel:IsShown())
+        ''')
+
     def test_ctrl_cleanup_cleans_all_saved_maps_and_preserves_selection(self):
         self.lua.execute('''
             j.state.subzoneFillMethod='convex'

@@ -152,7 +152,7 @@ function U.SmallSlider(parent,text,x,y,labelWidth,low,high,step,format,action)
         value=low+math.floor((value-low)/step+0.5)*step
         self.valueLabel:SetText(format(value));action(value)
     end)
-    return slider
+    return slider,caption
 end
 function U.Scroll(parent,x,y,width,height)
     local s=CreateFrame("ScrollFrame",nil,parent,"UIPanelScrollFrameTemplate")

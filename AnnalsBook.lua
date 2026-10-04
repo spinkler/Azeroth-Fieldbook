@@ -217,10 +217,24 @@ function ns.CreateAnnalsBook(j,shell)
         self.main.map.zoom,self.main.map.panX,self.main.map.panY=1,0,0
         self:Refresh(true)
     end
+    function c:SyncRowSelection()
+        for i,row in ipairs(self.main.rows) do
+            local selected=row.record~=nil and row.record.id==self.selected
+            row:SetSelected(selected)
+            local previous=self.main.rows[i-1]
+            local previousSelected=previous and previous.record and previous.record.id==self.selected
+            for _,line in ipairs(row.divider or {}) do
+                line:SetShown(row.record~=nil and not selected and not previousSelected)
+            end
+        end
+    end
     function c:Select(id,preserveJourney)
         id=tonumber(id);local e=id and j.db.events[id];if not A.ValidEvent(e) then return end
         self.selected=id
-        if self.main then self.main.detail:SetEvent(e,true) end
+        if self.main then
+            self.main.detail:SetEvent(e,true)
+            self:SyncRowSelection()
+        end
         if not preserveJourney then
             self.mapID=e.mapID or self.mapID
             if self.main then self.index=nil;self:Seek(e.at) end
@@ -321,6 +335,7 @@ function ns.CreateAnnalsBook(j,shell)
                 row.location:SetText(A.Paint((e.zone or 'Unknown location')..(e.level and (' • Level '..e.level) or ''),'bbbbbb'))
             end
         end
+        self:SyncRowSelection()
         m.record:SetChecked(j.db.settings.trail~=false)
         self:RefreshStorage()
         self:SyncSlider()
@@ -383,13 +398,14 @@ function ns.CreateAnnalsBook(j,shell)
         m.journey=CreateFrame('Frame',nil,m);m.journey:SetAllPoints()
         m.emptySearch=U.Label(m.timeline,'',0,-5,250,'GameFontDisableSmall');m.emptySearch:SetWordWrap(true);m.emptySearch:Hide()
         for i=1,7 do
-            local row=CreateFrame('Button',nil,m.timeline);row:SetPoint('TOPLEFT',0,-(i-1)*65);row:SetSize(228,60)
-            row:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight')
-            row.icon=row:CreateTexture(nil,'ARTWORK');row.icon:SetSize(22,22);row.icon:SetPoint('TOPLEFT',2,-5)
+            local row=CreateFrame('Button',nil,m.timeline,'BackdropTemplate');row:SetPoint('TOPLEFT',0,-(i-1)*65);row:SetSize(228,64)
+            ns.FieldbookUI.StyleMenuRow(row)
+            if i>1 then row.divider=ns.FieldbookUI.EntryDivider(row,1) end
+            row.icon=row:CreateTexture(nil,'ARTWORK');row.icon:SetSize(22,22);row.icon:SetPoint('TOPLEFT',2,-8)
             row.iconShadow=row:CreateTexture(nil,'BACKGROUND');row.iconShadow:SetSize(22,22);row.iconShadow:SetPoint('TOPLEFT',row.icon,'TOPLEFT',2,-2);row.iconShadow:SetVertexColor(0,0,0,0.6)
-            row.label=U.Label(row,'',32,-2,192,'GameFontNormal');row.label:SetWordWrap(false)
-            row.status=U.Label(row,'',32,-20,192,'GameFontHighlightSmall');row.status:SetWordWrap(true);row.status:SetHeight(27)
-            row.location=U.Label(row,'',32,-48,192,'GameFontHighlightSmall');row.location:SetWordWrap(false)
+            row.label=U.Label(row,'',32,-6,192,'GameFontNormal');row.label:SetWordWrap(false)
+            row.status=U.Label(row,'',32,-24,192,'GameFontHighlightSmall');row.status:SetWordWrap(true);row.status:SetHeight(20)
+            row.location=U.Label(row,'',32,-46,192,'GameFontHighlightSmall');row.location:SetWordWrap(false)
             row:SetScript('OnClick',function(self) if self.record then c:Select(self.record.id) end end)
             m.rows[i]=row
         end

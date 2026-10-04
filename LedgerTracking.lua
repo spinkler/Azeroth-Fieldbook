@@ -269,7 +269,8 @@ function ns.CreateLedgerTracking(journal)
         local function run() visit.queued=false;if self.visits[kind]==visit and not visit.closed then self:Scan(visit) end end
         if C_Timer and type(C_Timer.After)=="function" then C_Timer.After(0.15,run) else run() end
     end
-    local services={BANKFRAME_OPENED="banker",AUCTION_HOUSE_SHOW="auctioneer",PET_STABLE_SHOW="stable",TAXIMAP_OPENED="transport",CONFIRM_BINDER="innkeeper"}
+    -- Learning a flight path can happen before the flight map opens.
+    local services={BANKFRAME_OPENED="banker",AUCTION_HOUSE_SHOW="auctioneer",PET_STABLE_SHOW="stable",NEW_TAXI_PATH="transport",TAXIMAP_OPENED="transport",CONFIRM_BINDER="innkeeper"}
     function t:OnEvent(event,...)
         if ns.InitializationBlocked then return end
         if event=="MERCHANT_SHOW" then self:Open("merchant")

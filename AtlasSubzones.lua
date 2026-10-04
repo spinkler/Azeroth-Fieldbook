@@ -2,6 +2,7 @@ local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A=ns.Atlas
 local S={MAX_MAPS=256,MAX_CROSSINGS=4096,MAX_AREAS=128,GRID=64,MAX_TRIANGLES=3000,SPACING_YARDS=10,DEFAULT_LABEL_SIZE=4}
+S.DEFAULT_WORLD_LABEL_SIZE=14
 S.INTERIOR_YARDS=50
 S.MAX_INTERIORS=1024
 ns.AtlasSubzones=S
@@ -1144,6 +1145,10 @@ function S.InstallMap(map,journal,cursorPoint)
             if A.Text(zone,160) then hidden=zone end
         end
         local size=A.Integer(journal.state.subzoneLabelSize,2,24) and journal.state.subzoneLabelSize or S.DEFAULT_LABEL_SIZE
+        if self.subzoneWorldLayers then
+            local worldSize=journal.state.worldSubzoneLabelSize
+            size=(A.Integer(worldSize,2,24) and worldSize or S.DEFAULT_WORLD_LABEL_SIZE)*(self.subzoneLabelZoom or 1)
+        end
         if not self.available or not (regions or names or points) or A.Read(self.IsVisible,self)==false then
             self:CancelSubzones();front.frame:Hide();self.subzoneModel=nil
             if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
@@ -1263,8 +1268,39 @@ function S.CreateWorldOverlay(journal)
         end,function() return not journal.readOnly end,function() controller:Refresh() end)
     end end
     local world,overlay,pending
+    local function updateLabelControl()
+        if not world then return end
+        local visible=journal.state.showSubzonesOnWorldMap==true and selected("Labels") and world:IsShown()
+        local panel=controller.labelControl
+        if visible and not panel then
+            panel=CreateFrame("Frame",nil,world);controller.labelControl=panel
+            panel:SetSize(220,36);panel:SetPoint("TOPRIGHT",world.ScrollContainer or world,"TOPRIGHT",-18,-3)
+            panel:SetFrameStrata("HIGH")
+            local slider,caption=ns.AtlasUI.SmallSlider(panel,"Label size",10,-10,62,2,24,1,tostring,function(value)
+                if journal.readOnly then return end
+                journal.state.worldSubzoneLabelSize=value
+                controller:Refresh()
+            end)
+            panel.slider=slider;slider:SetWidth(100)
+            slider.track:SetColorTexture(0,0,0,1)
+            for _,text in ipairs({caption,slider.valueLabel}) do
+                text:SetShadowColor(0,0,0,1);text:SetShadowOffset(1,-1)
+            end
+            slider.valueLabel:ClearAllPoints();slider.valueLabel:SetPoint("LEFT",slider,"RIGHT",6,0)
+            ns.AtlasUI.Tip(slider,"World map label size. Labels also scale with map zoom. Independent of Traveller's Atlas label size.")
+        end
+        if panel then
+            panel:SetShown(visible)
+            if visible then
+                local value=journal.state.worldSubzoneLabelSize
+                panel.slider:Display(A.Integer(value,2,24) and value or S.DEFAULT_WORLD_LABEL_SIZE)
+                panel.slider:SetEnabled(not journal.readOnly)
+            end
+        end
+    end
     local function stop()
         if overlay then overlay:CancelSubzones();overlay:Hide() end
+        if controller.labelControl then controller.labelControl:Hide() end
     end
     local function draw()
         pending=nil
@@ -1292,13 +1328,16 @@ function S.CreateWorldOverlay(journal)
         local level=manager and A.Read(manager.GetValidFrameLevel,manager,"PIN_FRAME_LEVEL_AREA_POI")
         overlay:SetFrameLevel(A.Integer(level,0,65535) and level or canvas:GetFrameLevel()+1)
         for _,buffer in ipairs(overlay.subzoneBuffers) do buffer.frame:SetFrameLevel(overlay:GetFrameLevel()) end
-        -- Counter-scale so label sizes and dots remain legible on both the
-        -- windowed and full-screen native map. Anchors follow its pan/zoom.
+        -- Keep survey dots constant-sized, but scale label text and its layout
+        -- with the canvas so names grow and shrink around their map anchors.
+        overlay.subzoneLabelZoom=scale
         overlay:SetScale(1/scale);overlay:ClearAllPoints();overlay:SetPoint("TOPLEFT",canvas,"TOPLEFT",0,0)
         overlay:SetSize(w*scale,h*scale);overlay.subzoneMapID=id;overlay.available=true;overlay:Show()
         overlay:RenderSubzones()
     end
     function controller:Refresh()
+        if not world then self:Attach() end
+        updateLabelControl()
         if journal.state.showSubzonesOnWorldMap~=true then stop();return end
         if not world then self:Attach() end
         if not world or not world:IsShown() then stop();return end

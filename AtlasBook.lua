@@ -1,7 +1,7 @@
 local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A,U=ns.Atlas,ns.AtlasUI
-local ROW_HEIGHT,LIST_HEIGHT=30,390
+local ROW_HEIGHT,LIST_HEIGHT=38,390
 local VISIBLE_ROWS=math.ceil(LIST_HEIGHT/ROW_HEIGHT)+1
 local function categoryInfo(id) return A.category[id] or ns.AtlasEntrances.Category(id) end
 function ns.CreateAtlasBook(journal,shell,adapters)
@@ -226,12 +226,12 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end
         m.list:EnableMouseWheel(true);m.list:SetScript("OnMouseWheel",scrollList)
         for i=1,VISIBLE_ROWS do
-            local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*ROW_HEIGHT);row:SetSize(228,29)
+            local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*ROW_HEIGHT);row:SetSize(228,ROW_HEIGHT-1)
             row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",scrollList)
             ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",3,-6);row.icon:SetSize(20,20)
-            row.name=U.Label(row,"",28,-2,195,"GameFontHighlightSmall");row.name:SetWordWrap(false)
-            row.zone=U.Label(row,"",28,-17,195,"GameFontDisableSmall");row.zone:SetWordWrap(false)
+            row.name=U.Label(row,"",32,-6,189,"GameFontHighlightSmall");row.name:SetWordWrap(false)
+            row.zone=U.Label(row,"",32,-21,189,"GameFontDisableSmall");row.zone:SetWordWrap(false)
             row:SetScript("OnClick",function(self) if self.id then c:Select(self.id) end end)
             row:SetScript("OnEnter",function(self)
                 local e=entries:Get(self.id)
