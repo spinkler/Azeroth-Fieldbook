@@ -377,7 +377,7 @@ local ink = { 0.75, 0.8, 0.8 }
         refresh()
     end
     local function cycleEntry(direction)
-        local rows=journal:List(category,book.search:GetText(),reviewOnly,initial,locationFilters,rankFilters)
+        local rows=journal:List(category,book.search:GetText(),reviewOnly,nil,locationFilters,rankFilters)
         if #rows==0 then return false end
         local current
         for i,row in ipairs(rows) do if row.id==selected then current=i; break end end
@@ -430,7 +430,7 @@ local ink = { 0.75, 0.8, 0.8 }
             letterButton:SetEnabled(availableLetters[letterButton.letter] == true)
             letterButton:SetSelected(initial == letterButton.letter)
         end
-        local rows = initial and journal:List(category, book.search:GetText(), reviewOnly, initial, locationFilters, rankFilters) or unletteredRows
+        local rows = unletteredRows
         offset = math.max(0, math.min(offset, math.max(0, #rows - creaturePageSize)))
         book.updatingCreatureScroll=true
         book.creatureScrollBar:SetMinMaxValues(0,math.max(0,#rows-creaturePageSize))
@@ -440,6 +440,9 @@ local ink = { 0.75, 0.8, 0.8 }
         for i, row in ipairs(book.rows) do
             row:EnableMouseWheel(#rows>creaturePageSize)
             local data = rows[offset + i]
+            local previous=i>1 and rows[offset+i-1]
+            local groupBoundary=data and previous and data.name:sub(1,1):upper()~=previous.name:sub(1,1):upper()
+            for _,line in ipairs(row.groupDivider) do line:SetShown(groupBoundary==true) end
             if row.id~=(data and data.id) or (data and row.text:GetText()~=data.name) then row:StopNameScroll() end
             row.id = data and data.id
             if data then
@@ -847,8 +850,8 @@ local ink = { 0.75, 0.8, 0.8 }
         book.ranksButton = button(book, "Ranks", 42, -511, 88, function() book.rankFrame:SetShown(not book.rankFrame:IsShown()) end)
         styleSelection(book.ranksButton,true)
         book.entryCount=ui.EntryCount(book)
-        book.pointsCount=label(book,"",174,-628,118,"GameFontHighlightSmall")
-        book.pointsCount:SetWordWrap(false);book.pointsCount:SetJustifyH("RIGHT")
+        book.pointsCount=label(book,"",42,-701,250,"GameFontHighlightSmall")
+        book.pointsCount:SetWordWrap(false)
         book.pointsCount:SetTextColor(0.55,0.58,0.58)
         book.search = ui.Search(book,70,-110,168,100)
         book.searchClear=book.search.clearButton
@@ -1057,6 +1060,7 @@ local ink = { 0.75, 0.8, 0.8 }
             local row = CreateFrame("Button", nil, book, "BackdropTemplate")
             row:SetPoint("TOPLEFT", 42, -140 - (i-1)*27); row:SetSize(236, 26)
             ns.FieldbookUI.StyleMenuRow(row)
+            row.groupDivider=ns.FieldbookUI.EntryDivider(row,1,236)
             row.reviewMark = label(row, "", 16, -6, 10)
             row.reviewMark:SetTextColor(1, 1, 1)
             row.reviewMark:SetWordWrap(false)
@@ -1102,21 +1106,6 @@ local ink = { 0.75, 0.8, 0.8 }
         book.indexCount:SetHeight(44)
         book.indexCount:SetJustifyV("MIDDLE")
         book.indexCount:SetTextColor(0.55,0.58,0.58)
-        book.bindingHint=label(book,"",38,-704,256,"GameFontHighlightSmall")
-        local function refreshBindingHint()
-            local bound=false
-            if type(GetBindingKey)=="function" then
-                for _,action in ipairs({"CLASSICBESTIARY_BOOK","CLASSICBESTIARY_MOUSEOVER_BOOK"}) do
-                    local primary,secondary=GetBindingKey(action)
-                    if (primary and primary~="") or (secondary and secondary~="") then bound=true end
-                end
-            end
-            book.bindingHint:SetText(bound and "" or "Bind this book in Options > Keybindings.")
-        end
-        book:RegisterEvent("UPDATE_BINDINGS")
-        book:SetScript("OnEvent",refreshBindingHint)
-        book:HookScript("OnShow",refreshBindingHint)
-        refreshBindingHint()
         book.indexButton = button(book, "Index", 3, -110, 57, function()
             indexOpen = not indexOpen
             initial=nil; offset=0; refresh()
@@ -1127,8 +1116,12 @@ local ink = { 0.75, 0.8, 0.8 }
         for i=1,26 do
             local letter = string.char(64+i)
             local tab = button(book, letter, 3, -139-(i-1)*21, 29, function()
-                if initial==letter then initial=nil else initial=letter end
-                offset=0; refresh()
+                local rows=journal:List(category,book.search:GetText(),reviewOnly,nil,locationFilters,rankFilters)
+                for index,row in ipairs(rows) do
+                    if row.name:sub(1,1):upper()==letter then
+                        initial=letter;offset=index-1;refresh();break
+                    end
+                end
             end)
             tab:SetHeight(19)
             -- Extend only the left edge; compensate for the half-pixel shift
@@ -2176,9 +2169,13 @@ local ink = { 0.75, 0.8, 0.8 }
         title="Bestiary",icon="Interface\\Icons\\Ability_Tracking",frameName="AzerothFieldbookBestiarySection",build=build,
         onOpen=function(context)
             if context and context.creatureID then choose(context.creatureID);return end
-            -- Start on the title page; normal reopening preserves the last entry
-            -- and its browsing state regardless of the current target.
-            if selected and journal.entries[selected] then safeModel(selected) end
+            -- Previous browsing selection wins; only fall back to a known target.
+            if selected and journal.entries[selected] then
+                safeModel(selected)
+            else
+                local target=journal:ExistingUnitEntry("target")
+                if target then choose(target);return end
+            end
             refresh()
         end,
         onLeave=function()

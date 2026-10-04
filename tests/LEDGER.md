@@ -61,10 +61,21 @@ Map, zone, subzone and coordinate precision must agree. This is a map-relative
 radius, not yards. A contact with another GUID already seen during this journal
 session is excluded to keep concurrently encountered individuals separate.
 Known GUIDs continue to follow travelling contacts regardless of distance.
+Observed taxi-service contacts are an exception to the same-session exclusion:
+matching nearby flight masters can reuse a contact after a spawn/layer change.
+On journal creation, personally observed Transport duplicates with matching NPC
+IDs, names, compatible titles and nearby sightings are consolidated. Each group
+requires pairwise location agreement; distant chains are not joined. Original
+records are retained as migration evidence, and old contact IDs, references and
+GUID aliases resolve to the surviving record. Notes, favourites and observations
+are preserved. Future-schema and initialization-blocked stores remain untouched.
+The saved `transportIdentityMigration` marker skips this consolidation on later
+loads. Importing another character's Ledger clears it so imported duplicates
+receive one fresh check. Restoring an older unmarked store also runs the migration.
 
 Missing positions, conflicting titles and multiple eligible contacts do not
-trigger this fallback. It never merges existing records or matches report-only
-contacts. Existing duplicates still use **Link identity**, which preserves
+trigger this fallback. Encounter matching never merges existing records or matches report-only
+contacts. Other existing duplicates still use **Link identity**, which preserves
 notes, observations and stable references after explicit confirmation.
 
 Each contact separately owns goods, lessons, roles, manual annotations and

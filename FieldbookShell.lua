@@ -141,11 +141,12 @@ local function styleMenuRow(row)
 end
 
 -- A fixed page-relative footer keeps Share stationary across unequal panes.
-local function entryDivider(parent,y)
+local function entryDivider(parent,y,width)
+    local segmentWidth=(width or 224)/32
     local segments={}
     for segment=1,32 do
         local line=parent:CreateTexture(nil,"ARTWORK")
-        line:SetSize(7,1);line:SetPoint("TOPLEFT",(segment-1)*7,y)
+        line:SetSize(segmentWidth,1);line:SetPoint("TOPLEFT",(segment-1)*segmentWidth,y)
         if line.SetSnapToPixelGrid then line:SetSnapToPixelGrid(false) end
         if line.SetTexelSnappingBias then line:SetTexelSnappingBias(0) end
         local fade=math.min(1,(segment-0.5)/8,(32.5-segment)/8)
@@ -164,7 +165,7 @@ local function entryDivider(parent,y)
         local height=math.max(1,math.floor(scale+0.5))/scale
         for segment,line in ipairs(segments) do
             line:SetHeight(height);line:ClearAllPoints()
-            line:SetPoint("TOPLEFT",(segment-1)*7,offset)
+            line:SetPoint("TOPLEFT",(segment-1)*segmentWidth,offset)
         end
     end
     parent:HookScript("OnUpdate",align)

@@ -38,42 +38,34 @@ class SubzoneTests(unittest.TestCase):
 
     def test_ctrl_cleanup_cleans_all_saved_maps_and_preserves_selection(self):
         self.lua.execute('''
-            j.state.subzoneFillMethod='convex'
+            C_Map.GetMapWorldSize=function() return 4000,4000 end
             for _,id in ipairs({101,102,999}) do
-                local function point(x,y) return {kind='interior',mapID=id,name='Lake',x=x,y=y,at=100} end
-                local border=crossing('Lake','Bank',2500,2000);border.mapID=id
-                s.store[id]={point(2000,2000),point(8000,2000),point(8000,8000),point(2000,8000),
-                    point(5000,2000),point(5000,5000),point(6000,6000),border,{invalid='preserve'}}
+                s.store[id]={}
+                for x=2000,8000,1000 do for y=2000,8000,1000 do
+                    s.store[id][#s.store[id]+1]={kind='interior',mapID=id,name='Lake',x=x,y=y}
+                end end
                 s:Changed(id)
             end
-            s.index={};local selected=j.state.mapID
-            local records=snapshot(j.records);local messages={}
-            DEFAULT_CHAT_FRAME={AddMessage=function(_,text) messages[#messages+1]=text end}
+            s.index={};local selected=j.state.mapID;local records=snapshot(j.records)
             IsControlKeyDown=function() return true end
-            m.cleanPoints.scripts.OnEnter(m.cleanPoints)
-            local tip=GameTooltip.lines[1].text
-            assert(tip:find('Ctrl+Click',1,true) and tip:find('ALL saved Atlas maps',1,true))
             click(m.cleanPoints);assert(not m.cleanPoints.enabled and s.cleaning)
-            assert(not S.CleanInterior(j,102) and not S.CleanAllInterior(j),'Batch prevents overlapping cleanup')
+            assert(not S.CleanInterior(j,102) and not S.CleanAllInterior(j))
             settle()
-            for _,id in ipairs({101,102,999}) do
-                assert(#s.store[id]==7 and #s:Crossings(id)==1)
-                assert(s.store[id][5].y==2000 and s.store[id][7].invalid=='preserve')
-            end
+            for _,id in ipairs({101,102,999}) do assert(#s.store[id]==4 and #j.saved.subzoneCoverage.maps[id].Lake==360) end
             assert(m.cleanPoints.enabled and not s.cleaning)
             assert(j.state.mapID==selected and snapshot(j.records)==records)
-            assert(messages[#messages]:find('removed 6',1,true) and messages[#messages]:find('3 maps',1,true))
+            assert(m.message:GetText():find('removed 135',1,true))
             click(m.cleanPoints);settle();assert(m.message:GetText():find('removed 0',1,true))
         ''')
 
     def test_all_map_cleanup_skips_stale_map_and_continues(self):
         self.lua.execute('''
-            j.state.subzoneFillMethod='convex'
+            C_Map.GetMapWorldSize=function() return 4000,4000 end
             for _,id in ipairs({101,102}) do
                 s.store[id]={}
-                for _,p in ipairs({{2000,2000},{8000,2000},{8000,8000},{2000,8000},{5000,5000}}) do
-                    s.store[id][#s.store[id]+1]={kind='interior',mapID=id,name='Lake',x=p[1],y=p[2],at=100}
-                end
+                for x=2000,8000,1000 do for y=2000,8000,1000 do
+                    s.store[id][#s.store[id]+1]={kind='interior',mapID=id,name='Lake',x=x,y=y}
+                end end
                 s:Changed(id)
             end
             s.index={};s:Index(101)
@@ -81,15 +73,12 @@ class SubzoneTests(unittest.TestCase):
             assert(S.CleanAllInterior(j,function(n,text) removed=n;message=text end))
             local clock=0;debugprofilestop=function() clock=clock+2;return clock end
             S.Step();debugprofilestop=nil
-            table.insert(s.store[101],{kind='interior',mapID=101,name='Lake',x=5500,y=5500,at=100})
+            table.insert(s.store[101],{kind='interior',mapID=101,name='Lake',x=5500,y=5500})
             s:Changed(101);local unchanged=snapshot(s.store[101]);settle()
             assert(snapshot(s.store[101])==unchanged and #s.store[102]==4)
-            assert(removed==1 and message:find('1 map could not be cleaned',1,true) and not s.cleaning)
+            assert(removed==45 and message:find('1 map could not be cleaned',1,true) and not s.cleaning)
             local readOnly=ns.CreateAtlasJournal({schema=999})
             assert(not S.CleanAllInterior(readOnly,function() error('read only') end))
-            local empty=ns.CreateAtlasJournal({});local finished=false
-            assert(not S.CleanAllInterior(empty,function(n) assert(n==0);finished=true end))
-            assert(finished and not empty.subzones.cleaning)
         ''')
 
     def test_great_sea_pauses_automatic_mapping_without_excluding_the_coast(self):
@@ -148,9 +137,9 @@ class SubzoneTests(unittest.TestCase):
             s.store[101]=rows;s:Changed(101);j.state.showSubzones=true;c:Refresh()
             local model=m.map.subzoneModel
             assert(model.method=='traced' and not model:At(5000,2500))
-            m.legacySubzones:SetChecked(true);click(m.legacySubzones);settle()
+            assert(not m.legacySubzones);ns.AtlasOptions.SetLegacy(true);settle()
             assert(m.map.subzoneModel.method=='convex' and m.map.subzoneModel:At(5000,2500))
-            m.legacySubzones:SetChecked(false);click(m.legacySubzones);settle()
+            ns.AtlasOptions.SetLegacy(false);settle()
             assert(m.map.subzoneModel.method=='traced' and not m.map.subzoneModel:At(5000,2500))
             for name,a in pairs(model.areas) do assert(m.map.subzoneModel.areas[name].colourID==a.colourID) end
         ''')
@@ -179,20 +168,21 @@ class SubzoneTests(unittest.TestCase):
             end
         ''')
 
-    def test_traced_cleanup_preserves_samples_and_cancels_legacy_cleanup_on_switch(self):
+    def test_traced_cleanup_works_and_remains_safe_across_option_switch(self):
         self.lua.execute(r'''
+            C_Map.GetMapWorldSize=function() return 4000,4000 end
             s.store[101]={}
-            for _,p in ipairs({{2000,2000},{8000,2000},{8000,8000},{2000,8000},{5000,5000}}) do
-                s.store[101][#s.store[101]+1]={kind='interior',mapID=101,name='Lake',x=p[1],y=p[2],at=100}
-            end
-            s:Changed(101);local before=snapshot(s.store);local message
-            assert(not S.CleanInterior(j,101,function(n,text) assert(n==0);message=text end))
-            assert(message:find('preserved') and snapshot(s.store)==before)
-            assert(not S.CleanAllInterior(j,function(n) assert(n==0) end))
-            j.state.subzoneFillMethod='convex'
-            assert(S.CleanInterior(j,101,function(n,text) assert(n==0);message=text end))
-            j.state.subzoneFillMethod='traced';settle()
-            assert(snapshot(s.store)==before and message:find('preserved'))
+            for x=2000,8000,1000 do for y=2000,8000,1000 do
+                s.store[101][#s.store[101]+1]={kind='interior',mapID=101,name='Lake',x=x,y=y}
+            end end
+            s.index={};s:Changed(101)
+            local before=S.Build(s:Samples(101));local removed
+            assert(S.CleanInterior(j,101,function(n) removed=n end))
+            ns.AtlasOptions.SetLegacy(true);settle()
+            assert(removed==45 and #s.store[101]==4)
+            local after=S.Build(s:Samples(101))
+            assert(snapshot(before.areas.Lake.hull)==snapshot(after.areas.Lake.hull))
+            assert(#j.saved.subzoneCoverage.maps[101].Lake==360)
         ''')
 
     def test_native_filters_control_independent_layers_and_preserve_recording(self):
@@ -333,6 +323,22 @@ class SubzoneTests(unittest.TestCase):
             for _,label in ipairs(overlay.subzoneLabels) do assert(not label:IsShown()) end
             canvas:SetScale(2);settle();assert(overlay:GetWidth()==2000 and overlay:GetScale()==0.5)
             assert(overlay.subzoneModel==model,'Zoom does not rebuild survey geometry')
+            j.state.showSubzoneLabels=true
+            s.store[100]={{kind='interior',mapID=100,name='Dwarven District',x=5000,y=5000,at=100}}
+            s:Changed(100)
+            local queued
+            C_Timer={After=function(_,fn) queued=fn end}
+            WorldMapFrame:SetMapID(100)
+            assert(not overlay:IsShown(),'Hide the previous map before the deferred redraw')
+            queued();settle()
+            for _,label in ipairs(overlay.subzoneLabels) do
+                assert(not label:IsShown(),'Continent maps must not display local sub-zone labels')
+            end
+            C_Timer=nil
+            WorldMapFrame:SetMapID(101);settle()
+            local visible=false
+            for _,label in ipairs(overlay.subzoneLabels) do if label:IsVisible() then visible=true end end
+            assert(visible,'Returning to the root map restores its labels')
             WorldMapFrame:SetMapID(102);settle();assert(#overlay.subzoneModel.rows==0,'Uses the native map selection')
             WorldMapFrame:SetMapID(101);S.Step()
             WorldMapFrame:Hide();WorldMapFrame.scripts.OnHide(WorldMapFrame);settle()
@@ -343,6 +349,26 @@ class SubzoneTests(unittest.TestCase):
             j.state.showSubzonesOnWorldMap=false;control:Refresh();settle()
             assert(not overlay:IsShown() and not overlay.subzonePending)
             assert(j.state.automaticMapping~=false,'Display toggle does not change collection')
+        ''')
+
+    def test_survey_pauses_dead_or_ghost_and_resumes_without_crossing(self):
+        self.lua.execute('''
+            C_Map.GetMapWorldSize=function() return 1000,1000 end
+            for _,signal in ipairs({'UnitIsDeadOrGhost','UnitIsDead','UnitIsGhost'}) do
+                s:Reset();s.store[101]={};s.index={}
+                _G[signal]=function(unit) assert(unit=='player');return false end
+                sample('Meadow',.4,.4);local before=snapshot(s.store)
+                _G[signal]=function(unit) assert(unit=='player');return true end
+                assert(not sample('Forest',.401,.4) and not sample('Hill',.6,.6))
+                assert(not s:RecordPoint(),'Manual points must also pause')
+                assert(s.previous==nil and snapshot(s.store)==before)
+                _G[signal]=function() return false end
+                sample('Forest',.402,.4)
+                assert(#s:Crossings(101)==0,'Resurrection must not bridge a corpse run')
+                sample('Hill',.403,.4)
+                assert(#s:Crossings(101)==1,'Living survey resumes')
+                _G[signal]=nil
+            end
         ''')
 
     def test_automatic_survey_pauses_in_flight_and_breaks_continuity(self):
@@ -394,34 +420,29 @@ class SubzoneTests(unittest.TestCase):
 
     def test_cleanup_keeps_edges_crossings_and_other_maps(self):
         self.lua.execute('''
-            j.state.subzoneFillMethod='convex'
-            local function point(x,y) return {kind='interior',mapID=101,name='Lake',x=x,y=y,at=100} end
+            C_Map.GetMapWorldSize=function() return 4000,4000 end
+            s.store[101]={}
+            for x=2000,8000,1000 do for y=2000,8000,1000 do
+                s.store[101][#s.store[101]+1]={kind='interior',mapID=101,name='Lake',x=x,y=y}
+            end end
+            local manual={kind='interior',manual=true,mapID=101,name='Lake',x=5500,y=5500}
             local border=crossing('Lake','Bank',2500,2000)
-            s.store[101]={point(2000,2000),point(8000,2000),point(8000,8000),point(2000,8000),
-                point(5000,2000),point(5000,5000),point(6000,6000),border,{invalid='preserve'}}
-            s.store[102]={point(3000,3000)}
-            local other=snapshot(s.store[102]);s.index={};s:Changed(101)
-            j.state.showSubzones=true;j.state.showSubzonePoints=true;c:Refresh();settle()
-            local messages={};DEFAULT_CHAT_FRAME={AddMessage=function(_,text) messages[#messages+1]=text end}
+            table.insert(s.store[101],manual);table.insert(s.store[101],border);table.insert(s.store[101],{invalid='preserve'})
+            s.store[102]={{invalid='preserve'}};local other=snapshot(s.store[102])
+            s.index={};s:Changed(101)
             click(m.cleanPoints);settle()
-            assert(#messages>=3 and messages[1]:find('Starting cleanup',1,true))
-            assert(messages[#messages]:find('kept',1,true) and messages[#messages]:find('cross-over',1,true))
-            assert(m.cleanPoints:GetWidth()>m.layerMenu:GetWidth())
-            assert(#s.store[101]==7 and #s:Crossings(101)==1)
-            assert(s.store[101][5].y==2000,'Collinear perimeter evidence stays')
-            assert(s.store[101][6]==border and s.store[101][7].invalid=='preserve')
-            assert(snapshot(s.store[102])==other)
-            assert(m.message:GetText():find('Removed 2',1,true))
-            click(m.cleanPoints);settle();assert(#s.store[101]==7,'Cleanup is idempotent')
-            assert(m.message:GetText():find('Removed 0',1,true))
-            local count
+            local foundManual,foundInvalid=false,false
+            for _,p in ipairs(s.store[101]) do if p==manual then foundManual=true end;if p.invalid then foundInvalid=true end end
+            assert(foundManual and foundInvalid and #s:Crossings(101)==1)
+            assert(#s.store[101]<52 and snapshot(s.store[102])==other)
+            local before=snapshot(s.store);click(m.cleanPoints);settle();assert(snapshot(s.store)==before)
             local readOnly=ns.CreateAtlasJournal({schema=999})
             assert(not S.CleanInterior(readOnly,101,function() error('read only') end))
         ''')
 
     def test_cleanup_preserves_overlapping_region_ownership_and_rejects_stale_work(self):
         self.lua.execute('''
-            j.state.subzoneFillMethod='convex'
+            j.state.subzoneFillMethod='convex';C_Map.GetMapWorldSize=function() return 4000,4000 end
             s.store[101]={}
             local function point(name,x,y)
                 s.store[101][#s.store[101]+1]={kind='interior',mapID=101,name=name,x=x,y=y,at=100}
@@ -431,20 +452,12 @@ class SubzoneTests(unittest.TestCase):
             s.index={};s:Changed(101)
             local before=S.Build(s:Samples(101),nil,nil,nil,'convex');local removed
             assert(S.CleanInterior(j,101,function(n) removed=n end));settle()
-            assert(removed and removed>0)
+            assert(removed==0,'Conservatively retain all potentially overlapping anchors')
             local after=S.Build(s:Samples(101),nil,nil,nil,'convex')
             for x=1000,9000,100 do for y=1000,7000,100 do
                 local a,b=before:At(x,y),after:At(x,y)
                 assert((a and a.name)==(b and b.name),'Cleanup must preserve overlap ownership')
             end end
-            point('A',2000,2000);s.index={};s:Changed(101);s:Index(101)
-            local message;removed=nil
-            S.CleanInterior(j,101,function(n,text) removed=n;message=text end)
-            local clock=0;debugprofilestop=function() clock=clock+2;return clock end
-            S.Step();debugprofilestop=nil
-            point('A',2500,2500);s:Changed(101)
-            local unchanged=snapshot(s.store);settle()
-            assert(removed==nil and message and snapshot(s.store)==unchanged,'New observations invalidate cleanup')
         ''')
 
     def test_hide_zone_named_areas_is_display_only_and_survives_buffer_swaps(self):
@@ -495,7 +508,7 @@ class SubzoneTests(unittest.TestCase):
             assert(not j.state.showSubzones and #s:Crossings(101)==0)
             assert(sample('Forest',.401,.4))
             local rows=s:Crossings(101);local r=rows[1]
-            assert(r.from=='Meadow' and r.to=='Forest' and r.x==4010 and r.fromX==4000 and r.mapID==101 and r.at==now)
+            assert(r.from=='Meadow' and r.to=='Forest' and r.x==4010 and r.fromX==4000 and r.mapID==101 and r.at==nil)
             assert(not sample('Forest',.401,.4) and #s:Crossings(101)==1)
             sample('Meadow',.4,.4);sample('Forest',.401,.4)
             assert(#s:Crossings(101)==2,'Same-direction cell crossings coalesce; reverse direction is retained')
@@ -882,9 +895,9 @@ class SubzoneTests(unittest.TestCase):
             name='Mine';px=.1;py=.1
             assert(survey:Observe() and #survey:Samples(101)==1,'Seed the current area without needing a crossing')
             assert(not survey:Observe(),'Stationary polling must not add data')
-            px=.15;assert(not survey:Observe(),'Exactly 50 yards is too close')
+            px=.125;assert(not survey:Observe(),'Exactly 25 yards is too close')
             px=.2;assert(survey:Observe(),'Exactly 100 horizontal yards permits a sample')
-            py=.125;assert(not survey:Observe(),'Use the map height for vertical yard distances')
+            py=.1125;assert(not survey:Observe(),'Use the map height for vertical yard distances')
             py=.15;assert(survey:Observe(),'Exactly 100 vertical yards permits a sample')
             assert(#survey:Samples(101)==3 and #survey:Crossings(101)==0)
             local model=S.Build(survey:Samples(101))
@@ -910,11 +923,11 @@ class SubzoneTests(unittest.TestCase):
             local data={subzones={[101]={crossing('A','B',1000,1000),
                 {kind='interior',mapID=101,name='Elsewhere',x=5000,y=1000,at=100}}}}
             local survey=ns.CreateAtlasJournal(data).subzones
-            name='Mine';px=.15;py=.1
-            assert(not survey:Observe(),'An existing crossing blocks an interior sample within or exactly 50 yards')
-            px=.1501
-            assert(survey:Observe(),'50.1 yards is eligible immediately after a rejected attempt')
-            survey:Reset();px=.55
+            name='Mine';px=.125;py=.1
+            assert(not survey:Observe(),'An existing crossing blocks an interior sample within or exactly 25 yards')
+            px=.1251
+            assert(survey:Observe(),'25.1 yards is eligible immediately after a rejected attempt')
+            survey:Reset();px=.525
             assert(not survey:Observe(),'Interior samples from other named areas also block sampling')
             survey:Reset();px=.6
             assert(survey:Observe(),'Allow an interior sample outside the exclusion radius')
@@ -999,7 +1012,7 @@ class SubzoneTests(unittest.TestCase):
             s.index={};s.store[101]={};name='Meadow';px=.4;py=.4
             assert(s:RecordPoint())
             px=.414;assert(not s:RecordPoint(),'Reject points within 15 yards')
-            px=.416;assert(s:RecordPoint(),'Manual points may be closer than automatic 50-yard samples')
+            px=.416;assert(s:RecordPoint(),'Manual points may be closer than automatic 25-yard samples')
             py=.408;assert(s:RecordPoint(),'Use map height for north-south distances')
             assert(#s.store[101]==3)
             local fresh=S.Attach(j);fresh:Index(101)

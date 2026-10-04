@@ -499,6 +499,7 @@ function ns.CreateAnnalsBook(j,shell)
         end)
         m.around:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         m.around:SetScript('OnHide',function() if GameTooltip then GameTooltip:Hide() end end)
+        m.footerBackground=U.FooterBackground(m.journey,shell)
         m.slider=CreateFrame('Slider',nil,m.journey,'OptionsSliderTemplate');m.slider:SetPoint('TOPLEFT',355,-618);m.slider:SetSize(545,18)
         m.slider.track=m.slider:CreateTexture(nil,'BACKGROUND')
         m.slider.track:SetPoint('TOPLEFT',2,-4);m.slider.track:SetPoint('BOTTOMRIGHT',-2,4)
@@ -514,20 +515,21 @@ function ns.CreateAnnalsBook(j,shell)
         end)
         m.slider:EnableMouseWheel(true)
         m.slider:SetScript('OnMouseWheel',function(_,delta) c:Seek((c.at or c.last)+(delta>0 and 1 or -1)) end)
-        m.play=U.Button(m.journey,'',350,-671,45,function() c:TogglePlayback() end)
+        m.play=U.Button(m.journey,'',350,-671,24,function() c:TogglePlayback() end)
+        m.play:SetSize(24,24)
         m.play.symbol=m.play:CreateTexture(nil,'OVERLAY');m.play.symbol:SetTexture('Interface\\ChatFrame\\ChatFrameExpandArrow')
         m.play.symbol:SetSize(14,16);m.play.symbol:SetPoint('CENTER',1,0)
         m.play.pauseBars={}
         for i=1,2 do
             local bar=m.play:CreateTexture(nil,'OVERLAY');bar:SetColorTexture(1,0.82,0.14,1)
-            bar:SetSize(4,13);bar:SetPoint('CENTER',i==1 and -4 or 4,0);m.play.pauseBars[i]=bar
+            bar:SetSize(3,10);bar:SetPoint('CENTER',i==1 and -3 or 3,0);m.play.pauseBars[i]=bar
         end
         m.play:SetScript('OnEnter',function(self) if GameTooltip then GameTooltip:SetOwner(self,'ANCHOR_TOP');GameTooltip:SetText(self.tooltipText);GameTooltip:Show() end end)
         m.play:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         c:SyncPlayButton()
         m.speeds={}
         for i,speed in ipairs({1,8,32,64,128,256}) do local rate=speed
-            m.speeds[rate]=U.Button(m.journey,tostring(rate)..'x',400+(i-1)*43,-671,41,function() c:SetPlaybackSpeed(rate) end)
+            m.speeds[rate]=U.Button(m.journey,tostring(rate)..'x',380+(i-1)*47,-671,45,function() c:SetPlaybackSpeed(rate) end)
         end
         m.speeds[1]:SetEnabled(false)
         m.timeZoom=U.MenuButton(m.journey,'Full range',665,-671,115,function()
@@ -623,7 +625,7 @@ function ns.CreateAnnalsBook(j,shell)
             storageElapsed=storageElapsed+elapsed
             if storageElapsed>=30 then storageElapsed=0;c:RefreshStorage() end
         end)
-        m.message=U.Label(m,'',350,-699,558,'GameFontHighlightSmall')
+        m.message=U.Label(m,'',342,-712,580,'GameFontHighlightSmall');m.message:SetWordWrap(false)
         m:SetScript('OnHide',function()
             c:PausePlayback();m.from:ClearFocus();m.to:ClearFocus();m.level:ClearFocus();m.search:ClearFocus()
             c.searchCache={};c.index=nil

@@ -8,6 +8,22 @@ ns.FieldbookBackups=B
 B.roots={"AzerothFieldbookDB","AzerothFieldbookAccountDB","AzerothFieldbookGatheringDB",
     "AzerothFieldbookAtlasDB","AzerothFieldbookAnglingDB","AzerothFieldbookLedgerDB",
     "AzerothFieldbookTreasureDB","AzerothFieldbookLoreDB","AzerothFieldbookAnnalsDB"}
+-- Stage deletion; live observers retain old tables until a fresh namespace.
+function B.StageFullReset()
+    if ns.InitializationBlocked or not ns.HoldForFieldbookRestore then return false end
+    ns.HoldForFieldbookRestore()
+    if type(AzerothFieldbookBackupDB)~="table" then AzerothFieldbookBackupDB={} end
+    AzerothFieldbookBackupDB.fullResetPending=true
+    if ReloadUI then ReloadUI() end
+    return true
+end
+function B.ApplyFullReset()
+    if ns.InitializationBlocked then return false end
+    if type(AzerothFieldbookBackupDB)~="table" or AzerothFieldbookBackupDB.fullResetPending~=true then return false end
+    for _,name in ipairs(B.roots) do _G[name]=nil end
+    AzerothFieldbookBackupDB=nil
+    return true
+end
 local sections={gathering=3,atlas=4,angling=5,ledger=6,treasure=7,lore=8}
 local rootSet={};for _,name in ipairs(B.roots) do rootSet[name]=true end
 local function public(v) return not (issecretvalue and issecretvalue(v)) end
@@ -184,7 +200,7 @@ function B.Capture()
 end
 
 local collections={
-    gathering={"entries"},atlas={"records","expeditions","weather","settings","subzones","loreAliases"},
+    gathering={"entries"},atlas={"records","expeditions","weather","settings","subzones","subzoneCoverage","loreAliases"},
     angling={"waters","spots","pools","items","aggregates","history","sessions","recent","recentOrder","waterKeys",
         "poolKeys","itemKeys","aggregateKeys","reported","claims","reportOrigins","state","merged","hoverKeys","eventLog"},
     ledger={"contacts","state","aliases","reportKeys","references","contactAliases"},

@@ -750,6 +750,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not wasNamed and self:GetCreatureName(id) and restoreObservations then restoreObservations(self, id) end
         return entry, discovered
     end
+    function journal:ExistingUnitEntry(unit)
+        local ok,id=pcall(identify,unit)
+        if ok and number(id) and self.entries[id] then return id end
+    end
     function journal:MatchesModelUnit(unit, id)
         if unit ~= "target" and unit ~= "mouseover" then return false end
         local ok, candidate = pcall(identify, unit)

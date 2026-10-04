@@ -320,7 +320,7 @@ class AtlasUITests(unittest.TestCase):
             assert(j.state.iconSize==6 and m.map.pins[1]:GetWidth()==10)
             assert(c.entries.borderlessPins and m.map.pins[1].icon.texture==A.category.cave.icon)
             assert(m.autoEntrances.point[3]==-91 and m.automaticMapping.point[3]==-119)
-            assert(m.layerMenu.parent==m.map and m.layerMenu.point[1]=="TOPLEFT" and m.layerMenu.point[4]==8 and m.layerMenu.point[5]==-8 and m.cleanPoints.point[2]==754 and m.cleanPoints.point[3]==-60 and m.current.point[2]==342 and m.current.point[3]==-146 and m.zone.point[3]==-174)
+            assert(m.layerMenu.parent==m.map and m.layerMenu.point[1]=="TOPLEFT" and m.layerMenu.point[4]==8 and m.layerMenu.point[5]==-8 and m.cleanPoints.point[2]==754 and m.cleanPoints.point[3]==-60 and m.current==nil and m.zone.point[3]==-174)
             m.layerPanel.IsMouseOver=function() return true end
             m.layerPanel.scripts.OnEvent(m.layerPanel,'GLOBAL_MOUSE_DOWN')
             assert(m.layerPanel:IsShown(),'Clicks inside must keep layer choices open')

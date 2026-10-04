@@ -686,6 +686,48 @@ class TreasureUITests(unittest.TestCase):
             c:ClosePanel();assert(m.list:IsShown())
         ''')
 
+    def test_notes_overlay_animation_switching_reversal_and_restore(self):
+        self.lua.execute("""
+            local e=record();c:Select(e.id)
+            local before=snapshot(j.db)
+            assert(m.notesOverlay.point[3]==-588 and m.details:GetHeight()==80)
+            click(m.expand)
+            m.notesOverlay.scripts.OnUpdate(m.notesOverlay,.09)
+            assert(m.notesOverlay.point[3]>-588 and m.notesOverlay.point[3]<-174)
+            assert(m.notesPaper:IsShown())
+            click(m.expand)
+            m.notesOverlay.scripts.OnUpdate(m.notesOverlay,.18)
+            assert(m.notesOverlay.point[3]==-588 and m.notesPaper:IsShown())
+            click(m.expand);m.notesOverlay.scripts.OnUpdate(m.notesOverlay,.18)
+            assert(m.notesOverlay.point[3]==-174 and m.details:GetHeight()==494)
+            assert(m.notesOverlay.scripts.OnUpdate==nil)
+            for _,key in ipairs({'notes','history','summary'}) do
+                click(m.detailButtons[key])
+                assert(c.state.detail==key and m.notesExpanded and m.notesOverlay.point[3]==-174)
+            end
+            click(m.expand);m.notesOverlay.scripts.OnUpdate(m.notesOverlay,.18)
+            assert(m.notesOverlay.point[3]==-588 and m.details:GetHeight()==80)
+            assert(snapshot(j.db)==before,'overlay navigation must not alter saved evidence')
+        """)
+
+    def test_edit_category_can_reset_to_default(self):
+        self.lua.execute("""
+            local e=record();j:Annotate(e.id,{category='salvage'});c:Select(e.id);c:Notes()
+            local p=c.panels.notes
+            local actions={}
+            function c:Menu(button,build)
+                local root={}
+                function root:CreateButton(label,action) actions[label]=action end
+                function root:CreateDivider() end
+                build(button,root)
+            end
+            click(p.category);assert(actions.Clear);actions.Clear()
+            assert(p.categoryID=='container' and p.category:GetText()=='Container type')
+            assert(j:Get(e.id).category=='salvage','clearing a draft must wait for Save')
+            assert(p.back:GetText()=='Back')
+            c:Manual();assert(c.panels.manual.save:GetText()=='Save' and c.panels.manual.back:GetText()=='Back')
+        """)
+
     def test_editors_and_map_stay_inside_existing_shell_bounds(self):
         self.lua.execute('''
             local e=record();c:Select(e.id);c:Notes();c:Manual();c:Expand();c:RemoveEncounter()

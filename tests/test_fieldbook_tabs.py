@@ -146,13 +146,12 @@ class FieldbookTabsTests(unittest.TestCase):
             end
         ''')
 
-    def test_first_open_title_then_reopen_last_selected_entry(self):
+    def test_first_open_known_target_then_reopen_last_selected_entry(self):
         self.lua.execute('''
             npcID=42;journal:Observe('target')
             shell:Toggle()
             local content=AzerothFieldbookBestiarySection
-            assert(content.title:GetText()=='A field guide of your own')
-            content.rows[1].scripts.OnClick(content.rows[1])
+            assert(content.modelEntryID==42,'First opening should use the known target')
             local title=content.title:GetText()
             assert(title~='A field guide of your own')
             content.manualName:SetText('Keep this draft')

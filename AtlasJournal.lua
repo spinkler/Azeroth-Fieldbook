@@ -192,6 +192,54 @@ function ns.CreateAtlasJournal(saved)
     end
     local j={saved=saved,records=writable and saved.records or {},expeditions=writable and saved.expeditions or {},
         state=writable and saved.settings or {layers={}},readOnly=not writable,revision=0}
+    function j:StorageStatus(checkpoint)
+        if self.readOnly then return 'Archive: read-only','Saved data is unsupported; archive usage is unavailable. Original data is preserved.' end
+        checkpoint=checkpoint or function() end
+        local active={}
+        local function size(value,depth)
+            checkpoint()
+            local kind=type(value)
+            if kind=='string' then return #string.format('%q',value) end
+            if kind=='number' or kind=='boolean' then return #tostring(value) end
+            if kind~='table' or active[value] or depth>64 then return nil end
+            active[value]=true
+            local bytes=3+depth
+            for key,item in pairs(value) do
+                local k,v=size(key,depth+1),size(item,depth+1)
+                if not k or not v then active[value]=nil;return nil end
+                bytes=bytes+depth+1+1+k+4+v+2
+            end
+            active[value]=nil;return bytes
+        end
+        local bytes=size(self.saved,0)
+        if not bytes then return 'Archive: usage unavailable','The Atlas store contains data that cannot be estimated. Original data is preserved.' end
+        local surveys,crossings,pointBytes=0,0,0
+        for _,rows in pairs(self.saved.subzones or {}) do
+            if type(rows)=='table' then for key,row in pairs(rows) do
+                checkpoint()
+                if type(row)=='table' and type(key)=='number' then
+                    if row.kind=='interior' then surveys=surveys+1 else crossings=crossings+1 end
+                    -- Include each sample's array key and formatting at its saved depth.
+                    pointBytes=pointBytes+(size(row,3) or 0)+(size(key,3) or 0)+10
+                end
+            end end
+        end
+        local count=surveys+crossings
+        local coverageCount,coverageBytes=0,0
+        local coverage=self.saved.subzoneCoverage
+        if type(coverage)=='table' and coverage.version==1 and type(coverage.maps)=='table' then
+            coverageBytes=size(coverage,1) or 0
+            for _,map in pairs(coverage.maps) do
+                checkpoint()
+                if type(map)=='table' then for _,packed in pairs(map) do
+                    checkpoint()
+                    if type(packed)=='string' then coverageCount=coverageCount+math.floor(#packed/8) end
+                end end
+            end
+        end
+        return string.format('Archive: ~%.2f MiB',bytes/1048576),
+            string.format('%d estimated saved-data bytes\n%d survey points • %d crossing points\n%d estimated point bytes • %.0f bytes per point on average\n%d compact coverage positions • %d estimated coverage bytes\nIncludes the active Atlas store: discoveries, expeditions, sub-zone samples, coverage, weather, references and settings. Excludes separate backups and inactive character stores. Estimated Lua formatting; actual SavedVariables file size and memory usage differ. Updates while this page is open.',bytes,surveys,crossings,pointBytes,count>0 and pointBytes/count or 0,coverageCount,coverageBytes)
+    end
     function j:ObserveWeather()
         if self.readOnly then return end
         local mapID=A.Read(C_Map and C_Map.GetBestMapForUnit,"player")

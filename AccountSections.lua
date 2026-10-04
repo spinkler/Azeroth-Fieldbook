@@ -105,6 +105,30 @@ local function mergeAtlas(target,source,key)
             if not seen[identity] and #saved<4096 then saved[#saved+1]=copy(p);seen[identity]=true end
         end
     end
+    -- Merge compact survey coverage independently of sample deduplication.
+    local coverage=source.subzoneCoverage
+    local targetCoverage=target.subzoneCoverage
+    if ns.AtlasSubzones and type(coverage)=='table' and coverage.version==1 and type(coverage.maps)=='table'
+        and (targetCoverage==nil or (type(targetCoverage)=='table' and targetCoverage.version==1 and type(targetCoverage.maps)=='table')) then
+        targetCoverage=targetCoverage or {version=1,maps={}};target.subzoneCoverage=targetCoverage
+        for mapID,map in pairs(coverage.maps) do
+            local old=targetCoverage.maps[mapID]
+            if ns.AtlasSubzones.ValidCoverageMap(map) and (old==nil or ns.AtlasSubzones.ValidCoverageMap(old)) then
+                local merged=copy(old or {});local count=0
+                for _,packed in pairs(merged) do count=count+#packed/8 end
+                for name,packed in pairs(map) do
+                    local kept=merged[name] or '';local seen={}
+                    for i=1,#kept,8 do seen[kept:sub(i,i+7)]=true end
+                    for i=1,#packed,8 do
+                        local token=packed:sub(i,i+7)
+                        if not seen[token] and count<ns.AtlasSubzones.MAX_COVERAGE then kept=kept..token;seen[token]=true;count=count+1 end
+                    end
+                    if kept~='' then merged[name]=kept end
+                end
+                if ns.AtlasSubzones.ValidCoverageMap(merged) then targetCoverage.maps[mapID]=merged end
+            end
+        end
+    end
     target.weather=target.weather or {};missing(target.weather,source.weather)
     if ns.AtlasEntrances then ns.AtlasEntrances.MergeStores(target,source,key) end
     for field,value in pairs(source) do if target[field]==nil then target[field]=copy(value) end end
@@ -225,6 +249,9 @@ local function mergeLedger(target,source,key)
     target.contactAliases=target.contactAliases or {}
     for alias,id in pairs(source.contactAliases or {}) do target.contactAliases["char"..key..":"..alias]=ids[id] or id end
     for field,value in pairs(source) do if target[field]==nil then target[field]=copy(value) end end
+    -- A new character import may bring older duplicate taxi contacts even
+    -- when both journals have already completed their own migration.
+    target.transportIdentityMigration=nil
 end
 -- Lore and Treasure preserve individual records, including private annotations.
 -- Reserve dangling links as well as records before assigning import-local IDs.

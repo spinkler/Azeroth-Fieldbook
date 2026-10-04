@@ -50,13 +50,28 @@ local function reportIdentity(report)
     local o=report.identity and report.identity.origin
     if o and L.Text(o.source,160) and L.Text(o.key,700) then return L.Key(o.source,o.key) end
 end
-function L.ReconcileReports(db)
+local function nearbyPosition(a,b)
+    if not L.Position(a) or not L.Position(b) then return false end
+    if a.mapID~=b.mapID or a.zone~=b.zone or a.subzone~=b.subzone or a.precision~=b.precision then return false end
+    local dx,dy=a.x-b.x,a.y-b.y
+    return dx*dx+dy*dy<=25*25
+end
+local function sameTransport(a,b)
+    if not (a.personal and b.personal and a.roles and a.roles.transport and b.roles and b.roles.transport)
+        or not a.npcID or a.npcID~=b.npcID or a.name~=b.name
+        or (L.Name(a.sublabel) and L.Name(b.sublabel) and a.sublabel~=b.sublabel) then return false end
+    for _,p in ipairs(a.sightings or {}) do
+        for _,q in ipairs(b.sightings or {}) do if nearbyPosition(p,q) then return true end end
+    end
+    return false
+end
+function L.ReconcileReports(db,transportOnly)
     if ns.InitializationBlocked or (db.schema or 0)>L.SCHEMA then return end
     local contacts=db.contacts or {};local parent,ids={},{}
     for id in pairs(contacts) do parent[id]=id;ids[#ids+1]=id end;table.sort(ids)
     local function root(id) while parent[id] and parent[id]~=id do id=parent[id] end;return id end
     local origins={}
-    for _,id in ipairs(ids) do for _,report in ipairs(contacts[id].reports or {}) do
+    for _,id in ipairs(ids) do for _,report in ipairs(not transportOnly and contacts[id].reports or {}) do
         local key=reportIdentity(report)
         if key then
             local prior=origins[key]
@@ -67,6 +82,24 @@ function L.ReconcileReports(db)
             else origins[key]=id end
         end
     end end
+    if transportOnly then
+        -- Require agreement with every member, rather than joining distant
+        -- contacts through a chain of intermediate sightings.
+        local groups={}
+        for _,id in ipairs(ids) do
+            local e=contacts[id]
+            if e.personal and e.roles and e.roles.transport then
+                local destination
+                for _,group in ipairs(groups) do
+                    local matches=true
+                    for _,other in ipairs(group) do if not sameTransport(e,contacts[other]) then matches=false;break end end
+                    if matches then destination=group;break end
+                end
+                if destination then parent[id]=destination[1];destination[#destination+1]=id
+                else groups[#groups+1]={id} end
+            end
+        end
+    end
     local function retain(into,e)
         into.migrationEvidence=into.migrationEvidence or {}
         for key,original in pairs(e.migrationEvidence or {}) do
@@ -132,6 +165,10 @@ function ns.CreateLedgerJournal(saved)
     local db=readOnly and {} or saved
     for _,k in ipairs({"contacts","state","aliases","reportKeys","references"}) do if type(db[k])~="table" then db[k]={} end end
     db.schema=L.SCHEMA;db.serial=L.Integer(db.serial,0,999999999) and db.serial or 0
+    if not readOnly and db.transportIdentityMigration~=1 then
+        L.ReconcileReports(db,true)
+        db.transportIdentityMigration=1
+    end
     if not L.Text(db.origin,100) then db.origin=tostring(L.Now())..'-'..math.random(1,999999999) end
     local j={db=db,state=db.state,readOnly=readOnly,revision=0,cache={},sessionGUIDs={}}
     function j:Changed(id)
@@ -176,7 +213,7 @@ function ns.CreateLedgerJournal(saved)
     end
     -- A new session may expose a different spawn GUID for a stationary service.
     -- Only one personal candidate may qualify; never combine saved records here.
-    function j:NearbyContact(v,p)
+    function j:NearbyContact(v,p,roles)
         if not L.Position(p) then return end
         local candidate
         for _,e in pairs(db.contacts) do
@@ -184,7 +221,9 @@ function ns.CreateLedgerJournal(saved)
                 and (not L.Name(v.sublabel) or not L.Name(e.sublabel) or v.sublabel==e.sublabel) then
                 local seen=false
                 for guid in pairs(e.aliases or {}) do if self.sessionGUIDs[guid] then seen=true;break end end
-                if not seen then
+                -- Taxi service identifies a stationary flight master across
+                -- respawns/layer changes even within the current session.
+                if not seen or (roles and roles.transport and e.roles.transport) then
                     for _,old in ipairs(e.sightings) do
                         if old.mapID==p.mapID and old.zone==p.zone and old.subzone==p.subzone
                             and old.precision==p.precision and L.Position(old) then
@@ -208,7 +247,7 @@ function ns.CreateLedgerJournal(saved)
             if not e or (e.npcID and e.npcID~=v.npcID) then return nil,"NPC template does not match the selected contact." end
         end
         local location=L.Location(v.location,near)
-        if not e then e=self:NearbyContact(v,location) end
+        if not e then e=self:NearbyContact(v,location,roles) end
         local newlyAdded=not e
         if not e then
             e=self:New(v.name);if not e then return end

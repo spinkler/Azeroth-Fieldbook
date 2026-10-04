@@ -381,19 +381,19 @@ entry.rumours={{kind='behaviour',value='Summons'}}
 AzerothFieldbookDB.showKillCountTooltips=false
 entry.abilities['Observed trap'].showInTooltip=false
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Behaviour: Flees at low health, Melee, Patrols','behaviour tooltip option defaults on')
+check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Flees at low health, Melee, Patrols','behaviour tooltip option defaults on')
 AzerothFieldbookDB.showBehaviourTooltips=true
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Behaviour: Flees at low health, Melee, Patrols',
+check(#GameTooltip.lines==2 and GameTooltip.lines[2]=='Flees at low health, Melee, Patrols',
     'checked traits display alone on locked entries; dispositions, unchecked marks and rumours stay excluded')
 entry.behaviours.Melee=false;entry.disposition='Neutral'
 GameTooltip.lines={};tooltipHook(GameTooltip)
-check(GameTooltip.lines[2]=='Behaviour: Flees at low health, Patrols','unchecked traits disappear without exposing disposition')
+check(GameTooltip.lines[2]=='Flees at low health, Patrols','unchecked traits disappear without exposing disposition')
 entry.abilities['Observed trap'].showInTooltip=true
 AzerothFieldbookDB.showKillCountTooltips=true
 GameTooltip.lines={};tooltipHook(GameTooltip)
 check(#GameTooltip.lines==4 and GameTooltip.lines[2]=='Observed trap'
-    and GameTooltip.lines[3]=='Behaviour: Flees at low health, Patrols' and GameTooltip.lines[4]=='Kills: 1',
+    and GameTooltip.lines[3]=='Flees at low health, Patrols' and GameTooltip.lines[4]=='Kills: 1',
     'behaviour traits coexist with selected abilities and kill count')
 AzerothFieldbookDB.showBehaviourTooltips=false
 GameTooltip.lines={};tooltipHook(GameTooltip)

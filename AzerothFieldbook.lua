@@ -365,7 +365,7 @@ local function addTooltip(tooltip)
         local behaviours = journal:GetBehaviourTooltips() and journal:TooltipBehaviours(id) or {}
         local showKills=journal:GetKillCountTooltips() and journal.entries[id]~=nil
         if #names == 0 and #behaviours == 0 and not showKills then tooltipStatus = "No selected tooltip facts: review this entry in /fieldbook."; return end
-        tooltip:AddLine("Azeroth Fieldbook - Bestiary", 0.5, 0.82, 1)
+        tooltip:AddLine("AFB: Bestiary", 0.5, 0.82, 1)
         local expanded = readTrue(IsControlKeyDown)
         local hasDetails = false
         for _, name in ipairs(names) do
@@ -382,7 +382,7 @@ local function addTooltip(tooltip)
             tooltip:AddLine("(Ctrl for details)", 0.6, 0.6, 0.6, true)
         end
         if #behaviours>0 then
-            tooltip:AddLine("Behaviour: " .. table.concat(behaviours, ", "),1,1,1,true)
+            tooltip:AddLine(table.concat(behaviours, ", "),0.72,0.80,0.72,true)
         end
         if showKills then
             local _,_,kills=journal:GetKillReward(id)
@@ -470,6 +470,7 @@ local function initializeImpl()
     if not backupStartupChecked then
         backupStartupChecked=true
         if ns.FieldbookBackups then
+            ns.FieldbookBackups.ApplyFullReset()
             local ok,err=ns.FieldbookBackups.ApplyPending()
             if not ok then
                 ns.HoldForFieldbookRestore()

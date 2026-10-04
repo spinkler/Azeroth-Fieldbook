@@ -453,7 +453,7 @@ class LedgerTests(unittest.TestCase):
             local function encounter(book,guid,x,y,title,near)
                 return book:Encounter({guid=guid,npcID=42,name='Stationary service',sublabel=title,
                     location={mapID=101,zone='Town',subzone='Square',x=x,y=y}},
-                    {transport=true},near~=false)
+                    {merchant=true},near~=false)
             end
             local a=encounter(j,'old',7123,7236,'Gryphon Master')
             a.note='Keep my notes';local ref=a.reference
@@ -486,6 +486,64 @@ class LedgerTests(unittest.TestCase):
             j=ns.CreateLedgerJournal(saved);t=ns.CreateLedgerTracking(j);assert(visit()==a)
             local other=visit(42,'DEF');assert(other~=a and other.ambiguous and L.Count(saved.contacts)==2)
             assert(other.name==a.name and other.npcID==a.npcID)
+        ''')
+
+    def test_transport_duplicate_migration_and_changed_spawn(self):
+        self.lua.execute('''
+            local refs,ids={},{}
+            saved.transportIdentityMigration=nil
+            -- Seed the four legacy records without invoking encounter matching.
+            for i=1,4 do
+                local e=j:New('Dungar Longdrink');ids[i]=e.id;refs[i]=e.reference
+                e.personal=true;e.npcID=352;e.roles.transport={at=i}
+                e.sublabel=i==1 and '' or 'Gryphon Master'
+                e.note='Note '..i;e.favourite=i==3;e.first=i;e.last=i+10
+                e.sightings={{mapID=1453,zone='Stormwind City',subzone='Trade District',
+                    x=7120+i*3,y=7236,precision='player',first=i,last=i+10}}
+                j:Bind(e,'legacy'..i)
+            end
+            local messages=0
+            local book=ns.CreateLedgerJournal(saved)
+            book.onContactDiscovered=function() messages=messages+1 end
+            assert(L.Count(saved.contacts)==1)
+            local e=one(saved.contacts)
+            assert(e.favourite and e.first==1 and e.last==14 and #e.sightings==4)
+            assert(L.Count(e.migrationEvidence)==4)
+            for i=1,4 do
+                assert(book:Get(ids[i])==e and book:Reference(refs[i])==e)
+                assert(book:Get(saved.aliases['legacy'..i])==e)
+                assert(e.note:find('Note '..i,1,true))
+            end
+            local before=snapshot(saved)
+            local reconcile=L.ReconcileReports
+            L.ReconcileReports=function() error('Completed migration must not run again') end
+            book=ns.CreateLedgerJournal(saved);assert(snapshot(saved)==before,'Migration is idempotent')
+            L.ReconcileReports=reconcile
+            book.onContactDiscovered=function() messages=messages+1 end
+            for i=1,3 do
+                assert(book:Encounter({guid='new'..i,npcID=352,name=e.name,sublabel='Gryphon Master',
+                    location={mapID=1453,zone='Stormwind City',subzone='Trade District',x=7132,y=7243}},
+                    {transport=true},true)==e)
+            end
+            assert(messages==0 and L.Count(saved.contacts)==1)
+        ''')
+
+    def test_transport_migration_keeps_unproven_contacts_separate(self):
+        self.lua.execute('''
+            saved.transportIdentityMigration=nil
+            for i=1,5 do
+                local e=j:New('Service');e.npcID=352;e.personal=true
+                e.roles.transport={at=1};e.sublabel='Gryphon Master'
+                e.sightings={{mapID=1453,zone='Stormwind City',subzone='Trade District',
+                    x=7100,y=7200,precision='player'}}
+                if i==2 then e.sightings[1].x=7500 end
+                if i==3 then e.sightings={} end
+                if i==4 then e.personal=nil end
+                if i==5 then e.sublabel='Different service' end
+            end
+            ns.CreateLedgerJournal(saved);assert(L.Count(saved.contacts)==5)
+            saved.schema=999;local before=snapshot(saved)
+            ns.CreateLedgerJournal(saved);assert(snapshot(saved)==before)
         ''')
 
     def test_delayed_metadata_and_target_change_retain_original_context(self):

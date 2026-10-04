@@ -34,6 +34,35 @@ function ns.CreateAnglingBook(journal,tracking,shell)
     local c={journal=journal,tracking=tracking,shell=shell,panels={}}
     local state=journal.state
     state.view=(state.view=="pools" or state.view=="catches") and state.view or "waters"
+    function c:LayoutDetails(progress)
+        local m=self.main
+        m.notesProgress=progress
+        m.notesOverlay:ClearAllPoints();m.notesOverlay:SetPoint("TOPLEFT",342,-588+414*progress)
+        m.notesOverlay:SetHeight(113+414*progress)
+        m.details:SetHeight(61+414*progress)
+        m.detailBody:SetHeight(math.max(m.details:GetHeight(),m.details.text:GetStringHeight()+12))
+        m.details:UpdateScrollChildRect();m.details:RefreshScrollBar()
+        m.notesOverlay:EnableMouse(progress>0)
+    end
+    function c:Expand()
+        local m=self.main
+        m.notesExpanded=not m.notesExpanded
+        local from=m.notesProgress or 0
+        local target=m.notesExpanded and 1 or 0
+        for row,stroke in ipairs(m.notesArrow) do
+            stroke:ClearAllPoints();stroke:SetPoint("CENTER",0,m.notesExpanded and 3-row or row-3)
+        end
+        local elapsed=0
+        m.notesOverlay:SetScript("OnUpdate",function(frame,delta)
+            elapsed=math.min(0.18,elapsed+delta)
+            local t=elapsed/0.18;local eased=1-(1-t)^3
+            c:LayoutDetails(from+(target-from)*eased)
+            if t>=1 then
+                frame:SetScript("OnUpdate",nil)
+                m.details:SetVerticalScroll(math.min(m.details:GetVerticalScroll(),math.max(0,m.detailBody:GetHeight()-m.details:GetHeight())))
+            end
+        end)
+    end
     function c:State() return journal:View(state.view) end
     function c:SelectedEntry()
         local e=journal:Get(self:State().selected)
@@ -200,6 +229,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         m.zone:SetText(A.Safe(s.mapZone or "Choose zone"));m.session:SetText(A.Safe(tracking:SessionText()))
         m.heading:SetText(e and A.Safe(e.name) or "Your fishing field notes")
         m.details:SetText(table.concat(self:Details(e),"\n"))
+        self:LayoutDetails(m.notesProgress or 0)
         for _,b in ipairs(m.entryButtons) do b:SetEnabled(e~=nil) end
         m.deleteButton:SetEnabled(e~=nil and not e.removed and not journal.readOnly)
         m.merge:SetShown(state.view=="waters")
@@ -444,8 +474,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             local ids={c:State().mapID};for _,water in pairs(journal.db.waters) do if water.mapID then ids[#ids+1]=water.mapID end end;return ids
         end,function(id,name)
             local s=c:State();s.mapID,s.mapZone=id,name;m.map:Invalidate();c:Refresh()
-        end)
-        m.current=U.Button(m,"Current Zone",342,-146,128,function()
+        end,function()
             local p=A.Location(A.CurrentLocation());local s=c:State();s.mapID,s.mapZone=p.mapID,p.zone;m.map:Invalidate();c:Refresh()
         end)
         m.session=U.ReadArea(m,480,-125,442,41)
@@ -461,16 +490,44 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         -- Exactly AtlasBook's parent-relative anchor and footer geometry. The
         -- renderer uses 578*.99 by 302*1.25*.99, aspect fits and crops edge tiles.
         m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
-        m.heading=U.Label(m,"",342,-587,580,"GameFontNormalSmall");m.heading:SetWordWrap(false)
+        m.notesOverlay=CreateFrame("Frame",nil,m)
+        m.notesOverlay:SetSize(580,113);m.notesOverlay:SetFrameLevel(m:GetFrameLevel()+30)
+        m.notesPaper=m.notesOverlay:CreateTexture(nil,"BACKGROUND")
+        m.notesPaper:SetPoint("TOPLEFT",m.notesOverlay,"TOPLEFT",-10,4)
+        m.notesPaper:SetPoint("BOTTOMRIGHT",m.notesOverlay,"BOTTOMRIGHT",10,-6)
+        m.notesPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga");m.notesPaper:SetDesaturated(true)
+        shell:AddBackgroundLayer(m.notesPaper,0.17,0.17,0.17,true)
+        for _,edge in ipairs({{"TOPLEFT","TOPRIGHT",true},{"BOTTOMLEFT","BOTTOMRIGHT",true},{"TOPLEFT","BOTTOMLEFT",false},{"TOPRIGHT","BOTTOMRIGHT",false}}) do
+            local border=m.notesOverlay:CreateTexture(nil,"OVERLAY")
+            border:SetColorTexture(0.45,0.30,0.13,1)
+            border:SetPoint(edge[1],m.notesPaper,edge[1]);border:SetPoint(edge[2],m.notesPaper,edge[2])
+            if edge[3] then border:SetHeight(1) else border:SetWidth(1) end
+        end
+        m.heading=U.Label(m.notesOverlay,"",0,-33,580,"GameFontNormalSmall");m.heading:SetWordWrap(false)
         m.heading:SetShadowColor(0,0,0,0.85);m.heading:SetShadowOffset(1,-1)
-        m.details=U.ReadArea(m,342,-606,555,64)
+        m.details,m.detailBody=U.ReadArea(m.notesOverlay,0,-52,555,61)
         m.details:HookScript("OnVerticalScroll",function(self,value) c:State().detailScroll=value or self:GetVerticalScroll() end)
-        m.locations=U.Button(m,"Sources / spots",342,-680,126,function() c:OpenLinks("locations") end)
-        m.catches=U.Button(m,"Catches",474,-680,88,function() c:OpenLinks("items") end)
-        m.notes=U.Button(m,"Notes / edit",568,-680,106,function() c:OpenForm("edit",c:State().selected) end)
-        m.favourite=U.Button(m,"Favourite",680,-680,106,function()
+        m.locations=U.Button(m.notesOverlay,"Sources / spots",0,0,126,function() c:OpenLinks("locations") end)
+        m.catches=U.Button(m.notesOverlay,"Catches",132,0,88,function() c:OpenLinks("items") end)
+        m.notes=U.Button(m.notesOverlay,"Notes / edit",226,0,106,function() c:OpenForm("edit",c:State().selected) end)
+        m.favourite=U.Button(m.notesOverlay,"Favourite",338,0,106,function()
             local e=journal:Get(c:State().selected);if e then journal:Edit(e.id,e.name,e.note,not e.favourite);c:Refresh() end
         end)
+        m.expand=U.Button(m.notesOverlay,"",450,0,22,function() c:Expand() end);m.expand:SetSize(22,22)
+        m.expand:ClearAllPoints();m.expand:SetPoint("TOPRIGHT",m.notesPaper,"TOPRIGHT",-4,-4)
+        m.notesArrow={}
+        for row=0,4 do
+            local stroke=m.expand:CreateTexture(nil,"OVERLAY")
+            stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,row-2);stroke:SetColorTexture(1,0.82,0.14,1)
+            m.notesArrow[#m.notesArrow+1]=stroke
+        end
+        m.expand:SetScript("OnEnter",function(self)
+            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(m.notesExpanded and "Collapse notes" or "Expand notes");GameTooltip:Show() end
+        end)
+        m.expand:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        U.AlignFooterScrollBar(m.details,m.notesPaper,m.expand)
+        U.FooterFades(m.details,shell,56)
+        c:LayoutDetails(0)
         m.merge=U.Button(m,"Merge spot",42,-574,118,function()
             local e=c:SelectedEntry()
             if state.view=="waters" and e and e.kind=="spot" and not e.removed and not journal.readOnly then c:OpenLinks("merge") end
@@ -488,6 +545,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         c.eventLog=ns.CreateAnglingEventLog(journal,shell)
         shell:SetSectionPages("angling",{eventLog=c.eventLog})
         content:SetScript("OnHide",function()
+            m.notesOverlay:SetScript("OnUpdate",nil);c:LayoutDetails(m.notesExpanded and 1 or 0)
             c:State().detailScroll=m.details:GetVerticalScroll();m.map:SuspendPlayer();m.search:ClearFocus()
             for _,p in pairs(c.panels) do for _,input in ipairs(p.inputs or {}) do input:ClearFocus() end end
             if GameTooltip then GameTooltip:Hide() end

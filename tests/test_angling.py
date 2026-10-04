@@ -692,6 +692,24 @@ class AnglingUITests(unittest.TestCase):
         end
     ''')
 
+    def test_information_overlay_animates_reverses_and_preserves_actions(self):
+        self.lua.execute("""
+            assert(m.locations.point[3]==0 and m.heading.point[3]==-33)
+            assert(m.notesOverlay.point[3]==-588 and m.details:GetHeight()==61)
+            c:Expand();m.notesOverlay.scripts.OnUpdate(m.notesOverlay,.09)
+            assert(m.notesOverlay.point[3]>-588 and m.notesOverlay.point[3]<-174)
+            c:Expand();m.notesOverlay.scripts.OnUpdate(m.notesOverlay,.18)
+            assert(m.notesOverlay.point[3]==-588 and m.notesPaper:IsShown())
+            c:Expand();m.notesOverlay.scripts.OnUpdate(m.notesOverlay,.18)
+            assert(m.notesOverlay.point[3]==-174 and m.details:GetHeight()==475)
+            c:SetView('pools');c:SetView('catches');c:SetView('waters')
+            assert(m.notesExpanded and m.notesOverlay.point[3]==-174)
+            assert(m.detailBody:GetHeight()>=m.details:GetHeight())
+            c:Expand();m.notesOverlay.scripts.OnUpdate(m.notesOverlay,.18)
+            assert(m.notesOverlay.point[3]==-588 and m.details:GetHeight()==61)
+            assert(m.notesOverlay.scripts.OnUpdate==nil and m.notesPaper:IsShown())
+        """)
+
     def test_scrolling_index_and_context_actions(self):
         self.lua.execute("""
             for i=1,40 do spot(string.format('Spot %02d',i)) end
@@ -1051,7 +1069,7 @@ class AnglingUITests(unittest.TestCase):
             assert(m.session:GetHeight()==41 and m.session.text:GetStringHeight()>41)
             assert(m.session.point[2]==480 and m.session.point[3]==-125)
             assert(m.assign.point[3]==-91 and m.map.point[5]==-205)
-            assert(m.current.point[2]==342 and m.current.point[3]==-146)
+            assert(m.current==nil)
         ''')
 
     def test_private_note_opt_in_is_scoped_to_the_selected_record(self):

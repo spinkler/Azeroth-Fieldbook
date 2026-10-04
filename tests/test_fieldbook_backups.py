@@ -35,6 +35,7 @@ SUPPORT = r'''
         }
     end
     function populate(j,tag)
+        j.atlas.saved.subzoneCoverage={version=1,maps={[1]={Coast='1388138817701770'}}}
         local e=j.bestiary:Ensure(42,false,'Forest Lurker',{level=9})
         assert(j.bestiary:SetCreatureNotes(42,tag..' private Bestiary notes'))
         assert(j.bestiary:AddManual(42,'Poison','private observation',123,{Poison=true}))
@@ -93,6 +94,28 @@ def reload_client(lua, initialize=True):
 
 
 class WholeFieldbookBackupTests(unittest.TestCase):
+    def test_full_reset_waits_for_reload_and_clears_all_accessible_stores(self):
+        lua=client(account=True)
+        lua.execute("""
+            for _,name in ipairs(B.roots) do _G[name].resetSentinel='private old data' end
+            AzerothFieldbookBackupDB={resetSentinel='old backup data'}
+            local originals={};for _,name in ipairs(B.roots) do originals[name]=_G[name] end
+            local reloads=0;function ReloadUI() reloads=reloads+1 end
+            assert(B.StageFullReset() and reloads==1 and ns.InitializationBlocked)
+            for _,name in ipairs(B.roots) do assert(_G[name]==originals[name] and _G[name].resetSentinel) end
+            assert(AzerothFieldbookBackupDB.resetSentinel and AzerothFieldbookBackupDB.fullResetPending)
+            assert(not B.ApplyFullReset(),'never delete from the blocked live namespace')
+            mainEvent(main,'ADDON_LOADED','AzerothFieldbook')
+            assert(AzerothFieldbookDB.resetSentinel)
+        """)
+        fresh=reload_client(lua)
+        fresh.execute("""
+            for _,name in ipairs(B.roots) do assert(not _G[name] or not _G[name].resetSentinel,name) end
+            assert(not AzerothFieldbookBackupDB or (not AzerothFieldbookBackupDB.resetSentinel and not AzerothFieldbookBackupDB.fullResetPending))
+            assert(not B.ApplyFullReset(),'reset is one-shot')
+        """)
+
+
     def populated(self):
         lua=client()
         lua.execute("localJ=journals(false);populate(localJ,'Local');AzerothFieldbookDB.accountWideTracking=true")

@@ -4,6 +4,55 @@ from ui_test_harness import new_ui_client
 
 
 class BestiaryModelTests(unittest.TestCase):
+    def test_index_letters_scroll_without_filtering(self):
+        lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
+            'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
+            'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
+        lua.execute("""
+            j=ns.CreateBestiaryJournal({},function() return npcID end)
+            function UnitName(unit) return string.format('%s %02d',npcID<=20 and 'Alpha' or 'Beta',npcID) end
+            for i=1,40 do npcID=i;j:Observe('target') end
+            controller=ns.CreateBestiaryBook(j);controller:Toggle()
+            local section=AzerothFieldbookBestiarySection
+            section.letterButtons[2].scripts.OnClick()
+            assert(section.rows[1].id==21)
+            assert(section.creatureScrollBar:GetValue()==20)
+            section.creatureScrollBar.scripts.OnValueChanged(section.creatureScrollBar,0)
+            assert(section.rows[1].id==1,'earlier letters must remain in the list')
+            section.letterButtons[2].scripts.OnClick()
+            assert(section.rows[1].id==21,'repeat clicks jump again instead of clearing a filter')
+            section.indexButton.scripts.OnClick()
+            section.creatureScrollBar.scripts.OnValueChanged(section.creatureScrollBar,10)
+            assert(section.rows[10].id==20 and section.rows[11].id==21)
+            assert(section.rows[11].groupDivider[1]:IsShown())
+            assert(not section.rows[10].groupDivider[1]:IsShown())
+            section.indexButton.scripts.OnClick()
+            section.creatureScrollBar.scripts.OnValueChanged(section.creatureScrollBar,10)
+            assert(section.rows[11].groupDivider[1]:IsShown(),'group dividers remain when Index is closed')
+            assert(not section.rows[10].groupDivider[1]:IsShown())
+        """)
+
+    def test_reopening_prefers_previous_then_known_target_without_creating_entries(self):
+        lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
+            'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
+            'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
+        lua.execute("""
+            j=ns.CreateBestiaryJournal({},function() return npcID end)
+            npcID=41;j:Observe('target');npcID=42;j:Observe('target')
+            controller=ns.CreateBestiaryBook(j)
+            npcID=nil;controller:Toggle()
+            local section=AzerothFieldbookBestiarySection
+            assert(section.modelEntryID==nil)
+            controller:Toggle();npcID=999;controller:Toggle()
+            assert(section.modelEntryID==nil and j.entries[999]==nil)
+            controller:Toggle();npcID=41;controller:Toggle()
+            assert(section.modelEntryID==41)
+            controller:Toggle();npcID=42;controller:Toggle()
+            assert(section.modelEntryID==41,'previous selection must beat the target')
+            controller:Toggle();npcID=nil;controller:Toggle()
+            assert(section.modelEntryID==41)
+        """)
+
     def test_loading_retries_selection_and_encounter_gate(self):
         lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
             'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',

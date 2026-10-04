@@ -86,15 +86,29 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         detail=detail or state.detail
         if detail=="services" then
             local lines={}
-            if e.note~="" then lines[#lines+1]=e.note end
+            local roles=journal:Roles(e)
+            for _,group in ipairs({{"personal","Auto-recorded services"},{"manual","Your service labels"},{"reported","Reported services"}}) do
+                local names={}
+                for _,role in ipairs(L.roleOrder) do if roles[role]==group[1] then names[#names+1]=L.roles[role] end end
+                if #names>0 then lines[#lines+1]=group[2]..": "..table.concat(names,", ") end
+            end
+            if e.note~="" then lines[#lines+1]="Personal notes: "..e.note end
             local retained=journal:ImportedNotes(e);if retained~="" then lines[#lines+1]=retained end
             if e.migrationIssue then lines[#lines+1]=e.migrationIssue end
-            local roles=journal:RoleText(e);if roles~="" then lines[#lines+1]=roles end
-            for speciality,o in pairs(e.specialities) do lines[#lines+1]="Speciality: "..speciality.." ("..o.method..")" end
+            for speciality,o in pairs(e.specialities) do
+                lines[#lines+1]=(o.method=="recorded" and "Your speciality label: " or "Auto-recorded speciality: ")..speciality
+            end
             if e.ambiguous then lines[#lines+1]="Identity unresolved: another contact shares this NPC template. Use Link identity after reviewing both records." end
             for _,report in ipairs(e.reports) do
                 lines[#lines+1]="Report from "..report.identity.origin.source..", observed "..date(report.identity.origin.at)..", received "..date(report.received)
                 if report.notes then lines[#lines+1]="Reported note: "..report.notes end
+            end
+            if rich then
+                for i,line in ipairs(lines) do
+                    line=L.Safe(line)
+                    local label,value=line:match("^([^:\n]+:)(.*)$")
+                    lines[i]=label and ("|cff80d0ff"..label.."|r"..value) or line
+                end
             end
             return table.concat(lines,'\n')
         end
@@ -406,6 +420,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         if self.panel and self.panel==self.panels.notes then self:ClosePanel();return end
         local e=journal:Get(state.selected);if not e then return end
         local p=self:Panel("notes","Personal / access notes")
+        p.back:SetText("Back")
         if not p.edit then
             p.edit,p.scroll=U.TextArea(p,9,-32,217,322,4000);p.inputs={p.edit}
             U.Label(p,"Manual service / speciality",4,-375,240,"GameFontNormalSmall")
@@ -426,7 +441,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             end)
             p.speciality=U.Edit(p,10,-438,230,160);p.inputs[#p.inputs+1]=p.speciality
             U.Label(p,"Optional speciality; explicitly your annotation.",4,-466,245,"GameFontDisableSmall")
-            U.Button(p,"Save notes / annotation",4,-514,250,function()
+            U.Button(p,"Save",4,-514,250,function()
                 local ok,err=journal:Annotate(p.contact,p.edit:GetText(),p.roles,p.speciality:GetText())
                 c:Message(ok and "Personal notes saved." or err);if ok then c:ClosePanel() end
             end)
@@ -604,8 +619,47 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             p.data:SetText("");p.preview:SetText("Notes are excluded by default. Current item/lesson search limits prepared offerings. Report sources are claims, not authentication.",true)
         end
     end
-    function c:RefreshPortrait(e)
-        local m=self.main;local token,guid
+    local function createPortrait(host,parent,x,y,scale)
+        host.portraitFrame=CreateFrame("Frame",nil,parent)
+        host.portraitFrame:SetScale(scale);host.portraitFrame:SetSize(42,42)
+        host.portraitFrame:SetPoint("TOPLEFT",x/scale,y/scale)
+        host.portrait=host.portraitFrame:CreateTexture(nil,"ARTWORK")
+        host.portrait:SetPoint("CENTER");host.portrait:SetSize(38,38)
+        if type(host.portraitFrame.CreateMaskTexture)=="function" and type(host.portrait.AddMaskTexture)=="function" then
+            local mask=host.portraitFrame:CreateMaskTexture()
+            if mask then
+                mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
+                mask:SetAllPoints(host.portrait);host.portrait:AddMaskTexture(mask);host.portraitMask=mask
+            end
+        end
+        local function portraitCircle(size,r,g,b,layer)
+            local texture=host.portraitFrame:CreateTexture(nil,"BACKGROUND",nil,layer)
+            texture:SetSize(size,size);texture:SetPoint("CENTER");texture:SetColorTexture(r,g,b,1)
+            local mask=host.portraitFrame:CreateMaskTexture()
+            mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
+            mask:SetAllPoints(texture);texture:AddMaskTexture(mask)
+            return texture
+        end
+        -- Low-opacity concentric layers soften the shadow below the portrait.
+        host.portraitShadow={}
+        for i,spec in ipairs({{51,0.04},{48,0.07},{45,0.13}}) do
+            local shadow=portraitCircle(spec[1],0,0,0,-6+i)
+            shadow:ClearAllPoints();shadow:SetPoint("CENTER",host.portraitFrame,"CENTER",1,-2)
+            shadow:SetAlpha(spec[2]);host.portraitShadow[i]=shadow
+        end
+        host.portraitRim=portraitCircle(45,0.20,0.12,0.055,-2)
+        host.portraitRing=portraitCircle(43,0.67,0.43,0.19,-1)
+        host.portraitBacking=portraitCircle(38,0.035,0.025,0.015,0)
+        host.portraitUnknown=U.Label(host.portraitFrame,"?",0,-7,42,"GameFontNormalLarge")
+        host.portraitUnknown:SetJustifyH("CENTER")
+        -- Resolve an offline NPC's display ID without displaying a 3D widget.
+        host.portraitResolver=CreateFrame("PlayerModel",nil,parent)
+        host.portraitResolver:SetSize(1,1);host.portraitResolver:SetPoint("TOPLEFT");host.portraitResolver:SetAlpha(0)
+        host.portraitResolver:EnableMouse(false)
+        host.portraitResolver:SetScript("OnModelLoaded",function() c:ResolvePortrait(host) end)
+    end
+    function c:RefreshPortrait(e,host)
+        local m=host or self.main;local token,guid
         if e then for _,unit in ipairs({"npc","target","mouseover"}) do
             local candidate=L.Read(UnitGUID,unit)
             if L.Text(candidate,160) and e.aliases[candidate] then token,guid=unit,candidate;break end
@@ -621,11 +675,11 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         if e and L.Integer(e.npcID,1,10000000) then
             m.portraitResolver.key=key
             pcall(m.portraitResolver.SetCreature,m.portraitResolver,e.npcID)
-            self:ResolvePortrait()
+            self:ResolvePortrait(m)
         end
     end
-    function c:ResolvePortrait()
-        local m=self.main;local resolver=m.portraitResolver
+    function c:ResolvePortrait(host)
+        local m=host or self.main;local resolver=m.portraitResolver
         if not resolver.key or resolver.key~=m.portraitKey then return end
         local displayID=L.Read(resolver.GetDisplayInfo,resolver)
         if L.Integer(displayID,1,2147483647) and type(SetPortraitTextureFromCreatureDisplayID)=="function" then
@@ -661,16 +715,17 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                 local e=found.contact;local p=journal:Index(e).locations[1];row.id=e.id;row.match=found.match
                 row.name:SetText((e.favourite and U.SavedIcon(true) or "")..L.Safe(e.name))
                 local sublabel=journal:Sublabel(e);local lineOffset=sublabel=="" and 14 or 0
+                row.portraitFrame:ClearAllPoints();row.portraitFrame:SetPoint("TOPLEFT",9/0.7,(-37+lineOffset)/0.7)
                 row.sublabel:SetText(L.Safe(sublabel));row.sublabel:SetShown(sublabel~="")
                 row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-rowTop);row:SetSize(228,76-lineOffset)
                 rowTop=rowTop+77-lineOffset
                 for key,y in pairs({zone=-33,roles=-45,reason=-57}) do
-                    row[key]:ClearAllPoints();row[key]:SetPoint("TOPLEFT",7,y+lineOffset)
+                    row[key]:ClearAllPoints();row[key]:SetPoint("TOPLEFT",45,y+lineOffset)
                 end
                 row.zone:SetText(L.Safe((p and p.zone or "Unknown zone")..(p and p.subzone~="" and " / "..p.subzone or "")))
                 row.roles:SetText(L.Safe(journal:RoleText(e)))
                 row.reason:SetText(found.match and L.Safe((found.match.reported and "Report: " or "Offers: ")..found.match.name) or (e.personal and "Personally encountered" or e.recorded and "Manually recorded" or "Reported only"))
-                row:SetSelected(e.id==state.selected);row:Show()
+                row:SetSelected(e.id==state.selected);row:Show();self:RefreshPortrait(e,row)
             end
         end
         m.filters:SetSelected(next(state.roles)~=nil or state.currentZone==true or state.zone~=nil or state.subzone~=nil
@@ -733,7 +788,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             end
         end
         self:UpdateDetailToggles()
-        m.details:SetText(self:Details(e,false,"services"));m.map:Render()
+        m.details:SetText(self:Details(e,false,"services"));m.details.text:SetText(self:Details(e,true,"services"));m.map:Render()
         if self.panel==self.panels.catalogue and self.panel then self.panel.read:SetContact(e,false,self.panel.kind) end
     end
     local function build(content)
@@ -813,57 +868,23 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*77);row:SetSize(228,76)
             ns.FieldbookUI.StyleMenuRow(row)
             row.divider=ns.FieldbookUI.EntryDivider(row,1)
+            createPortrait(row,row,9,-23,0.7)
             row.name=U.Label(row,"",7,-5,214,"GameFontNormalSmall")
             local namePath,nameSize,nameFlags=row.name:GetFont()
             if namePath and type(nameSize)=="number" then row.name:SetFont(namePath,nameSize+4,nameFlags) end
             row.sublabel=U.Label(row,"",7,-21,214,"GameFontHighlightSmall")
             local tagPath,tagSize,tagFlags=row.sublabel:GetFont()
             if tagPath and type(tagSize)=="number" then row.sublabel:SetFont(tagPath,tagSize+1,tagFlags) end
-            row.zone=U.Label(row,"",7,-33,214,"GameFontDisableSmall")
-            row.roles=U.Label(row,"",7,-45,214,"GameFontHighlightSmall")
-            row.reason=U.Label(row,"",7,-57,214,"GameFontDisableSmall")
+            row.zone=U.Label(row,"",45,-33,176,"GameFontDisableSmall")
+            row.roles=U.Label(row,"",45,-45,176,"GameFontHighlightSmall")
+            row.reason=U.Label(row,"",45,-57,176,"GameFontDisableSmall")
             for _,k in ipairs({"name","sublabel","zone","roles","reason"}) do row[k]:SetWordWrap(false) end
             row:SetScript("OnClick",function(self) c:Select(self.id,self.match) end);m.rows[i]=row
         end
         m.empty=U.Label(d,"",49,-197,235,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(5)
         m.manual=U.Button(d,"Record contact",174,-638,118,function() c:Manual() end)
         m.remove=U.Button(d,"Delete",174,-672,118,function() c:RemoveContact() end)
-        m.portraitFrame=CreateFrame("Frame",nil,m)
-        m.portraitFrame:SetPoint("TOPLEFT",342,-60);m.portraitFrame:SetSize(42,42)
-        m.portrait=m.portraitFrame:CreateTexture(nil,"ARTWORK")
-        m.portrait:SetPoint("CENTER");m.portrait:SetSize(38,38)
-        if type(m.portraitFrame.CreateMaskTexture)=="function" and type(m.portrait.AddMaskTexture)=="function" then
-            local mask=m.portraitFrame:CreateMaskTexture()
-            if mask then
-                mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
-                mask:SetAllPoints(m.portrait);m.portrait:AddMaskTexture(mask);m.portraitMask=mask
-            end
-        end
-        local function portraitCircle(size,r,g,b,layer)
-            local texture=m.portraitFrame:CreateTexture(nil,"BACKGROUND",nil,layer)
-            texture:SetSize(size,size);texture:SetPoint("CENTER");texture:SetColorTexture(r,g,b,1)
-            local mask=m.portraitFrame:CreateMaskTexture()
-            mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
-            mask:SetAllPoints(texture);texture:AddMaskTexture(mask)
-            return texture
-        end
-        -- Low-opacity concentric layers soften the shadow below the portrait.
-        m.portraitShadow={}
-        for i,spec in ipairs({{51,0.04},{48,0.07},{45,0.13}}) do
-            local shadow=portraitCircle(spec[1],0,0,0,-6+i)
-            shadow:ClearAllPoints();shadow:SetPoint("CENTER",m.portraitFrame,"CENTER",1,-2)
-            shadow:SetAlpha(spec[2]);m.portraitShadow[i]=shadow
-        end
-        m.portraitRim=portraitCircle(45,0.20,0.12,0.055,-2)
-        m.portraitRing=portraitCircle(43,0.67,0.43,0.19,-1)
-        m.portraitBacking=portraitCircle(38,0.035,0.025,0.015,0)
-        m.portraitUnknown=U.Label(m.portraitFrame,"?",0,-7,42,"GameFontNormalLarge")
-        m.portraitUnknown:SetJustifyH("CENTER")
-        -- Resolve an offline NPC's display ID without displaying a 3D widget.
-        m.portraitResolver=CreateFrame("PlayerModel",nil,m)
-        m.portraitResolver:SetSize(1,1);m.portraitResolver:SetPoint("TOPLEFT");m.portraitResolver:SetAlpha(0)
-        m.portraitResolver:EnableMouse(false)
-        m.portraitResolver:SetScript("OnModelLoaded",function() c:ResolvePortrait() end)
+        createPortrait(m,m,342,-60,1)
         m.name=U.Label(m,"",392,-60,376,"GameFontNormalLarge");m.name:SetWordWrap(false)
         m.name:SetShadowColor(0,0,0,0.85);m.name:SetShadowOffset(1,-1)
         local titlePath,titleSize,titleFlags=m.name:GetFont()
@@ -907,7 +928,12 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             U.StyleSelection(button)
         end
         m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.favourite,"TOPLEFT",-8,0)
-        m.details=U.ReadArea(m,342,-588,555,113)
+        m.footerBackground=U.FooterBackground(m,shell)
+        m.details=U.ReadArea(m,342,-594,555,107)
+        U.AlignFooterScrollBar(m.details,m.footerBackground,nil)
+        U.FooterFades(m.details,shell,10)
+        local path,size,flags=m.details.text:GetFont()
+        if path and type(size)=="number" then m.details.text:SetFont(path,size+2,flags) end
         m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall");m.message:SetWordWrap(false)
         for _,event in ipairs({"ZONE_CHANGED","ZONE_CHANGED_INDOORS","ZONE_CHANGED_NEW_AREA","PLAYER_ENTERING_WORLD"}) do m:RegisterEvent(event) end
         m:SetScript("OnEvent",function()

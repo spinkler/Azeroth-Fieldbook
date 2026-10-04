@@ -9,6 +9,16 @@ function ns.CreateAtlasBook(journal,shell,adapters)
     local entries=ns.AtlasEntrances and ns.AtlasEntrances.View(journal) or journal
     entries.borderlessPins=true -- The icon artwork retains its own bevel.
     c.entries=entries
+    ns.AtlasOptions={
+        GetLegacy=function() return journal.state.subzoneFillMethod=='convex' end,
+        Writable=function() return not journal.readOnly end,
+        SetLegacy=function(on)
+            if journal.readOnly then return end
+            journal.state.subzoneFillMethod=on and 'convex' or 'traced'
+            if c.main then c:Refresh() end
+            c.worldSubzones:Refresh()
+        end,
+    }
     c.worldSubzones=ns.AtlasSubzones.CreateWorldOverlay(journal)
     c.subzoneObserver=ns.AtlasSubzones.Track(journal,function()
         if c.main and c.main.map:IsVisible() then c.main.map:RenderSubzones() end
@@ -163,7 +173,6 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.subzones:SetChecked(state.showSubzones==true)
         m.subzoneLabels:SetChecked(state.showSubzoneLabels==true)
         m.subzonePoints:SetChecked(state.showSubzonePoints==true)
-        m.legacySubzones:SetChecked(state.subzoneFillMethod=="convex")
         c.worldSubzones:Refresh()
         m.hideZoneAreas:SetChecked(state.hideZoneNameSubzones==true)
         m.labelSize:Display(A.Integer(state.subzoneLabelSize,2,24) and state.subzoneLabelSize or ns.AtlasSubzones.DEFAULT_LABEL_SIZE)
@@ -245,6 +254,38 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         U.Button(m,"Add Discovery",342,-60,140,function() c:OpenEditor(nil,false,A.CurrentLocation()) end)
         U.Button(m,"Expeditions",488,-60,116,function() c:Expeditions() end)
         m.shareButton=U.ShareButton(m,function() c:Report() end)
+        m.capacity=U.Label(m,"Archive: calculating…",42,-701,250,"GameFontDisableSmall")
+        m.capacity:SetWordWrap(false)
+        local storageJob,storageDetail
+        local storageElapsed=30
+        local function storageTooltip()
+            if GameTooltip then
+                GameTooltip:SetOwner(m.capacityHover,'ANCHOR_RIGHT');GameTooltip:SetText(m.capacity:GetText())
+                GameTooltip:AddLine(storageDetail or 'Calculating estimated saved-data size…',1,1,1,true);GameTooltip:Show()
+            end
+        end
+        local function refreshStorage()
+            if storageJob and storageJob.thread then return end
+            storageJob=ns.AtlasSubzones.Queue(function(checkpoint)
+                local title,detail=journal:StorageStatus(checkpoint)
+                return {title=title,detail=detail}
+            end,function(ok,result)
+                storageJob=nil
+                if ok then m.capacity:SetText(result.title);storageDetail=result.detail
+                else m.capacity:SetText('Archive: usage unavailable');storageDetail='Could not estimate saved data.' end
+                if GameTooltip and GameTooltip:IsOwned(m.capacityHover) then storageTooltip() end
+            end,m)
+        end
+        m.capacityHover=CreateFrame('Frame',nil,m);m.capacityHover:SetPoint('TOPLEFT',42,-699);m.capacityHover:SetSize(250,20)
+        m.capacityHover:EnableMouse(true)
+        m.capacityHover:SetScript('OnEnter',function() storageTooltip();refreshStorage() end)
+        m.capacityHover:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
+        m:HookScript('OnShow',function() storageElapsed=30 end)
+        m:HookScript('OnHide',function() ns.AtlasSubzones.Cancel(storageJob);storageJob=nil end)
+        m:HookScript('OnUpdate',function(_,dt)
+            storageElapsed=(storageElapsed or 0)+dt
+            if storageElapsed>=30 then storageElapsed=0;refreshStorage() end
+        end)
         m.deleteButton=U.Button(m,"Delete",174,-672,118,function()
             local id=state.selected;local e=entries:Get(id)
             if c.activePage~=m or not e or journal.readOnly then return end
@@ -258,12 +299,11 @@ function ns.CreateAtlasBook(journal,shell,adapters)
                 return ok,"Could not delete this entry."
             end)
         end)
-        m.current=U.Button(m,"Current Zone",342,-146,128,function()
-            local location=A.CurrentLocation();c:SetZone(location.mapID,location.zone);c:Message(location.mapID and "Showing your current zone." or "Current map unavailable; you can still record notes.")
-        end)
         m.zone=U.ZoneMenu(m,342,-174,306,function()
             local ids={state.mapID};for _,row in ipairs(A.MapCatalog(entries)) do ids[#ids+1]=row.mapID end;return ids
-        end,function(id,name) c:SetZone(id,name) end)
+        end,function(id,name) c:SetZone(id,name) end,function()
+            local location=A.CurrentLocation();c:SetZone(location.mapID,location.zone);c:Message(location.mapID and "Showing your current zone." or "Current map unavailable; you can still record notes.")
+        end)
         m.layerMenu=ns.FieldbookUI.FilterButton(m,0,0,function()
             m.layerPanel:SetShown(not m.layerPanel:IsShown())
         end)
@@ -312,16 +352,21 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end)
         m.automaticMapping:SetChecked(state.automaticMapping~=false)
         m.automaticMapping:SetEnabled(not journal.readOnly)
-        U.Tip(m.automaticMapping,"Automatically record sub-zone crossings and interior survey points. Pauses in The Great Sea, on flight paths and while flying. City mapping is enabled. Manual survey-point keybindings remain available when this is off.")
+        U.Tip(m.automaticMapping,"Automatically record sub-zone crossings and interior survey points. Pauses in The Great Sea, on flight paths, while flying, and while dead or a ghost. City mapping is enabled. Manual survey-point keybindings remain available when this is off.")
         m.cleanPoints=U.Button(m,"Clean Redundant Points",754,-60,168,function()
             local allMaps=A.Read(IsControlKeyDown)==true
+            local results={}
             local function done(count,message)
                 m.cleanPoints:SetEnabled(not journal.readOnly)
+                m.cleanPoints.lastCleanup=message or ''
+                if allMaps and #results>0 then m.cleanPoints.lastCleanup=m.cleanPoints.lastCleanup..'\n\n'..table.concat(results,'\n\n') end
+                storageElapsed=30
                 c:Refresh()
                 if message and DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r "..message) end
                 c:Message(message or ("Removed "..count.." redundant interior sample"..(count==1 and "." or "s.")))
             end
             local function progress(message)
+                if message and message:find('Removed %d+ of %d+ interior points') then results[#results+1]=message end
                 c:Message(message)
                 if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r "..message) end
             end
@@ -331,7 +376,13 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             if started then m.cleanPoints:SetEnabled(false);c:Message(allMaps and "Checking interior samples on all saved maps..." or "Checking interior samples on this map...") end
         end)
         m.cleanPoints:SetEnabled(not journal.readOnly)
-        U.Tip(m.cleanPoints,"Cleanup is paused while traced fill is enabled. With Legacy fill: click to remove redundant interior samples on this map, or Ctrl+Click for ALL saved Atlas maps. Preserves cross-over points and convex perimeter/overlap evidence. Removing interior points can affect a later return to traced fill. Recorded discoveries are unchanged.")
+        U.Tip(m.cleanPoints,"Simplify automatic survey points, including edge points, within a 5-yard outline tolerance on this map; Ctrl+Click for all maps. Protects narrow passages, shared borders, crossings and manual points. Compact coverage remembers removed positions, including edges, without blocking new observations beyond the simplified boundary or in another area. Recording stays at 25 yards. The last cleanup breakdown appears below after a run.")
+        m.cleanPoints:HookScript('OnEnter',function(self)
+            if GameTooltip and self.lastCleanup then
+                GameTooltip:AddLine('Last cleanup',1,0.82,0.14)
+                GameTooltip:AddLine(self.lastCleanup,1,1,1,true);GameTooltip:Show()
+            end
+        end)
         -- Keep the survey controls together within the existing header height.
         local group=CreateFrame("Frame",nil,m,"BackdropTemplate");m.subzoneControls=group
         group:SetPoint("TOPLEFT",660,-91);group:SetSize(262,107);group:EnableMouse(false)
@@ -345,19 +396,10 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.labelSize:SetWidth(120)
         m.labelSize.valueLabel:ClearAllPoints();m.labelSize.valueLabel:SetPoint("LEFT",m.labelSize,"RIGHT",5,0)
         U.Tip(m.labelSize,"Sub-zone label text size (2–24, default 4). Applies immediately; map zoom also scales labels.")
-        m.legacySubzones=U.Check(group,"Legacy Fill",98,-3,100,function(on)
-            if not journal.readOnly then state.subzoneFillMethod=on and "convex" or "traced" end
-            c:Refresh()
-        end)
-        m.legacySubzones:SetSize(20,20)
-        m.legacySubzones.label:ClearAllPoints()
-        m.legacySubzones.label:SetPoint("TOPLEFT",22,-5)
-        m.legacySubzones:SetEnabled(not journal.readOnly)
-        U.Tip(m.legacySubzones,"Restore the original convex fill on both maps. Unchecked: trace inward through supporting samples. Saved observations are unchanged when switching. Cleanup is paused in traced mode to protect its supporting points; legacy cleanup permanently removes points and can affect a later return to traced mode.")
         m.subzones=U.Check(group,"Shading",10,-23,65,function(on)
             if not journal.readOnly then state.showSubzones=on end;c:Refresh()
         end)
-        U.Tip(m.subzones,"Shade self-discovered sub-zones after three non-collinear observations. Crossings and interior samples with more than 50 yards of clearance collect while playing, even with these layers hidden. Points and Labels are independent display options. Hover for evidence details. Traced fill bends inward through supporting samples; sparse evidence can still span unknown space. Legacy fill restores the original outline.")
+        U.Tip(m.subzones,"Shade self-discovered sub-zones after three non-collinear observations. Crossings and interior samples with more than 25 yards of clearance collect while playing, even with these layers hidden. Points and Labels are independent display options. Hover for evidence details. Traced fill bends inward through supporting samples; sparse evidence can still span unknown space. Legacy fill restores the original outline.")
         m.subzonePoints=U.Check(group,"Points",10,-43,88,function(on)
             if not journal.readOnly then state.showSubzonePoints=on end;c:Refresh()
         end)
@@ -420,12 +462,12 @@ function ns.CreateAtlasBook(journal,shell,adapters)
     end
     shell:RegisterSection("atlas",{title="Traveller’s Atlas",icon="Interface\\Icons\\INV_Misc_Map03",
         help="|cffffd1001. Record a discovery|r\nKeep a journal of places you want to find again. Click Add Discovery, enter a name and category, then Save. Use my current position captures your location; Choose on displayed map lets you place a point yourself. Coordinates may be left blank. For a cave, record its entrance.\n\n"..
-            "|cffffd1002. Browse maps|r\nChoose a map or click Current Zone. Search the current map or all recorded zones, then select an index entry or map pin. Repeated clicks cycle overlapping pins. Map Layers shows or hides discovery categories; Reveal layer shows a selected entry's hidden category.\n\n"..
+            "|cffffd1002. Browse maps|r\nChoose a map or select Current Zone at the top of the zone menu. Search the current map or all recorded zones, then select an index entry or map pin. Repeated clicks cycle overlapping pins. Map Layers shows or hides discovery categories; Reveal layer shows a selected entry's hidden category.\n\n"..
             "|cffffd1003. Edit and explore|r\nEdit changes names, notes, access details and explored status. Map position lets you place the selected discovery. Explored is your own assertion: saving a location does not mark it explored. Recorded and Reported identify the source of the information.\n\n"..
             "|cffffd1004. Routes and passages|r\nChoose the Route / Passage category, then Save & route stops. Add recorded places or named waypoints; use Up, Down and Remove to arrange them. Stops can span zones. Map lines connect recorded stops, not guaranteed safe paths.\n\n"..
             "|cffffd1005. Expeditions and connections|r\nUse Expeditions for longer journals and Linked notes to attach them to a discovery. Connections links known Atlas discoveries or records in other supported Fieldbook sections. Removing a link leaves the source record intact.\n\n"..
             "|cffffd1006. Field reports|r\nShare saves a field-report draft for a zone or selected discoveries. Choose what to include, add private notes or expedition excerpts only if wanted, then use Preview report. This page provides drafts and previews only; it cannot send or import reports.\n\n"..
-            "|cffffd1007. Self-discovered sub-zones|r\nAutomatic mapping starts on and records area crossings and survey points as you travel, even with the Atlas closed. Toggle Automatic Mapping pauses it. Automatic recording pauses in The Great Sea, on flight paths and while flying.\n\nBind Record Atlas survey point in the game's keybinding settings to add a point where you stand, including with automatic mapping off. You need a readable position and enough distance from existing samples. Cleanup is paused while traced fill is enabled to preserve its supporting points. Legacy fill restores the original convex outline; its cleanup can permanently remove interior samples.\n\nShading, Points and Labels control the Atlas display. Use the world map Filters dropdown to enable Points, Labels and Zones independently on the main map, alongside Merchants and Nodes. Shading estimates an area from your samples; it is not an exact border survey. Hover the map to inspect the evidence. Sub-zone samples do not add discovery entries or enter field reports.\n\n"..
+            "|cffffd1007. Self-discovered sub-zones|r\nAutomatic mapping starts on and records area crossings and survey points as you travel, even with the Atlas closed. Toggle Automatic Mapping pauses it. Automatic recording pauses in The Great Sea, on flight paths, while flying, and while dead or a ghost.\n\nBind Record Atlas survey point in the game's keybinding settings to add a point where you stand, including with automatic mapping off. You must be alive, with a readable position and enough distance from existing samples. Clean Redundant Points simplifies automatic survey points, including edge points, within a 5-yard outline tolerance while recording stays at 25 yards. It protects narrow passages, shared borders, crossings and manual points. Compact coverage prevents repeat sampling at cleaned locations; new observations beyond the simplified boundary or in another area remain eligible. Repeated cleanup uses the original remembered positions so its tolerance does not accumulate. Legacy Fill in Options defaults off; it uses less CPU at the expense of outline detail. Survey points no longer store timestamps.\n\nShading, Points and Labels control the Atlas display. Use the world map Filters dropdown to enable Points, Labels and Zones independently on the main map, alongside Merchants and Nodes. Shading estimates an area from your samples; it is not an exact border survey. Hover the map to inspect the evidence. Sub-zone samples do not add discovery entries or enter field reports.\n\n"..
             "|cffffd1008. Entrance discovery|r\nAuto-discover entrances starts off and learns from physical indoor / outdoor crossings. Generic Entrances starts hidden in Map Layers; recording and visibility are independent. Grey category ticks are suggestions; explicitly choose a category and Save for a gold player-confirmed tick. Entrance evidence stays separate from deliberate records and field reports.\n\n"..
             "|cffffd1009. Your journal|r\nAtlas records and browsing settings follow Account-wide tracking in Options. It starts on; turn it off to use this character's separate journal after /reload. Bestiary resets, backups and sharing do not include Atlas records.",
         frameName="AzerothFieldbookAtlasSection",build=build,onOpen=function()

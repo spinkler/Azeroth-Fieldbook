@@ -3,7 +3,8 @@ local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or b
 local A=ns.Atlas
 local S={MAX_MAPS=256,MAX_CROSSINGS=4096,MAX_AREAS=128,GRID=64,MAX_TRIANGLES=3000,SPACING_YARDS=10,DEFAULT_LABEL_SIZE=4}
 S.DEFAULT_WORLD_LABEL_SIZE=14
-S.INTERIOR_YARDS=50
+S.INTERIOR_YARDS=25
+S.SIMPLIFY_YARDS=5
 S.MAX_INTERIORS=1024
 ns.AtlasSubzones=S
 S.WORK_MS=1
@@ -106,11 +107,11 @@ end
 local function valid(p)
     return type(p)=="table" and p.kind~="interior" and A.Position(p) and A.Text(p.from,160) and A.Text(p.to,160)
         and p.from~=p.to and A.Integer(p.fromX,0,10000) and A.Integer(p.fromY,0,10000)
-        and A.Integer(p.at,0,9999999999)
+        and (p.at==nil or A.Integer(p.at,0,9999999999))
 end
 local function interior(p)
     return type(p)=="table" and p.kind=="interior" and A.Position(p)
-        and A.Text(p.name,160) and A.Integer(p.at,0,9999999999)
+        and A.Text(p.name,160) and (p.at==nil or A.Integer(p.at,0,9999999999))
 end
 local function sampleNames(p)
     if p.kind=="interior" then return p.name end
@@ -124,12 +125,16 @@ local function key(p)
     if p.kind=="interior" then return "interior\t"..p.name.."\t"..math.floor(p.x/25)..":"..math.floor(p.y/25) end
     return p.from.."\t"..p.to.."\t"..math.floor(p.x/25)..":"..math.floor(p.y/25)
 end
-local function airborne(fn,...)
+local function blockedSignal(fn,...)
     if type(fn)~="function" then return false end
     local ok,value=pcall(fn,...)
-    -- Do not record while an available flight signal cannot safely be read.
+    -- Do not record while an available blocking signal cannot safely be read.
     if not ok or not A.Public(value) then return true end
     return value==true or value==1
+end
+local function deadOrGhost()
+    return blockedSignal(UnitIsDeadOrGhost,"player") or blockedSignal(UnitIsDead,"player")
+        or blockedSignal(UnitIsGhost,"player")
 end
 function S.Attach(j)
     if not j.readOnly then
@@ -181,8 +186,8 @@ function S.Attach(j)
                         local first,second=sampleNames(p)
                         count=count+extra;names[first]=true;if second then names[second]=true end
                         if p.kind=="interior" then
-                            out[#out+1]={kind="interior",mapID=id,x=p.x,y=p.y,name=p.name,at=p.at}
-                        else out[#out+1]={mapID=id,x=p.x,y=p.y,fromX=p.fromX,fromY=p.fromY,from=p.from,to=p.to,at=p.at} end
+                            out[#out+1]={kind="interior",mapID=id,x=p.x,y=p.y,name=p.name,manual=p.manual}
+                        else out[#out+1]={mapID=id,x=p.x,y=p.y,fromX=p.fromX,fromY=p.fromY,from=p.from,to=p.to} end
                     end
                 end
             end
@@ -268,7 +273,10 @@ function S.Attach(j)
                 local row=rows[i]
                 if row==nil then sparse=true end
                 if (valid(row) or interior(row)) and row.mapID==id then
-                    if compact and row.manual~=true and spatial(index,row) then removed=removed+1
+                    if not j.readOnly then row.at=nil end
+                    -- Interior simplification must use the border-preserving cleanup,
+                    -- never proximity alone during reload/index construction.
+                    if compact and row.kind~='interior' and row.manual~=true and spatial(index,row) then removed=removed+1
                     else remember(index,row);kept[#kept+1]=row end
                 else kept[#kept+1]=row end
             end
@@ -316,10 +324,17 @@ function S.Attach(j)
         -- Actual map dimensions are required for yard-spaced interior evidence.
         -- Existing crossing capture keeps its fallback on unsupported maps.
         if not index.width then return end
-        return record({kind="interior",mapID=id,name=name,x=x,y=y,at=A.Now()},index)
+        if not index.ready then
+            local coverage=j.saved.subzoneCoverage
+            if type(coverage)=='table' and type(coverage.maps)=='table' and coverage.maps[id] then return end
+            return record({kind="interior",mapID=id,name=name,x=x,y=y},index)
+        end
+        if S.Covered and S.Covered(s,j,index,id,name,x,y) then return end
+        return record({kind="interior",mapID=id,name=name,x=x,y=y},index)
     end
     function s:RecordPoint()
         if j.readOnly then return false,"Atlas recording is unavailable." end
+        if deadOrGhost() then self:Reset();return false,"Atlas survey points are paused while dead or a ghost." end
         local name=A.Read(GetSubZoneText)
         if name=="" then name=A.Read(GetRealZoneText) end
         local id=A.Read(C_Map and C_Map.GetBestMapForUnit,"player")
@@ -330,7 +345,7 @@ function S.Attach(j)
         if not index.ready then return false,"Atlas points are still loading; try again shortly." end
         if not index.width then return false,"Map dimensions are unavailable; cannot verify 15-yard spacing." end
         local row={kind="interior",manual=true,mapID=id,name=name,
-            x=math.floor(p.x*10000+0.5),y=math.floor(p.y*10000+0.5),at=A.Now()}
+            x=math.floor(p.x*10000+0.5),y=math.floor(p.y*10000+0.5)}
         if spatial(index,row,false,true,15) then return false,"An Atlas point is already within 15 yards." end
         if not record(row,index) then return false,"Atlas point could not be recorded; the map may be full." end
         if self.onChange then self.onChange(id) end
@@ -338,7 +353,7 @@ function S.Attach(j)
     end
     function s:Observe(deferred)
         if j.readOnly or j.state.automaticMapping==false then self:Reset();return end
-        if airborne(UnitOnTaxi,"player") or airborne(IsFlying) then self:Reset();return end
+        if deadOrGhost() or blockedSignal(UnitOnTaxi,"player") or blockedSignal(IsFlying) then self:Reset();return end
         -- Read the raw labels: unavailable/secret values must not become an
         -- invented sub-zone called "Unavailable". Blank sub-zones are the zone.
         local name=A.Read(GetSubZoneText)
@@ -369,7 +384,7 @@ function S.Attach(j)
         -- Loading screens, stale samples and large jumps are not boundaries.
         local crossed
         if oldID==id and oldName~=name and gap>=0 and gap<=2 and (x-oldX)^2+(y-oldY)^2<=300^2 then
-            crossed=record({mapID=id,x=x,y=y,fromX=oldX,fromY=oldY,from=oldName,to=name,at=A.Now()},index)
+            crossed=record({mapID=id,x=x,y=y,fromX=oldX,fromY=oldY,from=oldName,to=name},index)
         end
         local sampled=observeInterior(id,name,x,y,index)
         return crossed or sampled
@@ -438,8 +453,8 @@ local function sortRange(points,lo,hi,axis,checkpoint,scratch)
         size=size*2
     end
 end
-local function hull(points,checkpoint)
-    sortRange(points,1,#points,nil,checkpoint,{})
+local function hull(points,checkpoint,presorted)
+    if not presorted then sortRange(points,1,#points,nil,checkpoint,{}) end
     local unique={}
     for _,p in ipairs(points) do
         checkpoint()
@@ -474,8 +489,14 @@ end
 -- Preserve the original convex hull above for an exact, selectable rollback.
 -- Peel empty triangles off long edges. Each accepted detour uses a real sample,
 -- shortens both replacement edges, and cannot remove any observed location.
-local function tracedHull(points,checkpoint)
-    local outline=hull(points,checkpoint)
+local function tracedHull(points,checkpoint,convex)
+    local outline
+    if convex then
+        -- Callers supplying the hull also supply its sorted input. Copy the
+        -- vertices because tracing inserts detours into this array.
+        outline={}
+        for i,p in ipairs(convex) do checkpoint();outline[i]=p end
+    else outline=hull(points,checkpoint) end
     if #outline<3 then return outline end
     local used,unique={},{}
     -- hull sorted the input already; reuse point identities, avoiding string
@@ -488,10 +509,12 @@ local function tracedHull(points,checkpoint)
     points=unique
     for _,p in ipairs(outline) do used[p]=true end
     local function onSegment(a,b,p)
-        return math.abs(cross(a,b,p))<0.000001 and p.x>=math.min(a.x,b.x) and p.x<=math.max(a.x,b.x)
-            and p.y>=math.min(a.y,b.y) and p.y<=math.max(a.y,b.y)
+        return p.x>=math.min(a.x,b.x) and p.x<=math.max(a.x,b.x)
+            and p.y>=math.min(a.y,b.y) and p.y<=math.max(a.y,b.y) and math.abs(cross(a,b,p))<0.000001
     end
     local function intersects(a,b,c,d)
+        if math.max(a.x,b.x)<math.min(c.x,d.x) or math.max(c.x,d.x)<math.min(a.x,b.x)
+            or math.max(a.y,b.y)<math.min(c.y,d.y) or math.max(c.y,d.y)<math.min(a.y,b.y) then return false end
         return (cross(a,b,c)*cross(a,b,d)<0 and cross(c,d,a)*cross(c,d,b)<0)
             or (c~=a and c~=b and onSegment(a,b,c)) or (d~=a and d~=b and onSegment(a,b,d))
             or (a~=c and a~=d and onSegment(c,d,a)) or (b~=c and b~=d and onSegment(c,d,b))
@@ -566,143 +589,472 @@ local function insideTrace(points,x,y,checkpoint,buckets)
     return hit
 end
 function S.FillMethod(journal) return journal.state.subzoneFillMethod=="convex" and "convex" or "traced" end
-local function preserveTrialPoints(journal,done)
-    if S.FillMethod(journal)=="convex" then return false end
-    if done then done(0,"Points preserved: cleanup is paused while traced sub-zone fill is being tested.") end
+-- Coverage v1: per map and area, concatenated eight-character hexadecimal
+-- coordinates (four digits per axis). Names are stored once per area. No dates.
+-- Retain exact observed positions rather than marking inferred polygon cells.
+S.MAX_COVERAGE=4096
+function S.ValidCoverageMap(map,checkpoint)
+    checkpoint=checkpoint or noWork
+    if type(map)~='table' or A.Count(map)>S.MAX_AREAS then return false end
+    local count=0
+    for name,packed in pairs(map) do
+        checkpoint()
+        if not A.Text(name,160) or type(packed)~='string' or #packed%8~=0 or #packed>S.MAX_COVERAGE*8 then return false end
+        count=count+#packed/8;if count>S.MAX_COVERAGE then return false end
+        for i=1,#packed,8 do
+            checkpoint()
+            local token=packed:sub(i,i+7)
+            if not token:match('^%x%x%x%x%x%x%x%x$') or tonumber(token:sub(1,4),16)>10000 or tonumber(token:sub(5,8),16)>10000 then return false end
+        end
+    end
     return true
 end
--- Test whether removing each interior anchor can let a competing area take
--- ownership anywhere in their overlapping hulls; keep all perimeter evidence.
+local function coverageRows(saved,id,checkpoint)
+    local out={}
+    local root=saved.subzoneCoverage
+    local map=type(root)=='table' and root.version==1 and type(root.maps)=='table' and root.maps[id]
+    if type(map)~='table' then return out end
+    for name,packed in pairs(map) do
+        checkpoint()
+        if A.Text(name,160) and type(packed)=='string' and #packed%8==0 and #packed<=8*S.MAX_COVERAGE then
+            for i=1,#packed,8 do
+                checkpoint()
+                local token=packed:sub(i,i+7)
+                if token:match('^%x%x%x%x%x%x%x%x$') then
+                    local x,y=tonumber(token:sub(1,4),16),tonumber(token:sub(5,8),16)
+                    if x<=10000 and y<=10000 then out[#out+1]={name=name,x=x,y=y} end
+                end
+                if #out>=S.MAX_COVERAGE then return out end
+            end
+        end
+    end
+    return out
+end
+local function geometry(rows,checkpoint)
+    local areas={}
+    local function area(name)
+        if not areas[name] then areas[name]={points={},anchors={}} end
+        return areas[name]
+    end
+    for _,p in ipairs(rows) do
+        checkpoint()
+        if interior(p) then local a=area(p.name);a.points[#a.points+1]=p;a.anchors[#a.anchors+1]=p
+        elseif valid(p) then
+            local a,b=area(p.from),area(p.to)
+            local mid={x=(p.fromX+p.x)/2,y=(p.fromY+p.y)/2}
+            a.points[#a.points+1]=mid;b.points[#b.points+1]=mid
+            a.anchors[#a.anchors+1]={x=p.fromX,y=p.fromY}
+            b.anchors[#b.anchors+1]={x=p.x,y=p.y}
+        end
+    end
+    for _,a in pairs(areas) do
+        a.convex=hull(a.points,checkpoint);a.traced=tracedHull(a.points,checkpoint,a.convex)
+        a.buckets=traceBuckets(a.traced,checkpoint)
+        a.minX,a.minY,a.maxX,a.maxY=10000,10000,0,0
+        for _,p in ipairs(a.convex) do
+            a.minX,a.minY=math.min(a.minX,p.x),math.min(a.minY,p.y)
+            a.maxX,a.maxY=math.max(a.maxX,p.x),math.max(a.maxY,p.y)
+        end
+    end
+    return areas
+end
+local function segmentDistance2(p,a,b,width,height)
+    local dx,dy=(b.x-a.x)*width/10000,(b.y-a.y)*height/10000
+    local px,py=(p.x-a.x)*width/10000,(p.y-a.y)*height/10000
+    local length=dx*dx+dy*dy
+    local t=length>0 and math.max(0,math.min(1,(px*dx+py*dy)/length)) or 0
+    return (px-t*dx)^2+(py-t*dy)^2
+end
+local function nearOutline(points,x,y,width,height,checkpoint,radius)
+    local p={x=x,y=y}
+    for i,a in ipairs(points) do
+        checkpoint()
+        if segmentDistance2(p,a,points[i%#points+1],width,height)<=radius^2 then return true end
+    end
+    return false
+end
+local function coverageMatches(areas,name,x,y,width,height)
+    local own=areas[name]
+    if not own or #own.traced<3 then return false end
+    local best,distance
+    -- Match the renderer's nearest-anchor tie-breaking in overlapping regions.
+    for area,a in pairs(areas) do
+        if #a.traced>=3 and insideTrace(a.traced,x,y,noWork,a.buckets) then
+            local d=math.huge
+            for _,p in ipairs(a.anchors) do d=math.min(d,(p.x-x)^2+(p.y-y)^2) end
+            if not distance or d<distance or (d==distance and area<best) then best,distance=area,d end
+        end
+    end
+    if best then return best==name end
+    -- A removed edge may lie just outside its simplified outline. Remember it
+    -- within the same 5-yard tolerance; accept observations beyond that frontier.
+    return nearOutline(own.traced,x,y,width,height,noWork,S.SIMPLIFY_YARDS)
+end
+function S.Covered(s,j,index,id,name,x,y)
+    local root=j.saved.subzoneCoverage
+    if type(root)~='table' or root.version~=1 or type(root.maps)~='table' or type(root.maps[id])~='table' then return false end
+    if type(root.maps[id][name])~='string' then return false end
+    local revision=s:Revision(id)
+    local cache=index.coverage
+    local function nearby(grid)
+        if not grid then return false end
+        local cx,cy=math.floor(x*index.width/10000/25),math.floor(y*index.height/10000/25)
+        for dx=-1,1 do for dy=-1,1 do
+            for _,p in ipairs(grid[(cx+dx)..':'..(cy+dy)] or {}) do
+                if ((p.x-x)*index.width/10000)^2+((p.y-y)*index.height/10000)^2<=25^2 then return true end
+            end
+        end end
+        return false
+    end
+    -- Movement elsewhere need not rebuild coverage geometry after every sample.
+    if cache and cache.grid and not nearby(cache.grid[name]) then return false end
+    if not cache or cache.revision~=revision then
+        if cache and cache.job then S.Cancel(cache.job) end
+        cache={revision=revision};index.coverage=cache
+        cache.job=S.Queue(function(checkpoint)
+            local areas=geometry(s:Samples(id,checkpoint),checkpoint)
+            local grid={}
+            for _,p in ipairs(coverageRows(j.saved,id,checkpoint)) do
+                checkpoint()
+                local cx,cy=math.floor(p.x*index.width/10000/25),math.floor(p.y*index.height/10000/25)
+                grid[p.name]=grid[p.name] or {}
+                local key=cx..':'..cy;local cells=grid[p.name]
+                cells[key]=cells[key] or {};cells[key][#cells[key]+1]=p
+            end
+            return {areas=areas,grid=grid}
+        end,function(ok,result)
+            cache.job=nil;cache.ready=true
+            if ok then cache.areas,cache.grid=result.areas,result.grid end
+        end)
+    end
+    -- Defer automatic interiors while coverage is warming; never block crossings.
+    if not cache.ready then return true end
+    local grid=cache.grid and cache.grid[name]
+    if not grid then return false end
+    if cache.lastName==name and cache.lastX==x and cache.lastY==y then return cache.lastResult end
+    local covered=nearby(grid) and coverageMatches(cache.areas,name,x,y,index.width,index.height)
+    cache.lastName,cache.lastX,cache.lastY,cache.lastResult=name,x,y,covered
+    return covered
+end
+local function sameOutline(a,b)
+    if #a~=#b then return false end
+    for i,p in ipairs(a) do if p.x~=b[i].x or p.y~=b[i].y then return false end end
+    return true
+end
+-- Convex overlap contains every possible traced overlap. Reject a removal if
+-- a rival anchor could beat all remaining own anchors anywhere a removed one
+-- currently wins. This is conservative even with third-party overlapping areas.
+local function clipHalfPlane(polygon,nx,ny,limit,checkpoint)
+    -- Expand by a tiny tolerance: ambiguous/tied boundaries must retain evidence.
+    limit=limit+0.0001
+    local out={}
+    for i,v in ipairs(polygon) do
+        checkpoint();local w=polygon[i%#polygon+1]
+        local dv,dw=nx*v.x+ny*v.y-limit,nx*w.x+ny*w.y-limit
+        if dv<=0 then out[#out+1]=v end
+        if (dv<0 and dw>0) or (dv>0 and dw<0) then
+            local t=dv/(dv-dw);out[#out+1]={x=v.x+t*(w.x-v.x),y=v.y+t*(w.y-v.y)}
+        end
+    end
+    return out
+end
+local function closer(polygon,p,q,checkpoint)
+    return clipHalfPlane(polygon,2*(q.x-p.x),2*(q.y-p.y),q.x*q.x+q.y*q.y-p.x*p.x-p.y*p.y,checkpoint)
+end
+local function overlaps(areas,a,checkpoint)
+    if a.overlaps then return a.overlaps end
+    a.overlaps={}
+    for _,b in pairs(areas) do
+        checkpoint()
+        if b~=a and #b.convex>=3 and a.minX<=b.maxX and a.maxX>=b.minX and a.minY<=b.maxY and a.maxY>=b.minY then
+            local polygon=b.convex
+            for i,p in ipairs(a.convex) do
+                local q=a.convex[i%#a.convex+1]
+                polygon=clipHalfPlane(polygon,q.y-p.y,p.x-q.x,(q.y-p.y)*p.x+(p.x-q.x)*p.y,checkpoint)
+                if #polygon==0 then break end
+            end
+            if #polygon>0 then a.overlaps[#a.overlaps+1]={area=b,polygon=polygon} end
+        end
+    end
+    return a.overlaps
+end
+local function ownershipSafe(areas,a,remaining,list,first,last,checkpoint)
+    for _,overlap in ipairs(overlaps(areas,a,checkpoint)) do
+        for i=first,last do
+            local p=list[i]
+            -- If remaining own anchors already beat this point throughout the
+            -- overlap, no rival can make its removal matter there. Compute that
+            -- small potential influence cell once, before iterating rivals.
+            local influence=overlap.polygon
+            local nearest,distance
+            for _,q in ipairs(remaining) do
+                checkpoint();local d=(p.x-q.x)^2+(p.y-q.y)^2
+                if not distance or d<distance then nearest,distance=q,d end
+            end
+            if nearest then influence=closer(influence,p,nearest,checkpoint) end
+            for _,q in ipairs(remaining) do
+                if #influence==0 then break end
+                influence=closer(influence,p,q,checkpoint)
+            end
+            if #influence>0 then for _,rival in ipairs(overlap.area.anchors) do
+                checkpoint()
+                local polygon=closer(influence,p,rival,checkpoint)
+                for _,q in ipairs(remaining) do
+                    if #polygon==0 then break end
+                    polygon=closer(polygon,rival,q,checkpoint)
+                end
+                if #polygon>0 then return false end
+            end end
+        end
+    end
+    return true
+end
+local function segmentMeets(a,b,c,d)
+    local function on(p,q,r)
+        return math.abs(cross(p,q,r))<0.000001 and r.x>=math.min(p.x,q.x) and r.x<=math.max(p.x,q.x)
+            and r.y>=math.min(p.y,q.y) and r.y<=math.max(p.y,q.y)
+    end
+    return cross(a,b,c)*cross(a,b,d)<0 and cross(c,d,a)*cross(c,d,b)<0
+        or on(a,b,c) or on(a,b,d) or on(c,d,a) or on(c,d,b)
+end
+-- A replacement edge must shortcut a contiguous original chain, in the same
+-- cyclic order. Every chain vertex stays inside its 5-yard capsule. By
+-- continuity of projection this bounds both directions of boundary deviation.
+-- Comparing to reconstructed observations prevents repeated-cleanup drift.
+function S.OutlineWithinTolerance(reference,proposed,width,height,checkpoint,areas,ownName)
+    checkpoint=checkpoint or noWork
+    if sameOutline(reference,proposed) then return true end
+    if #reference<3 or #proposed<3 then return false end
+    local indices={}
+    for i,p in ipairs(reference) do checkpoint();indices[p.x..':'..p.y]=i end
+    local positions={}
+    for i,p in ipairs(proposed) do
+        checkpoint();positions[i]=indices[p.x..':'..p.y]
+        if not positions[i] then return false end
+    end
+    local travelled=0
+    for i,a in ipairs(proposed) do
+        checkpoint()
+        local b=proposed[i%#proposed+1]
+        local first,last=positions[i],positions[i%#proposed+1]
+        local steps=(last-first)%#reference
+        if steps==0 then return false end
+        travelled=travelled+steps;if travelled>#reference then return false end
+        if steps>1 then
+            local chain,omitted={},{}
+            local moved=false
+            for offset=0,steps do
+                checkpoint();local index=(first+offset-1)%#reference+1;local p=reference[index]
+                local distance=segmentDistance2(p,a,b,width,height)
+                if distance>S.SIMPLIFY_YARDS^2+0.000001 then return false end
+                if distance>0.000001 then moved=true end
+                chain[#chain+1]=p;if offset<steps then omitted[index]=true end
+            end
+            if moved then
+                -- No shortcut across a narrow neck or another side of a passage.
+                for edge,c in ipairs(reference) do
+                    checkpoint();local d=reference[edge%#reference+1]
+                    if not omitted[edge] and edge~=(first-2)%#reference+1 and edge~=last then
+                        if segmentMeets(a,b,c,d) or math.min(segmentDistance2(a,c,d,width,height),segmentDistance2(b,c,d,width,height),
+                            segmentDistance2(c,a,b,width,height),segmentDistance2(d,a,b,width,height))<=(2*S.SIMPLIFY_YARDS)^2 then return false end
+                    end
+                end
+                -- The changed strip is contained by this convex patch. Do not
+                -- move any part of a shared border, even within the tolerance.
+                local patch=hull(chain,checkpoint)
+                for name,other in pairs(areas or {}) do
+                    checkpoint()
+                    if name~=ownName and #other.convex>=3 then
+                        local overlap=patch
+                        for edge,c in ipairs(other.convex) do
+                            local d=other.convex[edge%#other.convex+1]
+                            overlap=clipHalfPlane(overlap,d.y-c.y,c.x-d.x,(d.y-c.y)*c.x+(c.x-d.x)*c.y,checkpoint)
+                            if #overlap==0 then break end
+                        end
+                        if #overlap>0 then return false end
+                    end
+                end
+            end
+        end
+    end
+    return travelled==#reference
+end
 local function cleanInterior(journal,id,done,progress,batch)
     local survey=journal.subzones
     if journal.readOnly or not A.Integer(id,1,2147483647) or (survey.cleaning and survey.cleaning~=batch) then return false end
     survey.cleaning=batch or true
-    if progress then progress("Starting cleanup on map "..id.."; preparing saved samples.") end
+    if progress then progress('Starting cleanup on map '..id..'; checking border evidence.') end
     S.Queue(function(checkpoint)
         local index=survey:Index(id,true)
         while not index.ready do
             if index.error then error(index.error) end
             checkpoint(4096)
         end
-        local source=survey.store[id]
-        local revision=survey:Revision(id)
-        if type(source)~="table" or not A.Array(source,S.MAX_CROSSINGS) then return {removed=0,reason="No supported sample list to clean."} end
-        if progress then progress("Checking "..#source.." saved samples; cross-over points will be kept.") end
-        local areas={}
-        local function area(name)
-            if not areas[name] then areas[name]={points={},anchors={}} end
-            return areas[name]
+        local source=survey.store[id];local revision=survey:Revision(id)
+        local coverageRoot=journal.saved.subzoneCoverage
+        if coverageRoot~=nil and (type(coverageRoot)~='table' or coverageRoot.version~=1 or type(coverageRoot.maps)~='table') then
+            return {removed=0,reason='Unsupported coverage data preserved; cleanup skipped.'}
         end
-        for _,p in ipairs(survey:Samples(id,checkpoint)) do
-            checkpoint()
-            if p.kind=="interior" then
-                local a=area(p.name);a.points[#a.points+1]=p;a.anchors[#a.anchors+1]=p
-            else
-                local a,b=area(p.from),area(p.to)
-                local mid={x=(p.fromX+p.x)/2,y=(p.fromY+p.y)/2}
-                a.points[#a.points+1]=mid;b.points[#b.points+1]=mid
-                a.anchors[#a.anchors+1]={x=p.fromX,y=p.fromY};b.anchors[#b.anchors+1]=p
-            end
+        if coverageRoot and coverageRoot.maps[id]~=nil and not S.ValidCoverageMap(coverageRoot.maps[id],checkpoint) then
+            return {removed=0,reason='Unsupported map coverage preserved; cleanup skipped.'}
         end
-        for _,a in pairs(areas) do a.hull=hull(a.points,checkpoint) end
-        local function clip(polygon,nx,ny,limit)
-            local out={}
-            for i,v in ipairs(polygon) do
-                checkpoint()
-                local w=polygon[i%#polygon+1]
-                local dv,dw=nx*v.x+ny*v.y-limit,nx*w.x+ny*w.y-limit
-                if dv<=0 then out[#out+1]=v end
-                if (dv<0 and dw>0) or (dv>0 and dw<0) then
-                    local t=dv/(dv-dw);out[#out+1]={x=v.x+t*(w.x-v.x),y=v.y+t*(w.y-v.y)}
-                end
-            end
-            return out
+        if not index.width then return {removed=0,reason='Map dimensions unavailable; cleanup skipped.'} end
+        if type(source)~='table' or not A.Array(source,S.MAX_CROSSINGS) then return {removed=0,reason='No supported sample list to clean.'} end
+        local rows=survey:Samples(id,checkpoint)
+        local areas=geometry(rows,checkpoint)
+        local memory=coverageRows(journal.saved,id,checkpoint)
+        -- Coverage retains the original coordinates and names. Reconstruct only
+        -- for validation, not rendering, so the error budget never compounds.
+        for _,p in ipairs(memory) do
+            checkpoint();rows[#rows+1]={kind='interior',mapID=id,name=p.name,x=p.x,y=p.y}
         end
-        local function closer(polygon,p,q)
-            return clip(polygon,2*(q.x-p.x),2*(q.y-p.y),q.x*q.x+q.y*q.y-p.x*p.x-p.y*p.y)
-        end
-        local function redundant(p)
-            local a=areas[p.name]
-            if not a or #a.hull<3 then return false,"edges" end
-            for i,v in ipairs(a.hull) do
-                checkpoint()
-                if cross(v,a.hull[i%#a.hull+1],p)<=0.000001 then return false,"edges" end
-            end
-            local candidate
-            for i,q in ipairs(a.anchors) do
-                if q.kind=="interior" and q.x==p.x and q.y==p.y then candidate=i;break end
-            end
-            if not candidate then return false,"edges" end
-            for _,other in pairs(areas) do
-                if other~=a and #other.hull>=3 then
-                    local overlap=other.hull
-                    for i,v in ipairs(a.hull) do
-                        local w=a.hull[i%#a.hull+1]
-                        overlap=clip(overlap,w.y-v.y,v.x-w.x,(w.y-v.y)*v.x+(v.x-w.x)*v.y)
-                        if #overlap==0 then break end
-                    end
-                    if #overlap>0 then for _,rival in ipairs(other.anchors) do
-                        checkpoint()
-                        -- Find places this point wins now but a rival could win
-                        -- after its removal, against every remaining own anchor.
-                        local polygon=closer(overlap,p,rival)
-                        for i,q in ipairs(a.anchors) do
-                            if #polygon==0 then break end
-                            if i~=candidate then polygon=closer(polygon,rival,q) end
-                        end
-                        if #polygon>0 then return false,"boundaries" end
-                    end end
-                end
-            end
-            table.remove(a.anchors,candidate)
-            return true
-        end
+        local reference=geometry(rows,checkpoint)
+        local seen={}
+        for _,p in ipairs(memory) do checkpoint();seen[p.name..':'..p.x..':'..p.y]=true end
         local kept,removed={},0
-        local counts={edges=0,boundaries=0,crossings=0,other=0}
+        local stats={interior=0,edge=0,nearby=0,manual=0,crossings=0,outline=0,ownership=0,capacity=0,other=0}
+        local candidates,planned={},{};local reserved=#memory
         for i,p in ipairs(source) do
             checkpoint()
-            local remove,reason
-            if interior(p) and p.mapID==id then remove,reason=redundant(p)
-            else reason=valid(p) and "crossings" or "other" end
-            if remove then removed=removed+1
-            else kept[#kept+1]=p;counts[reason]=counts[reason]+1 end
-            if progress and i%64==0 then progress("Checked "..i.."/"..#source.." samples; "..removed.." removable so far.") end
+            local a=interior(p) and p.mapID==id and areas[p.name]
+            if a then stats.interior=stats.interior+1 end
+            if a and p.manual~=true then
+                local eligible=#a.traced>=3
+                local reason='edge'
+                local key=p.name..':'..p.x..':'..p.y
+                if not eligible then stats[reason]=stats[reason]+1
+                elseif seen[key] or planned[key] or reserved<S.MAX_COVERAGE then
+                    candidates[p.name]=candidates[p.name] or {}
+                    candidates[p.name][#candidates[p.name]+1]=p
+                    if not seen[key] and not planned[key] then reserved=reserved+1;planned[key]=true end
+                else stats.capacity=stats.capacity+1 end
+            elseif a then stats.manual=stats.manual+1
+            elseif valid(p) and p.mapID==id then stats.crossings=stats.crossings+1
+            else stats.other=stats.other+1 end
+            if progress and i%64==0 then progress('Checked '..i..'/'..#source..' samples; validating interior candidates.') end
         end
-        return {source=source,revision=revision,kept=kept,removed=removed,counts=counts}
+        local remove={}
+        -- Try whole batches first. If their combined removal changes an outline,
+        -- split and validate each half against the cumulatively retained evidence.
+        -- Dense safe interiors therefore require one rebuild, not one per point.
+        local function simplify(a,list,first,last)
+            checkpoint()
+            local wanted,anchorWanted={},{}
+            for i=first,last do
+                checkpoint();local p=list[i];local key=p.x..':'..p.y
+                wanted[key]=(wanted[key] or 0)+1
+                anchorWanted[key]=(anchorWanted[key] or 0)+1
+            end
+            local points={}
+            for _,q in ipairs(a.points) do
+                checkpoint();local key=q.x..':'..q.y
+                if q.kind=='interior' and q.manual~=true and (wanted[key] or 0)>0 then wanted[key]=wanted[key]-1
+                else points[#points+1]=q end
+            end
+            local found=true
+            for _,count in pairs(wanted) do checkpoint();if count>0 then found=false end end
+            local anchors={}
+            for _,q in ipairs(a.anchors) do
+                checkpoint();local key=q.x..':'..q.y
+                if q.kind=='interior' and q.manual~=true and (anchorWanted[key] or 0)>0 then anchorWanted[key]=anchorWanted[key]-1
+                else anchors[#anchors+1]=q end
+            end
+            for _,count in pairs(anchorWanted) do checkpoint();if count>0 then found=false end end
+            local original=reference[list[first].name]
+            -- Filtering retains the sorted order established by geometry().
+            -- Reject convex changes before paying for a traced reconstruction.
+            local convex=hull(points,checkpoint,true)
+            local shape=found and original
+                and S.OutlineWithinTolerance(original.convex,convex,index.width,index.height,checkpoint,reference,list[first].name)
+            -- Later recording can make the reconstructed history differ from
+            -- the current displayed shape. Never jump farther than 5 yards
+            -- from that current shape either.
+            if shape and not sameOutline(a.convex,original.convex) then
+                shape=S.OutlineWithinTolerance(a.convex,convex,index.width,index.height,checkpoint,areas,list[first].name)
+            end
+            local traced
+            if shape then
+                traced=tracedHull(points,checkpoint,convex)
+                shape=S.OutlineWithinTolerance(original.traced,traced,index.width,index.height,checkpoint,reference,list[first].name)
+            end
+            if shape and not sameOutline(a.traced,original.traced) then
+                shape=S.OutlineWithinTolerance(a.traced,traced,index.width,index.height,checkpoint,areas,list[first].name)
+            end
+            local safe=shape and ownershipSafe(areas,a,anchors,list,first,last,checkpoint)
+            if safe then
+                a.points,a.anchors=points,anchors
+                for i=first,last do
+                    checkpoint();local p=list[i];remove[p]=true;removed=removed+1
+                    local key=p.name..':'..p.x..':'..p.y
+                    if not seen[key] then memory[#memory+1]={name=p.name,x=p.x,y=p.y};seen[key]=true end
+                end
+            elseif first<last then
+                local middle=math.floor((first+last)/2)
+                simplify(a,list,first,middle);simplify(a,list,middle+1,last)
+            else
+                local reason=shape and 'ownership' or 'outline';stats[reason]=stats[reason]+1
+            end
+        end
+        -- Later accepted batches can make earlier blockers redundant. A bounded
+        -- follow-up avoids requiring repeated clicks on simple perimeter chains.
+        for pass=1,3 do
+            local before=removed;stats.outline,stats.ownership=0,0
+            if progress then progress('Validating 5-yard simplification, pass '..pass..'; '..removed..' removable points so far.') end
+            for name,list in pairs(candidates) do
+                local remaining={}
+                for _,p in ipairs(list) do checkpoint();if not remove[p] then remaining[#remaining+1]=p end end
+                if #remaining>0 then simplify(areas[name],remaining,1,#remaining) end
+            end
+            if removed==before then break end
+            -- Rechecking expensive shared-border cases usually buys only a few
+            -- extra points. Keep one pass on overlapping maps; isolated regions
+            -- can cheaply finish straight chains in the bounded follow-ups.
+            local shared=false
+            for _,area in pairs(areas) do
+                if #overlaps(areas,area,checkpoint)>0 then shared=true;break end
+            end
+            if shared then break end
+        end
+        for _,p in ipairs(source) do checkpoint();if not remove[p] then kept[#kept+1]=p end end
+        local packed={}
+        for _,p in ipairs(memory) do
+            checkpoint();packed[p.name]=packed[p.name] or {}
+            packed[p.name][#packed[p.name]+1]=string.format('%04x%04x',p.x,p.y)
+        end
+        for name,parts in pairs(packed) do checkpoint();packed[name]=table.concat(parts) end
+        return {source=source,revision=revision,coverageRoot=coverageRoot,kept=kept,removed=removed,packed=packed,stats=stats}
     end,function(ok,result)
         if not batch then survey.cleaning=nil end
-        if not ok then if done then done(nil,"Cleanup could not complete; no samples were removed.") end;return end
-        if S.FillMethod(journal)~="convex" then
-            if done then done(0,"Points preserved: traced fill was enabled during cleanup.") end
-            return
-        end
+        if not ok then if done then done(nil,'Cleanup could not complete; no samples were removed.') end;return end
         if result.removed>0 then
-            if survey.store[id]~=result.source or survey:Revision(id)~=result.revision then
-                if done then done(nil,"New samples arrived during cleanup; try again while stationary.") end;return
+            if journal.readOnly or ns.InitializationBlocked or survey.store[id]~=result.source or survey:Revision(id)~=result.revision or journal.saved.subzoneCoverage~=result.coverageRoot then
+                if done then done(nil,'New samples arrived during cleanup; try again while stationary.') end;return
             end
-            survey.store[id]=result.kept;survey.index[id]=nil;survey:Changed(id)
+            local root=result.coverageRoot or {version=1,maps={}}
+            root.maps[id]=result.packed;journal.saved.subzoneCoverage=root
+            survey.store[id]=result.kept
+            local old=survey.index[id];if old and old.coverage then S.Cancel(old.coverage.job) end
+            survey.index[id]=nil;survey:Changed(id)
             if survey.onChange then survey.onChange(id) end
         end
-        if progress then
-            local c=result.counts
-            progress(result.reason or ("Cleanup complete: removed "..result.removed.." interior points; kept "..c.edges..
-                " edge/insufficient-boundary points, "..c.boundaries.." overlap-boundary points, "..c.crossings..
-                " cross-over points and "..c.other.." other records."))
+        local message=result.reason
+        if not message then
+            local t=result.stats
+            message=string.format('Removed %d of %d interior points (5-yard limit). Kept: %d insufficient area, %d protecting shape / narrow passages, %d protecting overlap borders, %d manual, %d coverage full. Also kept %d cross-over points and %d other records.',result.removed,t.interior,t.edge,t.outline,t.ownership,t.manual,t.capacity,t.crossings,t.other)
         end
-        if done then done(result.removed) end
+        if progress then progress(message) end
+        if done then done(result.removed,message,result.stats) end
     end)
     return true
 end
 
 function S.CleanInterior(journal,id,done,progress)
     if journal.readOnly then return false end
-    if preserveTrialPoints(journal,done) then return false end
     return cleanInterior(journal,id,done,progress)
 end
 
 function S.CleanAllInterior(journal,done,progress)
     if journal.readOnly then return false end
-    if preserveTrialPoints(journal,done) then return false end
     local survey=journal.subzones
     if journal.readOnly or survey.cleaning then return false end
     local maps={}
@@ -1136,6 +1488,9 @@ function S.InstallMap(map,journal,cursorPoint)
             regions=self.subzoneWorldLayers("Zones")
             names=self.subzoneWorldLayers("Labels")
             points=self.subzoneWorldLayers("Points")
+            local info=A.Read(C_Map and C_Map.GetMapInfo,id)
+            -- Sub-zone names belong to local maps, never world/continent views.
+            if type(info)=="table" and A.Integer(info.mapType,0,2) then names=false end
         end
         local method=S.FillMethod(journal)
         local hidden
@@ -1230,7 +1585,6 @@ function S.InstallMap(map,journal,cursorPoint)
                 GameTooltip:AddLine(A.Safe(nearest.from).." -> "..A.Safe(nearest.to),1,0.82,0.14,true)
                 GameTooltip:AddLine(string.format("Crossed at %.2f, %.2f; from %.2f, %.2f",nearest.x/100,nearest.y/100,nearest.fromX/100,nearest.fromY/100),1,1,1,true)
             end
-            if ns.AtlasUI then GameTooltip:AddLine("Observed "..ns.AtlasUI.Date(nearest.at),1,1,1) end
         end
         GameTooltip:AddLine(#model.rows.." observation samples / "..#model.names.." observed areas",0.75,0.8,0.8)
         if #model.rows==0 then GameTooltip:AddLine("Explore this map to begin recording sub-zones.",1,1,1,true) end
@@ -1341,6 +1695,9 @@ function S.CreateWorldOverlay(journal)
         if journal.state.showSubzonesOnWorldMap~=true then stop();return end
         if not world then self:Attach() end
         if not world or not world:IsShown() then stop();return end
+        if overlay and overlay.subzoneMapID~=A.Read(world.GetMapID,world) then
+            overlay:CancelSubzones();overlay:Hide()
+        end
         -- Collapse bursts of map/zoom/selection notifications into one request.
         if pending then return end
         if C_Timer and type(C_Timer.After)=="function" then pending=true;C_Timer.After(0,draw)

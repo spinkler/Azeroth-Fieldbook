@@ -1,6 +1,6 @@
 local _, ns = ...
 local T,U=ns.Treasure,ns.AtlasUI
-local ROW_HEIGHT,LIST_HEIGHT=55,440
+local ROW_HEIGHT,LIST_HEIGHT=60,440
 local VISIBLE_ROWS=math.ceil(LIST_HEIGHT/ROW_HEIGHT)+1
 local HISTORY_PAGE=8
 local categories={world="World finds",portable="Portable",salvage="Salvage"}
@@ -81,7 +81,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             end end
             add("Automatic capture records readable openable bag items and strictly matched portable inspections. It never confirms receipt. World identity, acquisition context, access requirements and recovery claims can be recorded manually.")
         elseif detail=="notes" then
-            add("General notes (private):\n"..(e.note~="" and e.note or "No notes yet. Use Kind notes."))
+            add("General notes (private):\n"..(e.note~="" and e.note or "No notes yet. Use Edit."))
             add("Look for again: "..(e.bookmark and "Bookmarked" or "Not bookmarked").."\n"..(e.bookmarkNote~="" and e.bookmarkNote or "No reason recorded."))
             add("Bookmarks describe your intention to look again. They make no claim that a particular container remains available.")
             for _,v in ipairs(history) do if v.reportNote and v.reportNote~="" then add("Reported kind note — "..v.origin.source..": "..v.reportNote,nil,v.id) end end
@@ -154,10 +154,34 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         for i=#rows+1,#pool do pool[i]:Hide();pool[i].data=nil end
         body:SetHeight(math.max(scroll:GetHeight(),y));scroll:UpdateScrollChildRect();scroll:RefreshScrollBar()
     end
+    function c:LayoutDetails(progress)
+        local m=self.main
+        m.notesProgress=progress
+        m.notesOverlay:ClearAllPoints();m.notesOverlay:SetPoint("TOPLEFT",342,-588+414*progress)
+        m.notesOverlay:SetHeight(113+414*progress)
+        m.details:SetHeight(80+414*progress)
+        m.notesPaper:Show()
+        m.notesOverlay:EnableMouse(progress>0)
+    end
     function c:Expand()
-        local p=self:Panel("details","Selected entry details")
-        if not p.rows then p.rows={} end
-        self:RenderDetails(p.scroll,p.body,p.rows,224)
+        local m=self.main
+        m.notesExpanded=not m.notesExpanded
+        local from=m.notesProgress or 0
+        local target=m.notesExpanded and 1 or 0
+        for row,stroke in ipairs(m.notesArrow) do
+            stroke:ClearAllPoints();stroke:SetPoint("CENTER",0,m.notesExpanded and 3-row or row-3)
+        end
+        local elapsed=0
+        m.notesOverlay:SetScript("OnUpdate",function(frame,delta)
+            elapsed=math.min(0.18,elapsed+delta)
+            local t=elapsed/0.18;local eased=1-(1-t)^3
+            c:LayoutDetails(from+(target-from)*eased)
+            if t>=1 then
+                frame:SetScript("OnUpdate",nil)
+                c:RenderDetails(m.details,m.detailBody,m.detailRows,550)
+                m.details:SetVerticalScroll(math.min(m.details:GetVerticalScroll(),math.max(0,m.detailBody:GetHeight()-m.details:GetHeight())))
+            end
+        end)
     end
     function c:Refresh(preserveTop)
         if not self.main then return end
@@ -207,7 +231,6 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         local zoneName;for _,p in ipairs(journal:Zones()) do if p.mapID==state.mapID then zoneName=p.zone;break end end
         m.mapZone:SetText(zoneName or "Known maps");m.scope:SetText(state.allZone and "All finds in zone" or "Selected kind")
         m.map:Render();self:RenderDetails(m.details,m.detailBody,m.detailRows,550)
-        if self.panel and self.panel==self.panels.details then self:RenderDetails(self.panel.scroll,self.panel.body,self.panel.rows,224) end
         if journal.readOnly then self:Message("Saved schema is read-only; original data is preserved.")
         elseif journal.invalid>0 then self:Message(journal.invalid.." malformed saved records preserved but omitted from this view.") end
     end
@@ -281,6 +304,8 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         m.contentsHeader.icon=m.contentsHeader:CreateTexture(nil,"ARTWORK")
         m.contentsHeader.icon:SetPoint("TOPLEFT",6,-6);m.contentsHeader.icon:SetSize(24,24)
         m.contentsHeader.name=U.Label(m.contentsHeader,"",37,-6,185,"GameFontNormal")
+        local headerNamePath,headerNameSize,headerNameFlags=m.contentsHeader.name:GetFont()
+        if headerNamePath and type(headerNameSize)=="number" then m.contentsHeader.name:SetFont(headerNamePath,headerNameSize+2,headerNameFlags) end
         m.contentsHeader.name:SetWordWrap(true)
         m.contents,m.contentsBody=U.Scroll(d,42,-211,228,LIST_HEIGHT-34);m.contentsRows={}
         m.contents:ClearAllPoints();m.contents:SetPoint("TOPLEFT",m.contentsHeader,"BOTTOMLEFT",0,-8)
@@ -293,20 +318,20 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         end
         m.list:EnableMouseWheel(true);m.list:SetScript("OnMouseWheel",scrollList)
         for i=1,VISIBLE_ROWS do
-            local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*ROW_HEIGHT);row:SetSize(228,54)
+            local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*ROW_HEIGHT);row:SetSize(228,ROW_HEIGHT-1)
             row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",scrollList)
             ns.FieldbookUI.StyleMenuRow(row)
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",6,-6);row.icon:SetSize(19,19)
             row.name=U.Label(row,"",29,-6,192,"GameFontHighlightSmall")
-            row.kind=U.Label(row,"",7,-22,214,"GameFontDisableSmall");row.knowledge=U.Label(row,"",7,-36,214,"GameFontHighlightSmall")
+            local namePath,nameSize,nameFlags=row.name:GetFont()
+            if namePath and type(nameSize)=="number" then row.name:SetFont(namePath,nameSize+4,nameFlags) end
+            row.kind=U.Label(row,"",7,-27,214,"GameFontDisableSmall");row.knowledge=U.Label(row,"",7,-41,214,"GameFontHighlightSmall")
             row.name:SetWordWrap(false);row.kind:SetWordWrap(false);row.knowledge:SetWordWrap(false)
             row:SetScript("OnClick",function(self) c:Select(self.id) end)
             row:SetScript("OnEnter",function(self)
                 local e=journal:Get(self.id);if not e or not GameTooltip then return end
                 GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText(T.Safe(journal:Title(e)))
-                GameTooltip:AddLine(T.Safe(e.name.." • "..e.id),1,1,1,true)
                 GameTooltip:AddLine(journal:Summary(e).knowledge,1,1,1,true)
-                GameTooltip:AddLine(e.itemID and "Portable item identity: "..e.itemID or "Provisional identity; matching names remain separate.",1,1,1,true)
                 GameTooltip:Show()
             end)
             row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end);m.rows[i]=row
@@ -333,24 +358,49 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         end)
         m.scope=U.Button(m,"Selected kind",604,-174,146,function() state.allZone=not state.allZone;c:Refresh() end)
         m.edit=U.Button(m,"Correct",756,-174,78,function() c:Manual(state.encounter) end)
+        m.notes=U.Button(d,"Edit",42,-672,118,function() c:Notes() end)
         m.remove=U.Button(d,"Delete",174,-672,118,function() c:RemoveEncounter() end)
-        m.expand=U.Button(m,"Expand",840,-174,82,function() c:Expand() end)
         m.map=ns.CreateTreasureMap(m,journal,state,function(id) c:Encounter(id) end)
         m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
+        m.notesOverlay=CreateFrame("Frame",nil,m)
+        m.notesOverlay:SetSize(580,113);m.notesOverlay:SetFrameLevel(m:GetFrameLevel()+30)
+        m.notesPaper=m.notesOverlay:CreateTexture(nil,"BACKGROUND")
+        m.notesPaper:SetPoint("TOPLEFT",m.notesOverlay,"TOPLEFT",-10,4)
+        m.notesPaper:SetPoint("BOTTOMRIGHT",m.notesOverlay,"BOTTOMRIGHT",10,-6)
+        m.notesPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga");m.notesPaper:SetDesaturated(true)
+        shell:AddBackgroundLayer(m.notesPaper,0.17,0.17,0.17,true)
+        for _,edge in ipairs({{"TOPLEFT","TOPRIGHT",true},{"BOTTOMLEFT","BOTTOMRIGHT",true},{"TOPLEFT","BOTTOMLEFT",false},{"TOPRIGHT","BOTTOMRIGHT",false}}) do
+            local border=m.notesOverlay:CreateTexture(nil,"OVERLAY")
+            border:SetColorTexture(0.45,0.30,0.13,1)
+            border:SetPoint(edge[1],m.notesPaper,edge[1]);border:SetPoint(edge[2],m.notesPaper,edge[2])
+            if edge[3] then border:SetHeight(1) else border:SetWidth(1) end
+        end
         m.detailButtons={}
-        for i,v in ipairs({{"summary","Summary / access"},{"history","Encounter history"},{"kind","Kind notes"},{"notes","Personal notes"}}) do
-            if v[1]=="kind" then
-                m.notes=U.Button(m,v[2],342+(i-1)*146,-588,140,function() c:Notes() end)
-            else
-            local key=v[1];m.detailButtons[key]=U.Button(m,v[2],342+(i-1)*146,-588,140,function()
+        for i,v in ipairs({{"summary","Summary / access"},{"history","Encounter history"},{"notes","Personal notes"}}) do
+            local key=v[1];m.detailButtons[key]=U.Button(m.notesOverlay,v[2],(i-1)*146,0,140,function()
                 state.detail=key;state.detailScroll=0;m.details:SetVerticalScroll(0);c:Refresh()
             end)
             U.StyleSelection(m.detailButtons[key])
-            end
         end
-        m.details,m.detailBody=U.Scroll(m,342,-621,555,80);m.detailRows={}
+        m.expand=U.Button(m.notesOverlay,"",438,0,22,function() c:Expand() end);m.expand:SetSize(22,22)
+        m.expand:ClearAllPoints();m.expand:SetPoint("TOPRIGHT",m.notesPaper,"TOPRIGHT",-4,-4)
+        m.notesArrow={}
+        for row=0,4 do
+            local stroke=m.expand:CreateTexture(nil,"OVERLAY")
+            stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,row-2);stroke:SetColorTexture(1,0.82,0.14,1)
+            m.notesArrow[#m.notesArrow+1]=stroke
+        end
+        m.expand:SetScript("OnEnter",function(self)
+            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(m.notesExpanded and "Collapse notes" or "Expand notes");GameTooltip:Show() end
+        end)
+        m.expand:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        m.details,m.detailBody=U.Scroll(m.notesOverlay,0,-33,555,80);m.detailRows={}
+        U.AlignFooterScrollBar(m.details,m.notesPaper,m.expand)
+        U.FooterFades(m.details,shell,37)
+        c:LayoutDetails(0)
         m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall");m.message:SetWordWrap(false)
         content:SetScript("OnHide",function()
+            m.notesOverlay:SetScript("OnUpdate",nil);c:LayoutDetails(m.notesExpanded and 1 or 0)
             state.detailScroll=m.details:GetVerticalScroll();m.map:SuspendPlayer();m.search:ClearFocus()
             for _,p in pairs(c.panels) do for _,input in ipairs(p.inputs or {}) do input:ClearFocus() end end
             if GameTooltip then GameTooltip:Hide() end
@@ -359,8 +409,8 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     end
     shell:RegisterSection("treasure",{title="Treasure Journal",icon=T.ICON,frameName="AzerothFieldbookTreasureSection",build=build,
         help=T.VISION.."\n\n|cffffd100Historical knowledge|r\nEach entry groups a kind of treasure or container; History lists its past sightings, access attempts and inspections. A recorded past find is not evidence that a container is currently present. Matching names do not automatically combine different kinds.\n\n"..
-            "|cffffd100Record and correct|r\nUse Record a find to choose an existing kind or create one, then record what happened. Leave the location unknown if unsure. Use player position supplies approximate coordinates for review. Enter contents only if inspected, and distinguish what you saw from what you personally recovered.\n\nSelect an encounter in History or on the map, then use Correct or Remove. Automatic encounters allow corrections to location, access details and notes while retaining their original contents evidence. Kind notes edits the kind's label, category and notes; Look for again bookmarks it.\n\n"..
-            "|cffffd100Maps and browsing|r\nSearch names, locations, items and notes. Known maps chooses a recorded map; Selected kind switches to All finds in zone. Click a marker to review a past encounter, or click again to cycle overlapping finds. Expand gives the details more reading space.\n\nMap pins come from positioned world finds and recorded acquisitions. Seeing or opening a container in your bags does not establish where you acquired it.\n\n"..
+            "|cffffd100Record and correct|r\nUse Record a find to choose an existing kind or create one, then record what happened. Leave the location unknown if unsure. Use player position supplies approximate coordinates for review. Enter contents only if inspected, and distinguish what you saw from what you personally recovered.\n\nSelect an encounter in History or on the map, then use Correct or Remove. Automatic encounters allow corrections to location, access details and notes while retaining their original contents evidence. Edit changes the kind's label, category and notes; Look for again bookmarks it.\n\n"..
+            "|cffffd100Maps and browsing|r\nSearch names, locations, items and notes. Known maps chooses a recorded map; Selected kind switches to All finds in zone. Click a marker to review a past encounter, or click again to cycle overlapping finds. The arrow beside the detail tabs slides the notes over the map; use the down arrow to collapse them.\n\nMap pins come from positioned world finds and recorded acquisitions. Seeing or opening a container in your bags does not establish where you acquired it.\n\n"..
             "|cffffd100Automatic capture|r\nRecognizable openable bag items and world containers can be recorded automatically. World capture matches a recent object tooltip to the actual loot source; recognized English names include chests, crates, coffers, strongboxes, footlockers, lockboxes, caches, barrels and sacks. When the tooltip has no object ID, a recent world click or completed opening cast can establish the name; the loot window must still identify one world-object source. Locations are approximate player positions. When opened, contents are captured only if the addon can reliably identify the source. Captures are partial and do not confirm that you recovered the items. Uncertain sources are skipped; the page status explains why a recognized container could not be captured.\n\nUse Record a find for unrecognized world finds, acquisition details, access methods and recovered quantities. Seeing an item in the journal does not establish that you still own it.\n\n"..
             "|cffffd100Reports|r\nTreasure currently has no player-facing report sending, import or export. Bestiary Share does not send Treasure records.\n\n"..
             "|cffffd100Your journal|r\nTreasure follows Account-wide tracking in Options. It starts on; turn it off to use this character's separate journal after /reload. Existing character history imports once; later changes in the two scopes stay separate.",

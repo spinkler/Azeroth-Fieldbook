@@ -96,12 +96,26 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     end)
     help:Hide(); book.help=help
     local options,optionsBody=createBookPage("AzerothFieldbookOptions","AZEROTH FIELDBOOK - OPTIONS",65)
-    optionsBody:SetHeight(2105)
+    local optionItems,optionSections={},{}
+    local originalLabel,originalButton,originalEdit=label,button,edit
+    local originalCreateFrame=CreateFrame
+    local function remember(control,parent)
+        if parent==optionsBody then optionItems[#optionItems+1]=control end
+        return control
+    end
+    label=function(parent,...) return remember(originalLabel(parent,...),parent) end
+    button=function(parent,...) return remember(originalButton(parent,...),parent) end
+    edit=function(parent,...) return remember(originalEdit(parent,...),parent) end
+    local function CreateFrame(kind,name,parent,...)
+        return remember(originalCreateFrame(kind,name,parent,...),parent)
+    end
+    optionsBody:SetHeight(2450)
     local function optionHeading(title,y)
         local heading=label(optionsBody,title,30,-y,510,"GameFontNormalLarge")
         heading:SetTextColor(1,0.82,0.14)
         local font,size,flags=heading:GetFont()
         if font and type(size)=="number" then heading:SetFont(font,size-2,flags) end
+        optionSections[#optionSections+1]={heading=heading,originalY=y,items={}}
     end
     optionHeading("Tracking",0)
     optionHeading("Chat notifications",122)
@@ -438,9 +452,80 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         options.fieldbookBackups=button(optionsBody,"Fieldbook backups",30,-2012,200,function() ns.OpenFieldbookBackups() end)
         label(optionsBody,"Also available with /fieldbook backups, even if normal startup is blocked.",35,-2050,510,"GameFontHighlightSmall")
     end
+    optionHeading("Traveller's Atlas",2100)
+    options.legacySubzones=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
+    options.legacySubzones:SetPoint("TOPLEFT",30,-2130);options.legacySubzones:SetSize(24,24)
+    label(optionsBody,"Legacy Fill (off by default)",58,-2136,470,"GameFontHighlightSmall")
+    label(optionsBody,"Uses less CPU to calculate simpler convex outlines, at the expense of sub-zone detail. Off uses traced fill. Applies to Atlas and the world map.",35,-2168,510,"GameFontHighlightSmall")
+    options.legacySubzones:SetScript("OnClick",function(self)
+        if ns.AtlasOptions then ns.AtlasOptions.SetLegacy(self:GetChecked()==true) end
+    end)
+    if ns.FieldbookBackups and ns.FieldbookBackups.StageFullReset then
+        optionHeading("Reset entire Fieldbook",2250)
+        label(optionsBody,"Deletes all account journals, this character's journals and settings, and saved backups. Other characters' separate saves are not accessible and may import again when those characters log in. Two confirmations are required; the UI then reloads.",35,-2284,510,"GameFontHighlightSmall")
+        if type(StaticPopupDialogs)=="table" then
+            StaticPopupDialogs.AZEROTHFIELDBOOK_FULL_RESET_REVIEW={
+                text="Reset the entire Fieldbook? This deletes all account-wide journals, this character's journals and settings, and saved backups. Other characters' separate saves remain. Continue to the final confirmation?",
+                button1="Continue",button2=NO,
+                OnAccept=function() StaticPopup_Show("AZEROTHFIELDBOOK_FULL_RESET_CONFIRM") end,
+                timeout=0,whileDead=true,hideOnEscape=true,preferredIndex=3,
+            }
+            StaticPopupDialogs.AZEROTHFIELDBOOK_FULL_RESET_CONFIRM={
+                text="Final confirmation: permanently delete all accessible Fieldbook data, including saved backups, and reload now? This cannot be undone. Other characters' retained journals may import again when they log in.",
+                button1="Delete and reload",button2=NO,
+                OnAccept=function() ns.FieldbookBackups.StageFullReset() end,
+                timeout=0,whileDead=true,hideOnEscape=true,preferredIndex=3,
+            }
+        end
+        options.fullReset=button(optionsBody,"Reset entire Fieldbook",30,-2396,230,function()
+            if StaticPopup_Show then StaticPopup_Show("AZEROTHFIELDBOOK_FULL_RESET_REVIEW") end
+        end)
+    end
+    -- Keep each section's existing rows together, then space sections from
+    -- their measured content instead of accumulating hard-coded blank gaps.
+    table.sort(optionSections,function(a,b) return a.originalY<b.originalY end)
+    for _,control in ipairs(optionItems) do
+        local point,relative,relativePoint,x,y=control:GetPoint()
+        if type(relative)=="number" then x,y=relative,relativePoint;relative,relativePoint=optionsBody,point end
+        if type(y)=="number" then
+            local section=optionSections[1]
+            for _,candidate in ipairs(optionSections) do if -y>=candidate.originalY then section=candidate end end
+            section.items[#section.items+1]={control=control,point=point,x=x or 0,offset=-y-section.originalY}
+        end
+    end
+    for i,section in ipairs(optionSections) do
+        if i>1 then
+            section.divider=originalCreateFrame("Frame",nil,optionsBody)
+            section.divider:SetSize(510,1)
+            ui.EntryDivider(section.divider,0,510)
+        end
+    end
+    local function layoutOptions()
+        local top=0
+        for i,section in ipairs(optionSections) do
+            if i>1 then
+                section.divider:ClearAllPoints();section.divider:SetPoint("TOPLEFT",30,-top-18)
+                top=top+37
+            end
+            local bottom=0
+            for _,item in ipairs(section.items) do
+                local control=item.control
+                control:ClearAllPoints();control:SetPoint(item.point,optionsBody,item.point,item.x,-top-item.offset)
+                local height=control:GetHeight() or 0
+                if control.GetStringHeight then height=math.max(height,control:GetStringHeight() or 0) end
+                bottom=math.max(bottom,item.offset+height)
+            end
+            top=top+bottom
+        end
+        optionsBody:SetHeight(top+18)
+    end
+    layoutOptions()
     options:SetScript("OnShow",function(self)
+        layoutOptions()
         showBookPage(self)
         refreshTrackingOption()
+        options.legacySubzones:SetChecked(ns.AtlasOptions and ns.AtlasOptions.GetLegacy() or false)
+        options.legacySubzones:SetEnabled(ns.AtlasOptions and ns.AtlasOptions.Writable() or false)
         options.mapClickNavigation:SetChecked(journal:GetMapClickNavigation())
         options.lockNewCritters:SetChecked(journal:GetLockNewCritters())
         options.autoRecordBuffs:SetChecked(journal:GetAutoRecordAbilities())

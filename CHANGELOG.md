@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.26.0 - 2026-10-04
+
+Release-channel update covering the complete batch since v0.25.0 and previous-push baseline 0a3c5121ecf9db331a2cc3aa680542eaead2a7a7.
+
+- Add sliding information overlays to Treasure Journal and Angler's Almanac, with controls above the text, top-right expand/collapse arrows, matching dark parchment and thin borders, aligned full-height scrollbars, and scrolling edge fades. Apply the matching footer size, position and styling to Ledger notes and Annals controls; keep status text below the box.
+- Improve Treasure list spacing, enlarge contact names and the Observed contents header, remove technical IDs from list tooltips, move Kind notes beside Delete as Edit, add a Container type reset, and standardize Save / Back labels.
+- Add header-style portraits beneath Ledger contact names and tags. Label personal notes, automatic services, manual annotations and reports clearly; use cyan labels, larger footer text, extra padding and automatic services first. Standardize Edit's Save / Back buttons.
+- Make Bestiary Index letters jump through the list instead of filtering it, with fading dividers between letter groups. Reopening preserves the previous entry, then falls back to a known target before showing the blank page.
+- Organize Options with fading dividers and consistent section spacing. Add Reset entire Fieldbook with two confirmations and deletion on fresh reload, covering account-wide data, this character's journals/settings and saved backups. Other characters' separate saves remain and may import again.
+- Move Current Zone into the first zone-menu option in Atlas and Almanac. Make Annals' play/pause button square, reduce the pause symbol and widen its speed buttons uniformly.
+- Replace convex-only Atlas cleanup with budgeted cumulative simplification for both fill methods, including edge samples, within a 5-yard outline tolerance. Protect narrow passages, shared borders, manual points and crossings. Retain compact coverage so repeated cleanup cannot accumulate error or repeatedly record removed samples; preserve it through account imports and whole-Fieldbook backups.
+- Improve cleanup performance through geometry reuse, early rejection and disjoint-segment checks while retaining the 1 ms frame budget. Correct overly broad overlap exclusions, report reasons points remain, retain the last breakdown in the cleanup tooltip and refresh storage estimates after cleanup. Automatic periodic cleanup remains disabled.
+- Reduce automatic interior survey spacing to 25 yards and remove obsolete sample timestamps without changing discovery or Annals dates. Pause survey points and crossings while dead or a ghost, then resume without drawing a crossing across the corpse run.
+- Move Legacy Fill to Atlas Options, off by default, with its CPU/detail tradeoff explained. Restrict world-map sub-zone labels to local maps and hide stale overlays when changing maps or zooming out.
+- Add an estimated Atlas archive-size counter beneath Share, including survey/crossing counts and average bytes per point, measured with the shared background work budget. Move Bestiary's knowledge counter beneath Share.
+- Consolidate duplicate personally observed flight-master contacts at matching nearby locations, retaining evidence, notes, favourites, GUID aliases and historical references. Reuse identities across spawns/layers, persist migration completion and recheck after character imports.
+- Shorten Bestiary and minimap tooltip headings, remove the Behaviour prefix in favour of sage-coloured text, and remove the obsolete Bestiary keybinding hint and handlers.
+- Expand regression coverage for cleanup geometry, storage, reload/import/backup preservation, Ledger identity migration, footer navigation, Index behavior and full-reset staging. Include Atlas cleanup implementation/rollback notes and an optional synthetic benchmark.
+
 ## v0.25.0 - 2026-10-04
 
 Release-channel update covering all changes since v0.24.1 and previous-push

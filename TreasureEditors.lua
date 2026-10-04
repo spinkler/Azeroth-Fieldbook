@@ -26,7 +26,7 @@ function T.InstallEditors(c)
             p=CreateFrame("Frame",nil,self.main);p:SetPoint("TOPLEFT",38,-90);p:SetSize(262,615)
             p.title=U.Label(p,title,4,-4,250,"GameFontNormalSmall");p.inputs={}
             p.scroll,p.body=U.Scroll(p,6,-30,230,506)
-            p.back=U.Button(p,"Cancel / back",4,-581,250,function() c:ClosePanel() end)
+            p.back=U.Button(p,"Back",4,-581,250,function() c:ClosePanel() end)
             self.panels[key]=p
         end
         self.main.directory:Hide();self.panel=p;p:Show();return p
@@ -34,11 +34,15 @@ function T.InstallEditors(c)
     -- Notes and manual forms retain drafts when merely switching sections.
     function c:Notes()
         local e=journal:Get(state.selected);if not e then return end
-        local p=self:Panel("notes","Kind notes & classification")
+        local p=self:Panel("notes","")
+        p.back:SetText("Back")
         if not p.label then
             p.label=U.Field(p.body,"Personal label",2,0,220,160)
-            p.category=U.MenuButton(p.body,"Category",2,-58,220,function(self)
-                c:Menu(self,function(_,root) for _,v in ipairs({{"container","Container"},{"find","Recoverable find"},{"salvage","Salvage"}}) do
+            p.category=U.MenuButton(p.body,"Container type",2,-58,220,function(self)
+                c:Menu(self,function(_,root)
+                    root:CreateButton("Clear",function() p.categoryID="container";p.category:SetText("Container type") end)
+                    root:CreateDivider()
+                    for _,v in ipairs({{"container","Container"},{"find","Recoverable find"},{"salvage","Salvage"}}) do
                     local id=v[1];root:CreateButton(v[2],function() p.categoryID=id;p.category:SetText(v[2]) end)
                 end end)
             end)
@@ -47,14 +51,14 @@ function T.InstallEditors(c)
             U.Label(p.body,"Look for again — reason (private)",2,-330,220,"GameFontNormalSmall")
             p.reason=U.TextArea(p.body,7,-353,195,116,4000)
             p.body:SetHeight(491);p.inputs={p.label,p.note,p.reason}
-            U.Button(p,"Save notes / category",4,-548,250,function()
+            U.Button(p,"Save",4,-548,250,function()
                 local ok,err=journal:Annotate(p.kindID,{label=p.label:GetText(),note=p.note:GetText(),bookmarkNote=p.reason:GetText(),category=p.categoryID})
                 if ok then c:ClosePanel();c:Message("Personal notes saved.") else c:Message(err) end
             end)
         end
         if p.kindID~=e.id then
             p.kindID=e.id;p.label:SetText(e.label);p.note:SetText(e.note);p.reason:SetText(e.bookmarkNote)
-            p.categoryID=e.category;p.category:SetText(e.category)
+            p.categoryID=e.category;p.category:SetText(({container="Container type",find="Recoverable find",salvage="Salvage"})[e.category] or "Container type")
         end
     end
     function c:Manual(encounterID)
@@ -136,7 +140,7 @@ function T.InstallEditors(c)
                 self.precisionID=loc.precision;self.precision:SetText(loc.precision=="player" and "Approximate player position" or loc.precision=="manual" and "Manually placed" or "Coordinates unknown")
                 self.syncing=false
             end
-            p.save=U.Button(p,"Save manual encounter",4,-548,250,function()
+            p.save=U.Button(p,"Save",4,-548,250,function()
                 local x,y,err=ns.Atlas.Coordinates(p.x:GetText(),p.y:GetText());if err then c:Message(err);return end
                 local mapText=p.mapID:GetText();local mapID=tonumber(mapText)
                 if mapText~="" and not T.Integer(mapID,1,2147483647) then c:Message("Enter a valid map ID or leave it blank.");return end
@@ -174,7 +178,7 @@ function T.InstallEditors(c)
             p.items:SetText(table.concat(lines,"\n"));p.note:SetText(existing and existing.note or "");p.scroll:SetVerticalScroll(0)
             p.timeUnknown:SetChecked(existing and existing.origin.at==nil or false)
             p.title:SetText(existing and "Correct personal encounter" or "Record a find")
-            p.save:SetText(existing and "Save correction" or "Save manual encounter")
+            p.save:SetText("Save")
             local automatic=existing and existing.origin.method=="observed"
             for _,control in ipairs({p.context,p.sighted,p.attempted,p.inspected,p.capture,p.form,p.category}) do control:SetEnabled(not automatic) end
             for _,control in ipairs({p.result,p.items,p.name,p.item}) do control:SetEnabled(not automatic) end

@@ -5,12 +5,13 @@ local ui=ns.FieldbookUI
 U.Button=ui.Button;U.Edit=ui.Edit;U.Search=ui.Search
 U.ShareButton=ui.ShareButton
 U.MenuButton=ui.MenuButton
-function U.ZoneMenu(parent,x,y,width,getMaps,onSelect)
+function U.ZoneMenu(parent,x,y,width,getMaps,onSelect,onCurrentZone)
     local button
     button=U.MenuButton(parent,"Choose zone",x,y,width,function()
         if not MenuUtil or type(MenuUtil.CreateContextMenu)~="function" then return end
         MenuUtil.CreateContextMenu(button,function(_,root)
             root:SetScrollMode(420)
+            if onCurrentZone then root:CreateButton("Current Zone",onCurrentZone);root:CreateDivider() end
             local groups=ns.Atlas.MapMenuGroups(getMaps())
             for _,group in ipairs(groups) do
                 local submenu=root:CreateButton(ns.Atlas.Safe(group.name))
@@ -187,6 +188,71 @@ function U.TextArea(parent,x,y,width,height,limit)
     s:SetScript("OnMouseDown",function() e:SetFocus() end)
     return e,s
 end
+-- Match the collapsed journal detail panel without moving its contents.
+function U.FooterBackground(parent,shell)
+    local paper=parent:CreateTexture(nil,"BACKGROUND")
+    paper:SetPoint("TOPLEFT",332,-584);paper:SetSize(600,123)
+    paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga");paper:SetDesaturated(true)
+    shell:AddBackgroundLayer(paper,0.17,0.17,0.17,true)
+    for _,edge in ipairs({{"TOPLEFT","TOPRIGHT",true},{"BOTTOMLEFT","BOTTOMRIGHT",true},{"TOPLEFT","BOTTOMLEFT",false},{"TOPRIGHT","BOTTOMRIGHT",false}}) do
+        local border=parent:CreateTexture(nil,"BORDER")
+        border:SetColorTexture(0.45,0.30,0.13,1)
+        border:SetPoint(edge[1],paper,edge[1]);border:SetPoint(edge[2],paper,edge[2])
+        if edge[3] then border:SetHeight(1) else border:SetWidth(1) end
+    end
+    return paper
+end
+-- Match the Options edge fade against the footer's dark parchment.
+function U.AlignFooterScrollBar(scroll,paper,expand)
+    local bar=scroll.ScrollBar
+    if not bar or type(bar)=="function" then return end
+    local up,down=bar.ScrollUpButton,bar.ScrollDownButton
+    local upHeight=up and type(up)~="function" and up:GetHeight() or 16
+    local downHeight=down and type(down)~="function" and down:GetHeight() or 16
+    bar:ClearAllPoints()
+    if expand then bar:SetPoint("TOP",expand,"BOTTOM",0,-4-upHeight)
+    else bar:SetPoint("TOP",paper,"TOPRIGHT",-15,-6-upHeight) end
+    bar:SetPoint("BOTTOM",paper,"BOTTOMRIGHT",-15,4+downHeight)
+    if up and type(up)~="function" then up:ClearAllPoints();up:SetPoint("BOTTOM",bar,"TOP",0,0) end
+    if down and type(down)~="function" then down:ClearAllPoints();down:SetPoint("TOP",bar,"BOTTOM",0,0) end
+end
+
+function U.FooterFades(scroll,shell,topInset)
+    local steps,fadeHeight=24,12
+    local function makeEdge(top)
+        local edge=CreateFrame("Frame",nil,scroll)
+        edge:SetFrameLevel(scroll:GetFrameLevel()+10);edge:EnableMouse(false)
+        edge:SetPoint(top and "TOPLEFT" or "BOTTOMLEFT",scroll,top and "TOPLEFT" or "BOTTOMLEFT",0,top and 1 or -2)
+        edge.strips={}
+        for i=1,steps do
+            local strip=edge:CreateTexture(nil,"ARTWORK")
+            strip:SetPoint(top and "TOPLEFT" or "BOTTOMLEFT",0,(top and -1 or 1)*(i-1)*fadeHeight/steps)
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga");strip:SetDesaturated(true)
+            strip:SetAlpha(1-(i-1)/(steps-1));shell:AddBackgroundLayer(strip,0.17,0.17,0.17,true)
+            edge.strips[i]=strip
+        end
+        return edge
+    end
+    scroll.topFade,scroll.bottomFade=makeEdge(true),makeEdge(false)
+    local function update()
+        local width,height=scroll:GetWidth(),scroll:GetHeight()
+        local paperHeight=topInset+height+6
+        local range=math.max(0,scroll:GetVerticalScrollRange() or 0)
+        local offset=scroll:GetVerticalScroll() or 0
+        for _,edge in ipairs({scroll.topFade,scroll.bottomFade}) do
+            edge:SetSize(width,fadeHeight)
+            for i,strip in ipairs(edge.strips) do
+                local y=edge==scroll.topFade and topInset-1+(i-1)*fadeHeight/steps or topInset+height+2-i*fadeHeight/steps
+                strip:SetSize(width,fadeHeight/steps)
+                strip:SetTexCoord(10/600,(10+width)/600,y/paperHeight,(y+fadeHeight/steps)/paperHeight)
+            end
+        end
+        scroll.topFade:SetShown(range>0 and offset>0)
+        scroll.bottomFade:SetShown(range>0 and offset<range)
+    end
+    for _,event in ipairs({"OnVerticalScroll","OnScrollRangeChanged","OnShow","OnSizeChanged"}) do scroll:HookScript(event,update) end
+    update()
+end
 function U.ReadArea(parent,x,y,width,height)
     local s,body=U.Scroll(parent,x,y,width,height)
     local t=ui.Label(body,"",0,0,width,"GameFontHighlightSmall");t:SetWordWrap(true);t:SetSpacing(3)
@@ -195,7 +261,7 @@ function U.ReadArea(parent,x,y,width,height)
         if reset then self:SetVerticalScroll(0) end
         self:UpdateScrollChildRect();self:RefreshScrollBar()
     end
-    s.text=t;return s
+    s.text=t;return s,body
 end
 function U.Panel(parent,shell,title,back)
     local p=CreateFrame("Frame",nil,parent,"BackdropTemplate")

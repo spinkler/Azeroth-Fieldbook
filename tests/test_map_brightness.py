@@ -83,15 +83,14 @@ class MapBrightnessTests(unittest.TestCase):
             assert(db.mapBrightness==.3 and m.map.brightness.valueLabel:GetText()=='30%')
         ''')
 
-    def test_legacy_fill_has_its_own_compact_header_control(self):
+    def test_legacy_fill_is_removed_from_map_header(self):
         lua = new_atlas(ui=True)
         lua.execute('''
-            assert(m.legacySubzones.parent==m.subzoneControls)
-            assert(m.legacySubzones:GetWidth()==20 and m.legacySubzones:GetHeight()==20)
-            assert(m.legacySubzones.label:GetText()=='Legacy Fill')
+            assert(not m.legacySubzones)
+            assert(not ns.AtlasOptions.GetLegacy())
             assert(m.layerMenu.parent==m.map and m.layerMenu.point[1]=="TOPLEFT")
             assert(m.brightness==m.map.brightness and m.brightness.parent.parent==m.map)
-            m.legacySubzones:SetChecked(true);click(m.legacySubzones)
+            ns.AtlasOptions.SetLegacy(true)
             assert(j.state.subzoneFillMethod=='convex')
         ''')
 
