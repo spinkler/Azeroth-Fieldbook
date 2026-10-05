@@ -324,7 +324,9 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
     end
     function map:Invalidate() cachedMap=nil end
     local function hide(pool) for _,f in ipairs(pool) do f:Hide() end end
-    local function leave() if GameTooltip then GameTooltip:Hide() end end
+    local function leave()
+        if GameTooltip then GameTooltip:Hide() end
+    end
     map.empty=ns.FieldbookUI.Label(map,"",12,-110,554,"GameFontHighlight")
     map.empty:SetJustifyH("CENTER");map.empty:SetWordWrap(true)
     local function drawArt(id)
@@ -476,7 +478,9 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
             local m=g[1];for _,v in ipairs(g) do if v.id==selected then m=v;break end end
             p.group,p.selected=g,selected;p:ClearAllPoints()
             p:SetPoint("CENTER",canvas,"TOPLEFT",m.point.x/10000*self:GetWidth(),-m.point.y/10000*self:GetHeight())
-            p.icon:SetTexture(categoryInfo(m.category).icon);p.text:SetText(m.number and tostring(m.number) or (#g>1 and tostring(#g) or ""))
+            local info=categoryInfo(m.category)
+            p.icon:SetTexture(info.icon);p.icon:SetVertexColor(1,1,1)
+            p.text:SetText(m.number and tostring(m.number) or (#g>1 and tostring(#g) or ""))
             local iconSize=journal.state and journal.state.iconSize
             local size=A.Number(iconSize,6,40) and iconSize or 20
             size=size+(g.selected and 4 or 0)

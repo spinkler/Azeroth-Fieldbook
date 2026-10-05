@@ -573,7 +573,7 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         local quads=A.TrailRibbon(segments,map:GetWidth(),map:GetHeight(),2/map.zoom)
         for i,quad in ipairs(quads) do
             local texture=pool[i]
-            if not texture then texture=map.canvas:CreateTexture(nil,'ARTWORK');pool[i]=texture end
+            if not texture then texture=map.journeyOverlay:CreateTexture(nil,'ARTWORK');pool[i]=texture end
             if quad and type(texture.SetVertexOffset)=='function' then
                 local left,right,bottom,top=quad[1].x,quad[1].x,quad[1].y,quad[1].y
                 for n=2,4 do
@@ -595,6 +595,10 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
     function adapter:Layer() return true end
     function adapter:WeatherText() return '' end
     local map=ns.CreateAtlasMap(parent,adapter,onSelect,function() end,onNavigate)
+    map.journeyOverlay=CreateFrame('Frame',nil,map.canvas)
+    map.journeyOverlay:SetAllPoints(map.canvas)
+    map.journeyOverlay:SetFrameLevel(map.canvas:GetFrameLevel()+2)
+    map.journeyOverlay:EnableMouse(false)
     adapter.map=map
     local zoomBy=map.ZoomBy
     function map:ZoomBy(delta)
@@ -666,6 +670,7 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
             end
         end
         for _,pin in ipairs(self.pins or {}) do if pin.group and pin:IsShown() then
+            pin:SetFrameLevel(self.canvas:GetFrameLevel()+1)
             local event=pin.group[1].point.event
             local priority={hearth=3,teleport=3,crossing=3,battleground=3,instance=3,flight=2}
             for _,member in ipairs(pin.group) do

@@ -431,7 +431,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
     end
     local function build(content)
         c.frame=content;local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
-        local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
+        local spine=ns.FieldbookUI.PageDivider(m)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Angler’s Almanac")
         m.views={}
         local viewHelp={
@@ -491,6 +491,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
         m.filters:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         m.count=ns.FieldbookUI.EntryCount(m);m.rows={}
         m.list,m.listBody=U.Scroll(m,42,-180,228,LIST_HEIGHT)
+        U.ContactListFades(m.list,shell,m,42,-180)
         m.list:HookScript("OnVerticalScroll",function(self,value)
             if not m.updatingList then c:State().indexScroll=value or self:GetVerticalScroll();c:Refresh() end
         end)
@@ -502,6 +503,8 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*ROW_HEIGHT);row:SetSize(228,37)
             row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",scrollList)
             ns.FieldbookUI.StyleMenuRow(row)
+            row.divider=ns.FieldbookUI.EntryDivider(row,1,228)
+            for _,line in ipairs(row.divider) do line:SetShown(i>1) end
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",7,-10);row.icon:SetSize(20,20)
             row.name=U.Label(row,"",32,-6,189,"GameFontHighlightSmall");row.name:SetWordWrap(false)
             row.zone=U.Label(row,"",32,-21,189,"GameFontDisableSmall");row.zone:SetWordWrap(false)

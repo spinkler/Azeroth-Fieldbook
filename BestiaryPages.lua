@@ -324,7 +324,6 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         if ns.SpellIDWindow then ns.SpellIDWindow:OpenBlacklist() end
     end)
     label(optionsBody,"Each row expires two minutes after observation unless kept indefinitely. The ID window is display-only. Automatic ability recording below works independently.",35,-1150,510,"GameFontHighlightSmall")
-    label(optionsBody,"Offenses, Defenses and Behaviour replace the abilities area.",35,-626,510,"GameFontHighlightSmall")
     options.blockIncomingOffers=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
     options.blockIncomingOffers:SetPoint("TOPLEFT",30,-726); options.blockIncomingOffers:SetSize(24,24)
     label(optionsBody,"Block incoming offers",58,-732,470,"GameFontHighlightSmall")
@@ -340,8 +339,8 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     end)
     options.blockIncomingOffers:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
     options.alwaysAnchorToMain=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
-    options.alwaysAnchorToMain:SetPoint("TOPLEFT",30,-652); options.alwaysAnchorToMain:SetSize(24,24)
-    label(optionsBody,"Always attempt to anchor to main window",58,-658,470,"GameFontHighlightSmall")
+    options.alwaysAnchorToMain:SetPoint("TOPLEFT",30,-626); options.alwaysAnchorToMain:SetSize(24,24)
+    label(optionsBody,"Always attempt to anchor to main window",58,-632,470,"GameFontHighlightSmall")
     options.alwaysAnchorToMain:SetScript("OnClick",function(self)
         journal:SetAlwaysAnchorToMain(self:GetChecked()==true)
     end)
@@ -464,8 +463,8 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     if ns.OpenFieldbookBackups then
         optionHeading("Whole-Fieldbook backup and recovery",1900)
         label(optionsBody,"Protect all eight journals, including private notes, the account journals and this character's Annals. Export a copy outside the game. Reports are not backups.",35,-1934,510,"GameFontHighlightSmall")
-        options.fieldbookBackups=button(optionsBody,"Fieldbook backups",30,-2012,200,function() ns.OpenFieldbookBackups() end)
-        label(optionsBody,"Also available with /fieldbook backups, even if normal startup is blocked.",35,-2050,510,"GameFontHighlightSmall")
+        options.fieldbookBackups=button(optionsBody,"Fieldbook backups",30,-1990,200,function() ns.OpenFieldbookBackups() end)
+        label(optionsBody,"Also available with /fieldbook backups, even if normal startup is blocked.",35,-2028,510,"GameFontHighlightSmall")
     end
     optionHeading("Traveller's Atlas",2100)
     options.legacySubzones=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
@@ -492,12 +491,18 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
                 timeout=0,whileDead=true,hideOnEscape=true,preferredIndex=3,
             }
         end
-        options.fullReset=button(optionsBody,"Reset entire Fieldbook",30,-2396,230,function()
+        options.fullReset=button(optionsBody,"Reset entire Fieldbook",30,-2368,230,function()
             if StaticPopup_Show then StaticPopup_Show("AZEROTHFIELDBOOK_FULL_RESET_REVIEW") end
         end)
     end
     -- Keep each section's existing rows together, then space sections from
     -- their measured content instead of accumulating hard-coded blank gaps.
+    optionHeading("Adventurer's Annals",2450)
+    options.rebuildTimelineData=button(optionsBody,"Rebuild timeline data",30,-2480,230,function()
+        local controller=ns.AnnalsController
+        if controller then controller:RebuildTimelineData() end
+    end)
+    label(optionsBody,"Rebuild the current timeline and journey view from recorded history. New events appear automatically; this preserves your filters, timeline page and playback position.",35,-2520,510,"GameFontHighlightSmall")
     table.sort(optionSections,function(a,b) return a.originalY<b.originalY end)
     for _,control in ipairs(optionItems) do
         local point,relative,relativePoint,x,y=control:GetPoint()

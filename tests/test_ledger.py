@@ -245,7 +245,12 @@ class LedgerTests(unittest.TestCase):
             local notes=m.details.text:GetText();assert(notes:find(e.note,1,true))
             m.detailButtons.goods.scripts.OnClick()
             local panel=c.panels.catalogue
-            assert(c.panel==panel and not m.directory:IsShown() and panel.kind=='goods')
+            assert(c.panel==panel and m.directory:IsShown() and panel.kind=='goods')
+            assert(not m.contactList:IsShown() and m.search:IsVisible())
+            assert(m.detailButtons.goods:IsVisible() and m.detailButtons.training:IsVisible())
+            assert(panel.point[2]==42 and panel.point[3]==-170)
+            assert(panel.read:GetHeight()==458)
+            assert(panel.read.point[3]==panel.sort.point[3])
             assert(m.detailButtons.goods.afbSelected and not m.detailButtons.training.afbSelected)
             m.detailButtons.training.scripts.OnClick()
             assert(c.panel==panel and panel.kind=='training')
@@ -253,8 +258,72 @@ class LedgerTests(unittest.TestCase):
             assert(m.details.text:GetText()==notes)
             m.detailButtons.training.scripts.OnClick()
             assert(c.panel==nil and m.directory:IsShown() and not m.detailButtons.training.afbSelected)
-            m.detailButtons.goods.scripts.OnClick();panel.back.scripts.OnClick()
+            assert(panel.back==nil)
+            m.detailButtons.goods.scripts.OnClick();m.detailButtons.goods.scripts.OnClick()
             assert(c.panel==nil and not m.detailButtons.goods.afbSelected)
+        ''')
+
+    def test_catalogue_search_filters_offerings_and_restores_contact_search(self):
+        self.lua.execute('''
+            local e=visit()
+            trainer={{name='Sword lesson',status='available',rank='',category='',price=10},
+                {name='Axe lesson',status='available',rank='',category='',price=20}}
+            fire('TRAINER_SHOW');flush();shell:ShowSection('merchants');c:Select(e.id)
+            local m=c.main;m.search:SetText(e.name)
+            c:Catalogue('training');assert(m.search:GetText()=='')
+            m.search:SetText('sWoRd')
+            local text=c:Details(e,false,'training')
+            assert(text:find('Sword lesson',1,true) and not text:find('Axe lesson',1,true))
+            m.search:SetText('no such offering')
+            assert(c:Details(e,false,'training'):find('No offerings match your search.',1,true))
+            m.search:SetText('');text=c:Details(e,false,'training')
+            assert(text:find('Sword lesson',1,true) and text:find('Axe lesson',1,true))
+            c:Catalogue('goods');local name
+            for _,v in pairs(e.goods) do name=v.name;break end
+            assert(name);m.search:SetText(name)
+            assert(c:Details(e,false,'goods'):find(name,1,true))
+            m.search:SetText('no such offering')
+            assert(c:Details(e,false,'goods'):find('No offerings match your search.',1,true))
+            c:ClosePanel();assert(m.search:GetText()==e.name and m.contactList:IsShown())
+        ''')
+
+    def test_offering_rows_hover_metadata_dividers_and_filter_reuse(self):
+        self.lua.execute('''
+            local e=visit(42,'ABC',{item(1001,-1,250),item(1002,-1,500)})
+            trainer={{name='Sword lesson',status='available',rank='',category='',price=10},
+                {name='Axe lesson',status='available',rank='',category='',price=20}}
+            fire('TRAINER_SHOW');flush();shell:ShowSection('merchants');c:Select(e.id)
+            local lines={}
+            GameTooltip={SetOwner=function() end,SetText=function() lines={} end,
+                SetHyperlink=function() lines={} end,AddLine=function(_,line) lines[#lines+1]=line end,
+                Show=function() end,Hide=function() end}
+            for _,kind in ipairs({'goods','training'}) do
+                c:Catalogue(kind);local area=c.panels.catalogue.read
+                assert(area.rows[1]:IsShown() and area.rows[2]:IsShown())
+                assert(not area.rows[1].divider[1]:IsShown() and area.rows[2].divider[1]:IsShown())
+                local row=area.rows[1]
+                if kind=='goods' then
+                    assert(row.view.point[2]==46 and row.view:GetWidth()==area:GetWidth()-46)
+                    assert(row.view.icon.parent==row and row.view.icon.point[3]==-4)
+                    assert(row:GetHeight()>=49,'Goods row must contain its icon alongside name and price')
+                else
+                    assert(row:GetHeight()>=row.view:GetHeight()+5+40+5,
+                        'Training entries must contain the full icon below their heading')
+                end
+                assert(area.rows[2].top>=row.top+row:GetHeight(),
+                    'Next entry must begin after the previous icon and hover area')
+                assert(row.highlightTexture=='Interface\\\\QuestFrame\\\\UI-QuestTitleHighlight')
+                assert(row:GetHeight()>row.view:GetHeight() and row:GetWidth()==area:GetWidth())
+                row.scripts.OnEnter(row)
+                local tooltip=table.concat(lines,' ')
+                assert(tooltip:find('First:',1,true) and tooltip:find('Last:',1,true))
+                assert(tooltip:find(row.view.offering.value.origin.source,1,true))
+                row.scripts.OnLeave(row)
+                c.main.search:SetText('nothing matches this')
+                assert(not area.rows[1]:IsShown() and not area.rows[2]:IsShown())
+                c.main.search:SetText('');assert(area.rows[2]:IsShown())
+                c:ClosePanel()
+            end
         ''')
 
     def test_innkeeper_name_typed_and_legacy_titles_add_both_roles(self):
@@ -296,7 +365,7 @@ class LedgerTests(unittest.TestCase):
             assert(not text:find('Last observed stock:',1,true))
             assert(not text:find('Not purchasable',1,true))
             assert(not text:find('Not usable when inspected',1,true) and text:find('Requires Level 40',1,true))
-            assert(text:find('|cff888888First:',1,true))
+            assert(not text:find('First:',1,true))
             v.notSeen=true;assert(c:Details(e,true):find('Not seen on the latest inspection',1,true))
             for _,stock in ipairs({{state='finite',quantity=2},{state='soldout'},{state='unknown'}}) do
                 v.stock=stock;assert(c:Details(e,true):find('Last observed stock:',1,true))
@@ -319,7 +388,7 @@ class LedgerTests(unittest.TestCase):
             local view=area.headingViews[2];assert(view.contentWidth==501)
             local tooltipLink
             GameTooltip={SetOwner=function() end,SetHyperlink=function(_,link) tooltipLink=link end,
-                Show=function() end,Hide=function() tooltipLink=nil end}
+                AddLine=function() end,Show=function() end,Hide=function() tooltipLink=nil end}
             view.iconHover.scripts.OnEnter(view.iconHover)
             assert(tooltipLink==label:GetText():match('|H(item:%d+)'))
             view.iconHover.scripts.OnLeave();assert(tooltipLink==nil)
@@ -395,10 +464,13 @@ class LedgerTests(unittest.TestCase):
             local e=visit();shell:ShowSection('merchants');c:Select(e.id);local m=c.main
             assert(m.notes==nil)
             assert(m.sightings.point[3]==-174)
-            assert(m.link.parent==m.directory and m.link.point[2]+m.link:GetWidth()<306)
-            assert(m.search.point[3]-m.search:GetHeight()>m.link.point[3])
+            assert(m.link.parent==m and m.link.point[2]==654 and m.link.point[3]==-89)
+            assert(m.link.point[2]+m.link:GetWidth()==922)
+            local goods=m.detailButtons.goods
+            assert(goods.parent==m.directory and goods.point[2]==42 and goods:GetWidth()==122)
+            assert(m.search.point[3]-m.search:GetHeight()>goods.point[3])
             assert(m.count.point[3]>m.search.point[3])
-            assert(m.link.point[3]-m.link:GetHeight()>m.contactList.point[3])
+            assert(goods.point[3]-goods:GetHeight()>m.contactList.point[3])
             assert(not m.details.text:GetText():find('Access notes',1,true))
             e.note='Upstairs';c:Refresh();assert(m.details.text:GetText():find('Upstairs',1,true))
         ''')
@@ -1007,20 +1079,23 @@ class LedgerUITests(unittest.TestCase):
             local text,blocks=c:Details(e,true,'training')
             assert(blocks[2].heading and blocks[2].text:find('|T123:18:18:0:0|t ',1,true))
             assert(text:find('|cff80e680Sword lesson|r',1,true) and text:find('(Rank 2)',1,true))
-            assert(text:find('|cffffd100Required level: 20|r',1,true))
-            assert(select(2,text:gsub('Required level:', ''))==1)
+            assert(text:find('|cffffd100Required: Level 20|r',1,true))
+            assert(select(2,text:gsub('Required:', ''))==1)
+            lesson.requirements={'Required level: 20','Greater Stamina (Rank 2)'}
+            assert(c:Details(e,true,'training'):find('|cffffd100Required: Level 20, Greater Stamina (Rank 2)|r',1,true))
+            lesson.requirements={'Required level: 20'}
             assert(text:find('|cff80cfffCategory: Swords|r',1,true))
             assert(text:find('1|cffffd100g|r 23|cffc7c7cfs|r 45|cffb87333c|r',1,true))
-            assert(text:find('|cff888888First:',1,true) and text:find('Last: '..L.Date(lesson.last),1,true))
-            assert(text:match('Last quoted cost: ([^\n]+)')=='1|cffffd100g|r 23|cffc7c7cfs|r 45|cffb87333c|r')
-            assert(c:Details(e,false,'training'):match('Last quoted cost: ([^\n]+)')=='1g 23s 45c')
+            assert(not text:find('First:',1,true) and not text:find('Last: '..L.Date(lesson.last),1,true))
+            assert(text:match('Price: ([^\n]+)')=='1|cffffd100g|r 23|cffc7c7cfs|r 45|cffb87333c|r')
+            assert(c:Details(e,false,'training'):match('Price: ([^\n]+)')=='1g 23s 45c')
             local view=area.headingViews[2]
             assert(view.icon.texture==123 and view.icon:GetWidth()==40 and view.icon:IsShown())
             local tooltipLink
             C_Spell={GetSpellLink=function(identifier)
                 assert(identifier=='Sword lesson(Rank 2)');return '|Hspell:1234|h[Sword lesson]|h'
             end}
-            GameTooltip.SetHyperlink=function(_,link) tooltipLink=link end
+            GameTooltip.SetHyperlink=function(self,link) tooltipLink=link;self.lines={} end
             view.iconHover.scripts.OnEnter(view.iconHover);assert(tooltipLink:find('spell:1234',1,true))
             view.iconHover.scripts.OnLeave();assert(not GameTooltip:IsShown())
             tooltipLink=nil;view.hover.scripts.OnEnter(view.hover);assert(tooltipLink:find('spell:1234',1,true))
@@ -1029,7 +1104,7 @@ class LedgerUITests(unittest.TestCase):
             view.iconHover.scripts.OnEnter(view.iconHover);assert(GameTooltip:GetText()=='Sword lesson (Rank 2)')
             view.iconHover.scripts.OnLeave()
 
-            assert(area.blocks[3].point[2]==46 and area.blocks[3]:GetWidth()==175)
+            assert(area.blocks[3].point[2]==46 and area.blocks[3]:GetWidth()==182)
             assert(not area.blocks[2]:GetText():find('|T',1,true))
             assert(snapshot(e)==before,'Display must not change observations')
             for status,color in pairs({unavailable='ffff8080',used='ff999999',unknown='ffffd100'}) do
@@ -1078,18 +1153,24 @@ class LedgerUITests(unittest.TestCase):
 
     def test_training_requires_personal_or_reported_lessons(self):
         self.lua.execute('''
-            assert(m.detailButtons.training.enabled==false and not m.detailButtons.training:IsShown())
+            assert(m.detailButtons.training.enabled==false and m.detailButtons.training:IsShown())
             c:Catalogue('training');assert(c.panel==nil)
             local e=visit();flush();c:Select(e.id)
             assert(m.detailButtons.goods.enabled==true and m.detailButtons.training.enabled==false)
-            assert(m.detailButtons.goods:IsShown() and not m.detailButtons.training:IsShown())
-            assert(m.detailButtons.goods.point[2]+m.detailButtons.goods:GetWidth()==922)
+            assert(m.detailButtons.goods:IsShown() and m.detailButtons.training:IsShown())
+            assert(m.detailButtons.goods.point[2]==42 and m.detailButtons.goods:GetWidth()==122)
             c:Catalogue('training');assert(c.panel==nil)
             trainer={{name='Sword lesson',status='available',rank='',category='',price=10}}
             fire('TRAINER_SHOW');flush()
             assert(m.detailButtons.training.enabled==true)
             assert(m.detailButtons.goods:IsShown() and m.detailButtons.training:IsShown())
-            assert(m.detailButtons.goods.point[2]==654 and m.detailButtons.training.point[2]==776)
+            assert(m.detailButtons.goods.point[2]==42 and m.detailButtons.training.point[2]==170)
+            assert(m.detailButtons.goods:GetWidth()==122 and m.detailButtons.training:GetWidth()==122)
+            local goods=e.goods;e.goods={};j:Changed(e.id);flush();c:Refresh()
+            assert(m.detailButtons.goods:IsShown() and not m.detailButtons.goods.enabled and m.detailButtons.training:IsShown())
+            assert(m.detailButtons.training.point[2]==170 and m.detailButtons.training:GetWidth()==122)
+            e.goods=goods;j:Changed(e.id);flush();c:Refresh()
+            assert(m.detailButtons.goods:GetWidth()==122 and m.detailButtons.training:GetWidth()==122)
             c:Catalogue('training');assert(c.panel==c.panels.catalogue and c.panel.kind=='training')
             c:ClosePanel()
             local report=reportFor(e);assert(j:Remove(e.id));flush()
@@ -1098,15 +1179,15 @@ class LedgerUITests(unittest.TestCase):
             assert(m.detailButtons.training.enabled==true)
             c:Catalogue('training');assert(c.panel==c.panels.catalogue)
             c:ClosePanel();local empty=assert(j:Manual({name='Empty contact'}));flush();c:Select(empty.id)
-            assert(m.detailButtons.training.enabled==false and not m.detailButtons.training:IsShown())
+            assert(m.detailButtons.training.enabled==false and m.detailButtons.training:IsShown())
         ''')
 
     def test_known_goods_requires_personal_or_reported_offerings(self):
         self.lua.execute('''
-            assert(m.detailButtons.goods.enabled==false and not m.detailButtons.goods:IsShown())
+            assert(m.detailButtons.goods.enabled==false and m.detailButtons.goods:IsShown())
             c:Catalogue('goods');assert(c.panel==nil)
             local empty=assert(j:Manual({name='Empty merchant',role='merchant'}));flush();c:Select(empty.id)
-            assert(m.detailButtons.goods.enabled==false and not m.detailButtons.goods:IsShown())
+            assert(m.detailButtons.goods.enabled==false and m.detailButtons.goods:IsShown())
             c:Catalogue('goods');assert(c.panel==nil)
             local stocked=visit();flush();c:Select(stocked.id)
             assert(m.detailButtons.goods.enabled==true)
@@ -1119,7 +1200,7 @@ class LedgerUITests(unittest.TestCase):
             assert(m.detailButtons.goods.enabled==true)
             c:Catalogue('goods');assert(c.panel==c.panels.catalogue)
             c:ClosePanel();c:Select(empty.id)
-            assert(m.detailButtons.goods.enabled==false and not m.detailButtons.goods:IsShown())
+            assert(m.detailButtons.goods.enabled==false and m.detailButtons.goods:IsShown())
         ''')
 
     def test_current_zone_checkbox_tracks_travel_and_excludes_fixed_zone_filters(self):

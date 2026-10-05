@@ -7,7 +7,7 @@ U.ShareButton=ui.ShareButton
 U.MenuButton=ui.MenuButton
 U.DetailGold={0.46,0.36,0.13}
 function U.DetailDivider(parent,y,width)
-    return ui.EntryDivider(parent,y,width,U.DetailGold)
+    return ui.EntryDivider(parent,y,width)
 end
 function U.DetailPaint(text,colour)
     return "|cff"..colour..ns.Atlas.Safe(text).."|r"
@@ -258,6 +258,46 @@ function U.FooterFades(scroll,shell,topInset)
         scroll.bottomFade:SetShown(range>0 and offset<range)
     end
     for _,event in ipairs({"OnVerticalScroll","OnScrollRangeChanged","OnShow","OnSizeChanged"}) do scroll:HookScript(event,update) end
+    update()
+end
+function U.ContactListFades(scroll,shell,parent,x,y)
+    local steps,fadeHeight=24,12
+    local function edge(top)
+        local frame=CreateFrame("Frame",nil,parent)
+        frame:SetFrameLevel(scroll:GetFrameLevel()+10);frame:EnableMouse(false)
+        frame:SetPoint(top and "TOPLEFT" or "BOTTOMLEFT",scroll,top and "TOPLEFT" or "BOTTOMLEFT",0,top and 2 or -2)
+        frame.strips={}
+        for i=1,steps do
+            local strip=frame:CreateTexture(nil,"ARTWORK")
+            strip:SetPoint(top and "TOPLEFT" or "BOTTOMLEFT",0,(top and -1 or 1)*(i-1)*fadeHeight/steps)
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+            strip:SetAlpha(1-(i-1)/(steps-1))
+            shell:AddBackgroundLayer(strip,0.504,0.504,0.48888)
+            frame.strips[i]=strip
+        end
+        return frame
+    end
+    scroll.topFade,scroll.bottomFade=edge(true),edge(false)
+    local bar=scroll.ScrollBar
+    if bar then bar:SetFrameLevel(scroll.topFade:GetFrameLevel()+1) end
+    local function update()
+        local width,height=scroll:GetWidth(),scroll:GetHeight()
+        local paperWidth,paperHeight=parent:GetWidth()-8,parent:GetHeight()-15
+        local originY=type(y)=="function" and y() or y
+        for _,frame in ipairs({scroll.topFade,scroll.bottomFade}) do
+            frame:SetSize(width,fadeHeight)
+            for i,strip in ipairs(frame.strips) do
+                local py=frame==scroll.topFade and -originY-2+(i-1)*fadeHeight/steps or -originY+height+2-i*fadeHeight/steps
+                strip:SetSize(width,fadeHeight/steps)
+                strip:SetTexCoord((x-6)/paperWidth,(x+width-6)/paperWidth,(py-9)/paperHeight,(py+fadeHeight/steps-9)/paperHeight)
+            end
+        end
+        local range=math.max(0,scroll:GetVerticalScrollRange() or 0)
+        local offset=scroll:GetVerticalScroll() or 0
+        scroll.topFade:SetShown(scroll:IsShown() and range>0 and offset>0)
+        scroll.bottomFade:SetShown(scroll:IsShown() and range>0 and offset<range)
+    end
+    for _,event in ipairs({"OnVerticalScroll","OnScrollRangeChanged","OnShow","OnSizeChanged","OnHide"}) do scroll:HookScript(event,update) end
     update()
 end
 function U.ReadArea(parent,x,y,width,height)

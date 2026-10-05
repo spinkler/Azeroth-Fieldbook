@@ -6,6 +6,8 @@ BINDING_NAME_CLASSICBESTIARY_BOOK = "Toggle Azeroth Fieldbook"
 BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK = "Open Azeroth Fieldbook at mouseover"
 BINDING_NAME_CLASSICBESTIARY_NEXT_ENTRY = "Next Bestiary entry"
 BINDING_NAME_CLASSICBESTIARY_PREVIOUS_ENTRY = "Previous Bestiary entry"
+BINDING_NAME_AZEROTHFIELDBOOK_NEXT_PAGE = "Next Page"
+BINDING_NAME_AZEROTHFIELDBOOK_PREVIOUS_PAGE = "Previous Page"
 local effectGroups = {
     { "Control", { "Stun", "Root/Immobilize", "Slow/Snare", "Daze", "Fear", "Horror", "Disorient", "Sleep/Incapacitate", "Polymorph/Transform", "Charm/Possession", "Banish", "Knockback/Pull", "Disarm", "Silence" } },
     { "Combat", { "Interrupt", "School Lockout", "Damage over Time", "Heal", "Heal over Time", "Shield/Absorb", "Damage Reduction", "Damage Vulnerability", "Enrage", "Immunity/Invulnerability" } },
@@ -829,9 +831,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.lootMode=true
         local function addBackgroundLayer(...) shell:AddBackgroundLayer(...) end
         book.pageTitle=ui.SectionTitle(book,"Bestiary")
-        local spine = book:CreateTexture(nil, "ARTWORK")
-        spine:SetColorTexture(0.25, 0.13, 0.055, 0.35)
-        spine:SetPoint("TOPLEFT", 306, -53);book.spine=spine; spine:SetSize(3, 661)
+        book.spine=ns.FieldbookUI.PageDivider(book)
         book.typeButtons = {}
         local function addTypeButton(name, y)
             local typeButton = button(book, name == "All creatures" and "All" or name, 42, y, 88, function()
@@ -1148,20 +1148,20 @@ local ink = { 0.75, 0.8, 0.8 }
             if creatureNotes then creatureNotes:Toggle(selected) end
         end)
         book.creatureNotesButton:ClearAllPoints()
-        book.creatureNotesButton:SetPoint("TOPRIGHT",book,"TOPRIGHT",-24,-60)
         book.creatureLocationsButton=button(book,"Locations",710,-60,82,function()
             if creatureLocations then creatureLocations:Toggle(selected) end
         end)
         book.creatureLocationsButton:ClearAllPoints()
-        book.creatureLocationsButton:SetPoint("RIGHT",book.creatureNotesButton,"LEFT",-6,0)
+        book.creatureLocationsButton:SetPoint("TOPRIGHT",book,"TOPRIGHT",-24,-60)
         book.rumoursButton=button(book,"Rumours",710,-60,76,function()
             if rumoursWindow then rumoursWindow:Toggle(selected) end
         end)
         book.rumoursButton:ClearAllPoints()
         book.rumoursButton:SetPoint("RIGHT",book.creatureLocationsButton,"LEFT",-6,0)
+        book.creatureNotesButton:SetPoint("RIGHT",book.rumoursButton,"LEFT",-6,0)
         book.killCount=label(book,"",720,-57,78,"GameFontHighlightSmall")
         book.killCount:ClearAllPoints()
-        book.killCount:SetPoint("RIGHT",book.rumoursButton,"LEFT",-8,0)
+        book.killCount:SetPoint("RIGHT",book.creatureNotesButton,"LEFT",-8,0)
         book.killCount:SetJustifyH("RIGHT")
         book.killCount:SetWidth(0) -- Fit the text so the adjacent reward keeps a 3px gap.
         book.killStar=createKillReward(book)
@@ -1460,9 +1460,9 @@ local ink = { 0.75, 0.8, 0.8 }
         local abilityPanel=CreateFrame("Frame",nil,detail)
         abilityPanel:SetAllPoints(detail)
         book.abilityPanel=abilityPanel
-        local abilityDivider = abilityPanel:CreateTexture(nil, "ARTWORK")
-        abilityDivider:SetColorTexture(0.25,0.13,0.055,0.35)
-        abilityDivider:SetPoint("TOPLEFT",342,-315); abilityDivider:SetSize(584,3)
+        local abilityDivider = CreateFrame("Frame",nil,abilityPanel)
+        abilityDivider:SetPoint("TOPLEFT",330,-315); abilityDivider:SetSize(608,3)
+        ns.FieldbookUI.EntryDivider(abilityDivider,0,608,nil,3)
         local abilitiesHeading = label(abilityPanel, "Recorded abilities", 342, -325, 232, "GameFontNormalLarge")
         abilitiesHeading:SetTextColor(1.00, 0.82, 0.14)
         book.abilityCount = label(abilityPanel, "", 580, -331, 346, "GameFontHighlightSmall")

@@ -259,7 +259,7 @@ class AtlasUITests(unittest.TestCase):
             assert(m.listBody:GetHeight()==15*stride and j.state.indexScroll==0)
             m.list:SetVerticalScroll(60)
             m.search:SetText('Discovery 01')
-            assert(m.list:GetVerticalScroll()==0 and m.listBody:GetHeight()==390)
+            assert(m.list:GetVerticalScroll()==0 and m.listBody:GetHeight()==462)
             assert(m.rows[1].name:GetText()=='Discovery 01' and not m.rows[2]:IsShown())
             click(m.scope);assert(j.state.all and not m.scope.afbSelected)
         ''')
@@ -304,6 +304,16 @@ class AtlasUITests(unittest.TestCase):
             m.layerPanel.scripts.OnShow()
             local checks={};for _,check in ipairs(m.layerPanel.checks) do checks[check.layerID]=check end
             assert(#m.layerPanel.checks==#A.categories+1 and not checks.entrance:GetChecked())
+            for _,category in ipairs(A.categories) do
+                assert(checks[category.id].icon.texture==category.icon)
+            end
+            assert(checks.entrance.icon.texture==ns.AtlasEntrances.generic.icon)
+            local originalIcon=A.category.cave.icon
+            A.category.cave.icon='Interface\\\\Icons\\\\INV_Misc_QuestionMark'
+            m.layerPanel.scripts.OnShow()
+            assert(checks.cave.icon.texture==A.category.cave.icon)
+            A.category.cave.icon=originalIcon
+            m.layerPanel.scripts.OnShow()
             checks.cave:SetChecked(false);click(checks.cave)
             assert(not j:Layer('cave') and j:Layer('route') and m.reveal:IsShown())
             assert(snapshot(j.records)==before)

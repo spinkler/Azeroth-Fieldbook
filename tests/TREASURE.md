@@ -85,6 +85,32 @@ Potion ×3, Linen Cloth ×2 and 98 Copper. Autoloot usage was not confirmed.
 The journal reported: “Capture skipped: Loot source is not a recognized container.”
 The source-identification cause remains unresolved; do not mark this fixed.
 
+Follow-up on 2026-10-05: another Battered Chest was first opened with Shift
+held to inspect its contents, then cancelled, then fully looted. Neither attempt
+appeared in the journal. Screenshots show Minor Mana Potion ×2, Haunch of Meat
+×2, Moss Agate, Ice Cold Milk ×2, Scroll: STHENIC LUNATE and 1 Silver, 6 Copper.
+The zone and bottom capture-status diagnostic are not shown. The failed manual
+inspection means an autoloot-cleared window alone cannot explain this attempt.
+Opening should suffice; taking every item is not required by the observer.
+The retained status was subsequently supplied: "Capture skipped: World loot
+has no matching container tooltip or recent opening interaction". This confirms
+the GameObject source path rejected the identity correlation, but does not
+distinguish missing context from mismatching tooltip identity.
+
+Code review found that an empty UNIT_SPELLCAST_SENT target discarded the
+right-click identity. Opening (3365) now retains a container clicked within
+0.5 seconds when the target is empty; it still requires matching cast completion
+and a single compatible GameObject loot source. Hover, unrelated spells, stale
+clicks and failed casts cannot enable this fallback. This is a tested correction,
+not yet a confirmed explanation of the live failure. World rejection diagnostics
+now include source GUID, observed name/object ID and last opening-cast details.
+Focused validation on 2026-10-05: all 65 Treasure tests passed.
+
+Subsequent live observation on 2026-10-05: the player confirmed success and
+supplied a screenshot showing Battered Chest, World / container, Redridge
+Mountains, Contents recorded. This verifies capture for that encounter after
+the correction; it does not establish every opening/event-order variant.
+
 Diagnostics now include the rejected readable source GUID and observed container
 name, and preserve the original failure reason if autoloot clears the window.
 A separate zero-quantity coin-slot rejection was corrected and passed the
@@ -93,7 +119,8 @@ Treasure tests, but is not established as the cause of this encounter.
 When the player naturally encounters another chest, after loading these changes
 with `/reload`, open/loot it and check Treasure Journal. If capture fails, retain
 the complete bottom status message (especially `Source:` and `observed container:`),
-chest name, zone and whether autoloot was enabled. Use that evidence to diagnose
+chest name, zone and whether autoloot was enabled. World-source failures now
+also expose tooltip object ID and opening details. Use that evidence to diagnose
 source recognition. The player does not know another chest location; wait for an
 opportunistic observation rather than asking them to find one. No scheduled
 reminder or active monitor is requested. Previously missed loot is not backfilled.

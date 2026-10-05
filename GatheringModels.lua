@@ -44,6 +44,8 @@ local models={
     {"mineral","Ooze Covered Thorium Vein",219553,{123848}},
     {"mineral","Ooze Covered Truesilver Deposit",219553,{123309}},
     {"herb","Peacebloom",219481,{1618,3724}},
+    -- Wowhead object 657454 uses display 269; Forever 1.60.1.70205 maps it to 219481.
+    {"herb","Wilted Peacebloom",219481,{657454}},
     {"herb","Plaguebloom",219482,{176587,176641}},
     {"herb","Purple Lotus",219483,{142140}},
     {"mineral","Rich Thorium Vein",219550,{175404}},

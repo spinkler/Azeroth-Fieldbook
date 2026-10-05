@@ -133,7 +133,13 @@ function ns.CreateTreasureTracking(journal)
             if #sources~=2 or not T.Text(sources[1],160) or not T.Integer(sources[2],coin and 0 or 1,1000000) then return nil,"Loot source missing or mixed." end
             local guid=sources[1];local known=self.bagGUIDs[guid] or self:WorldSource(guid)
             if not known then
-                if objectID(guid) then return nil,"World loot has no matching container tooltip or recent opening interaction." end
+                if objectID(guid) then
+                    local seen=self.interaction or self.world or self.cast
+                    return nil,"World loot has no matching container tooltip or recent opening interaction. Source: "..guid
+                        .."; observed container: "..(seen and seen.name or "none")
+                        .."; tooltip object ID: "..tostring(seen and seen.objectID or "none")
+                        .."; opening: "..(self.lastOpening or "none").."."
+                end
                 -- Retain the rejected readable identity so native client
                 -- differences can be diagnosed after the loot window closes.
                 local seen=self.interaction or self.world or self.cast
@@ -195,11 +201,21 @@ function ns.CreateTreasureTracking(journal)
         elseif event=="UNIT_SPELLCAST_SENT" then
             local unit,target,castGUID,spellID=...
             if not T.Public(unit) or unit~="player" then return end
+            local clicked=fresh(self.interaction,0.5) and self.interaction or nil
             self.cast=nil;self.interaction=nil;self.pending=nil
             local name=containerName(target)
+            -- Opening can omit its target name. Carry only a just-clicked
+            -- world container through this specific cast, never an arbitrary
+            -- spell or hover. Completion and exact loot-source checks remain.
+            local unnamed=T.Public(target) and (target==nil or target=="")
+            local opening=T.Public(spellID) and spellID==3365
+            if not name and unnamed and opening and clicked then name=clicked.name end
+            self.lastOpening="spell "..(T.Integer(spellID,1,2147483647) and tostring(spellID) or "unreadable")
+                ..", target "..(T.Name(target) or "none")..", clicked "..(clicked and clicked.name or "none")
             if name and T.Text(castGUID,160) and T.Integer(spellID,1,2147483647) then
                 self:ObserveWorldCursor()
-                local seen=fresh(self.world,0.5) and self.world.name==name and self.world or nil
+                local seen=clicked and clicked.name==name and clicked
+                    or (fresh(self.world,0.5) and self.world.name==name and self.world or nil)
                 self.world=seen
                 self.cast={name=name,guid=seen and seen.guid,objectID=seen and seen.objectID,
                     castGUID=castGUID,spellID=spellID,at=clock()}
@@ -215,7 +231,7 @@ function ns.CreateTreasureTracking(journal)
             end
             return
         end
-        if event=="PLAYER_ENTERING_WORLD" then self.active=nil;self.pending=nil;self.world=nil;self.interaction=nil;self.cast=nil;self.bagGUIDs={};self.recent={} end
+        if event=="PLAYER_ENTERING_WORLD" then self.active=nil;self.pending=nil;self.world=nil;self.interaction=nil;self.cast=nil;self.lastOpening=nil;self.bagGUIDs={};self.recent={} end
         if event=="BAG_UPDATE_DELAYED" or event=="PLAYER_ENTERING_WORLD" then
             if self.bagQueued then return end;self.bagQueued=true
             local function scan() self.bagQueued=false;self:ScanBags() end

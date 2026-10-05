@@ -237,7 +237,9 @@ class FieldbookTabsTests(unittest.TestCase):
             directions={}
             AzerothFieldbookNextEntry();AzerothFieldbookPreviousEntry()
             shellToggles=0
-            ns.CreateFieldbookShell=function() return {Toggle=function() shellToggles=shellToggles+1 end} end
+            pageDirections={}
+            ns.CreateFieldbookShell=function() return {Toggle=function() shellToggles=shellToggles+1 end,
+                CycleSection=function(_,direction) pageDirections[#pageDirections+1]=direction end} end
             ns.CreateBestiaryBook=function() return {CycleEntry=function(_,direction)
                 directions[#directions+1]=direction;return true end,
                 Toggle=function() error('binding must toggle the shared shell') end,
@@ -245,7 +247,7 @@ class FieldbookTabsTests(unittest.TestCase):
             fire('ADDON_LOADED','AzerothFieldbook')
         ''')
         nodes=list(ET.parse(ROOT/'Bindings.xml').getroot())
-        self.assertEqual(len(nodes),5)
+        self.assertEqual(len(nodes),7)
         for node in nodes:
             self.assertEqual(node.attrib.get('category'),'BINDING_HEADER_AZEROTHFIELDBOOK')
             self.assertNotIn('header',node.attrib,'legacy headers create synthetic binding rows')
@@ -256,6 +258,9 @@ class FieldbookTabsTests(unittest.TestCase):
         lua.execute('assert(atlasPoints==1)')
         lua.execute(bindings['CLASSICBESTIARY_NEXT_ENTRY'])
         lua.execute(bindings['CLASSICBESTIARY_PREVIOUS_ENTRY'])
+        lua.execute(bindings['AZEROTHFIELDBOOK_NEXT_PAGE'])
+        lua.execute(bindings['AZEROTHFIELDBOOK_PREVIOUS_PAGE'])
+        lua.execute('assert(#pageDirections==2 and pageDirections[1]==1 and pageDirections[2]==-1)')
         lua.execute(bindings['CLASSICBESTIARY_BOOK'])
         lua.execute(bindings['CLASSICBESTIARY_MOUSEOVER_BOOK'])
         lua.execute('assert(#directions==2 and directions[1]==1 and directions[2]==-1)')
@@ -264,6 +269,18 @@ class FieldbookTabsTests(unittest.TestCase):
             assert(BINDING_HEADER_AZEROTHFIELDBOOK=='Azeroth Fieldbook')
             assert(BINDING_NAME_CLASSICBESTIARY_BOOK=='Toggle Azeroth Fieldbook')
             assert(BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK=='Open Azeroth Fieldbook at mouseover')
+        ''')
+
+    def test_page_navigation_wraps_in_display_order(self):
+        self.lua.execute('''
+            shell:ShowSection(shell.order[1])
+            shell:CycleSection(-1);assert(shell.active==shell.order[#shell.order])
+            shell:CycleSection(1);assert(shell.active==shell.order[1])
+            shell:CycleSection(1);assert(shell.active==shell.order[2])
+            shell:Hide();shell:CycleSection(-1)
+            assert(shell.active==shell.order[1] and shell:GetFrame():IsShown())
+            ns.InitializationBlocked=true
+            assert(shell:CycleSection(1)==false and shell.active==shell.order[1])
         ''')
 
     def test_mouseover_binding_prefers_ledger_then_falls_back_to_bestiary(self):

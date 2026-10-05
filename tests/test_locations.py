@@ -392,7 +392,7 @@ class LocationsWindowTests(unittest.TestCase):
             book=ns.CreateBestiaryBook(j);book:OpenAtUnit('target')
             local content=AzerothFieldbookBestiarySection
             assert(content.creatureLocationsButton.enabled)
-            eq(content.creatureLocationsButton.point[2],content.creatureNotesButton)
+            eq(content.creatureLocationsButton.point[2],content)
             content.creatureLocationsButton.scripts.OnClick()
             local map=AzerothFieldbookCreatureLocations
             map.scripts.OnShow(map) -- The mock's Show omits native OnShow dispatch.

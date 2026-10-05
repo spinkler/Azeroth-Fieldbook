@@ -1,4 +1,10 @@
 <Bindings>
+    <Binding name="AZEROTHFIELDBOOK_NEXT_PAGE" category="BINDING_HEADER_AZEROTHFIELDBOOK">
+        AzerothFieldbookNextPage();
+    </Binding>
+    <Binding name="AZEROTHFIELDBOOK_PREVIOUS_PAGE" category="BINDING_HEADER_AZEROTHFIELDBOOK">
+        AzerothFieldbookPreviousPage();
+    </Binding>
     <Binding name="CLASSICBESTIARY_BOOK" category="BINDING_HEADER_AZEROTHFIELDBOOK">
         AzerothFieldbookToggleBestiary();
     </Binding>

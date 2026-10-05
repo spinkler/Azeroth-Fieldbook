@@ -37,8 +37,9 @@ function ns.CreateTreasureMap(parent,journal,state,onEncounter)
             self.empty:Show()
         end
         for _,pin in ipairs(self.pins or {}) do if pin.group and pin:IsShown() then
-            pin.icon:SetTexture(T.ICON)
             local v=pin.group[1].point.encounter
+            local kind=journal:Get(v.kindID)
+            pin.icon:SetTexture(kind and kind.form=="world" and T.WORLD_ICON or T.ICON)
             pin.icon:SetVertexColor(v.reported and 0.55 or 1,v.reported and 0.7 or 1,1)
             pin:SetScript("OnEnter",function(self)
                 if not GameTooltip then return end

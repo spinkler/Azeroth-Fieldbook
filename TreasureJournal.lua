@@ -4,6 +4,7 @@ ns.Treasure=T
 -- These exposed helpers are pure. Treasure never borrows another journal's state.
 for _,key in ipairs({"Public","Read","Text","Safe","Number","Integer","Array","Count","Copy","Now","Position"}) do T[key]=ns.Atlas[key] end
 T.ICON="Interface\\Icons\\INV_Box_03"
+T.WORLD_ICON="Interface\\Icons\\INV_Box_01"
 T.VISION="Record discovered chests, locked containers and salvage opportunities. Distinguish sightings from opened finds, with locations, observed contents and personal notes."
 T.contexts={world="World find",acquired="Acquired",opened="Contents inspected",carried="Observed carried"}
 T.captures={missing="Contents not recorded",partial="Partial contents capture",full="Full contents capture (player assertion)"}

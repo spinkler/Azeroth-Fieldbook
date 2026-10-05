@@ -88,6 +88,12 @@ those assets read-only from the installed CASC archive; model paths do not
 resolve by name in this build. `PlayerModel:SetModel` accepts FileAsset IDs in
 the installed SimpleModel API. These are game-object assets, not creature IDs.
 The catalog contains presentation data only, not discovered resources or spawns.
+Wilted Peacebloom object 657454 specifies display 269 in the
+[Wowhead Forever object record](https://www.wowhead.com/forever/object=657454/wilted-peacebloom).
+The installed Forever 1.60.1.70205 GameObjectDisplayInfo table maps display 269
+to model file 219481 (`world/skillactivated/tradeskillnodes/bush_peacebloom01.m2`);
+that file was successfully read from the installed CASC archive. This verifies
+the asset association, not native in-game preview rendering.
 The native TempPortraitAlphaMask texture was verified in the installed archive;
 gathering uses separate circular masks for the 6-pixel marker border and inset.
 The map regression exercises three nearby samples with triangulation disabled,

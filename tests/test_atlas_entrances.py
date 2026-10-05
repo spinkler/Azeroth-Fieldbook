@@ -91,6 +91,38 @@ class EntranceTests(unittest.TestCase):
         self.lua = new_atlas(ui=True)
         self.lua.execute(ENV)
 
+    def test_generic_archways_scale_filter_and_revert_to_category_icons(self):
+        self.lua.execute('''
+            enabled();local id=assert(j.entrances:Record(observe(2500)))
+            local selected=E.PREFIX..id
+            assert(c.entries:Get(selected).category=='entrance')
+            c.entries:SetLayer('entrance',true);j.state.iconSize=20;c:Refresh()
+            local function pin()
+                for _,p in ipairs(m.map.pins) do
+                    if p:IsShown() then for _,v in ipairs(p.group) do
+                        if v.id==selected then return p end
+                    end end
+                end
+            end
+            local p=assert(pin())
+            assert(p.icon.texture==E.generic.icon)
+            assert(p.icon.vertexColor[1]==1 and not p.icon.entranceMask)
+            assert(p.highlightTexture=='Interface\\\\Buttons\\\\ButtonHilight-Square')
+            assert(not p.circularHighlight)
+            local inset=p.icon.point[3]
+            assert(inset==0 and p:GetWidth()==20)
+            j.state.iconSize=40;c:Refresh();p=assert(pin())
+            assert(p.icon.point[3]==0 and p:GetWidth()==40)
+            c.entries:SetLayer('entrance',false);c:Refresh();assert(not pin())
+            local e=j.entrances.records[id];e.classification={kind='inferred',category='cave',at=A.Now()}
+            c:Refresh();p=assert(pin())
+            assert(p.icon.texture==A.category.cave.icon and p.icon.vertexColor[1]==1)
+            assert(not p.icon.entranceMask)
+            assert(p.highlightTexture=='Interface\\\\Buttons\\\\ButtonHilight-Square')
+            assert(p.icon.point[3]==0)
+            c.entries:SetLayer('cave',false);c:Refresh();assert(not pin())
+        ''')
+
     def test_defaults_off_login_indoors_and_reenable_baseline(self):
         self.lua.execute('''
             assert(j.state.autoEntrances==false and j.state.layers.entrance==false)

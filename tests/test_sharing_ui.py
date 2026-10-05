@@ -334,8 +334,9 @@ main.creatureNotesButton.scripts.OnClick();assert(notes.shown,'Creature Notes to
 notes.pinButton.scripts.OnClick()
 assert(notes.notesArea.shown and notes.rumoursToggle==nil,'Rumours moved out of Creature Notes')
 eq(main.rumoursButton.point[2],main.creatureLocationsButton)
-eq(main.creatureLocationsButton.point[2],main.creatureNotesButton)
-eq(main.killCount.point[2],main.rumoursButton,'Kills sits immediately left of Rumours')
+eq(main.creatureLocationsButton.point[2],main)
+eq(main.creatureNotesButton.point[2],main.rumoursButton)
+eq(main.killCount.point[2],main.creatureNotesButton,'Kills sits immediately left of Notes')
 main.rumoursButton.scripts.OnClick()
 local rumours=AzerothFieldbookRumours
 assert(rumours.shown and rumours.parent==main.damageBorder and notes.shown)

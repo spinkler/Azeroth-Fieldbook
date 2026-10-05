@@ -2,7 +2,7 @@ local _,ns=...
 local A,C,T=ns.Atlas,ns.AtlasEnvironment,ns.AtlasEntranceTypes
 local E={SCHEMA=1,MAX_RECORDS=5000,CLUSTER_YARDS=35,UNKNOWN_YARDS=12,PREFIX="entrance:"}
 ns.AtlasEntrances=E
-E.generic={id="entrance",label="Generic Entrances",icon="Interface\\Icons\\INV_Misc_Map_01"}
+E.generic={id="entrance",label="Generic Entrances",icon="Interface\\Icons\\Achievement_Dungeon_UlduarRaid_Archway_01"}
 function E.Category(category) return A.category[category] or (category=="entrance" and E.generic) end
 local function plain(t) return type(t)=="table" and not getmetatable(t) end
 function E.SupportsStore(saved)

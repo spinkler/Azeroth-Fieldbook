@@ -1,11 +1,12 @@
 local _, ns = ...
 local T,U=ns.Treasure,ns.AtlasUI
-local ROW_HEIGHT,LIST_HEIGHT=60,440
+local ROW_HEIGHT,LIST_HEIGHT=60,462
 local VISIBLE_ROWS=math.ceil(LIST_HEIGHT/ROW_HEIGHT)+1
 local HISTORY_PAGE=8
 local categories={world="World finds",portable="Portable",salvage="Salvage"}
 local knowledge={personal="Personal",reported="Reported only",missing="No contents",contents="Has contents"}
 local function icon(item)
+    if item and item.form=="world" then return T.WORLD_ICON end
     local value=item and item.itemID and T.Read(C_Item and C_Item.GetItemIconByID or GetItemIcon,item.itemID)
     return T.Integer(value,1,2147483647) and value or T.ICON
 end
@@ -255,7 +256,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     T.InstallEditors(c)
     local function build(content)
         c.frame=content;local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
-        local spine=m:CreateTexture(nil,"ARTWORK");spine:SetColorTexture(0.25,0.13,0.055,0.35);spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
+        local spine=ns.FieldbookUI.PageDivider(m)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Treasure Journal")
         m.directory=CreateFrame("Frame",nil,m);m.directory:SetAllPoints();local d=m.directory
         m.search=U.Search(d,70,-110,168,200);m.search:SetText(state.query)
@@ -313,12 +314,12 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             end)
             item[1]:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         end
-        m.showContents=U.Button(d,"Observed contents",42,-142,250,function()
+        m.showContents=U.Button(d,"Observed contents",42,-140,250,function()
             state.showContents=not state.showContents;c:Refresh()
         end)
         U.StyleSelection(m.showContents)
         m.count=ns.FieldbookUI.EntryCount(d);m.rows={}
-        m.contentsHeader=CreateFrame("Button",nil,d,"BackdropTemplate");m.contentsHeader:SetPoint("TOPLEFT",42,-177);m.contentsHeader:SetSize(250,36)
+        m.contentsHeader=CreateFrame("Button",nil,d,"BackdropTemplate");m.contentsHeader:SetPoint("TOPLEFT",42,-170);m.contentsHeader:SetSize(250,36)
         ns.FieldbookUI.StyleMenuRow(m.contentsHeader);m.contentsHeader:EnableMouse(false)
         m.contentsHeader.icon=m.contentsHeader:CreateTexture(nil,"ARTWORK")
         m.contentsHeader.icon:SetPoint("TOPLEFT",6,-6);m.contentsHeader.icon:SetSize(24,24)
@@ -326,9 +327,11 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         local headerNamePath,headerNameSize,headerNameFlags=m.contentsHeader.name:GetFont()
         if headerNamePath and type(headerNameSize)=="number" then m.contentsHeader.name:SetFont(headerNamePath,headerNameSize+2,headerNameFlags) end
         m.contentsHeader.name:SetWordWrap(true)
-        m.contents,m.contentsBody=U.Scroll(d,42,-211,228,LIST_HEIGHT-34);m.contentsRows={}
+        m.contents,m.contentsBody=U.Scroll(d,42,-214,228,LIST_HEIGHT-44);m.contentsRows={}
+        U.ContactListFades(m.contents,shell,d,42,function() return -170-m.contentsHeader:GetHeight()-8 end)
         m.contents:ClearAllPoints();m.contents:SetPoint("TOPLEFT",m.contentsHeader,"BOTTOMLEFT",0,-8)
-        m.list,m.listBody=U.Scroll(d,42,-177,228,LIST_HEIGHT)
+        m.list,m.listBody=U.Scroll(d,42,-170,228,LIST_HEIGHT)
+        U.ContactListFades(m.list,shell,d,42,-170)
         m.list:HookScript("OnVerticalScroll",function(self,value)
             if not m.updatingList then state.indexScroll=value or self:GetVerticalScroll();c:Refresh() end
         end)
@@ -340,6 +343,8 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*ROW_HEIGHT);row:SetSize(228,ROW_HEIGHT-1)
             row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",scrollList)
             ns.FieldbookUI.StyleMenuRow(row)
+            row.divider=ns.FieldbookUI.EntryDivider(row,1,228)
+            for _,line in ipairs(row.divider) do line:SetShown(i>1) end
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",6,-6);row.icon:SetSize(19,19)
             row.name=U.Label(row,"",29,-6,192,"GameFontHighlightSmall")
             local namePath,nameSize,nameFlags=row.name:GetFont()

@@ -668,6 +668,14 @@ function AzerothFieldbookPreviousEntry()
     if book then return book:CycleEntry(-1) end
 end
 
+function AzerothFieldbookNextPage()
+    if fieldbook then return fieldbook:CycleSection(1) end
+end
+
+function AzerothFieldbookPreviousPage()
+    if fieldbook then return fieldbook:CycleSection(-1) end
+end
+
 local function watchedAlias(unit)
     if not publicString(unit) then return end
     if unit == "target" or unit == "mouseover" then return unit end

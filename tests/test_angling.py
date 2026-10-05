@@ -720,7 +720,7 @@ class AnglingUITests(unittest.TestCase):
             assert(m.detailRows[1].text:GetText():find('|cffffd100Fishing summary|r',1,true))
             assert(m.detailRows[2].text:GetText():find('|cff74c7d5',1,true))
             local line=m.detailRows[2].divider[16]
-            assert(line:IsShown() and line.colorTexture[1]==ns.AtlasUI.DetailGold[1])
+            assert(line:IsShown() and line.colorTexture[1]==0.25 and line.colorTexture[4]==0.35)
             c:Refresh();assert(snapshot(j.db)==before)
             c:State().selected=nil;c:Refresh()
             assert(m.detailRows[1]:IsShown() and not m.detailRows[2]:IsShown())

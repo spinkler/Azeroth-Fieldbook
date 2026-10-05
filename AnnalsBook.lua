@@ -10,7 +10,7 @@ function A.ParseDate(text,ending)
     return stamp
 end
 local function detailArea(parent)
-    local area,body=U.Scroll(parent,0,0,228,436)
+    local area,body=U.Scroll(parent,0,0,228,422)
     area.rows={};area.requests={};area.body=body
     local function hideTooltip() if GameTooltip then GameTooltip:Hide() end end
     local function scroll(_,delta)
@@ -100,7 +100,7 @@ function ns.CreateAnnalsBook(j,shell)
         c.filter[kind]=type(j.db.settings.eventFilters)~='table' or j.db.settings.eventFilters[kind]~=false
     end
     function c:LatestOffset()
-        return self.newestFirst and 0 or math.max(0,math.floor((#self.rows-1)/7)*7)
+        return self.newestFirst and 0 or math.max(0,math.floor((#self.rows-1)/8)*8)
     end
     function c:ToggleSort()
         self.newestFirst=not self.newestFirst;self.offset=0;self:Refresh()
@@ -227,7 +227,7 @@ function ns.CreateAnnalsBook(j,shell)
     end
     function c:SetRange(first,last)
         self:PausePlayback();self.sliderStart=nil
-        self.follow=false
+        self.follow=false;self.liveRange=false
         self.first,self.last=first,last;self.at=last;self.offset=0;self.index=nil
         if self.main then
             self.main.from:SetText(date and date('%Y-%m-%d',first) or '')
@@ -247,7 +247,7 @@ function ns.CreateAnnalsBook(j,shell)
         self.first=math.min(j:Bounds(),A.Now());self.last=A.Now();self.at=self.last
         local held=A.JourneyPosition(A.JourneyIndex(j,self.first,self.last,nil),self.last)
         if held and held.instanceName then self.mapID=held.mapID end
-        self.follow=true;self.index=nil;self.offset=self.newestFirst and 0 or math.huge
+        self.follow=true;self.liveRange=true;self.index=nil;self.offset=self.newestFirst and 0 or math.huge
         self.main.map.zoom,self.main.map.panX,self.main.map.panY=1,0,0
         self:Refresh(true)
     end
@@ -360,29 +360,38 @@ function ns.CreateAnnalsBook(j,shell)
             ..(invalid>0 and (invalid..' malformed segments preserved but not drawn. ') or '')
             ..(self.main.map.linesAvailable==false and 'Line rendering unavailable; markers and stored history remain.' or ''))
     end
+    function c:RebuildTimelineData()
+        self.index=nil;self.positionIndex=nil;self.searchCache={}
+        self:Refresh(true)
+    end
     function c:Refresh(requery)
         if not self.main then return end
-        if self.follow then self.first=math.min(j:Bounds(),A.Now());self.last=A.Now();self.at=self.last end
+        if self.liveRange or self.follow then
+            local previousLast=self.last
+            self.first=math.min(j:Bounds(),A.Now());self.last=A.Now()
+            if self.follow then self.at=self.last end
+            if previousLast~=self.last then requery=true end
+        end
         if not self.first then local lo,hi=j:Bounds();self.first,self.last=lo,hi;self.at=hi end
         if requery or self.revision~=j.revision then
             self.rows=A.SearchEvents(j:Range(self.first,self.last,self.filter,self.level),self.query,self.searchCache)
             self.revision=j.revision;self.index=nil;self.positionIndex=nil
         end
-        self.offset=math.max(0,math.min(self.offset,math.max(0,math.floor((#self.rows-1)/7)*7)))
+        self.offset=math.max(0,math.min(self.offset,math.max(0,math.floor((#self.rows-1)/8)*8)))
         local m=self.main
         local filtered=false
         for _,kind in ipairs(eventKinds) do if not self.filter[kind] then filtered=true;break end end
         m.filter:SetSelected(filtered);m.mapFilter:SetSelected(filtered)
         for i,line in ipairs(m.sort.lines) do line:SetSize(self.newestFirst and (11-i*2) or (i*2-1),1) end
         m.timelineScroll.syncing=true
-        m.timelineScroll:SetMinMaxValues(0,math.max(0,math.floor((#self.rows-1)/7)))
-        m.timelineScroll:SetValue(self.offset/7);m.timelineScroll:SetShown(#self.rows>7)
+        m.timelineScroll:SetMinMaxValues(0,math.max(0,math.floor((#self.rows-1)/8)))
+        m.timelineScroll:SetValue(self.offset/8);m.timelineScroll:SetShown(#self.rows>8)
         m.timelineScroll.syncing=false
         if self.follow then
             m.from:SetText(date and date('%Y-%m-%d',self.first) or '');m.to:SetText(date and date('%Y-%m-%d',self.last) or '')
         end
         self:SyncDetailOverlay()
-        m.page:SetText(string.format('%d–%d / %d events',#self.rows>0 and self.offset+1 or 0,math.min(self.offset+7,#self.rows),#self.rows))
+        m.page:SetText(string.format('%d–%d / %d events',#self.rows>0 and self.offset+1 or 0,math.min(self.offset+8,#self.rows),#self.rows))
         m.emptySearch:SetShown(#self.rows==0)
         m.emptySearch:SetText(self.query~='' and 'No matching events. Try a broader search or reset the filters.' or 'No events match the current filters.')
         for i,row in ipairs(m.rows) do
@@ -403,10 +412,9 @@ function ns.CreateAnnalsBook(j,shell)
     end
     local function build(content)
         c.main=content;local m=content;m.rows={}
-        m.spine=m:CreateTexture(nil,'ARTWORK');m.spine:SetColorTexture(0.25,0.13,0.055,0.35)
-        m.spine:SetPoint('TOPLEFT',306,-53);m.spine:SetSize(3,661)
+        m.spine=ns.FieldbookUI.PageDivider(m)
         ns.FieldbookUI.SectionTitle(m,"Adventurer's Annals")
-        m.search=U.Search(m,42,-96,194,200);m.search:SetText(c.query)
+        m.search=U.Search(m,70,-110,168,200);m.search:SetText(c.query)
         m.search:HookScript('OnTextChanged',function(self)
             if c.searchSync then return end
             c.query=self:GetText();c.offset=0;c.selected=nil
@@ -421,14 +429,14 @@ function ns.CreateAnnalsBook(j,shell)
             if c.query~='' and m:IsVisible() then c:QueueSearchRefresh() end
         end)
         m.from=U.Field(m,'From date',342,-71,130,10);m.to=U.Field(m,'Through date',480,-71,130,10)
-        m.level=U.Field(m,'Level (optional)',618,-71,105,3)
-        U.Button(m,'Apply',731,-91,75,function()
+        m.level=U.Field(m,'Level',618,-71,60,3)
+        U.Button(m,'Apply',686,-91,75,function()
             local first,last=A.ParseDate(m.from:GetText()),A.ParseDate(m.to:GetText(),true)
             local levelText=m.level:GetText();local level=levelText~='' and tonumber(levelText) or nil
             if not first or not last or first>last or (levelText~='' and not A.Int(level,1,1000)) then c:Message('Use valid YYYY-MM-DD dates, earliest first, and an optional level.');return end
             c.level=level;c:SetRange(first,last)
         end)
-        m.now=U.Button(m,'Now / reset',814,-91,106,function() c:ResetNow() end)
+        m.now=U.Button(m,'Now / reset',342,-143,106,function() c:ResetNow() end)
         local function showFilters(owner)
             m.search:ClearFocus()
             if not MenuUtil then return end
@@ -445,7 +453,7 @@ function ns.CreateAnnalsBook(j,shell)
                 end
             end)
         end
-        m.filter=ns.FieldbookUI.FilterButton(m,244,-96,showFilters)
+        m.filter=ns.FieldbookUI.FilterButton(m,244,-110,showFilters)
         m.filter.ResetFilters=function()
             c.level=nil;c.query='';c.searchCache={};c.searchSync=true;m.search:SetText('');c.searchSync=false
             m.level:SetText('')
@@ -458,7 +466,7 @@ function ns.CreateAnnalsBook(j,shell)
             if GameTooltip then GameTooltip:SetOwner(self,'ANCHOR_RIGHT');GameTooltip:SetText('Filter events\nRight-click to reset filters.');GameTooltip:Show() end
         end)
         m.filter:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
-        m.sort=U.Button(m,'',270,-96,22,function(button)
+        m.sort=U.Button(m,'',270,-110,22,function(button)
             m.search:ClearFocus();c:ToggleSort()
             if GameTooltip and GameTooltip:IsOwned(button) then button:GetScript('OnEnter')(button) end
         end)
@@ -478,15 +486,15 @@ function ns.CreateAnnalsBook(j,shell)
         end)
         m.sort:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
 
-        m.show=U.Button(m,'Show detail',42,-126,250,function() c.showDetail=not c.showDetail;c:SyncDetailOverlay() end)
+        m.show=U.Button(m,'Show detail',42,-140,250,function() c.showDetail=not c.showDetail;c:SyncDetailOverlay() end)
         U.StyleSelection(m.show)
-        m.timeline=CreateFrame('Frame',nil,m);m.timeline:SetPoint('TOPLEFT',42,-155);m.timeline:SetSize(228,455)
-        m.detailPane=CreateFrame('Frame',nil,m);m.detailPane:SetPoint('TOPLEFT',42,-155);m.detailPane:SetSize(250,507)
+        m.timeline=CreateFrame('Frame',nil,m);m.timeline:SetPoint('TOPLEFT',42,-169);m.timeline:SetSize(228,488)
+        m.detailPane=CreateFrame('Frame',nil,m);m.detailPane:SetPoint('TOPLEFT',42,-169);m.detailPane:SetSize(250,493)
         m.detailPane:SetFrameLevel(m.timeline:GetFrameLevel()+5);m.detailPane:EnableMouse(true);m.detailPane:Hide()
         m.journey=CreateFrame('Frame',nil,m);m.journey:SetAllPoints()
         m.emptySearch=U.Label(m.timeline,'',0,-5,250,'GameFontDisableSmall');m.emptySearch:SetWordWrap(true);m.emptySearch:Hide()
-        for i=1,7 do
-            local row=CreateFrame('Button',nil,m.timeline,'BackdropTemplate');row:SetPoint('TOPLEFT',0,-(i-1)*65);row:SetSize(228,64)
+        for i=1,8 do
+            local row=CreateFrame('Button',nil,m.timeline,'BackdropTemplate');row:SetPoint('TOPLEFT',0,-(i-1)*61);row:SetSize(228,60)
             ns.FieldbookUI.StyleMenuRow(row)
             row.playheadHighlight=row:CreateTexture(nil,'BACKGROUND',nil,1)
             row.playheadHighlight:SetPoint('TOPLEFT',1,-1);row.playheadHighlight:SetPoint('BOTTOMRIGHT',-1,1)
@@ -542,29 +550,28 @@ function ns.CreateAnnalsBook(j,shell)
             row:SetScript('OnClick',function(self) if self.record then c:Select(self.record.id) end end)
             m.rows[i]=row
         end
-        m.timeline:EnableMouseWheel(true);m.timeline:SetScript('OnMouseWheel',function(_,delta) c.offset=c.offset+(delta<0 and 7 or -7);c:Refresh() end)
+        m.timeline:EnableMouseWheel(true);m.timeline:SetScript('OnMouseWheel',function(_,delta) c.offset=c.offset+(delta<0 and 8 or -8);c:Refresh() end)
         m.timelineScroll=CreateFrame('Slider',nil,m.timeline,'UIPanelScrollBarTemplate')
         m.timelineScroll.scrollStep=1;m.timelineScroll:ClearAllPoints()
-        m.timelineScroll:SetPoint('TOPLEFT',m.timeline,'TOPRIGHT',3,-16);m.timelineScroll:SetSize(16,423)
+        -- Match the Ledger's 462-high viewport and native 16-unit end insets.
+        m.timelineScroll:SetPoint('TOPLEFT',m,'TOPLEFT',276,-186);m.timelineScroll:SetSize(16,430)
         m.timelineScroll:SetValueStep(1);m.timelineScroll:SetObeyStepOnDrag(true)
         ns.StyleScrollBarTrack(m.timelineScroll,0.4)
         m.timelineScroll:SetScript('OnValueChanged',function(self,value)
             if self.syncing then return end
-            c.offset=math.floor(value+0.5)*7;c:Refresh()
+            c.offset=math.floor(value+0.5)*8;c:Refresh()
         end)
         m.detail=detailArea(m.detailPane)
-        U.Button(m.detailPane,'Around event',0,-449,112,function() c:Around(false) end)
-        U.Button(m.detailPane,'Quest interval',118,-449,132,function() c:Around(true) end)
-        U.Button(m.detailPane,'Open linked journal',0,-483,250,function()
+        U.Button(m.detailPane,'Around event',0,-435,112,function() c:Around(false) end)
+        U.Button(m.detailPane,'Quest interval',118,-435,132,function() c:Around(true) end)
+        U.Button(m.detailPane,'Open linked journal',0,-469,250,function()
             local e=c.selected and j.db.events[c.selected]
             if not e or not e.link then c:Message('Select a linked discovery first.');return end
             local ok,message=c:OpenLink(e.link);if not ok then c:Message(message) end
         end)
-        m.paging=CreateFrame('Frame',nil,m);m.paging:SetPoint('TOPLEFT',42,-618);m.paging:SetSize(250,42)
-        U.Button(m.paging,'Previous',0,0,80,function() c.offset=c.offset-7;c:Refresh() end)
-        U.Button(m.paging,'Next',86,0,70,function() c.offset=c.offset+7;c:Refresh() end)
-        U.Button(m.paging,'Latest',162,0,80,function() c.offset=c:LatestOffset();c:Refresh() end)
-        m.page=U.Label(m.paging,'',0,-26,250,'GameFontHighlightSmall')
+        m.paging=CreateFrame('Frame',nil,m);m.paging:SetPoint('TOPLEFT',42,-638);m.paging:SetSize(250,58)
+        U.Button(m.paging,'Latest',132,-34,118,function() c.offset=c:LatestOffset();c:Refresh() end)
+        m.page=ns.FieldbookUI.EntryCount(m)
         m.map=ns.CreateAnnalsMap(m.journey,j,function(id) c:Select(id,true);c.showDetail=true;c:SyncDetailOverlay() end,function(id) c.mapID=id;c.index=nil;c:Journey() end)
         m.mapFilter=ns.FieldbookUI.FilterButton(m.map,0,0,showFilters)
         m.mapFilter.ResetFilters=m.filter.ResetFilters
@@ -625,7 +632,7 @@ function ns.CreateAnnalsBook(j,shell)
         m.findPlayer=U.Button(m.journey,'Find player',0,0,100,function() c:FindPlayer() end)
         m.findPlayer:ClearAllPoints();m.findPlayer:SetPoint('RIGHT',m.followPlayer,'LEFT',-6,0)
         m.journey:SetScript('OnHide',function() m.legend:Hide() end)
-        m.around=U.Button(m.journey,'Around selected event',342,-129,200,function() c:Around(false) end)
+        m.around=U.Button(m.journey,'Around selected event',456,-143,200,function() c:Around(false) end)
         m.around:SetScript('OnEnter',function(self)
             if not GameTooltip then return end
             GameTooltip:SetOwner(self,'ANCHOR_TOP');GameTooltip:SetText('Around selected event')
@@ -752,12 +759,11 @@ function ns.CreateAnnalsBook(j,shell)
             j.trail:SetEnabled(false);m.record:SetChecked(j.db.settings.trail~=false);m.recordConfirm:Hide()
         end)
         m.recordConfirm.no=U.Button(dialog,'No',195,-82,95,function() m.recordConfirm:Hide() end)
-        m.record=U.Check(m,'Record Journey',48,-671,160,function(value)
+        m.record=U.Check(m,'Record Journey',773,-91,140,function(value)
             if value then j.trail:SetEnabled(true)
             elseif j.db.settings.trail~=false then m.recordConfirm:Show() end
             m.record:SetChecked(j.db.settings.trail~=false)
         end)
-        U.Button(m,'Refresh',218,-672,74,function() c.index=nil;c:Refresh(true) end)
         m.capacity=U.Label(m,'',42,-701,250,'GameFontDisableSmall');m.capacity:SetWordWrap(false)
         m.capacityHover=CreateFrame('Frame',nil,m);m.capacityHover:SetPoint('TOPLEFT',42,-699);m.capacityHover:SetSize(250,20)
         m.capacityHover:EnableMouse(true)
@@ -769,9 +775,14 @@ function ns.CreateAnnalsBook(j,shell)
         end)
         m.capacityHover:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         -- Journey samples can grow without a new event. Only poll while visible.
-        local storageElapsed=0
+        local storageElapsed,liveElapsed=0,0
         m:SetScript('OnUpdate',function(_,elapsed)
             c:TickPlayback(elapsed)
+            liveElapsed=liveElapsed+elapsed
+            if liveElapsed>=0.2 then
+                liveElapsed=0
+                if c.revision~=j.revision then c:Refresh(true) end
+            end
             storageElapsed=storageElapsed+elapsed
             if storageElapsed>=30 then storageElapsed=0;c:RefreshStorage() end
         end)
@@ -782,7 +793,7 @@ function ns.CreateAnnalsBook(j,shell)
             m.recordConfirm:Hide();m.legend:Hide()
             if GameTooltip then GameTooltip:Hide() end
         end)
-        c:SetRange(j:Bounds());c.follow=true
+        c:SetRange(j:Bounds());c.follow=true;c.liveRange=true
         if j.readOnly then c:Message('Unsupported or malformed Annals store: recording disabled; original data preserved.') end
     end
     shell:RegisterSection('annals',{title="Adventurer's Annals",icon='Interface\\Icons\\INV_Misc_PocketWatch_02',

@@ -1,7 +1,7 @@
 local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local A,U=ns.Atlas,ns.AtlasUI
-local ROW_HEIGHT,LIST_HEIGHT=38,390
+local ROW_HEIGHT,LIST_HEIGHT=38,462
 local VISIBLE_ROWS=math.ceil(LIST_HEIGHT/ROW_HEIGHT)+1
 local function categoryInfo(id) return A.category[id] or ns.AtlasEntrances.Category(id) end
 function ns.CreateAtlasBook(journal,shell,adapters)
@@ -36,6 +36,30 @@ function ns.CreateAtlasBook(journal,shell,adapters)
     end
     journal:ObserveWeather()
     local state=journal.state
+    function c:ListRows()
+        local rows={}
+        for _,entry in ipairs(entries:List(state.query,state.mapID,state.all)) do
+            if (not state.listCategory or entry.category==state.listCategory)
+                and (not state.listOrigin or (state.listOrigin=="automatic" and entry.entrance)
+                    or (state.listOrigin=="deliberate" and not entry.entrance)) then rows[#rows+1]=entry end
+        end
+        local sort=state.listSort or "name"
+        table.sort(rows,function(a,b)
+            if sort=="newest" or sort=="oldest" then
+                local av,bv=a.created or 0,b.created or 0
+                if av~=bv then if sort=="newest" then return av>bv else return av<bv end end
+            elseif sort=="zone" and a.zone~=b.zone then return a.zone:lower()<b.zone:lower() end
+            if a.name:lower()~=b.name:lower() then return a.name:lower()<b.name:lower() end
+            return a.id<b.id
+        end)
+        return rows
+    end
+    function c:SetListFilter(category,origin)
+        state.listCategory=category;state.listOrigin=origin;state.indexScroll=0;self:Refresh()
+    end
+    function c:SetListSort(sort)
+        state.listSort=sort;state.indexScroll=0;self:Refresh()
+    end
     state.query=type(state.query)=="string" and state.query or ""
     state.offset=A.Integer(state.offset,0,5000) and state.offset or 0
     state.indexScroll=A.Number(state.indexScroll,0,1000000) and state.indexScroll or state.offset*ROW_HEIGHT
@@ -68,7 +92,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end
         -- Pins may select entries outside the current search. Make that clear
         -- and clear only the index query so selection can be seen in both views.
-        local rows=entries:List(state.query,state.mapID,state.all);local found
+        local rows=self:ListRows();local found
         for i,r in ipairs(rows) do if r.id==id then found=i;break end end
         if not found then
             if state.query~="" then self:Message("Index search cleared to show the selected discovery.") end
@@ -144,7 +168,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
     function c:Refresh()
         if not self.main then return end
         local m=self.main
-        local rows=entries:List(state.query,state.mapID,state.all)
+        local rows=self:ListRows()
         local scroll=math.max(0,math.min(state.indexScroll,math.max(0,#rows*ROW_HEIGHT-LIST_HEIGHT)))
         state.indexScroll=scroll
         m.updatingList=true;m.listBody:SetHeight(math.max(LIST_HEIGHT,#rows*ROW_HEIGHT))
@@ -155,6 +179,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             m.autoEntrances:SetChecked(state.autoEntrances==true)
         end
         m.scope:SetSelected(not state.all)
+        if m.listFilter then m.listFilter:SetSelected(state.listCategory~=nil or state.listOrigin~=nil) end
         m.zone:SetText(state.zone and state.zone~="" and state.zone or "Choose zone")
         for i,row in ipairs(m.rows) do
             local data=rows[first+i];row.id=data and data.id;row:SetShown(data~=nil)
@@ -216,17 +241,54 @@ function ns.CreateAtlasBook(journal,shell,adapters)
     local function build(content)
         c.frame=content
         local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m;c.pages.main=m
-        local spine=m:CreateTexture(nil,"ARTWORK")
-        spine:SetColorTexture(0.25,0.13,0.055,0.35)
-        spine:SetPoint("TOPLEFT",306,-53);spine:SetSize(3,661)
+        local spine=ns.FieldbookUI.PageDivider(m)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Traveller’s Atlas")
-        m.search=U.Search(m,70,-110,222,200);m.search:SetText(state.query)
+        m.search=U.Search(m,70,-110,168,200);m.search:SetText(state.query)
         m.search:HookScript("OnTextChanged",function() state.query=m.search:GetText();state.offset=0;state.indexScroll=0;c:Refresh() end)
-        m.scope=U.Button(m,"Current map",42,-146,250,function() state.all=not state.all;state.offset=0;state.indexScroll=0;c:Refresh() end)
+        m.listFilter=ns.FieldbookUI.FilterButton(m,244,-110,function(owner)
+            if not MenuUtil then return end
+            m.search:ClearFocus()
+            MenuUtil.CreateContextMenu(owner,function(_,root)
+                local categories=root:CreateButton("Category")
+                categories:CreateRadio("All categories",function() return not state.listCategory end,function() c:SetListFilter(nil,state.listOrigin) end)
+                local choices={};for _,category in ipairs(A.categories) do choices[#choices+1]=category end
+                if journal.entrances then choices[#choices+1]=categoryInfo("entrance") end
+                for _,category in ipairs(choices) do
+                    local id=category.id
+                    categories:CreateRadio(category.label,function() return state.listCategory==id end,function() c:SetListFilter(id,state.listOrigin) end)
+                end
+                local origin=root:CreateButton("Record source")
+                for _,choice in ipairs({{"All records",false},{"Automatic entrances","automatic"},{"Deliberate records","deliberate"}}) do
+                    local value=choice[2] or nil
+                    origin:CreateRadio(choice[1],function() return state.listOrigin==value end,function() c:SetListFilter(state.listCategory,value) end)
+                end
+                root:CreateButton("Clear list filters",function() c:SetListFilter(nil,nil) end)
+            end)
+        end)
+        m.listFilter.ResetFilters=function() c:SetListFilter(nil,nil) end
+        U.StyleSelection(m.listFilter);U.Tip(m.listFilter,"Filter discoveries by category or record source. Right-click to clear list filters.")
+        m.listSort=U.Button(m,"",270,-110,22,function(owner)
+            if not MenuUtil then return end
+            m.search:ClearFocus()
+            MenuUtil.CreateContextMenu(owner,function(_,root)
+                for _,choice in ipairs({{"Name","name"},{"Zone","zone"},{"Newest first","newest"},{"Oldest first","oldest"}}) do
+                    local value=choice[2]
+                    root:CreateRadio(choice[1],function() return (state.listSort or "name")==value end,function() c:SetListSort(value) end)
+                end
+            end)
+        end)
+        m.listSort:SetSize(22,22)
+        for row=0,4 do
+            local stroke=m.listSort:CreateTexture(nil,"OVERLAY")
+            stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,2-row);stroke:SetColorTexture(1,0.82,0.14,1)
+        end
+        U.Tip(m.listSort,"Sort discoveries by name, zone or first recorded time.")
+        m.scope=U.Button(m,"Current map",42,-140,250,function() state.all=not state.all;state.offset=0;state.indexScroll=0;c:Refresh() end)
         U.StyleSelection(m.scope)
         m.count=ns.FieldbookUI.EntryCount(m)
         m.rows={}
-        m.list,m.listBody=U.Scroll(m,42,-204,228,LIST_HEIGHT)
+        m.list,m.listBody=U.Scroll(m,42,-170,228,LIST_HEIGHT)
+        U.ContactListFades(m.list,shell,m,42,-170)
         m.list:HookScript("OnVerticalScroll",function(self,value)
             if not m.updatingList then state.indexScroll=value or self:GetVerticalScroll();c:Refresh() end
         end)
@@ -238,6 +300,8 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             local row=CreateFrame("Button",nil,m.listBody,"BackdropTemplate");row:SetPoint("TOPLEFT",0,-(i-1)*ROW_HEIGHT);row:SetSize(228,ROW_HEIGHT-1)
             row:EnableMouseWheel(true);row:SetScript("OnMouseWheel",scrollList)
             ns.FieldbookUI.StyleMenuRow(row)
+            row.divider=ns.FieldbookUI.EntryDivider(row,1,228)
+            for _,line in ipairs(row.divider) do line:SetShown(i>1) end
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",3,-6);row.icon:SetSize(20,20)
             row.name=U.Label(row,"",32,-6,189,"GameFontHighlightSmall");row.name:SetWordWrap(false)
             row.zone=U.Label(row,"",32,-21,189,"GameFontDisableSmall");row.zone:SetWordWrap(false)
@@ -249,7 +313,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
             m.rows[i]=row
         end
-        m.empty=U.Label(m,"",50,-228,233,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(4)
+        m.empty=U.Label(m,"",50,-194,233,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(4)
         -- Center the 580-pixel control rows between the divider and inner right edge.
         U.Button(m,"Add Discovery",342,-60,140,function() c:OpenEditor(nil,false,A.CurrentLocation()) end)
         U.Button(m,"Expeditions",488,-60,116,function() c:Expeditions() end)
@@ -316,11 +380,16 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         layers.checks={}
         local y=-10
         local function addLayer(id,label)
-            local check=U.Check(layers,label,10,y,210,function(on) entries:SetLayer(id,on);c:Refresh() end)
+            local check=U.Check(layers,label,10,y,174,function(on) entries:SetLayer(id,on);c:Refresh() end)
+            check.icon=check:CreateTexture(nil,"ARTWORK")
+            check.icon:SetPoint("LEFT",check,"RIGHT",2,0);check.icon:SetSize(20,20)
+            local info=categoryInfo(id)
+            check.icon:SetTexture(info.icon)
+            check.label:ClearAllPoints();check.label:SetPoint("TOPLEFT",check, "TOPLEFT",50,-5)
             check.layerID=id;layers.checks[#layers.checks+1]=check;y=y-26
         end
         for _,category in ipairs(A.categories) do addLayer(category.id,category.label) end
-        if journal.entrances then addLayer("entrance","Generic Entrances") end
+        if journal.entrances then addLayer("entrance",categoryInfo("entrance").label) end
         local function all(visible)
             for _,check in ipairs(layers.checks) do entries:SetLayer(check.layerID,visible);check:SetChecked(visible) end
             c:Refresh()
@@ -337,7 +406,12 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         layers:SetSize(244,-y+30)
         ns.FieldbookUI.DismissOnOutsideClick(layers,m.layerMenu)
         layers:SetScript("OnShow",function()
-            for _,check in ipairs(layers.checks) do check:SetChecked(entries:Layer(check.layerID)) end
+            for _,check in ipairs(layers.checks) do
+                check:SetChecked(entries:Layer(check.layerID))
+                -- Resolve the shared definition again so icon revisions carry through.
+                local info=categoryInfo(check.layerID)
+                check.icon:SetTexture(info.icon)
+            end
             m.iconSize:Display(A.Number(state.iconSize,6,40) and state.iconSize or 20)
         end)
         m:HookScript("OnHide",function() layers:Hide() end)

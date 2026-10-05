@@ -199,6 +199,54 @@ class TreasureCaptureTests(unittest.TestCase):
             openworld();assert(T.Count(j.encounters)==1)
         """)
 
+    def test_unnamed_opening_preserves_clicked_chest_through_cast(self):
+        self.world_fixture()
+        self.lua.execute("""
+            worldData.id=nil;worldData.lines[1].leftText='Battered Chest'
+            GetMouseFoci=function() return {WorldFrame} end
+            fire('GLOBAL_MOUSE_DOWN','RightButton');worldData=nil
+            fire('UNIT_SPELLCAST_SENT','player','','Cast-chest',3365)
+            now=now+5
+            fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-chest',3365)
+            openworld()
+            local v=assert(j.encounters[t.active.id])
+            assert(j:Get(v.kindID).name=='Battered Chest' and v.facts.inspected)
+            assert(v.items[1].recovered==nil)
+            fire('LOOT_CLOSED');openworld()
+            assert(T.Count(j.encounters)==1,'reinspection does not duplicate')
+        """)
+
+    def test_unnamed_opening_does_not_accept_hover_other_spells_or_failed_cast(self):
+        for scenario in ('hover', 'stale', 'other_spell', 'failed', 'wrong_source'):
+            with self.subTest(scenario=scenario):
+                self.setUp();self.world_fixture()
+                self.lua.globals().scenario=scenario
+                self.lua.execute("""
+                    worldData.id=nil;worldData.lines[1].leftText='Battered Chest'
+                    GetMouseFoci=function() return {WorldFrame} end
+                    t:ObserveWorldCursor()
+                    if scenario~='hover' then fire('GLOBAL_MOUSE_DOWN','RightButton') end
+                    worldData=nil
+                    if scenario=='stale' then now=now+1 end
+                    local spell=scenario=='other_spell' and 133 or 3365
+                    fire('UNIT_SPELLCAST_SENT','player','','Cast-chest',spell)
+                    now=now+5
+                    fire(scenario=='failed' and 'UNIT_SPELLCAST_INTERRUPTED' or 'UNIT_SPELLCAST_SUCCEEDED',
+                        'player','Cast-chest',spell)
+                    openworld(scenario=='wrong_source' and 'Creature-0-1-2-3-99-ABC' or nil)
+                    assert(T.Count(j.encounters)==0)
+                """)
+
+    def test_rejected_world_source_has_identity_diagnostic(self):
+        self.world_fixture()
+        self.lua.execute("""
+            worldData.id=100;worldData.lines[1].leftText='Battered Chest'
+            openworld()
+            assert(t.status:find('Source: GameObject-0-1-2-3-99-ABC',1,true))
+            assert(t.status:find('observed container: Battered Chest',1,true))
+            assert(t.status:find('tooltip object ID: 100',1,true))
+        """)
+
     def test_opening_failure_unrelated_cast_and_wrong_source_cancel_fallback(self):
         self.world_fixture()
         self.lua.execute("""
@@ -566,7 +614,7 @@ class TreasureUITests(unittest.TestCase):
                 c.state.detail=key;c:Refresh()
                 assert(m.detailRows[1].text:GetText():find('|cffffd100',1,true))
                 assert(m.detailRows[2].divider[16]:IsShown())
-                assert(m.detailRows[2].divider[16].colorTexture[1]==ns.AtlasUI.DetailGold[1])
+                assert(m.detailRows[2].divider[16].colorTexture[1]==0.25 and m.detailRows[2].divider[16].colorTexture[4]==0.35)
             end
             assert(snapshot({j.db.kinds,j.db.encounters})==before)
             c.state.detail='history';c:Refresh()

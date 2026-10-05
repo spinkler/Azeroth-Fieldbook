@@ -148,15 +148,20 @@ local function styleMenuRow(row)
 end
 
 -- A fixed page-relative footer keeps Share stationary across unequal panes.
-local function entryDivider(parent,y,width,colour)
-    local segmentWidth=(width or 224)/32
+local function entryDivider(parent,y,width,colour,thickness)
+    local count=thickness and 128 or 32
+    local segmentWidth=(width or 224)/count
     local segments={}
-    for segment=1,32 do
+    for segment=1,count do
         local line=parent:CreateTexture(nil,"ARTWORK")
-        line:SetSize(segmentWidth,1);line:SetPoint("TOPLEFT",(segment-1)*segmentWidth,y)
+        line:SetSize(segmentWidth,thickness or 1);line:SetPoint("TOPLEFT",(segment-1)*segmentWidth,y)
         if line.SetSnapToPixelGrid then line:SetSnapToPixelGrid(false) end
         if line.SetTexelSnappingBias then line:SetTexelSnappingBias(0) end
-        local fade=math.min(1,(segment-0.5)/8,(32.5-segment)/8)
+        local fade=math.min(1,(segment-0.5)/(count/4),(count+0.5-segment)/(count/4))
+        if thickness then
+            line:SetHeight(thickness*fade)
+            line:ClearAllPoints();line:SetPoint("TOPLEFT",(segment-1)*segmentWidth,y-(thickness-thickness*fade)/2)
+        end
         if colour then line:SetColorTexture(colour[1],colour[2],colour[3],fade)
         else line:SetColorTexture(0.25,0.13,0.055,0.35*fade) end
         segments[#segments+1]=line
@@ -170,14 +175,19 @@ local function entryDivider(parent,y,width,colour)
         if top==lastTop and scale==lastScale then return end
         lastTop,lastScale=top,scale
         local offset=math.floor((top+y)*scale+0.5)/scale-top
-        local height=math.max(1,math.floor(scale+0.5))/scale
+        -- Keep every divider exactly one physical pixel, even when the book
+        -- scale would otherwise round a UI unit up to two pixels.
+        local height=thickness or 1/scale
         for segment,line in ipairs(segments) do
-            line:SetHeight(height);line:ClearAllPoints()
-            line:SetPoint("TOPLEFT",(segment-1)*segmentWidth,offset)
+            local fade=thickness and math.min(1,(segment-0.5)/(count/4),(count+0.5-segment)/(count/4)) or 1
+            local taperedHeight=height*fade
+            line:SetHeight(taperedHeight);line:ClearAllPoints()
+            line:SetPoint("TOPLEFT",(segment-1)*segmentWidth,offset-(height-taperedHeight)/2)
         end
     end
     parent:HookScript("OnUpdate",align)
     parent:HookScript("OnShow",align)
+    align()
     return segments
 end
 
@@ -186,6 +196,20 @@ local function shareButton(parent,action)
 end
 ns.FieldbookUI = {Label=label, SectionTitle=sectionTitle, EntryCount=entryCount, Button=button, ShareButton=shareButton, MenuButton=menuButton, FilterButton=filterButton, DismissOnOutsideClick=dismissOnOutsideClick, StyleMenuArrow=styleMenuArrow, Close=cornerClose, Edit=edit, Search=search, StyleMenuRow=styleMenuRow}
 ns.FieldbookUI.EntryDivider=entryDivider
+function ns.FieldbookUI.PageDivider(parent)
+    local frame=CreateFrame("Frame",nil,parent)
+    frame:SetPoint("TOPLEFT",306,-41);frame:SetSize(2,685);frame:EnableMouse(false)
+    local count,height=128,685/128
+    for i=1,count do
+        local line=frame:CreateTexture(nil,"ARTWORK")
+        local fade=math.min(1,(i-0.5)*height/36,(count-i+0.5)*height/36)
+        line:SetPoint("TOPLEFT",(2-2*fade)/2,-(i-1)*height);line:SetSize(2*fade,height)
+        if line.SetSnapToPixelGrid then line:SetSnapToPixelGrid(false) end
+        if line.SetTexelSnappingBias then line:SetTexelSnappingBias(0) end
+        line:SetColorTexture(0.25,0.13,0.055,0.35*fade)
+    end
+    return frame
+end
 
 -- Entry deletion follows the Ledger's left-page warning/action/back layout.
 function ns.FieldbookUI.DeletePanel(parent,shell,title,typed)
@@ -835,6 +859,13 @@ function ns.CreateFieldbookShell(settings)
         return true
     end
     function shell:Hide() if book then book:Hide() end end
+    function shell:CycleSection(direction)
+        if ns.InitializationBlocked or #self.order==0 then return false end
+        local index=1
+        for i,id in ipairs(self.order) do if id==self.active then index=i;break end end
+        if self.active then index=(index-1+(direction<0 and -1 or 1))%#self.order+1 end
+        return self:ShowSection(self.order[index],{navigation=true})
+    end
     function shell:ToggleSection(id)
         if self:IsSectionShown(id) then self:Hide();return end
         return self:ShowSection(id)

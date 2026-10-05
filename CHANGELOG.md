@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.30.0 - Unreleased
+
+- Add Next Page and Previous Page keybindings to cycle through journal tabs in display order, wrapping at either end.
+- Add Traveller's Atlas sidebar filters for discovery category and automatic/deliberate source, plus name, zone and observation-time sorting, independently of map-layer visibility. Align its search, index and Current map controls with the other journals.
+- Rework Merchant's Ledger browsing: Goods and Training remain side-by-side above the contact list, with unavailable offerings greyed out. Link identity moves to the contact header. Offering views fill the list area while retaining search and buttons; search filters the selected contact's offerings and restores the contact search on closing. The offering buttons also toggle back to contacts.
+- Give Ledger offerings full-row yellow hover highlights, native tooltips and standard dividers. Move first/last observation dates, observer/method and report receipt details into tooltips. Place Goods icons beside their names and prices, contain short rows without overlap, and tighten title spacing. Combine Training level and prerequisite skills into one yellow Required line and label its cost Price.
+- Replace Ledger's Personally encountered / Reported only row labels with Rumours-green names for reported contacts not personally encountered. Centre location/service text beside portraits; show a grey-explained Green: key only when a green contact is visible. Shortened Goods/Training buttons include observation/provenance tooltips.
+- Preserve clicked chest identity through an Opening cast with an empty target name, retaining cast completion and loot-source checks. Expand world-source rejection diagnostics. A subsequent Battered Chest inspection was confirmed in game with contents recorded. Use INV_Box_01 for world-container journal icons, contents headers and historical map pins.
+- Add matching parchment edge fades to journal indices and Ledger offering lists, extending two pixels beyond their edges while retaining scrollbar clearance. Add smooth, one-physical-pixel dividers to Chronicle, all three Almanac sidebar views, Treasure, Atlas and gathering lists. Standardise detail-list divider colour and opacity.
+- Extend large Bestiary and gathering horizontal dividers and all vertical page dividers, tapering thickness over the same span as their opacity fade. Make vertical dividers two points thick. Match gathering's Locations button font to Bestiary and reorder Bestiary header buttons to Notes, Rumours, Locations.
+- Align Treasure Observed contents and its viewport with the common sidebar layout. Align Annals search, counts and scrollbar with other journals; use eight compact timeline rows, scrollbar/mouse-wheel paging and a bottom-right Latest button. Reposition date/level, Now / reset and journey-recording controls with footer clearance.
+- Refresh visible Annals changes within 0.2 seconds and keep the live range current after scrubbing without moving the playhead; explicit historical ranges remain fixed. Move manual rebuilding to Options as Rebuild timeline data, preserving filters, paging and playback position. Draw journey paths above event icons.
+- Show Atlas map-layer icons beside their checkboxes. Render uncategorized automatic entrances with the native Ulduar archway at standard icon size, retaining their generic filter and category assignment behavior. Give Wilted Peacebloom its verified native Peacebloom preview by name and object ID while preserving its journal identity.
+- Remove obsolete abilities-area Options text and tighten backup/reset spacing. Extend regression coverage for Ledger layout, filtering, tooltips and row containment; chest attribution; page keybindings; Atlas filters/entrances; and Annals controls and live updates. Update gathering and Treasure validation notes.
+
 ## v0.29.1 - 2026-10-05
 
 Release-channel correction since v0.29.0 and previous-push baseline 89aa4100b567385b36a2e186d13ced5bfd97ebef.

@@ -214,9 +214,9 @@ class AnnalsTests(unittest.TestCase):
             m.sort.scripts.OnClick(m.sort)
             assert(not c.newestFirst and c.offset==0 and m.rows[1].record.id==1)
             assert(c.selected==16 and c.at==at and m.detail.event==j.db.events[16])
-            c.offset=c:LatestOffset();c:Refresh();assert(c.offset==14 and m.rows[2].record.id==16)
+            c.offset=c:LatestOffset();c:Refresh();assert(c.offset==8 and m.rows[8].record.id==16)
             m.sort.scripts.OnClick(m.sort);assert(c.newestFirst and c.offset==0 and m.rows[1].record.id==16)
-            m.timeline.scripts.OnMouseWheel(m.timeline,-1);assert(c.offset==7 and m.rows[1].record.id==9)
+            m.timeline.scripts.OnMouseWheel(m.timeline,-1);assert(c.offset==8 and m.rows[1].record.id==8)
             c:ResetNow();assert(c.offset==0 and m.rows[1].record.id==16)
             c:SetEventFilter('all',false);m.sort.scripts.OnClick(m.sort);assert(#c.rows==0 and c.offset==0)
             c:SetEventFilter('all',true);assert(m.rows[1].record.id==1)
@@ -247,7 +247,7 @@ class AnnalsTests(unittest.TestCase):
             c:Seek(100+3661);assert(m.rangeDuration:GetText()=='0d01h01m / 1d00h00m')
             c:SetRange(100,200)
             m.timelineScroll.scripts.OnValueChanged(m.timelineScroll,2)
-            assert(c.offset==14 and m.rows[1].record.event.title=='Event 6')
+            assert(c.offset==16 and m.rows[1].record.event.title=='Event 4')
             m.customSpeed:SetText('2.5');m.customSpeed.scripts.OnEnterPressed(m.customSpeed)
             assert(c.playbackSpeed==2.5)
             c:Seek(100);c:TogglePlayback();c:TickPlayback(2)
@@ -428,7 +428,7 @@ class AnnalsTests(unittest.TestCase):
             local _,relative,anchor,x,y=m.zoneMenu:GetPoint();assert(relative==m.journey and anchor=='TOPLEFT' and x==342 and y==-174)
             assert(m.zoneMenu:GetWidth()==256 and m.legendButton.point[4]==857 and m.legendButton.point[5]==-174)
             assert(m.legendButton:GetWidth()==65 and m.followPlayer:GetWidth()==110 and m.findPlayer:GetWidth()==100)
-            assert(m.around.point[3]==-129 and m.now.point[3]==-91)
+            assert(m.around.point[3]==-143 and m.now.point[3]==-143)
             local _,_,_,mx,my=m.map:GetPoint();assert(mx==632 and my==-205)
             assert(-my+m.map:GetHeight()<-m.contrast.point[3],'map overlaps display settings')
             m.legendButton.scripts.OnClick();assert(m.legend:IsShown() and m.legendButton.afbSelected)
@@ -451,37 +451,37 @@ class AnnalsTests(unittest.TestCase):
     def test_left_detail_overlay_preserves_journey_playback_and_timeline_selection(self):
         l=full_client();l.execute(ENV);l.execute('''
             local c=ns.AnnalsController;local j=c.journal
-            for i=1,9 do
-                j:Append('flight','Shared timeline '..i,nil,{mapID=i==8 and 102 or 101,x=3000,y=4000,level=20},100+i)
+            for i=1,10 do
+                j:Append('flight','Shared timeline '..i,nil,{mapID=i==9 and 102 or 101,x=3000,y=4000,level=20},100+i)
             end
-            c.shell:ShowSection('annals');c:SetRange(101,109);c:ToggleSort();local m=c.main
+            c.shell:ShowSection('annals');c:SetRange(101,110);c:ToggleSort();local m=c.main
             assert(m.journey:IsVisible() and m.timeline:IsVisible())
             assert(not m.detailPane:IsShown() and not m.show.afbSelected and m.show:GetText()=='Show detail')
             assert(m.rows[1]:IsVisible() and m.rows[1].record.event.title=='Shared timeline 1')
             m.timeline.scripts.OnMouseWheel(m.timeline,-1)
-            assert(c.offset==7 and m.rows[1].record.event.title=='Shared timeline 8' and m.page:IsVisible())
+            assert(c.offset==8 and m.rows[1].record.event.title=='Shared timeline 9' and m.page:IsVisible())
             m.rows[1].scripts.OnClick(m.rows[1])
-            assert(not c.showDetail and c.selected==8 and c.at==108 and c.mapID==102)
-            assert(m.map.journeyAt==108 and m.detail.event.title=='Shared timeline 8')
+            assert(not c.showDetail and c.selected==9 and c.at==109 and c.mapID==102)
+            assert(m.map.journeyAt==109 and m.detail.event.title=='Shared timeline 9')
             c:TogglePlayback();assert(c.playing)
             local page=m.page:GetText();m.show.scripts.OnClick(m.show)
             assert(c.showDetail and c.playing and m.show.afbSelected and m.show:GetText()=='Show detail')
             assert(m.detail:IsVisible() and m.journey:IsVisible() and not m.timeline:IsShown() and not m.paging:IsShown())
-            assert(c.offset==7 and c.selected==8 and m.page:GetText()==page)
+            assert(c.offset==8 and c.selected==9 and m.page:GetText()==page)
             assert(m.show.point[2]+m.show:GetWidth()<306 and m.detailPane.point[2]+m.detailPane:GetWidth()<306)
             assert(m.detail:GetWidth()==228 and m.detail.rows[1].label:GetWidth()==228)
-            c:TickPlayback(0.25);assert(c.at==108.25 and m.map.journeyAt==108.25 and m.detail:IsVisible())
+            c:TickPlayback(0.25);assert(c.at==109.25 and m.map.journeyAt==109.25 and m.detail:IsVisible())
             m.show.scripts.OnClick(m.show)
             assert(not c.showDetail and c.playing and not m.show.afbSelected and m.show:GetText()=='Show detail')
-            assert(m.rows[1]:IsVisible() and m.paging:IsVisible() and m.journey:IsVisible() and c.offset==7 and c.at==108.25)
+            assert(m.rows[1]:IsVisible() and m.paging:IsVisible() and m.journey:IsVisible() and c.offset==8 and c.at==109.25)
             for _,control in ipairs({m.around,m.contrast,m.iconSize}) do
                 assert(control.parent==m.journey and control.point[2]>309,'Journey control occupies timeline pane')
             end
-            m.search:SetText('Shared timeline 8');c:Refresh(true)
-            assert(#c.rows==1 and m.rows[1].record.id==8 and m.rows[1]:IsVisible())
+            m.search:SetText('Shared timeline 9');c:Refresh(true)
+            assert(#c.rows==1 and m.rows[1].record.id==9 and m.rows[1]:IsVisible())
             m.rows[1].scripts.OnClick(m.rows[1])
             m.around.scripts.OnClick(m.around)
-            assert(m.journey:IsVisible() and not m.show.afbSelected and c.first==0 and c.last==1908)
+            assert(m.journey:IsVisible() and not m.show.afbSelected and c.first==0 and c.last==1909)
         ''')
 
     def test_instance_entry_exit_badges_and_timeline_icon_shadows(self):
@@ -1075,8 +1075,8 @@ class AnnalsTests(unittest.TestCase):
         l.execute('''
             local c=ns.AnnalsController;local A=ns.Annals;c.shell:ShowSection('annals')
             local map=c.main.map
-            local create=map.canvas.CreateTexture
-            function map.canvas:CreateTexture(...)
+            local create=map.journeyOverlay.CreateTexture
+            function map.journeyOverlay:CreateTexture(...)
                 local texture=create(self,...)
                 function texture:SetVertexOffset(i,x,y)
                     self.offsets=self.offsets or {};self.offsets[i]={x,y}
@@ -1687,7 +1687,7 @@ class AnnalsTests(unittest.TestCase):
             assert(c:OpenLink(link) and opened=='x');entries.x=nil;assert(not c:OpenLink(link))
             assert(c.journal.db.events[1].title=='Original')
             for i=1,100 do c.journal:Append('accepted','Long timeline '..i,{questID=i}) end
-            c:Refresh(true);assert(#c.main.rows==7 and #c.rows==101)
+            c:Refresh(true);assert(#c.main.rows==8 and #c.rows==101)
             c:Refresh();c.shell:ShowSection('bestiary');c.shell:ShowSection('annals')
             assert(c.main.journey:IsVisible() and not ns.AnnalsDiscoveryError)
         ''')
@@ -1702,6 +1702,57 @@ class AnnalsTests(unittest.TestCase):
             assert(B.Encode(s));assert(B.CanRestore(s))
         ''')
 
+    def test_rebuild_timeline_option_preserves_view(self):
+        l=full_client();l.execute(ENV)
+        l.execute('''
+            local c=ns.AnnalsController;local j=c.journal
+            for i=1,10 do j:Append('death','Death '..i,nil,{mapID=101,x=2500,y=7500},now-20+i) end
+            c.shell:ShowSection('annals');c:ResetNow()
+            c:SetEventFilter('accepted',false);c:Seek(now-15)
+            c.newestFirst=false;c.offset=0;c.selected=1
+            c.shell:EnsureSection('bestiary')
+            local button=c.shell.sections.bestiary.pages.options.rebuildTimelineData
+            assert(button:GetText()=='Rebuild timeline data' and not c.main.refresh)
+            local held=c.at;now=now+1
+            button.scripts.OnClick(button)
+            assert(c.at==held and c.last==now and c.offset==0)
+            assert(c.filter.accepted==false and c.selected==1)
+            c:SetRange(now-20,now-2);local first,last=c.first,c.last
+            c:Seek(first);button.scripts.OnClick(button)
+            assert(c.first==first and c.last==last and c.at==first and not c.follow)
+            assert(c.filter.accepted==false and c.selected==1)
+        ''')
+
+    def test_visible_live_updates_preserve_scrubbing_and_fixed_ranges(self):
+        l=full_client();l.execute(ENV)
+        l.execute('''
+            local c=ns.AnnalsController;local j=c.journal
+            j:Append('death','Earlier',nil,{mapID=101,x=2500,y=7500},now-10)
+            c.shell:ShowSection('annals');c:ResetNow()
+            local m=c.main;local refresh=c.Refresh;local calls=0
+            function c:Refresh(...) calls=calls+1;return refresh(self,...) end
+            for i=1,20 do m.scripts.OnUpdate(m,0.2) end
+            assert(calls==0,'Idle updates must not rebuild the timeline')
+            now=now+1
+            local _,id=j:Append('accepted','Live quest',{questID=42},{mapID=101,x=2500,y=7500},now)
+            m.scripts.OnUpdate(m,0.2)
+            local function contains(id)
+                for _,row in ipairs(c.rows) do if row.id==id then return true end end
+                return false
+            end
+            assert(contains(id) and c.last==now and c.at==now and calls==1)
+            c:Seek(now-5);local held=c.at;local offset=c.offset
+            now=now+1;local _,nextID=j:Append('death','Live death',nil,{mapID=101,x=2500,y=7500},now)
+            m.scripts.OnUpdate(m,0.2)
+            assert(contains(nextID) and c.at==held and c.offset==offset and c.last==now)
+            now=now+1;c:Refresh(true)
+            assert(c.last==now and c.at==held,'Refresh advances the live range without resetting the playhead')
+            c:SetRange(now-20,now);local fixed=c.last
+            now=now+1;local _,outside=j:Append('death','Outside range',nil,{mapID=101,x=2500,y=7500},now)
+            m.scripts.OnUpdate(m,0.2)
+            assert(c.last==fixed and not contains(outside),'Historical ranges must remain fixed')
+        ''')
+
     def test_actual_map_renderer_and_overlapping_marker_cycle(self):
         l=full_client();l.execute(ENV)
         l.execute('''
@@ -1713,6 +1764,8 @@ class AnnalsTests(unittest.TestCase):
             function c.main.map.canvas:CreateLine() return CreateFrame('Texture',nil,self) end
             c:SetRange(100,110);c.mapID=101;c:Refresh()
             local map=c.main.map;assert(map.available and #map.lines==1 and #map.pins==1)
+            assert(map.lines[1].parent==map.journeyOverlay)
+            assert(map.journeyOverlay:GetFrameLevel()>map.pins[1]:GetFrameLevel())
             assert(map.playerArrow:IsShown())
             local pin=map.pins[1];pin.scripts.OnClick(pin,'LeftButton');assert(c.selected==1)
             assert(c.main.show.afbSelected and c.main.detail:IsVisible() and not c.main.timeline:IsShown())
