@@ -61,6 +61,12 @@ class BestiaryModelTests(unittest.TestCase):
             c:Refresh();c:Refresh()
             assert(section.portraitBorder:GetWidth()==width, 'refresh must not repeatedly shrink the atlas')
             assert(section.portraitBorder.mask==nil, 'native artwork needs no custom mask')
+            local circleX,circleY=section.portraitFrame.point[2],section.portraitFrame.point[3]
+            for _,rank in ipairs({'Elite','Rare','Rare Elite','World Boss','Normal'}) do
+                j.entries[42].rank=rank;c:Refresh()
+                assert(section.portraitFrame.point[2]==circleX and section.portraitFrame.point[3]==circleY,
+                    'copper circle must stay fixed when dragon artwork changes')
+            end
             j.entries[42].rank=nil;c:Refresh()
             assert(not section.portraitBorder:IsShown())
             assert(section.portraitRings[1]:IsShown())

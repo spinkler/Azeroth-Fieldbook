@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.31.1 - 2026-10-06
+
+Release-channel bug fix since v0.31.0 and previous-push baseline 4b5fbdb89180c4468b59fa57b3e5e13f2d06d842.
+
+- Keep all Bestiary copper portrait circles at the same header position, matching the calibrated dragon portrait placement for normal, rare, elite, boss and gated entries.
+
 ## v0.31.0 - 2026-10-06
 
 Release-channel update covering the complete batch since v0.29.1 and previous-push baseline f0b30b8ce0e4f3c0c986e607df71187cb6194083.

@@ -1,6 +1,8 @@
 BINDING_NAME_AZEROTHFIELDBOOK_ATLAS_POINT = "Record Atlas survey point"
 local addonName, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
+-- Keep the copper circle at the calibrated elite position for every rank.
+local portraitHeaderX=314-(24+(-15*48/58-10-24)*1.20)
 BINDING_HEADER_AZEROTHFIELDBOOK = "Azeroth Fieldbook"
 BINDING_NAME_CLASSICBESTIARY_BOOK = "Toggle Azeroth Fieldbook"
 BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK = "Open Azeroth Fieldbook at mouseover"
@@ -611,7 +613,7 @@ local ink = { 0.75, 0.8, 0.8 }
             book.portraitBorder:SetPoint("TOPLEFT",x+pixel,y-2*pixel)
             book.portraitBorder:SetTexCoord(1,0,0,1)
         end
-        book.portraitFrame:SetPoint("TOPLEFT",(portraitBorder and (314-x) or 318.875)-3/book:GetEffectiveScale(),-60+4/book:GetEffectiveScale())
+        book.portraitFrame:SetPoint("TOPLEFT",portraitHeaderX-3/book:GetEffectiveScale(),-60+4/book:GetEffectiveScale())
         local title=basic.name or ("Encountered creature #" .. selected)
         if book.title:GetText()~=title then book.titleHover:StopNameScroll() end
         book.titleHover.id=selected
@@ -1230,7 +1232,7 @@ local ink = { 0.75, 0.8, 0.8 }
             book.letterButtons[i]=tab
         end
         book.portraitFrame=CreateFrame("Frame",nil,book)
-        book.portraitFrame:SetPoint("TOPLEFT",318.875-3/book:GetEffectiveScale(),-60+4/book:GetEffectiveScale());book.portraitFrame:SetSize(48,48)
+        book.portraitFrame:SetPoint("TOPLEFT",portraitHeaderX-3/book:GetEffectiveScale(),-60+4/book:GetEffectiveScale());book.portraitFrame:SetSize(48,48)
         -- Every creature uses the same copper rim, beneath any dragon overlay.
         book.portraitRings={}
         for i,spec in ipairs({
