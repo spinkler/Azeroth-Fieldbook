@@ -318,11 +318,11 @@ function ns.CreateTreasureBook(journal,tracking,shell)
         end)
         U.StyleSelection(m.showContents)
         m.count=ns.FieldbookUI.EntryCount(d);m.rows={}
-        m.contentsHeader=CreateFrame("Button",nil,d,"BackdropTemplate");m.contentsHeader:SetPoint("TOPLEFT",42,-177);m.contentsHeader:SetSize(228,36)
+        m.contentsHeader=CreateFrame("Button",nil,d,"BackdropTemplate");m.contentsHeader:SetPoint("TOPLEFT",42,-177);m.contentsHeader:SetSize(250,36)
         ns.FieldbookUI.StyleMenuRow(m.contentsHeader);m.contentsHeader:EnableMouse(false)
         m.contentsHeader.icon=m.contentsHeader:CreateTexture(nil,"ARTWORK")
         m.contentsHeader.icon:SetPoint("TOPLEFT",6,-6);m.contentsHeader.icon:SetSize(24,24)
-        m.contentsHeader.name=U.Label(m.contentsHeader,"",37,-6,185,"GameFontNormal")
+        m.contentsHeader.name=U.Label(m.contentsHeader,"",37,-6,207,"GameFontNormal")
         local headerNamePath,headerNameSize,headerNameFlags=m.contentsHeader.name:GetFont()
         if headerNamePath and type(headerNameSize)=="number" then m.contentsHeader.name:SetFont(headerNamePath,headerNameSize+2,headerNameFlags) end
         m.contentsHeader.name:SetWordWrap(true)

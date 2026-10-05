@@ -24,6 +24,77 @@ LOG_REWARDS = '''
 
 
 class AnnalsTests(unittest.TestCase):
+    def test_details_follow_playhead_until_manually_selected(self):
+        l=full_client();l.execute(ENV);l.execute('''
+            local c=ns.AnnalsController;local j=c.journal
+            for i=1,3 do j:Append('accepted','Event '..i,nil,{mapID=101,x=100,y=100},100+i*10) end
+            c.shell:ShowSection('annals');c:SetRange(100,140);c:Seek(125)
+            assert(not c.selected and c.main.detail.event==j.db.events[2])
+            c:Select(1);c:Seek(135)
+            assert(c.selected==1 and c.main.detail.event==j.db.events[1])
+            c:Select(1)
+            assert(not c.selected and c.at==135 and c.main.detail.event==j.db.events[3])
+            c:Seek(100);assert(c.main.detail.event==nil)
+            c:TogglePlayback();c:TickPlayback(21)
+            assert(c.main.detail.event==j.db.events[2])
+        ''')
+
+    def test_login_location_retries_preserve_time_and_cancel_on_departure(self):
+        l=client();l.execute('''
+            local A=ns.Annals;local original=A.Location
+            A.Location=function() return {level=17} end
+            local started=now;t:Event('PLAYER_ENTERING_WORLD',true,false)
+            local entry=db.events[1];assert(entry.kind=='login' and not entry.zone)
+            advance(1);assert(not entry.zone)
+            A.Location=function() return {zone='Westfall',subzone='Sentinel Hill',mapID=101,x=100,y=200,level=17} end
+            advance(1)
+            assert(entry.zone=='Westfall' and entry.mapID==101 and entry.x==100 and entry.at==started)
+            assert(not t.loginLocation and #db.events==1)
+            reset();A.Location=function() return {level=17} end
+            t:Event('PLAYER_ENTERING_WORLD',true,false);entry=db.events[1]
+            t:Event('PLAYER_LEAVING_WORLD');A.Location=original;advance(10)
+            assert(not entry.zone and not t.loginLocation)
+            reset();t:Event('PLAYER_ENTERING_WORLD',false,true);advance(10)
+            assert(#db.events==0,'reload invented a login')
+        ''')
+
+    def test_playhead_highlight_tracks_time_in_both_sort_orders(self):
+        l=full_client();l.execute(ENV);l.execute('''
+            local c=ns.AnnalsController
+            for i=1,3 do c.journal:Append('accepted','Event '..i,nil,{mapID=101,x=100,y=100},100+i*10) end
+            c.shell:ShowSection('annals');c:SetRange(100,140);c:Seek(125)
+            local function active()
+                local id,count=nil,0
+                for _,row in ipairs(c.main.rows) do
+                    if row.playheadHighlight:IsShown() then id=row.record.id;count=count+1 end
+                end
+                assert(count<=1);return id
+            end
+            assert(active()==2)
+            c.selected=1;c:SyncRowSelection();assert(active()==2)
+            c:ToggleSort();assert(active()==2)
+            c:TogglePlayback();c:TickPlayback(6);assert(active()==3)
+            c:Seek(100);assert(active()==nil)
+            c:SetEventFilter('accepted',false);assert(active()==nil)
+        ''')
+
+    def test_hover_title_scroll_preserves_text_and_resets(self):
+        l=full_client();l.execute(ENV);l.execute('''
+            local c=ns.AnnalsController
+            c.journal:Append('flight',string.rep('Long flight title ',8),nil,{mapID=101,x=100,y=100},100)
+            c.shell:ShowSection('annals');local row=c.main.rows[1]
+            local label=row.label;local text=label:GetText()
+            row.scripts.OnEnter(row)
+            assert(row.label==label and label:GetText()==text and label:GetWidth()>192)
+            assert(row.scripts.OnUpdate)
+            row.scripts.OnUpdate(row,1.8);assert(row.titleViewport:GetHorizontalScroll()>0)
+            row.scripts.OnLeave(row)
+            assert(not row.scripts.OnUpdate and label:GetWidth()==192 and row.titleViewport:GetHorizontalScroll()==0)
+            row.scripts.OnEnter(row);c:Refresh()
+            assert(not row.scripts.OnUpdate and label:GetText()==text and label:GetWidth()==192)
+            label:SetText('Short');row.scripts.OnEnter(row);assert(not row.scripts.OnUpdate)
+        ''')
+
     def test_session_events_distinguish_login_reload_and_zone_changes(self):
         l=client();l.execute('''
             t:Event('PLAYER_ENTERING_WORLD',true,false)
@@ -161,6 +232,20 @@ class AnnalsTests(unittest.TestCase):
             c.shell:ShowSection('annals');c:SetRange(100,200)
             local m=c.main
             assert(m.timelineScroll:IsShown())
+            assert(m.rangeDuration:GetText()=='1m40s / 1m40s')
+            c:SetRange(100,100+2*86400+3*3600+4*60)
+            assert(m.rangeDuration:GetText()=='2d03h04m / 2d03h04m')
+            c.sliderSpan=10800;c:SyncSlider();assert(m.rangeDuration:GetText()=='3h00m00s / 3h00m00s')
+            c:SetRange(100,130);assert(m.rangeDuration:GetText()=='30s / 30s')
+            c:SetRange(100,100);assert(m.rangeDuration:GetText()=='00s / 00s')
+            c.sliderSpan=nil;c:SetRange(100,100+10800)
+            c:Seek(100);assert(m.rangeDuration:GetText()=='00s / 3h00m00s')
+            m.slider.scripts.OnValueChanged(m.slider,3661)
+            assert(m.rangeDuration:GetText()=='1h01m01s / 3h00m00s')
+            c:SetRange(100,100+86399);assert(m.rangeDuration:GetText()=='23h59m59s / 23h59m59s')
+            c:SetRange(100,100+86400);assert(m.rangeDuration:GetText()=='1d00h00m / 1d00h00m')
+            c:Seek(100+3661);assert(m.rangeDuration:GetText()=='0d01h01m / 1d00h00m')
+            c:SetRange(100,200)
             m.timelineScroll.scripts.OnValueChanged(m.timelineScroll,2)
             assert(c.offset==14 and m.rows[1].record.event.title=='Event 6')
             m.customSpeed:SetText('2.5');m.customSpeed.scripts.OnEnterPressed(m.customSpeed)
@@ -678,7 +763,7 @@ class AnnalsTests(unittest.TestCase):
             assert(m.map.zoom==1 and m.map.panX==0 and m.map.panY==0)
             assert(m.play.symbol:IsShown() and not m.play.pauseBars[1]:IsShown() and not m.speeds[16] and m.speeds[128])
             assert(m.play.symbol.texture=='Interface\\\\ChatFrame\\\\ChatFrameExpandArrow')
-            assert(m.detail.event==nil and not m.detail.rows[1].link)
+            assert(m.detail.event==j.db.events[2] and not m.detail.rows[1].link)
             c:Seek(130);assert(not c.follow and c.at==130)
             c.showDetail=true;c:SyncDetailOverlay();m.now.scripts.OnClick(m.now);assert(c.showDetail and c.at==1000)
         ''')
@@ -690,7 +775,7 @@ class AnnalsTests(unittest.TestCase):
             local cached=false;local loads=0
             C_Item={GetItemInfo=function(id) if cached then return 'Cached name',nil,3,nil,nil,nil,nil,nil,nil,999 end end,
                 RequestLoadItemDataByID=function() loads=loads+1 end}
-            GameTooltip={SetOwner=function() end,SetHyperlink=function(_,link) shownLink=link end,
+            GameTooltip={IsOwned=function() return false end,SetOwner=function() end,SetHyperlink=function(_,link) shownLink=link end,
                 Show=function() tooltipShown=true end,Hide=function() tooltipShown=false end}
             local e,id=j:Append('completed','The Killing Fields',{reward={chosen={itemID=1560,quantity=1,name="Harvester's Pest Slayer"},
                 automatic={{itemID=201,quantity=3,name='Supply',quality=2,icon=123}},xp=1050,money=12345}},
@@ -1198,7 +1283,7 @@ class AnnalsTests(unittest.TestCase):
     def test_archive_footer_in_both_views_and_live_trail_refresh(self):
         l=full_client()
         l.execute('''
-            GameTooltip={SetOwner=function() end,SetText=function(self,text) self.title=text end,
+            GameTooltip={IsOwned=function() return false end,SetOwner=function() end,SetText=function(self,text) self.title=text end,
                 AddLine=function(self,text) self.detail=text end,Show=function() end,Hide=function() end}
             local c=ns.AnnalsController;c.shell:ShowSection('annals')
             local m=c.main;assert(m.capacity:GetText()==c.journal:StorageStatus())

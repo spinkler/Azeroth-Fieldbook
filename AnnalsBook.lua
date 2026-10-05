@@ -157,11 +157,28 @@ function ns.CreateAnnalsBook(j,shell)
             first=math.max(self.first,math.min(self.last-span,start));last=first+span
         end
         self.sliderStart=first
+        local total=math.floor(math.max(0,last-first))
+        local current=math.floor(math.max(0,math.min(total,(self.at or last)-first)))
+        local showDays=total>=86400
+        local function elapsed(value)
+            local hours=math.floor(value%86400/3600)
+            local minutes=math.floor(value%3600/60)
+            if showDays then
+                return string.format('%dd%02dh%02dm',math.floor(value/86400),hours,minutes)
+            elseif value>=3600 then
+                return string.format('%dh%02dm%02ds',hours,minutes,value%60)
+            elseif value>=60 then
+                return string.format('%dm%02ds',minutes,value%60)
+            end
+            return string.format('%02ds',value%60)
+        end
+        self.main.rangeDuration:SetText(elapsed(current)..' / '..elapsed(total))
         local slider=self.main.slider;slider.syncing=true
         -- Native sliders use floats: epoch timestamps can lose whole minutes.
         -- Small offsets retain second-level precision, especially when zoomed.
         slider:SetMinMaxValues(0,math.max(1,last-first));slider:SetValue((self.at or last)-first)
         slider.syncing=false
+        self:SyncPlayheadRow()
     end
     function c:Seek(at)
         self:PausePlayback();self.follow=false
@@ -235,8 +252,30 @@ function ns.CreateAnnalsBook(j,shell)
             end
         end
     end
+    function c:SyncPlayheadRow()
+        local lo,hi=1,#self.rows
+        local at=self.at or self.last
+        while lo<=hi do
+            local mid=math.floor((lo+hi)/2)
+            if self.rows[mid].event.at<=at then lo=mid+1 else hi=mid-1 end
+        end
+        local id=self.rows[hi] and self.rows[hi].id
+        if not self.selected then
+            local event=id and j.db.events[id] or nil
+            if self.main.detail.event~=event then self.main.detail:SetEvent(event,true) end
+        end
+        for _,row in ipairs(self.main.rows) do
+            local active=row.record~=nil and row.record.id==id
+            row.playheadHighlight:SetShown(active)
+        end
+    end
     function c:Select(id,preserveJourney)
         id=tonumber(id);local e=id and j.db.events[id];if not A.ValidEvent(e) then return end
+        if self.selected==id then
+            self.selected=nil
+            if self.main then self:SyncRowSelection();self:SyncPlayheadRow() end
+            return
+        end
         self.selected=id
         if self.main then
             self.main.detail:SetEvent(e,true)
@@ -301,7 +340,8 @@ function ns.CreateAnnalsBook(j,shell)
         local cursor,limited,invalid=self.main.map:ShowJourney(self.index,self.at or self.last)
         if followPosition then self.main.map:CenterHistoricalPlayer(zoom) end
         local stamp=math.floor(self.at or self.last)
-        self.main.clock:SetText((date and date('%Y-%m-%d %H:%M:%S',stamp) or U.Date(stamp))..(cursor and ((cursor.instanceName and ' • At instance entrance' or cursor.interpolated and ' • Estimated position' or (' • Last sample '..U.Date(cursor.at)))..string.format(' • %.1f, %.1f',cursor.x/100,cursor.y/100)) or ' • No sample on this map yet'))
+        self.main.clock:SetText((date and date('%Y-%m-%d %H:%M:%S',stamp) or U.Date(stamp))..(cursor and string.format(' • %.1f, %.1f',cursor.x/100,cursor.y/100) or ''))
+        self.main.sampleStatus:SetText(cursor and ('Last sample: '..U.Date(cursor.sampleAt or cursor.at)) or 'No sample on this map yet')
         local level=cursor and cursor.level;local lo,hi=1,#self.rows
         while lo<=hi do local mid=math.floor((lo+hi)/2);if self.rows[mid].event.at<=(self.at or self.last) then lo=mid+1 else hi=mid-1 end end
         if not level and self.rows[hi] then level=self.rows[hi].event.level end
@@ -338,7 +378,7 @@ function ns.CreateAnnalsBook(j,shell)
         for i,row in ipairs(m.rows) do
             local index=self.offset+i
             local source=self.rows[self.newestFirst and (#self.rows-index+1) or index]
-            row:SetShown(source~=nil);row.record=source
+            row:StopTitleScroll();row:SetShown(source~=nil);row.record=source
             if source then
                 local e=source.event;row.icon:SetTexture(A.icons[e.kind]);row.iconShadow:SetTexture(A.icons[e.kind]);A.InstanceDirection(row,row.icon,e,0.6);row.label:SetText(A.Paint(e.title,'ffd100'))
                 row.status:SetText(A.Paint(A.eventNames[e.kind],A.eventColours[e.kind])..A.Paint(' • '..U.Date(e.at),'999999'))
@@ -438,10 +478,55 @@ function ns.CreateAnnalsBook(j,shell)
         for i=1,7 do
             local row=CreateFrame('Button',nil,m.timeline,'BackdropTemplate');row:SetPoint('TOPLEFT',0,-(i-1)*65);row:SetSize(228,64)
             ns.FieldbookUI.StyleMenuRow(row)
+            row.playheadHighlight=row:CreateTexture(nil,'BACKGROUND',nil,1)
+            row.playheadHighlight:SetPoint('TOPLEFT',1,-1);row.playheadHighlight:SetPoint('BOTTOMRIGHT',-1,1)
+            row.playheadHighlight:SetTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight')
+            row.playheadHighlight:SetBlendMode('ADD')
+            row.playheadHighlight:SetDesaturated(true)
+            row.playheadHighlight:SetVertexColor(0.25,0.85,1,0.8);row.playheadHighlight:Hide()
             if i>1 then row.divider=ns.FieldbookUI.EntryDivider(row,1) end
             row.icon=row:CreateTexture(nil,'ARTWORK');row.icon:SetSize(22,22);row.icon:SetPoint('TOPLEFT',2,-8)
             row.iconShadow=row:CreateTexture(nil,'BACKGROUND');row.iconShadow:SetSize(22,22);row.iconShadow:SetPoint('TOPLEFT',row.icon,'TOPLEFT',2,-2);row.iconShadow:SetVertexColor(0,0,0,0.6)
             row.label=U.Label(row,'',32,-6,192,'GameFontNormal');row.label:SetWordWrap(false)
+            -- Scroll the original font string so its font, rich colours and
+            -- shadow remain identical; the viewport clips without gradients.
+            row.titleViewport=CreateFrame('ScrollFrame',nil,row)
+            row.titleViewport:SetPoint('TOPLEFT',32,-6);row.titleViewport:SetSize(192,18);row.titleViewport:EnableMouse(false)
+            row.titleBody=CreateFrame('Frame',nil,row.titleViewport)
+            row.titleBody:SetSize(192,18);row.titleBody:EnableMouse(false);row.titleViewport:SetScrollChild(row.titleBody)
+            row.label:SetParent(row.titleBody);row.label:ClearAllPoints();row.label:SetPoint('TOPLEFT',0,0)
+            function row:StopTitleScroll()
+                self:SetScript('OnUpdate',nil);self.titleViewport:SetHorizontalScroll(0)
+                self.titleBody:SetWidth(192);self.label:SetWidth(192)
+                if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+            end
+            row:SetScript('OnEnter',function(self)
+                if not self.record then return end
+                if GameTooltip then
+                    GameTooltip:SetOwner(self,'ANCHOR_RIGHT')
+                    GameTooltip:SetText(self.label:GetText())
+                    GameTooltip:AddLine(self.status:GetText(),1,1,1,true)
+                    GameTooltip:AddLine(self.location:GetText(),1,1,1,true)
+                    GameTooltip:Show()
+                end
+                local width=self.label:GetUnboundedStringWidth()
+                if type(width)~='number' then width=self.label:GetStringWidth() end
+                if type(width)~='number' or width<=192 then return end
+                width=math.ceil(width)+1;self.titleBody:SetWidth(width);self.label:SetWidth(width)
+                local elapsed,distance=0,width-192
+                local travel=distance/24
+                self:SetScript('OnUpdate',function(_,dt)
+                    elapsed=(elapsed+dt)%(travel*2+2)
+                    local position
+                    if elapsed<0.8 then position=0
+                    elseif elapsed<0.8+travel then position=(elapsed-0.8)*24
+                    elseif elapsed<2+travel then position=distance
+                    else position=distance-(elapsed-2-travel)*24 end
+                    self.titleViewport:SetHorizontalScroll(position)
+                end)
+            end)
+            row:SetScript('OnLeave',function(self) self:StopTitleScroll() end)
+            row:SetScript('OnHide',function(self) self:StopTitleScroll() end)
             row.status=U.Label(row,'',32,-24,192,'GameFontHighlightSmall');row.status:SetWordWrap(true);row.status:SetHeight(20)
             row.location=U.Label(row,'',32,-46,192,'GameFontHighlightSmall');row.location:SetWordWrap(false)
             row:SetScript('OnClick',function(self) if self.record then c:Select(self.record.id) end end)
@@ -477,7 +562,11 @@ function ns.CreateAnnalsBook(j,shell)
         m.mapFilter:SetFrameLevel(m.map:GetFrameLevel()+25);U.StyleSelection(m.mapFilter)
         m.mapFilter:SetScript('OnEnter',m.filter:GetScript('OnEnter'));m.mapFilter:SetScript('OnLeave',m.filter:GetScript('OnLeave'))
         m.map:SetPoint('TOP',m.journey,'TOPLEFT',632,-205)
-        m.zoneMenu=U.ZoneMenu(m.journey,0,0,256,function() return c:Maps() end,function(id) c.mapID=id;c.index=nil;c:Journey() end)
+        m.zoneMenu=U.ZoneMenu(m.journey,0,0,256,function() return c:Maps() end,function(id) c.mapID=id;c.index=nil;c:Journey() end,function()
+            local location=A.Location()
+            if not location.mapID then c:Message('Current zone is not available yet.');return end
+            c.mapID=location.mapID;c.index=nil;c:Journey()
+        end)
         m.zoneMenu:ClearAllPoints();m.zoneMenu:SetPoint('TOPLEFT',m.journey,'TOPLEFT',342,-174)
         m.legend=CreateFrame('Frame',nil,m.map,'BackdropTemplate');m.legend:SetSize(500,348)
         m.legend:SetPoint('TOP',m.map,'TOP',0,-8);m.legend:SetFrameLevel(m.map:GetFrameLevel()+20);m.legend:EnableMouse(true)
@@ -548,6 +637,7 @@ function ns.CreateAnnalsBook(j,shell)
         m.slider:SetScript('OnValueChanged',function(self,value)
             if self.syncing then return end;c:PausePlayback();c.follow=false
             c.at=math.max(c.first,math.min(c.last,c.sliderStart+math.floor(value+0.5)))
+            c:SyncSlider()
             if c.scrubPending then return end
             if C_Timer and C_Timer.After then c.scrubPending=true;C_Timer.After(0.1,function() c.scrubPending=false;if m:IsVisible() then c:Journey() end end)
             else c:Journey() end
@@ -571,7 +661,7 @@ function ns.CreateAnnalsBook(j,shell)
             m.speeds[rate]=U.Button(m.journey,tostring(rate)..'x',380+(i-1)*47,-671,45,function() c:SetPlaybackSpeed(rate) end)
         end
         m.speeds[1]:SetEnabled(false)
-        m.timeZoom=U.MenuButton(m.journey,'Full range',665,-671,115,function()
+        m.timeZoom=U.MenuButton(m.journey,'Full range',792,-671,128,function()
             if not MenuUtil then return end
             MenuUtil.CreateContextMenu(m.timeZoom,function(_,root)
                 for _,choice in ipairs({{'Full range',false},{'3 hours',10800},{'1 hour',3600},{'15 minutes',900}}) do
@@ -580,7 +670,11 @@ function ns.CreateAnnalsBook(j,shell)
                 end
             end)
         end)
-        m.customSpeed=U.Field(m.journey,'Custom speed (x)',792,-650,128,7)
+        m.customSpeed=U.Field(m.journey,'',665,-650,47,7)
+        m.customSpeed:SetJustifyH('RIGHT')
+        m.customSpeed:SetTextInsets(2,5,0,0)
+        m.customSpeed.fieldLabel:Hide()
+        m.customSpeedUnit=U.Label(m.journey,'x',714,-677,16,'GameFontNormalSmall')
         m.customSpeed:SetText('1')
         m.customSpeed:SetScript('OnEnterPressed',function(self)
             if c:SetPlaybackSpeed(tonumber(self:GetText()))==false then
@@ -589,7 +683,15 @@ function ns.CreateAnnalsBook(j,shell)
             self:ClearFocus()
         end)
         m.customSpeed:SetScript('OnEscapePressed',function(self) self:SetText(tostring(c.playbackSpeed));self:ClearFocus() end)
-        m.clock=U.Label(m.journey,'',350,-641,430,'GameFontHighlightSmall')
+        m.clock=U.Label(m.journey,'',350,-641,545,'GameFontHighlightSmall')
+        m.clock:SetWordWrap(false)
+        m.clock:SetHeight(14)
+        m.sampleStatus=U.Label(m.journey,'',350,-656,545,'GameFontHighlightSmall')
+        m.sampleStatus:SetWordWrap(false);m.sampleStatus:SetHeight(14)
+        m.sampleStatus:SetTextColor(0.6,0.6,0.6)
+        m.rangeDuration=U.Label(m.journey,'',0,0,260,'GameFontNormalSmall')
+        m.rangeDuration:SetJustifyH('RIGHT')
+        m.rangeDuration:ClearAllPoints();m.rangeDuration:SetPoint('TOPRIGHT',m.slider,'BOTTOMRIGHT',0,-5)
         U.Label(m.journey,'Map icon size',646,-594,92,'GameFontNormalSmall'):SetWordWrap(false)
         m.iconSize=CreateFrame('Slider',nil,m.journey,'OptionsSliderTemplate')
         m.iconSize:SetPoint('TOPLEFT',746,-591);m.iconSize:SetSize(110,18)

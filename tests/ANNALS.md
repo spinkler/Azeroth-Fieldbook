@@ -64,8 +64,8 @@ event, with the exact range when a selection is available.
 **Legend** toggles an overlay of the actual event icons, player arrows
 and trail swatches, including the current age-contrast setting. Move the time
 slider using **Full range / 3 hours / 1 hour / 15 minutes**. This also clips the trail to that duration behind the playback time, including edges crossing the cutoff. The clock reports the selected
-time and historical position, with estimates between connected samples labelled.
-Playback offers 1x/8x/32x/64x/128x/256x and play/pause symbols. The styled **Custom speed (x)** field accepts 0.1-4096; Enter applies it, Escape restores the current rate, and invalid input leaves playback unchanged. **Follow player** keeps
+time and historical position, with the recorded last-sample timestamp on a separate grey line even between connected samples.
+Playback offers 1x/8x/32x/64x/128x/256x and play/pause symbols. The compact custom speed field beside the presets has an **x** suffix and accepts 0.1-4096; Enter applies it, Escape restores the current rate, and invalid input leaves playback unchanged. The gold readout at the scrubber's right edge shows elapsed time from its start / total span, including date and quest selections; full range measures elapsed recorded timestamps, including offline gaps. Below one day, seconds remain visible (e.g. **00s / 3h00m00s**). At a total span of one day or more, both values use days/hours/minutes and omit seconds (e.g. **0d01h01m / 1d00h00m**). Verify alignment and legibility in game. **Follow player** keeps
 the arrow in view, switches recorded zone/continent maps and jumps at observed
 teleport/hearth arrivals. It never uses the character's live position for playback.
 Both **Legend** and **Follow player** use the shared yellow toggle glow while

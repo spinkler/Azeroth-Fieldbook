@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.29.0 - 2026-10-05
+
+Release-channel update covering the complete batch since v0.28.0 and previous-push baseline 788bec9b1776c1668de193d2a19c53b0d62a0dbf.
+
+- Add Current Zone at the top of the Annals zone selector to switch to the player's current map without changing playback time or filters.
+- Widen Treasure Journal's observed-contents container header to match the button above it, giving the container name the additional space.
+- Let Annals Show detail follow the playhead event when no item is manually selected; click a selected event again to deselect it and resume following.
+- Retry missing location metadata on new Annals login records for up to ten seconds while retaining their original timestamp; stop retries on leaving-world/logout and leave historical entries unchanged.
+- Mark the latest filtered Annals event at or before the playhead with a soft cyan highlight using the hover's fading texture, updating during playback and scrubbing independently of hover and selection.
+- Put Annals scrubber coordinates beside the timestamp, with a grey Last sample: date/time on its own second line, using the recorded sample time even during estimated movement.
+- Scroll clipped Annals event titles gently on hover while retaining their original styling, and show full event/date/location metadata in a row tooltip.
+- Group Annals custom playback speed with the preset speeds in a compact field with an x suffix; move the range menu to the right and show elapsed time from the scrubber's start / total span above it, with seconds below one day and days/hours/minutes for longer timelines.
+- Remove default-state parentheticals from Options labels without changing the saved settings or defaults.
+- Extend Annals regression coverage for playhead details and highlighting, login-location retries, hover scrolling and elapsed-time formatting; update playback validation guidance.
+
 ## v0.28.0 - 2026-10-05
 
 Release-channel update covering the complete batch since v0.27.0 and previous-push baseline e8a87605af69890f8967e35c3ac5a526ef663626.

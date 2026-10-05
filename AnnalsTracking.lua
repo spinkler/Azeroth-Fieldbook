@@ -375,7 +375,27 @@ function ns.CreateAnnalsTracking(j)
                         j:Append('logout',exit.title,{sequence=exit.sequence},exit,exit.at,true)
                     end
                     j.trail:Break('login')
-                    j:Append('login','Logged in',nil,A.Location(),A.Now())
+                    local entry,index=j:Append('login','Logged in',nil,A.Location(),A.Now())
+                    -- Zone and map APIs can still be empty on the initial
+                    -- entering-world event. Enrich only this new session entry.
+                    if entry and (not entry.zone or entry.zone=='' or not entry.mapID) then
+                        local pending={entry=entry,index=index};t.loginLocation=pending
+                        for _,delay in ipairs({1,2,3,5,10}) do later(delay,function()
+                            if t.loginLocation~=pending or t.loading or j.readOnly or ns.InitializationBlocked then return end
+                            if db.events[index]~=entry then t.loginLocation=nil;return end
+                            local location=A.Location();local changed=false
+                            for _,key in ipairs({'zone','subzone','mapID','x','y','level'}) do
+                                if (entry[key]==nil or entry[key]=='') and location[key]~=nil and location[key]~='' then
+                                    entry[key]=location[key];changed=true
+                                end
+                            end
+                            if entry.zone and entry.zone~='' and entry.mapID or delay==10 then t.loginLocation=nil end
+                            if changed then
+                                j.revision=j.revision+1
+                                if j.onChange then j.onChange(index) end
+                            end
+                        end) end
+                    end
                 end
                 db.sessionLogout=nil
             end
@@ -391,6 +411,7 @@ function ns.CreateAnnalsTracking(j)
             return
         end
         if event=='PLAYER_LEAVING_WORLD' or event=='PLAYER_LOGOUT' then
+            t.loginLocation=nil
             local logoutLocation=event=='PLAYER_LOGOUT' and t.beforeWorld and t.beforeWorld.from.location
             if event=='PLAYER_LEAVING_WORLD' and not t.loading then
                 local context=travelContext()
