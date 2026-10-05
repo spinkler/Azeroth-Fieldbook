@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.30.0 (Release)
+# Azeroth Fieldbook 0.31.0 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -585,12 +585,11 @@ new credited kills after this update; old totals have no coordinates to recover.
 
 The **Tracking: Kills / Observations** button at the bottom of Locations switches
 between violet kill positions and cyan observation positions, each with a bright
-border. Both layers record independently of which one is displayed. Observation
-tracking records **your position when you target the creature**, including from
-the air. Hovering, the mouseover-open keybinding and repeated background scans
-do not add observation points. These positions describe where
-you observed the creature, not its exact position. The selected layer is saved
-per character; unavailable coordinates never prevent the entry itself being added.
+border. New zone names, subzones and map positions are recorded only for credited
+kills. Targeting, hovering and background scans do not add creature locations.
+The Observations layer preserves historical cyan points from earlier versions;
+no new targeting points are added. The selected layer is saved per character,
+and existing saved locations remain intact.
 
 Readable creature coordinates are preferred. When those are unavailable, the
 addon uses your position when the kill is credited and labels it **approximate**.
@@ -672,8 +671,8 @@ Hover over an overflowing
 name to slowly reveal the full text; leaving the row resets it to the beginning.
 Bestiary **Locations** lists zones, using the client’s parent zone map when
 available. Hover an individual zone name in the creature summary to see the
-sorted subzones from which that creature was observed. These are observer
-locations, not exact creature positions. Fresh subzone observations are retained
+sorted subzones recorded at credited kills. These are observer
+locations, not exact creature positions. Fresh kill subzones are retained
 while an entry is locked; they do not award extra zone-discovery Knowledge.
 Subzone history survives backups and account-wide merges.
 

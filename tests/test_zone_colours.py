@@ -17,6 +17,18 @@ def client():
         settings={accountWideTracking=false}
         j=ns.CreateBestiaryJournal(settings,function() return 42 end)
         book=ns.CreateBestiaryBook(j);book:OpenAtUnit('target');e=j.entries[42]
+        function GetTime() return now end
+        local serial,dead=0,false
+        function UnitGUID() return 'Creature-0-1-2-3-42-zone'..serial end
+        function UnitIsDead() return dead end
+        function UnitExists() return true end
+        function UnitPlayerControlled() return false end
+        function UnitIsTapDenied() return false end
+        function killHere()
+            serial=serial+1;dead=false;j:Observe('target')
+            dead=true;assert(j:RecordKill('target'));dead=false
+        end
+        killHere()
         section=AzerothFieldbookBestiarySection
         function summary()
             local text='';for _,row in ipairs(section.summaryBasicRows) do
@@ -35,7 +47,7 @@ class ZoneColourTests(unittest.TestCase):
                 {'Enemy zone','hostile','ff1a1a'},{'Contested zone','contested','ffb300'},
                 {'Sanctuary','sanctuary','69ccf0'},{'Arena','arena','ff1a1a'},
                 {'Other zone','combat','ffd100'}}) do
-                zone,territory=case[1],case[2];j:Observe('target');book:Refresh()
+                zone,territory=case[1],case[2];killHere();book:Refresh()
                 assert(summary():find('|cff'..case[3]..zone..'|r',1,true))
             end
             assert(summary():find('|cff1aff1aFriendly zone|r',1,true),'old location retains observed colour')

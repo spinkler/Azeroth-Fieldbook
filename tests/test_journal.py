@@ -35,7 +35,8 @@ journal:Observe('target')
 check(journal.entries[42].abilities['Test Trap'].state=='pending','identified legacy observations require review')
 check(journal.entries[42].name=='Defias Test' and journal.entries[42].category=='Humanoid' and journal.entries[42].rank=='Elite','identity, creature type and elite rank')
 check(journal.entries[42].levelMin==9 and journal.entries[42].levelMax==9,'observed level')
-check(journal.entries[42].locations['Elwynn Forest'],'observed location')
+check(not next(journal.entries[42].locations),'targeting does not record locations')
+journal.entries[42].locations['Elwynn Forest']=true -- historical saved location fixture
 journal:Observe('target')
 check(journal.entries[42].sightings==1,'repeat observations deduplicated')
 level=11; guid='Creature-0-1-2-3-42-2'; journal:Observe('mouseover')
@@ -237,6 +238,7 @@ local function object(kind,parent)
     return o
 end
 function methods:CreateTexture() return object('Texture',self) end
+function methods:CreateMaskTexture() return object('MaskTexture',self) end
 function methods:CreateFontString() return object('FontString',self) end
 function methods:GetName() return self.name end
 function CreateFrame(kind,name,parent,template)
@@ -516,16 +518,16 @@ check(not resolvedRow.scripts.OnEnter,'button area and gaps cannot open ability 
 GetCVarBool,GameTooltip=oldCVar,oldTooltip
 journal:SetEntryConfirmed(42,savedLock)
 journal.entries[42].abilities={}
-for i=1,4 do journal.entries[42].abilities['Ability '..i]={state='confirmed',spellID=i} end
+for i=1,3 do journal.entries[42].abilities['Ability '..i]={state='confirmed',spellID=i} end
 controller:Refresh()
-check(not abilityBook.abilityScrollBar:IsShown(),'four abilities fit without scrollbar')
-journal.entries[42].abilities['Ability 5']={state='confirmed',spellID=5}; controller:Refresh()
-check(abilityBook.abilityScrollBar:IsShown(),'fifth ability enables scrollbar')
+check(not abilityBook.abilityScrollBar:IsShown(),'three abilities fit without scrollbar')
+journal.entries[42].abilities['Ability 4']={state='confirmed',spellID=4}; controller:Refresh()
+check(abilityBook.abilityScrollBar:IsShown(),'fourth ability enables scrollbar')
 abilityBook.abilityScrollBar.scripts.OnValueChanged(abilityBook.abilityScrollBar,1)
 check(abilityBook.abilities[1].name=='Ability 2','scrollbar changes displayed abilities')
 abilityBook.abilities[1].scripts.OnMouseWheel(abilityBook.abilities[1],1)
 check(abilityBook.abilities[1].name=='Ability 1','mouse wheel changes displayed abilities')
-journal.entries[42].abilities['Ability 5']=nil; controller:Refresh()
+journal.entries[42].abilities['Ability 4']=nil; controller:Refresh()
 check(not abilityBook.abilityScrollBar:IsShown(),'scrollbar hides when abilities fit again')
 journal.entries[42].abilities=savedAbilities; controller:Refresh()
 local savedKills=journal.entries[42].kills

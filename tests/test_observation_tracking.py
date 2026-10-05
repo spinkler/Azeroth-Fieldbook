@@ -21,7 +21,7 @@ def observation_client():
 
 
 class ObservationTrackingTests(unittest.TestCase):
-    def test_airborne_target_records_skull_entry_log_and_player_position(self):
+    def test_airborne_target_records_skull_entry_without_locations(self):
         lua = observation_client()
         lua.execute('''
             taxi=true;units.target=mob(-1)
@@ -30,15 +30,10 @@ class ObservationTrackingTests(unittest.TestCase):
             assert(journal.entries[42] and journal:IsSkull(42) and points()==0)
             local log=journal:GetEventLog().entries
             assert(#log==1 and log[1].details.title=='Entry observed')
-            local p=observations().points[1+2000*10001+3000]
-            assert(p and not p.approximate and p.x~=nx*10000,'use the player, not NPC coordinates')
-            px=0.8;py=0.9;tick();tick()
-            assert(count(observations().points)==1,'polling never draws a flight path')
-            fire('ADDON_LOADED','AzerothFieldbook');tick()
-            assert(#journal:GetEventLog().entries==1 and count(observations().points)==1)
-            fire('PLAYER_TARGET_CHANGED')
-            assert(count(observations().points)==2 and #log==1,'retargeting adds a point, not another discovery')
-            assert(not next(journal.entries[42].killLocations[37].points))
+            assert(not observations() and not next(journal.entries[42].locations))
+            px=0.8;py=0.9;tick();tick();fire('PLAYER_TARGET_CHANGED')
+            assert(not observations() and not journal.entries[42].killLocations)
+            assert(#log==1,'retargeting does not duplicate discovery')
         ''')
 
     def test_explicit_mouseover_in_flight_bypasses_only_passive_filters(self):
@@ -90,19 +85,16 @@ class ObservationTrackingTests(unittest.TestCase):
             publicTree(AzerothFieldbookDB)
         ''')
 
-    def test_locked_entry_new_zone_and_changed_guid_during_capture(self):
+    def test_locked_target_cannot_record_new_zone(self):
         lua = observation_client()
         lua.execute('''
             units.target=mob(5);fire('PLAYER_TARGET_CHANGED')
             journal:SetEntryConfirmed(42,true)
             mapID=52;mapName='Other zone';px=0.5
-            fire('PLAYER_TARGET_CHANGED');assert(observations(52).points[1+5000*10001+3000])
-            assert(#ns.CreatureLocations.Zones(journal.entries[42],'observations')==2)
-            C_Map.GetPlayerMapPosition=function()
-                units.target.guid='Creature-0-1-2-3-99-other';return {x=0.9,y=0.9}
-            end
-            journal:Observe('target',true)
-            assert(count(observations(52).points)==1,'identity changed during sampling')
+            fire('PLAYER_TARGET_CHANGED');assert(not observations(52))
+            assert(#ns.CreatureLocations.Zones(journal.entries[42],'observations')==0)
+            assert(not next(journal.entries[42].locations))
+            journal:Observe('target',true);assert(not observations())
         ''')
 
     def test_layers_back_up_merge_and_remain_private_with_separate_limits(self):

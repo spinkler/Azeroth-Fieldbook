@@ -4,6 +4,71 @@ from ui_test_harness import new_ui_client
 
 
 class BestiaryModelTests(unittest.TestCase):
+    def test_portrait_appearance_and_gated_placeholder(self):
+        lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
+            'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
+            'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
+        lua.execute(r'''
+            function SetPortraitTexture(texture,unit) texture.appearance=unit end
+            function SetPortraitTextureFromCreatureDisplayID(texture,id) texture.appearance=id end
+            j=ns.CreateBestiaryJournal({},function() return npcID end)
+            c=ns.CreateBestiaryBook(j);c:OpenAtUnit('target')
+            local section=AzerothFieldbookBestiarySection
+            assert(section.portrait:IsShown() and not section.portraitUnknown:IsShown())
+            assert(section.indexCount:GetText()=='* Unlocked')
+            local rumours=j.GetRumours
+            function j:GetRumours(id) return id==42 and {{}} or {} end
+            c:Refresh()
+            assert(section.indexCount:GetText():find('Green',1,true))
+            section.search:SetText('No matching creature');c:Refresh()
+            assert(section.indexCount:GetText()=='* Unlocked')
+            section.search:SetText('');j.GetRumours=rumours;c:Refresh()
+            assert(section.confirm.backdrop==nil)
+            function section.portraitBorder:SetAtlas(name,useAtlasSize)
+                assert(useAtlasSize==true)
+                self.atlas=name
+                self:SetSize(100,90)
+            end
+            function section.model:GetDisplayInfo() return 1234 end
+            section.model.scripts.OnModelLoaded(section.model)
+            assert(section.portrait.appearance==1234)
+            j.entries[42].personalEncountered=false
+            j.entries[42].rank='Rare Elite'
+            c:Refresh()
+            assert(section.portraitFrame:IsShown() and section.portraitUnknown:IsShown())
+            assert(not section.portrait:IsShown())
+            assert(section.portraitBorder.atlas=='UI-HUD-UnitFrame-Target-PortraitOn-Boss-Rare-Silver')
+            assert(section.portraitBorder:IsShown() and section.portraitRings[1]:IsShown())
+            assert(section.portraitBorder.texCoord[1]==1 and section.portraitBorder.texCoord[2]==0,
+                'mirror the complete atlas, not a second crop of its texture sheet')
+            assert(section.portraitBorder.texCoord[3]==0 and section.portraitBorder.texCoord[4]==1)
+            section.model.scripts.OnModelLoaded(section.model)
+            assert(not section.portrait:IsShown(), 'late model callback revealed gated appearance')
+            j.entries[42].personalEncountered=true;j.entries[42].rank='Elite';c:Refresh()
+            local pixel=1/section.portraitFrame:GetEffectiveScale()
+            assert(math.abs(section.portraitBorder.point[2]-(24+(-15*48/58-10-24)*1.20+pixel))<0.001)
+            assert(math.abs(section.portraitBorder.point[3]-(-24+(11*48/58+10+24)*1.20-2*pixel))<0.001)
+            local eliteX,eliteY=section.portraitBorder.point[2],section.portraitBorder.point[3]
+            assert(section.portrait:IsShown() and not section.portraitUnknown:IsShown())
+            assert(section.portraitBorder.atlas=='UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold')
+            assert(section.portraitRings[1]:IsShown())
+            j.entries[42].rank='World Boss';c:Refresh()
+            assert(section.portraitBorder.atlas=='UI-HUD-UnitFrame-Target-PortraitOn-Boss-Gold-Winged')
+            j.entries[42].rank='Rare';c:Refresh()
+            assert(section.portraitBorder.atlas=='UI-HUD-UnitFrame-Target-PortraitOn-Boss-Rare-Silver')
+            assert(section.portraitBorder.point[2]==eliteX and section.portraitBorder.point[3]==eliteY)
+            local width=section.portraitBorder:GetWidth()
+            c:Refresh();c:Refresh()
+            assert(section.portraitBorder:GetWidth()==width, 'refresh must not repeatedly shrink the atlas')
+            assert(section.portraitBorder.mask==nil, 'native artwork needs no custom mask')
+            j.entries[42].rank=nil;c:Refresh()
+            assert(not section.portraitBorder:IsShown())
+            assert(section.portraitRings[1]:IsShown())
+            j.entries[42].personalEncountered=false;c:Refresh()
+            assert(section.portraitUnknown:IsShown() and section.portraitRings[1]:IsShown())
+            assert(not section.portrait:IsShown())
+        ''')
+
     def test_index_letters_scroll_without_filtering(self):
         lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
             'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',

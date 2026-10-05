@@ -388,8 +388,8 @@ class FieldbookTabsTests(unittest.TestCase):
             end
             local b=shell.sections.bestiary.frame
             local g=shell.sections.gathering.frame
-            assert(b.confirm.point[2]==b.title and b.confirm.point[3]=='TOPLEFT')
-            assert(b.confirm.point[4]==-29 and b.confirm.point[5]==4,'lock follows the creature name with a 5px gap')
+            assert(b.confirm.point[2]==b.modelBorder and b.confirm.point[3]=='TOPLEFT')
+            assert(b.confirm.point[4]==6 and b.confirm.point[5]==-6,'lock sits inside the viewer top left')
             assert(g.model.point[2]==b.model.point[2] and g.model.point[3]==b.model.point[3])
             assert(g.modelBorder.point[2]==b.modelBorder.point[2] and g.modelBorder.point[3]==b.modelBorder.point[3])
             assert(g.model:GetWidth()==b.model:GetWidth() and g.model:GetHeight()==b.model:GetHeight())

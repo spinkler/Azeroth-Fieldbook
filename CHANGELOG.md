@@ -1,6 +1,20 @@
 # Changelog
 
-## v0.30.0 - Unreleased
+## v0.31.0 - 2026-10-06
+
+Release-channel update covering the complete batch since v0.29.1 and previous-push baseline f0b30b8ce0e4f3c0c986e607df71187cb6194083.
+
+- Increase ability names by three points, colour descriptions tooltip-yellow, and wrap names, descriptions and notes just before the right-aligned action buttons. Fit ability rows to their text height within the list.
+
+- Show larger, 24-point resolved ability spell icons between their tooltip checkbox and name in the Bestiary, matching the icons already displayed in creature tooltips. Display readable spell descriptions below the name, with up to three compact rows per page, thin fading dividers with extra padding above and below, and scrolling for additional abilities.
+
+- Record new Bestiary zones, subzones and map locations only on credited kills; targeting and hovering no longer add locations. Preserve existing saved location history.
+- Increase creature header names by one point and move them one screen pixel right. Raise the whole portrait four screen pixels and move it three screen pixels left. Match the Index button to the 22-point Filter/Sort height with smaller text.
+
+- Add NPC portraits beside Bestiary entry names with native silver/gold rare and elite borders, placing stats and behaviours to their right. Gated entries show the portrait outline with a question mark. Move the entry lock to the character viewer's top left and the tameable badge to its top right.
+- Give all Bestiary portraits a copper circular rim and use the client's native target-frame silver/gold dragon atlases, mirrored to the left. Flip the complete atlas once, preserving its artwork and proportions; no custom mask or legacy frame fragments are used. Align the dragon coil to the standalone copper circle with fixed offsets for gold and silver dragons, independent of the current target. Enlarge dragons by 20% around the portrait centre so their claws reach the copper rim, then nudge the artwork one screen pixel right and two down relative to the face. Shift the portrait, name, stats and behaviours 28 UI points left so the dragon tail tip aligns with the creature viewer’s left edge.
+
+- Show Bestiary’s Green: rumours legend only while a rumour-bearing entry is visible in the index. Remove the viewer lock button’s background and border.
 
 - Add Next Page and Previous Page keybindings to cycle through journal tabs in display order, wrapping at either end.
 - Add Traveller's Atlas sidebar filters for discovery category and automatic/deliberate source, plus name, zone and observation-time sorting, independently of map-layer visibility. Align its search, index and Current map controls with the other journals.

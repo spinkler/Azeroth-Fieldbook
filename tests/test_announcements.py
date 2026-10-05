@@ -35,7 +35,7 @@ class AnnouncementTests(unittest.TestCase):
 
     def test_single_discovery_has_exact_wording_and_colors(self):
         self.lua.execute('observe(); observe(); tick()')
-        self.assertEqual(self.messages(), [announcement('New discovery!', 'Beast • Lvl11 • Loch Modan', None)])
+        self.assertEqual(self.messages(), [announcement('New discovery!', 'Beast • Lvl11', None)])
 
     def test_level_and_location_use_current_observation_even_when_locked(self):
         self.lua.execute('''
@@ -44,16 +44,12 @@ class AnnouncementTests(unittest.TestCase):
             units.target.level=10; observe(); observe()
             zone='The Twisting Nether'; observe(); observe()
         ''')
-        self.assertEqual(self.messages(), [
-            announcement('New observed location', 'Beast • Lvl10 • The Twisting Nether', None),
-        ])
+        self.assertEqual(self.messages(), [])
         self.assertEqual(self.lua.eval('AzerothFieldbookDB.bestiary.entries[42].levelMin'), 11)
 
     def test_level_and_location_together_keep_one_point(self):
         self.lua.execute("observe(); messages={}; units.target.level=10; zone='The Twisting Nether'; observe()")
-        self.assertEqual(self.messages(), [
-            announcement('New observed location', 'Beast • Lvl10 • The Twisting Nether', None)
-        ])
+        self.assertEqual(self.messages(), [])
         self.assertEqual(self.lua.eval('points()'), 0)
 
     def test_levels_update_without_rewards_and_preserve_old_balances(self):
@@ -71,13 +67,14 @@ class AnnouncementTests(unittest.TestCase):
             units.target.level=16;observe()
             assert(points()==1 and #messages==0)
             zone='New place';observe();observe()
-            assert(points()==1 and #messages==1)
+            assert(points()==1 and #messages==0)
         ''')
 
     def test_kill_milestones_have_exact_punctuation_and_no_level_or_zone(self):
         self.lua.execute("for i=1,51 do beginKill('kill'..i); finishKill() end")
         self.assertEqual(self.messages(), [
-            announcement('New discovery!', 'Beast • Lvl11 • Loch Modan', None),
+            announcement('New discovery!', 'Beast • Lvl11', None),
+            announcement('New observed location', 'Beast • Lvl11 • Loch Modan', None),
             announcement('First kill!', 'Beast'),
             announcement('10 kills!', 'Beast'),
             announcement('25 kills!!', 'Beast', 2),
@@ -93,11 +90,11 @@ class AnnouncementTests(unittest.TestCase):
                     settings.pointAnnouncements = points
                     settings.creatureAnnouncements = discoveries
                     self.lua.execute('observe(); observe()')
-                    expected = [announcement('New discovery!', 'Beast • Lvl11 • Loch Modan', None)] if discoveries else []
+                    expected = [announcement('New discovery!', 'Beast • Lvl11', None)] if discoveries else []
                     self.assertEqual(self.messages(), expected)
                     self.lua.execute("messages={}; units.target.level=10; zone='New location'; observe()")
-                    self.assertEqual(len(self.messages()), 1 if discoveries else 0)
-                    self.assertEqual(self.lua.eval('#AzerothFieldbookDB.eventLog.entries'), 2)
+                    self.assertEqual(len(self.messages()), 0)
+                    self.assertEqual(self.lua.eval('#AzerothFieldbookDB.eventLog.entries'), 1)
                     self.assertEqual(self.lua.eval('AzerothFieldbookDB.eventLog.entries[1].details.points'), None)
 
     def test_log_survives_reload_and_bestiary_reset_without_replaying(self):
@@ -124,7 +121,7 @@ class AnnouncementTests(unittest.TestCase):
         ''')
         self.assertEqual(self.messages(), [])
         self.lua.execute("units.target.name='Forest Lurker'; observe()")
-        self.assertEqual(self.messages(), [announcement('New discovery!', 'Beast • Lvl11 • Loch Modan', None)])
+        self.assertEqual(self.messages(), [announcement('New discovery!', 'Beast • Lvl11', None)])
 
     def test_unreadable_details_are_not_invented_or_stringified(self):
         self.lua.execute('''

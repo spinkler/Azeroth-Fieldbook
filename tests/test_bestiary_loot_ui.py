@@ -16,7 +16,7 @@ lua.execute(r"""
     assert(b.letterButtons[1].point[2]+b.letterButtons[1]:GetWidth()<b.rows[1].point[2])
     for _,control in pairs(b.typeButtons) do assert(control.parent==b.listFilterMenu) end
     assert(b.review.parent==b.listFilterMenu and b.locationsButton.parent==b.listFilterMenu and b.ranksButton.parent==b.listFilterMenu)
-    eq(b.summaryArea.point[2],342);eq(b.summaryArea:GetWidth(),594)
+    eq(b.summaryArea.point[2],406);eq(b.summaryArea:GetWidth(),530)
     eq(b.modelBorder.point[2]+b.modelBorder:GetWidth(),571)
     eq(b.model.point[2]+b.model:GetWidth(),569)
     eq(b.damageBorder.point[2],579);eq(b.damageBorder:GetWidth(),346)

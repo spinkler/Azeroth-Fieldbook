@@ -153,7 +153,7 @@ class AutoLockTests(unittest.TestCase):
             local e=activeJournal.entries[42]
             assert(activeJournal:GetLockNewCritters() and e.confirmed)
             assert(e.lockedBasic.category=='Critter' and e.lockedBasic.levelMin==5)
-            assert(e.lockedBasic.locations['Test zone'] and points()==0)
+            assert(not next(e.lockedBasic.locations) and points()==0)
             assert(not activeJournal:Offer(42,'New ability','Automatic observation',123))
             activeJournal:SetEntryConfirmed(42,false)
             fire('UPDATE_MOUSEOVER_UNIT');tick()

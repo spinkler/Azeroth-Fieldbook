@@ -3,20 +3,16 @@
 The button beside Creature Notes is separate from the existing Locations index
 filter. The button beside Map brightness switches between violet kill tracking
 and cyan observation tracking. Kill positions still require accepted kill credit;
-observation positions record the player's location when the creature is explicitly
-targeted. Both layers collect independently of the displayed layer. Tag eligibility,
+observation positions preserve historical targeting samples. New zone names,
+subzones and map points require accepted kill credit. Tag eligibility,
 pet credit and kill rewards are unchanged.
 
 ## Data and algorithm
 
-- Observe stores map IDs/names even before a kill. Accepted kills store normalized
-  coordinates quantized to integers from 0 to 10000. No historical positions are
-  inferred from old kill counts.
-- Target changes record the player's current readable map position, including
-  during flight. Passive mouseovers, explicitly opening a mouseover entry and
-  0.2-second observation polls do not record map points. An explicit mouseover
-  entry can still be added to the Bestiary during flight. Missing/secret position
-  data prevents a map sample without preventing a readable creature entry or log.
+- Targeting and hovering record identity and readable facts, but no creature
+  locations. A transient map ID guards against crossing maps before death.
+- Accepted kills store zone/subzone names and normalized coordinates quantized
+  to integers from 0 to 10000. No historical positions are inferred from totals.
 - Old zone names resolve through the client's map hierarchy when the name is
   unique. Ambiguous names/floors wait for a direct observation instead of choosing
   an arbitrary map. This resolves artwork only, never past kill coordinates.
@@ -107,18 +103,14 @@ particular enemy's coordinates. Live exact-coordinate availability is unverified
 7. `/reload`, switch account/character tracking, and backup/export/import/restore.
    Verify locations persist in the chosen scope and through backups. Restore an
    old backup with no locations and verify an empty map rather than stale markers.
-8. Select Observations beside Map brightness. Target the creature in several
-   places, including from a flight path: cyan points and nearby areas should use
-   your position at targeting. Hover and use the mouseover-open binding while
-   moving: neither should add map points. Leave one creature targeted while
-   moving: periodic scans must not draw a trail. Untarget/re-target to add another
-   observation. Switch layers, zones and creatures; check matching marker
-   tooltips, red empty messages, bright borders and saved layer choice. Verify
-   the new button fits beside the slider at 50–150% UI scales, and the window
-   continues to clear the main window's right-side section tabs.
+8. Select Observations beside Map brightness. Existing cyan points should remain.
+   Target, hover and use the mouseover-open binding while moving, including from
+   a flight path: no new zones, subzones or map points should appear. Confirm a
+   credited kill adds a violet point and its zone; an uncredited corpse does not.
+   Switch layers, zones and creatures and verify saved layer choice.
 
 `test_locations.py` and `test_observation_tracking.py` cover the real addon event
-paths, storage, secrecy, targeting-only observations, deduplication, scopes,
+paths, storage, secrecy, kill-only location recording, deduplication, scopes,
 backups, distance filtering, triangulation area, layer palettes/tooltips and mocked
 window controls. Mock widgets cannot validate native map textures, alpha blending,
 vertex winding, font fit, or Forever's live coordinate availability.

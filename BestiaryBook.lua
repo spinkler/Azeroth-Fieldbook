@@ -185,14 +185,14 @@ local ink = { 0.75, 0.8, 0.8 }
         local y=0
         local function section(groups,rows,fontObject)
             book.summaryMeasure:SetFontObject(textFont(fontObject))
-            local lines=ns.GroupPropertyLines(groups,594,function(text)
+            local lines=ns.GroupPropertyLines(groups,530,function(text)
                 book.summaryMeasure:SetText(text)
                 return book.summaryMeasure:GetStringWidth()
             end)
             for i,text in ipairs(lines) do
                 local row=rows[i]
                 if not row then
-                    row=label(book.summaryArea,"",0,0,594,fontObject)
+                    row=label(book.summaryArea,"",0,0,530,fontObject)
                     row:SetWordWrap(true); row:SetIndentedWordWrap(true)
                     row:SetJustifyV("TOP")
                     rows[i]=row
@@ -318,6 +318,15 @@ local ink = { 0.75, 0.8, 0.8 }
         local personal=entry and entry.personalEncountered==true or false
         book.modelEntryID,book.modelPersonal=id,personal
         book.modelPending=false
+        book.portraitFrame:SetShown(entry~=nil)
+        book.portrait:Hide();book.portraitUnknown:Show()
+        if personal and type(SetPortraitTexture)=="function" then
+            for _,unit in ipairs({book.modelPreferredUnit or "target","mouseover"}) do
+                if journal:MatchesModelUnit(unit,id) and pcall(SetPortraitTexture,book.portrait,unit) then
+                    book.portrait:Show();book.portraitUnknown:Hide();break
+                end
+            end
+        end
         -- Keep the frame shown for asynchronous loading, but conceal any old
         -- rendered appearance until the replacement reports it has loaded.
         book.model:SetAlpha(0)
@@ -439,6 +448,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.creatureScrollBar:SetValue(offset)
         book.creatureScrollBar:SetShown(#rows>creaturePageSize)
         book.updatingCreatureScroll=false
+        local visibleRumours=false
         for i, row in ipairs(book.rows) do
             row:EnableMouseWheel(#rows>creaturePageSize)
             local data = rows[offset + i]
@@ -465,13 +475,14 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.text:ClearAlphaGradient()
                 local rowSelected = data.id == selected
                 local hasRumours=journal.GetRumours and #journal:GetRumours(data.id)>0
-                if hasRumours then row.text:SetTextColor(114/255,214/255,91/255)
+                if hasRumours then visibleRumours=true;row.text:SetTextColor(114/255,214/255,91/255)
                 else row.text:SetTextColor(rowSelected and 1.00 or ink[1], rowSelected and 0.82 or ink[2], rowSelected and 0.14 or ink[3]) end
                 row.scrollingName:SetTextColor(row.text:GetTextColor())
                 row:SetSelected(rowSelected)
                 row:Show()
             else row:Hide() end
         end
+        book.indexCount:SetText("* Unlocked"..(visibleRumours and "\n|cff72d65bGreen|r: rumours" or ""))
         local entryCount, points = journal:GetTotals()
         book.entryCount:SetCounts(entryCount,#rows)
         book.pointsCount:SetText(points .. " knowledge")
@@ -574,6 +585,33 @@ local ink = { 0.75, 0.8, 0.8 }
             return
         end
         if book.modelEntryID~=selected or book.modelPersonal~=(e.personalEncountered==true) then safeModel(selected) end
+        local portraitBorders={Elite="Gold",Rare="Rare-Silver",["Rare Elite"]="Rare-Silver",["World Boss"]="Gold-Winged"}
+        local rank=basic.rank or e.rank
+        local portraitBorder=portraitBorders[rank]
+        book.portraitBorder:SetShown(portraitBorder~=nil)
+        book.portraitFrame:ClearAllPoints()
+        local scale=48/58
+        local inset=rank=="World Boss" and 34 or 15
+        -- Align the visible dragon coil with our standalone copper circle.
+        -- Native target-frame bounds include padding and do not centre the
+        -- artwork on this portrait; use a stable correction for every entry.
+        local x,y=-inset*scale-10,11*scale+10
+        -- Expand around the face centre so the claws reach the copper rim
+        -- without shifting the coil away from the portrait.
+        local dragonScale=1.20
+        x,y=24+(x-24)*dragonScale,-24+(y+24)*dragonScale
+        if portraitBorder then
+            local atlas="UI-HUD-UnitFrame-Target-PortraitOn-Boss-"..portraitBorder
+            book.portraitBorder:SetAtlas(atlas,true)
+            local width,height=book.portraitBorder:GetWidth()*scale*dragonScale,book.portraitBorder:GetHeight()*scale*dragonScale
+            book.portraitBorder:SetSize(width,height)
+            book.portraitBorder:ClearAllPoints()
+            -- Final visual nudge in screen pixels; leave the face anchor alone.
+            local pixel=1/book.portraitFrame:GetEffectiveScale()
+            book.portraitBorder:SetPoint("TOPLEFT",x+pixel,y-2*pixel)
+            book.portraitBorder:SetTexCoord(1,0,0,1)
+        end
+        book.portraitFrame:SetPoint("TOPLEFT",(portraitBorder and (314-x) or 318.875)-3/book:GetEffectiveScale(),-60+4/book:GetEffectiveScale())
         local title=basic.name or ("Encountered creature #" .. selected)
         if book.title:GetText()~=title then book.titleHover:StopNameScroll() end
         book.titleHover.id=selected
@@ -650,13 +688,14 @@ local ink = { 0.75, 0.8, 0.8 }
         local names = {}
         for name in pairs(e.abilities) do names[#names + 1] = name end
         table.sort(names)
-        local maxAbilityOffset = math.max(0, #names - 4)
+        local maxAbilityOffset = math.max(0, #names - 1)
         abilityOffset = math.max(0, math.min(abilityOffset, maxAbilityOffset))
         book.updatingAbilityScroll = true
         book.abilityScrollBar:SetMinMaxValues(0, maxAbilityOffset)
         book.abilityScrollBar:SetValue(abilityOffset)
         book.abilityScrollBar:SetShown(maxAbilityOffset > 0)
         book.updatingAbilityScroll = false
+        local abilityY,visibleAbilities,abilityFull=0,0,false
         for i, row in ipairs(book.abilities) do
             row:SetWidth(maxAbilityOffset > 0 and 569 or 593)
             row:EnableMouseWheel(maxAbilityOffset > 0)
@@ -667,8 +706,28 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.name = name
                 row.tooltipCheck:SetChecked(ability.showInTooltip ~= false)
                 local linkMissing = type(ability.spellID) ~= "number" or ability.spellID <= 0
+                local icon
+                local iconAPI=C_Spell and C_Spell.GetSpellTexture or GetSpellTexture
+                if not linkMissing and type(iconAPI)=="function" then
+                    local ok,value=pcall(iconAPI,ability.spellID)
+                    if ok and not (issecretvalue and issecretvalue(value))
+                        and ((readableNumber(value) and value>0) or (type(value)=="string" and value~="")) then icon=value end
+                end
+                row.icon:SetTexture(icon)
+                row.icon:SetShown(icon~=nil)
+                row.text:ClearAllPoints()
+                row.text:SetPoint("TOPLEFT",icon and 52 or 22,0)
+                local textX=icon and 52 or 22
+                local description
+                local descriptionAPI=C_Spell and C_Spell.GetSpellDescription or GetSpellDescription
+                if not linkMissing and type(descriptionAPI)=="function" then
+                    local ok,value=pcall(descriptionAPI,ability.spellID)
+                    if ok and not (issecretvalue and issecretvalue(value)) and type(value)=="string" then description=value end
+                end
+                row.description:SetText(description or "")
+                local displayName=name
                 local automatic = ability.playerLossOfControl or ability.origin == "Automatic buff observation" or ability.origin == "Automatic cast observation"
-                row.text:SetText(name .. (automatic and "  |cff80d0ff[A]|r" or "") .. (linkMissing and "  [?]" or "") .. (ability.state == "confirmed" and "" or "  [" .. ability.state .. "]"))
+                row.text:SetText(displayName .. (automatic and "  |cff80d0ff[A]|r" or "") .. (linkMissing and "  [?]" or "") .. (ability.state == "confirmed" and "" or "  [" .. ability.state .. "]"))
                 local effects=effectsText(ability.effects)
                 local note=ability.note or (ability.origin ~= "Your note" and ability.origin or nil)
                 if not ability.note and ability.origin=="Automatic buff observation" then note="|cff999999"..note.."|r" end
@@ -677,7 +736,33 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.accept.cover:SetColorTexture(unpack((editable and ability.state ~= "confirmed") and {0.13,0.025,0.015,1} or {0.22,0.22,0.22,1}))
                 row.resolve:SetShown(editable and (linkMissing or ability.state ~= "confirmed"))
                 for _,control in ipairs({row.link,row.reject,row.accept}) do control:SetShown(editable) end
-                row.divider:SetShown(i>1)
+                local textRight=row:GetWidth()-9
+                if editable then
+                    -- Action buttons are anchored to the right edge of the row.
+                    textRight=row:GetWidth()-row.accept:GetWidth()-row.reject:GetWidth()-row.link:GetWidth()-18
+                    if row.resolve:IsShown() then textRight=textRight-row.resolve:GetWidth()-6 end
+                end
+                row.text:SetWidth(textRight-textX)
+                row.text:SetHeight(0)
+                local titleHeight=math.max(20,row.text:GetStringHeight())
+                row.description:ClearAllPoints()
+                row.description:SetPoint("TOPLEFT",textX,-titleHeight-4)
+                row.description:SetWidth(textRight-textX)
+                row.description:SetHeight(0)
+                local descriptionHeight=description and description~="" and row.description:GetStringHeight() or 0
+                row.note:ClearAllPoints()
+                row.note:SetPoint("TOPLEFT",textX,-titleHeight-4-descriptionHeight-3)
+                row.note:SetWidth(textRight-textX)
+                row.note:SetHeight(0)
+                local noteHeight=row.note:GetText()~="" and row.note:GetStringHeight() or 0
+                local rowHeight=titleHeight+4+descriptionHeight+(noteHeight>0 and noteHeight+3 or 0)+16
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT",342,-360-abilityY)
+                row:SetHeight(rowHeight-4)
+                if not abilityFull and (abilityY+rowHeight<=184 or i==1) then
+                    abilityY=abilityY+rowHeight;visibleAbilities=visibleAbilities+1
+                else abilityFull=true;row:Hide() end
+                for _,line in ipairs(row.divider) do line:SetShown(i>1) end
                 row.tooltipArea:ClearAllPoints()
                 row.tooltipArea:SetPoint("TOPLEFT",row,"TOPLEFT",20,0)
                 if editable then
@@ -702,7 +787,8 @@ local ink = { 0.75, 0.8, 0.8 }
                 end
             else row:Hide() end
         end
-        book.abilityCount:SetText(#names == 0 and "No abilities recorded. Add what you experienced below." or (#names .. " recorded abilities" .. (#names > 4 and " - scroll to review" or "")))
+        book.abilityScrollBar:SetShown(abilityOffset>0 or #names>visibleAbilities)
+        book.abilityCount:SetText(#names == 0 and "No abilities recorded. Add what you experienced below." or (#names .. " recorded abilities" .. (#names > visibleAbilities and " - scroll to review" or "")))
         if #names == 0 then book.abilityCount:SetTextColor(0.55,0.58,0.58)
         else book.abilityCount:SetTextColor(unpack(ink)) end
         local levels = {}
@@ -1108,7 +1194,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.shareButton = ui.ShareButton(book, function()
             if sharingWindow then sharingWindow:Open(selected) end
         end)
-        book.indexCount = label(book, "* Unlocked\n|cff72d65bGreen|r: rumours", 42, -628, 250, "GameFontHighlightSmall")
+        book.indexCount = label(book, "* Unlocked", 42, -628, 250, "GameFontHighlightSmall")
         book.indexCount:SetHeight(44)
         book.indexCount:SetJustifyV("MIDDLE")
         book.indexCount:SetTextColor(0.55,0.58,0.58)
@@ -1116,6 +1202,9 @@ local ink = { 0.75, 0.8, 0.8 }
             indexOpen = not indexOpen
             initial=nil; offset=0; refresh()
         end)
+        book.indexButton:SetHeight(22)
+        book.indexButton:SetNormalFontObject(textFont("GameFontNormalSmall"))
+        book.indexButton:SetHighlightFontObject(textFont("GameFontHighlightSmall"))
         styleSelection(book.indexButton)
         book.indexButton:SetFrameLevel(shell:GetFrame().titleIcon:GetFrameLevel()-1)
         book.letterButtons = {}
@@ -1140,7 +1229,40 @@ local ink = { 0.75, 0.8, 0.8 }
             tab:Hide()
             book.letterButtons[i]=tab
         end
-        book.title = label(book, "", 342, -60, 284, "GameFontNormalLarge")
+        book.portraitFrame=CreateFrame("Frame",nil,book)
+        book.portraitFrame:SetPoint("TOPLEFT",318.875-3/book:GetEffectiveScale(),-60+4/book:GetEffectiveScale());book.portraitFrame:SetSize(48,48)
+        -- Every creature uses the same copper rim, beneath any dragon overlay.
+        book.portraitRings={}
+        for i,spec in ipairs({
+            {57.75,0.12,0.075,0.035},
+            {56.25,0.38,0.23,0.09},
+            {54.75,0.76,0.51,0.22},
+            {52.5,0.53,0.31,0.11},
+            {50.25,0.20,0.115,0.045},
+            {48,0.035,0.025,0.015},
+        }) do
+            local ring=book.portraitFrame:CreateTexture(nil,"BACKGROUND",nil,i-7)
+            ring:SetSize(spec[1],spec[1]);ring:SetPoint("CENTER")
+            ring:SetColorTexture(spec[2],spec[3],spec[4],1)
+            local mask=book.portraitFrame:CreateMaskTexture()
+            mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
+            mask:SetAllPoints(ring);ring:AddMaskTexture(mask)
+            book.portraitRings[i]=ring
+        end
+        book.portrait=book.portraitFrame:CreateTexture(nil,"ARTWORK")
+        book.portrait:SetAllPoints()
+        if type(book.portraitFrame.CreateMaskTexture)=="function" and type(book.portrait.AddMaskTexture)=="function" then
+            book.portraitMask=book.portraitFrame:CreateMaskTexture()
+            book.portraitMask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
+            book.portraitMask:SetAllPoints(book.portrait);book.portrait:AddMaskTexture(book.portraitMask)
+        end
+        book.portraitUnknown=label(book.portraitFrame,"?",0,-12,48,"GameFontNormalLarge")
+        book.portraitUnknown:SetJustifyH("CENTER")
+        -- Native target-frame artwork is already separate from the bars and
+        -- portrait circle. Mirror it directly; no custom mask is needed.
+        book.portraitBorder=book.portraitFrame:CreateTexture(nil,"OVERLAY")
+        book.portraitBorder:Hide()
+        book.title = label(book, "", 406+1/book:GetEffectiveScale(), -60, 220, "GameFontNormalLarge")
         book.title:SetTextColor(1,0.82,0.14)
         book.title:SetShadowColor(0,0,0,0.85);book.title:SetShadowOffset(1,-1)
         book.title:SetWordWrap(false)
@@ -1168,7 +1290,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.killStar:SetPoint("RIGHT",book.killCount,"LEFT",-3,0)
         book.title:SetPoint("TOPRIGHT",book.killStar,"LEFT",-8,12)
         local titlePath, titleSize, titleFlags = book.title:GetFont()
-        if titlePath and titleSize then book.title:SetFont(titlePath, titleSize + 2, titleFlags) end
+        if titlePath and titleSize then book.title:SetFont(titlePath, titleSize + 3, titleFlags) end
         book.titleHover=CreateFrame("Frame",nil,book)
         book.titleHover:SetPoint("TOPLEFT",book.title,"TOPLEFT",0,0)
         book.titleHover:SetPoint("TOPRIGHT",book.title,"TOPRIGHT",0,0)
@@ -1177,7 +1299,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.titleHover:SetMouseClickEnabled(false)
         book.titleHover:SetMouseMotionEnabled(true)
         book.summaryArea=CreateFrame("Frame",nil,book)
-        book.summaryArea:SetPoint("TOPLEFT",342,-92); book.summaryArea:SetSize(594,45)
+        book.summaryArea:SetPoint("TOPLEFT",406,-92); book.summaryArea:SetSize(530,45)
         book.summaryArea:SetHyperlinksEnabled(true)
         book.summaryArea:SetScript("OnHyperlinkEnter",function(self,link)
             local index=type(link)=="string" and tonumber(link:match("^afbzone:(%d+)$"))
@@ -1232,7 +1354,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         book.sourceTooltip:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         book.tameableBadge=CreateFrame("Button",nil,book.modelBorder,"BackdropTemplate")
-        book.tameableBadge:SetSize(24,24);book.tameableBadge:SetPoint("TOPLEFT",6,-6)
+        book.tameableBadge:SetSize(24,24);book.tameableBadge:SetPoint("TOPRIGHT",-6,-6)
         book.tameableBadge:SetFrameLevel(book.model:GetFrameLevel()+2)
         book.tameableBadge:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8})
         book.tameableBadge:SetBackdropColor(0.08,0.06,0.02,1)
@@ -1272,16 +1394,21 @@ local ink = { 0.75, 0.8, 0.8 }
         book.model:SetScript("OnModelLoaded", function()
             if not book.modelPending then return end
             book.modelPending=false
+            if book.modelPersonal and type(book.model.GetDisplayInfo)=="function" and type(SetPortraitTextureFromCreatureDisplayID)=="function" then
+                local ok,displayID=pcall(book.model.GetDisplayInfo,book.model)
+                if ok and not (issecretvalue and issecretvalue(displayID)) and type(displayID)=="number" and displayID>0 then
+                    if pcall(SetPortraitTextureFromCreatureDisplayID,book.portrait,displayID) then
+                        book.portrait:Show();book.portraitUnknown:Hide()
+                    end
+                end
+            end
             book.model:SetAlpha(1)
             book.modelCaption:SetText("")
         end)
-        book.confirm = CreateFrame("Button", nil, book, "BackdropTemplate")
+        book.confirm = CreateFrame("Button", nil, book)
         book.confirm:SetSize(24, 24)
-        book.confirm:SetPoint("TOPLEFT",book.title,"TOPLEFT",-29,4)
+        book.confirm:SetPoint("TOPLEFT",book.modelBorder,"TOPLEFT",6,-6)
         book.confirm:SetFrameLevel(detail:GetFrameLevel() + 5)
-        book.confirm:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=5, insets={left=2,right=2,top=2,bottom=2}})
-        book.confirm:SetBackdropColor(0.06, 0.04, 0.02, 0.95)
-        book.confirm:SetBackdropBorderColor(0.55, 0.40, 0.16, 1)
         -- Preserve the original screen center while shrinking the button and artwork.
         local function lockPart(width, height, x, y, layer)
             local part = book.confirm:CreateTexture(nil, layer or "ARTWORK")
@@ -1321,7 +1448,6 @@ local ink = { 0.75, 0.8, 0.8 }
             for _, corner in ipairs(self.lockCorners) do
                 corner:SetColorTexture(bgR, bgG, bgB, 1)
             end
-            self:SetBackdropColor(bgR, bgG, bgB, 0.95)
         end
         book.confirm:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
@@ -1486,13 +1612,10 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         book.abilityScrollBar:Hide()
         book.abilities = {}
-        for i=1,4 do
+        for i=1,3 do
             local row = CreateFrame("Frame", nil, abilityPanel)
-            row:SetPoint("TOPLEFT", 342, -360-(i-1)*48); row:SetSize(593, 42)
-            row.divider=row:CreateTexture(nil,"ARTWORK")
-            row.divider:SetColorTexture(0.35,0.20,0.08,0.16)
-            row.divider:SetPoint("TOPLEFT",0,7);row.divider:SetPoint("TOPRIGHT",-9,7)
-            row.divider:SetHeight(1)
+            row:SetPoint("TOPLEFT", 342, -360-(i-1)*62); row:SetSize(593, 58)
+            row.divider=ns.FieldbookUI.EntryDivider(row,6,569)
             row.tooltipCheck=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate")
             row.tooltipCheck:SetPoint("TOPLEFT",-2,5); row.tooltipCheck:SetSize(20,20)
             row.tooltipCheck:SetScript("OnClick",function(self)
@@ -1506,10 +1629,21 @@ local ink = { 0.75, 0.8, 0.8 }
                 GameTooltip:Show()
             end)
             row.tooltipCheck:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+            row.icon=row:CreateTexture(nil,"ARTWORK")
+            row.icon:SetPoint("TOPLEFT",22,3);row.icon:SetSize(24,24)
+            row.icon:Hide()
             row.text = label(row,"",22,0,224)
-            row.text:SetWordWrap(false)
-            row.note = label(row,"",35,-17,211,"GameFontHighlightSmall")
-            row.note:SetHeight(23)
+            row.text:SetWordWrap(true)
+            row.text:SetJustifyV("TOP")
+            local abilityFont,abilitySize,abilityFlags=row.text:GetFont()
+            if abilityFont and abilitySize then row.text:SetFont(abilityFont,abilitySize+3,abilityFlags) end
+            row.description=label(row,"",52,-24,510,"GameFontHighlightSmall")
+            row.description:SetHeight(24)
+            row.description:SetTextColor(1,0.82,0.14)
+            row.description:SetWordWrap(true)
+            row.description:SetJustifyV("TOP")
+            row.note = label(row,"",52,-46,510,"GameFontHighlightSmall")
+            row.note:SetHeight(12)
             row.resolve = button(row,"Resolve",254,0,72,function()
                 local ok,msg=journal:ResolveAbility(selected,row.name)
                 message(msg)

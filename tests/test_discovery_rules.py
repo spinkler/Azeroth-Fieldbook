@@ -46,13 +46,14 @@ class DiscoveryRules(unittest.TestCase):
                         units[watchedToken]=mob(17)
                         fire('PLAYER_ENTERING_WORLD');fire(observedEvent)
                         local e=journal.entries[42]
-                        assert(e and e.levelMin==17 and e.locations['The Hall of Thanes'])
+                        assert(e and e.levelMin==17 and not next(e.locations))
                         assert(not e.observationLocations and not e.killLocations)
                         units[watchedToken].combat=true;tick()
                         fire('PARTY_KILL',UnitGUID('player'),units[watchedToken].guid)
                         units[watchedToken].dead=true
                         fire('UNIT_DIED',units[watchedToken].guid);tick()
                         assert(e.kills==1 and points()==1 and not e.killLocations)
+                        assert(e.locations['The Hall of Thanes'])
                     ''')
 
     def test_airborne_mouseover_excluded_target_allowed(self):

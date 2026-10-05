@@ -16,11 +16,11 @@ class SubzoneTests(unittest.TestCase):
                         if id==101 then return {name=zone,mapType=5,parentMapID=100} end
                         return {name='Ironforge',mapType=3,parentMapID=0}
                     end}
-                    j:Observe('target')
+                    killHere()
                     assert(e.locations['The Hall of Thanes'] and not e.locations.Ironforge)
                     assert(e.subzones['The Hall of Thanes'][zone])
                     C_Map.GetBestMapForUnit=function() return nil end
-                    zone='The Hall of Thanes';j:Observe('target')
+                    zone='The Hall of Thanes';killHere()
                     assert(not e.locations['Reliquary of Kings'])
                 ''')
 
@@ -32,7 +32,7 @@ class SubzoneTests(unittest.TestCase):
                 if id==101 then return {name=zone,mapType=4,parentMapID=100} end
                 return {name='Ironforge',mapType=3,parentMapID=0}
             end}
-            j:Observe('target');assert(e.locations[zone] and not e.locations.Ironforge)
+            killHere();assert(e.locations[zone] and not e.locations.Ironforge)
         ''')
 
     def test_zone_parent_and_locked_subzone_observation(self):
@@ -44,11 +44,11 @@ class SubzoneTests(unittest.TestCase):
                 if id==101 then return {name='Sentinel Tower',mapType=5,parentMapID=100} end
                 return {name='Westfall',mapType=3,parentMapID=0}
             end}
-            j:Observe('target')
+            killHere()
             assert(e.locations.Westfall and not e.locations['Sentinel Tower'])
             assert(j:GetSubzones(42,'Westfall')[1]=='Sentinel Tower')
             local before=settings.bestiary.points.earned
-            j:SetEntryConfirmed(42,true);sub='Moonbrook';zone='Westfall';j:Observe('target')
+            j:SetEntryConfirmed(42,true);sub='Moonbrook';zone='Westfall';killHere()
             assert(#j:GetSubzones(42,'Westfall')==2 and e.confirmed)
             assert(settings.bestiary.points.earned==before,'subzones do not award zone discovery points')
             book:Refresh()
@@ -102,7 +102,7 @@ class SubzoneTests(unittest.TestCase):
             local old=j:Ensure(43,false,'Other creature')
             old.locations={Moonbrook=true,['Other zone']=true}
             zone='Westfall';function GetSubZoneText() return 'Moonbrook' end
-            j:Observe('target')
+            killHere()
             assert(e.locations.Westfall and not e.locations.Moonbrook)
             assert(e.subzones.Westfall.Moonbrook)
             assert(old.locations.Moonbrook and not old.locations.Westfall,'ambiguous other history is preserved')
@@ -116,10 +116,10 @@ class SubzoneTests(unittest.TestCase):
             local sub='Small settlement';zone='Elwynn Forest'
             function GetSubZoneText() return sub end
             C_Map={GetBestMapForUnit=function() return secret end}
-            j:Observe('target');j:Observe('target')
+            killHere();killHere()
             assert(#j:GetSubzones(42,zone)==1)
-            sub=secret;j:Observe('target');assert(#j:GetSubzones(42,zone)==1)
-            sub='Unmapped area';zone=sub;j:Observe('target')
+            sub=secret;killHere();assert(#j:GetSubzones(42,zone)==1)
+            sub='Unmapped area';zone=sub;killHere()
             assert(not e.locations[sub],'known subzone is not recorded as a zone without a parent')
         ''')
 

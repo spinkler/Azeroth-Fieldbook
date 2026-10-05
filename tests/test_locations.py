@@ -32,7 +32,7 @@ def kills_client():
     lua.execute(MAP_API)
     lua.execute('''
         function entry() return AzerothFieldbookDB.bestiary.entries[42] end
-        function pointsIn(id) return entry().killLocations[id or 37].points end
+        function pointsIn(id) local maps=entry().killLocations;return maps and maps[id or 37] and maps[id or 37].points end
     ''')
     return lua
 
@@ -65,7 +65,7 @@ class LocationStorageTests(unittest.TestCase):
     def test_credited_kills_only_exact_coordinates_and_deduplication(self):
         lua=kills_client()
         lua.execute('''
-            beginKill('1');assert(count(pointsIn())==0,'sighting has zone but no kill marker')
+            beginKill('1');assert(count(pointsIn())==0,'sighting has no location markers')
             local guid=finishKill('Pet-0-1-2-3-9-1')
             assert(kills()==1 and count(pointsIn())==1)
             local p=select(2,next(pointsIn()))
@@ -76,6 +76,23 @@ class LocationStorageTests(unittest.TestCase):
             beginKill('3');nx=0.41;finishKill();assert(kills()==2 and count(pointsIn())==2)
             publicTree(AzerothFieldbookDB)
         ''')
+
+    def test_zone_names_require_credit_and_reject_cross_map_capture(self):
+        lua=kills_client()
+        lua.execute("""
+            zone='Border sighting'
+            function GetRealZoneText() return zone end
+            beginKill('border')
+            assert(not next(entry().locations))
+            mapID=38;mapName='Other zone';zone='Other zone'
+            finishKill()
+            assert(kills()==1 and not next(entry().locations))
+            beginKill('denied');units.target.denied=true;finishKill()
+            assert(not next(entry().locations))
+            beginKill('credited');finishKill()
+            assert(entry().locations['Other zone'])
+            assert(not entry().locations['Border sighting'])
+        """)
 
     def test_secret_or_missing_npc_position_uses_labelled_player_fallback(self):
         lua=kills_client()
