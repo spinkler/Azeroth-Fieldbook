@@ -77,6 +77,13 @@ function ns.CreateLossOfControlObserver(journal, identify, say)
         if not accessible(data) then trace("LOC data " .. dataState .. "; table inaccessible/missing"); return false end
         local spellID, spellState = field(data, "spellID")
         if not integer(spellID, 1) then trace("LOC spell ID " .. spellState .. "/invalid; deferred"); return false end
+        local verifiedAuraID = field(data, "auraInstanceID")
+        local verifiedAura = integer(verifiedAuraID, 1) and payload[verifiedAuraID] or nil
+        if not verifiedAura and integer(verifiedAuraID, 1) then
+            verifiedAura = read(C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID, "player", verifiedAuraID)
+        end
+        local verifiedUnit, verifiedGUID, verifiedID = source(verifiedAura, verifiedAuraID)
+        if not verifiedID then trace("LOC excluded: no verified NPC source"); return false end
         -- locType is a label, never an acceptance whitelist.
         local locType, typeState = field(data, "locType")
         local label = text(field(data, "displayText")) or text(locType) or "Loss of Control"
@@ -99,16 +106,16 @@ function ns.CreateLossOfControlObserver(journal, identify, say)
         if not state then
             sequence = sequence + 1
             state = { token = "loc:" .. sequence,
-                candidate = journal:CaptureSpellAssignment("target", spellID, "Loss of Control", say) }
+                candidate = journal:CaptureSpellAssignment(verifiedUnit, spellID, "Loss of Control", say) }
             seen[key] = state
         end
+        if identify(verifiedUnit, false, verifiedGUID) ~= verifiedID or read(UnitGUID, verifiedUnit) ~= verifiedGUID then seen[key] = nil; return false end
         state.at, state.absentAt, state.active = at, nil, true
         local name = text(C_Spell and read(C_Spell.GetSpellName, spellID))
         local reason, caster = "no readable aura instance (" .. auraState .. ")", state.caster
         local recordingDisabled = not journal:GetAutoRecordAbilities()
         if not state.saved and auraID then
-            local aura, queryState = payload[auraID], "UNIT_AURA addition"
-            if not aura then aura, queryState = read(C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID, "player", auraID) end
+            local aura, queryState = verifiedAura, "Verified aura instance"
             local unit, guid, id, sourceState = source(aura, auraID)
             reason = queryState .. "; " .. sourceState
             if id then

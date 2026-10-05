@@ -50,6 +50,7 @@ def client(account=False):
             end
         end
     ''')
+    lua.execute("journal:SetSpellFeedback(true)")  # Opt in for announcement/deduplication checks.
     return lua
 
 

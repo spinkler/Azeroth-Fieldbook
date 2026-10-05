@@ -9,10 +9,10 @@ local applySpellIDTooltipPreference = ns.ApplySpellIDTooltipPreference or functi
     settings.spellIDTooltipInitialized = nil
     if type(GetCVarBool) == "function" then
         local ok, enabled = pcall(GetCVarBool, "tooltipShowAuraSpellIDs")
-        if ok and enabled == settings.showSpellIDs then return end
+        if ok and enabled == (settings.showTooltips ~= false and settings.showSpellIDs) then return end
     end
     if type(SetCVar) == "function" then
-        pcall(SetCVar, "tooltipShowAuraSpellIDs", settings.showSpellIDs and "1" or "0")
+        pcall(SetCVar, "tooltipShowAuraSpellIDs", (settings.showTooltips ~= false and settings.showSpellIDs) and "1" or "0")
     end
 end
 local db, trackingDB
@@ -248,7 +248,7 @@ local function storeObserved(id, spellID, observedName, creatureName)
     diagnostics.learned = diagnostics.learned + 1
     diagnostics.last = "Cast recorded."
     if journal then journal:RecordEvent("Observed: " .. name,{kind="cast",creatureID=id}) end
-    if db.announce then say("Observed: " .. name) end
+    if db.spellFeedback == true then say("Observed: " .. name) end
     return true
 end
 
@@ -352,6 +352,7 @@ end
 local function addTooltip(tooltip)
     if not db or tooltip ~= GameTooltip then return end
     tooltipCreatureID = nil
+    if db.showTooltips == false then tooltipStatus = "Fieldbook tooltips disabled."; return end
     diagnostics.tooltips = diagnostics.tooltips + 1
     local ok, _, unit = pcall(tooltip.GetUnit, tooltip)
     if not ok then tooltipStatus = "GetUnit: API ERROR."; return end
@@ -417,7 +418,7 @@ local function addSpellIDTooltip(tooltip, tooltipData)
     -- Forever's native aura-tooltip CVar provides the correct ID for aura
     -- tooltips. Retain this callback only as a fallback for clients without it.
     if type(GetCVarBool) == "function" then return end
-    if not db or db.showSpellIDs ~= true or type(tooltipData) ~= "table" then return end
+    if not db or db.showTooltips == false or db.showSpellIDs ~= true or type(tooltipData) ~= "table" then return end
     local spellID = tooltipData.id
     if not positiveID(spellID) or not tooltip or type(tooltip.AddLine) ~= "function" then return end
     tooltip:AddLine("Spell ID: " .. spellID, 1.00, 0.82, 0.20)
@@ -527,7 +528,11 @@ local function initializeImpl()
     if ns.CastIDs then ns.CastIDs:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
     if journal then
-        if journal.SetAutomaticRecordCallback then journal:SetAutomaticRecordCallback(say) end
+        if journal.SetAutomaticRecordCallback then journal:SetAutomaticRecordCallback(function(message, details)
+            if details and details.spellID then
+                if db.spellFeedback == true then say(message) end
+            else say(message) end
+        end) end
         if ns.SpellIDWindow and ns.SpellIDWindow.SetAssignmentCapture then
             ns.SpellIDWindow:SetAssignmentCapture(function(unit, spellID, kind)
                 if afterWipeHold or not journal.CaptureSpellAssignment then return end
@@ -542,7 +547,7 @@ local function initializeImpl()
                 end)
             end)
         end
-        if ns.CreateLossOfControlObserver then lossOfControl = ns.CreateLossOfControlObserver(journal, watchedEnemy, say) end
+        if ns.CreateLossOfControlObserver then lossOfControl = ns.CreateLossOfControlObserver(journal, watchedEnemy, function(message) if db.spellFeedback == true then say(message) end end) end
         journal:SetPointsRecordedCallback(function(entry, amount, reason, observation)
             local killTitles = { ["first kill"] = "First kill!", ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
             local discoveryTitles = { location = "New observed location" }

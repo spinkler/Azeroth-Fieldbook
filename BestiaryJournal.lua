@@ -7,10 +7,10 @@ function ns.ApplySpellIDTooltipPreference(db)
     db.spellIDTooltipInitialized = nil -- obsolete first-run marker
     if type(GetCVarBool) == "function" then
         local ok, enabled = pcall(GetCVarBool, "tooltipShowAuraSpellIDs")
-        if ok and enabled == db.showSpellIDs then return end
+        if ok and enabled == (db.showTooltips ~= false and db.showSpellIDs) then return end
     end
     if type(SetCVar) == "function" then
-        pcall(SetCVar, "tooltipShowAuraSpellIDs", db.showSpellIDs and "1" or "0")
+        pcall(SetCVar, "tooltipShowAuraSpellIDs", (db.showTooltips ~= false and db.showSpellIDs) and "1" or "0")
     end
 end
 
@@ -325,7 +325,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:RecordAutomaticEvent(message,details)
         self:RecordEvent(message,details)
-        if onAutomaticRecorded then onAutomaticRecorded(message) end
+        if onAutomaticRecorded then onAutomaticRecorded(message,details) end
     end
     local firstEncounterHistory={}
     for _,event in ipairs(journal:GetEventLog().entries) do
@@ -651,6 +651,17 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         else return end
         if ns.SpellIDWindow then ns.SpellIDWindow:ApplySettings() end
     end
+    function journal:GetTooltips() return db.showTooltips ~= false end
+    function journal:SetTooltips(enabled)
+        db.showTooltips = enabled == true
+        ns.ApplySpellIDTooltipPreference(db)
+        if GameTooltip and GameTooltip.IsShown and GameTooltip:IsShown() and GameTooltip.SetUnit then
+            local ok, _, unit = pcall(GameTooltip.GetUnit, GameTooltip)
+            if ok and public(unit) and type(unit) == "string" then pcall(GameTooltip.SetUnit, GameTooltip, unit) end
+        end
+    end
+    function journal:GetSpellFeedback() return db.spellFeedback == true end
+    function journal:SetSpellFeedback(enabled) db.spellFeedback = enabled == true end
     function journal:GetKillCountTooltips() return db.showKillCountTooltips~=false end
     function journal:GetBehaviourTooltips() return db.showBehaviourTooltips~=false end
     function journal:SetBehaviourTooltips(enabled)

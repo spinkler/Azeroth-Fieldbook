@@ -1,3 +1,5 @@
+Current capture policy: only effects with an exact readable aura instance and verified, non-player-controlled Creature source are displayed or recorded. Unknown, restricted, player, pet and vehicle sources are ignored, including manual target fallback. Automatic spell feedback is independently opt-in. Historical observations below describe the earlier unrestricted diagnostic investigation.
+
 # Player Loss of Control observations
 
 ## API evidence and live limits

@@ -1,4 +1,9 @@
-# Azeroth Fieldbook 0.27.0 (Release)
+# Azeroth Fieldbook 0.28.0 (Release)
+
+Bestiary Options includes a master AFB tooltip switch (on by default) and separate
+spell observation/ID chat feedback (off by default). Player debuffs and Loss of
+Control effects require a verified NPC caster; player-controlled and unknown
+sources are ignored.
 
 Adventurer's Annals adds an eighth journal for
 this character's quest history and Journey Trail. It is independent of account

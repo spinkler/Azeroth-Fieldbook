@@ -160,8 +160,9 @@ cast('target', 101)
 check(count() == 7, 'same spell needs independent creature evidence')
 check(#messages == 0, 'alerts default off')
 SlashCmdList.AZEROTHFIELDBOOK('alerts')
+AzerothFieldbookDB.spellFeedback=true
 cast('target', 107)
-check(messages[#messages]:find('107'), 'optional discovery message')
+check(messages[#messages]:find('107'), 'optional spell feedback')
 saved = AzerothFieldbookDB
 saved.showSpellIDs=false;saved.spellIDTooltipInitialized=false
 ''')

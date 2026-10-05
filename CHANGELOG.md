@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.28.0 - Unreleased
+
+- Add a master AFB tooltip toggle, on by default, retaining individual choices and gating the client-wide aura spell-ID preference.
+- Separate automatic spell/ID chat feedback from discovery announcements; spell feedback starts off. Explicit commands and manual assignment responses remain available.
+- Require verified NPC sources for player debuff and Loss of Control observations; exclude player-controlled and unidentified sources from spell-ID display, and fail closed on unavailable cast-overlay ownership.
+- Update regression coverage for source exclusion, NPC provenance, opt-in spell announcements and retained tooltip preferences.
+
 ## v0.27.0 - 2026-10-05
 
 Release-channel update covering the complete batch since v0.26.1 and previous-push baseline b7561e13c592b86db530daa50a8a48be9737eeac.

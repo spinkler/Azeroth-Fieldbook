@@ -57,7 +57,8 @@ function CreateFrame(_,name,parent)
 end
 now=0
 function GetTime() return now end
-exists,enemy,controlled=true,true,false
+exists,enemy,controlled,targetPlayer=true,true,false,false
+function UnitGUID() return "Creature-0-1-2-3-42-1" end
 function UnitExists() return exists end
 function UnitIsPlayer() return targetPlayer end
 function UnitIsEnemy() return enemy end
@@ -103,12 +104,12 @@ db.spellIDWindowLocked=true; db.spellIDWindowAlpha=0.6
 ns.SpellIDWindow:ApplySettings()
 panel.scripts.OnDragStart(panel)
 assert(not panel.moving and not panel.movable and panel.texture.alpha==0.6)
-auras.target={{auraInstanceID=1,spellId=123,name='Rushing Charge',dispelName='Magic'}}
+auras.target={{sourceUnit='target',auraInstanceID=1,spellId=123,name='Rushing Charge',dispelName='Magic'}}
 fire('UNIT_AURA','target',{})
 assert(buff.shown and id(buff)==123 and buff.strings[3].text=='Magic')
 assert(buff.strings[4].text=='Rushing Charge')
 advance(60)
-auras.player={{auraInstanceID=2,spellId=secret,name=secret,dispelName=secret}}
+auras.player={{sourceUnit='target',auraInstanceID=2,spellId=secret,name=secret,dispelName=secret}}
 fire('UNIT_AURA','player',{})
 assert(debuff.shown and rawequal(id(debuff),secret))
 fire('UNIT_AURA','target',{}) -- Same instance must not extend its expiry.
@@ -169,10 +170,10 @@ C_UnitAuras.GetAuraSlots=function(unit,filter,maxSlots,token)
     return nil, 8
 end
 C_UnitAuras.GetAuraDataBySlot=function(unit,slot) return slotAuras[slot] end
-local combatAura={auraInstanceID=secret,spellId=secret,name=secret,dispelName=secret}
+local combatAura={sourceUnit='target',auraInstanceID=secret,spellId=secret,name=secret,dispelName=secret}
 secretTables[combatAura]=true
 slotAuras[7]=combatAura
-slotAuras[8]={auraInstanceID=88,spellId=6288,name='Another buff'}
+slotAuras[8]={sourceUnit='target',auraInstanceID=88,spellId=6288,name='Another buff'}
 enemy=true; targetPlayer=false
 fire('PLAYER_TARGET_CHANGED')
 assert(slotCalls==2 and id(buff)==6288) -- Final page was not lost after nil token.
@@ -209,12 +210,12 @@ fire('PLAYER_TARGET_CHANGED')
 local messages={}
 ns.SpellIDWindow:Report(function(message) messages[#messages+1]=message end)
 assert(table.concat(messages,' '):find('aura table access denied',1,true))
-slotAuras[7]={auraInstanceID=secret,spellId=134,name='Fire Shield',dispelName='Magic'}
+slotAuras[7]={sourceUnit='target',auraInstanceID=secret,spellId=134,name='Fire Shield',dispelName='Magic'}
 slotAuras[8]=slotAuras[7]
 fire('UNIT_AURA','target',{})
 assert(id(buff)==134 and buff.strings[3].text=='Magic')
 -- Public instance replacement in an occupied slot is a new observation.
-slotAuras[7]={auraInstanceID=99,spellId=6288,name='Rushing Charge'}
+slotAuras[7]={sourceUnit='target',auraInstanceID=99,spellId=6288,name='Rushing Charge'}
 slotAuras[8]=slotAuras[7]
 fire('UNIT_AURA','target',{})
 assert(id(buff)==6288)
@@ -225,7 +226,7 @@ advance(118); assert(not buff.shown)
 -- A slot query that throws must try indexed access, not look like an empty scan.
 local workingSlots=C_UnitAuras.GetAuraSlots
 C_UnitAuras.GetAuraSlots=function() error('slot access denied') end
-auras.target={{auraInstanceID=1234,spellId=6268,name='Rushing Charge'}}
+auras.target={{sourceUnit='target',auraInstanceID=1234,spellId=6268,name='Rushing Charge'}}
 fire('PLAYER_TARGET_CHANGED')
 assert(buff.shown and id(buff)==6268)
 messages={}
@@ -260,7 +261,7 @@ fire('UNIT_AURA','target',{})
 assert(not buff.shown) -- Failed queries did not erase deduplication state.
 C_UnitAuras.GetAuraSlots=workingSlots
 -- Combat ending discovers still-active buffs without a target change.
-slotAuras[7]={auraInstanceID=900,spellId=134,name='Fire Shield'}
+slotAuras[7]={sourceUnit='target',auraInstanceID=900,spellId=134,name='Fire Shield'}
 slotAuras[8]=slotAuras[7]
 fire('PLAYER_REGEN_ENABLED')
 assert(buff.shown and id(buff)==134)
@@ -353,7 +354,7 @@ fire('UNIT_AURA','target',{})
 assert(buff.strings[6].shown and rawequal(buff.strings[7].text,secret) and buff.height==68)
 local managerMessage
 window.OpenBlacklist=function(_,message) managerMessage=message end
-auras.target={{auraInstanceID=905,spellId=secret,name=secret,sourceUnit=secret}}
+auras.target={{auraInstanceID=905,spellId=secret,name=secret,sourceUnit='target'}}
 fire('UNIT_AURA','target',{})
 ctrlDown=true;buff.scripts.OnMouseUp(buff,'RightButton');ctrlDown=false
 assert(not buff.shown and managerMessage:find('restricted',1,true))
@@ -376,7 +377,7 @@ ns.SpellIDWindow:Initialize({})
 auras.player={};C_UnitAuras.GetAuraSlots=nil
 C_UnitAuras.GetAuraDataByIndex=function() error('scan unavailable') end
 local debuff=frames[5]
-local disarm={auraInstanceID=67130,spellId=6713,name='Disarm',isHarmful=true}
+local disarm={sourceUnit='target',auraInstanceID=67130,spellId=6713,name='Disarm',isHarmful=true}
 fire('UNIT_AURA','player',{addedAuras={disarm}})
 assert(debuff.shown and debuff.strings[2].text==6713)
 fire('UNIT_AURA','player',{addedAuras={{spellId=123,isHelpful=true,isHarmful=false}}})
@@ -402,7 +403,7 @@ ns.SpellIDWindow:Initialize({})
 local debuff=frames[5]
 C_UnitAuras.GetAuraSlots=function() error('slot query blocked') end
 C_UnitAuras.GetAuraDataByIndex=function() error('indexed query blocked') end
-local aura={auraInstanceID=secret,spellId=secret,name=secret,isHarmful=true}
+local aura={sourceUnit='target',auraInstanceID=secret,spellId=secret,name=secret,isHarmful=true}
 local added={aura};local update={addedAuras=added}
 secretTables[aura]=true;secretTables[added]=true;secretTables[update]=true
 fire('UNIT_AURA','player',update)
@@ -412,7 +413,7 @@ C_UnitAuras.GetAuraSlots=function() return nil,7 end
 C_UnitAuras.GetAuraDataBySlot=function() return nil end
 C_UnitAuras.GetAuraDataByIndex=function(unit,index)
     if unit=='player' and index==1 then
-        return {auraInstanceID=67139,spellId=6713,name='Disarm'}
+        return {sourceUnit='target',auraInstanceID=67139,spellId=6713,name='Disarm'}
     end
 end
 fire('UNIT_AURA','player',{})
@@ -439,7 +440,7 @@ assert(ns.SpellIDWindow:ObserveLossOfControl(12345,'Disarming Smash','Disarm','C
 assert(loc.shown and loc.strings[2].text==12345 and loc.strings[3].text=='Disarm')
 assert(loc.strings[4].text=='Disarming Smash' and loc.strings[5].text=='Loss of Control on you')
 assert(loc.strings[7].text=='Creature A')
-fire('UNIT_AURA','player',{addedAuras={{auraInstanceID=22,spellId=999,name='Other debuff',isHarmful=true}}})
+fire('UNIT_AURA','player',{addedAuras={{sourceUnit='target',auraInstanceID=22,spellId=999,name='Other debuff',isHarmful=true}}})
 assert(loc.shown and loc.strings[2].text==12345)
 loc.scripts.OnMouseUp(loc,'RightButton');assert(not loc.shown)
 assert(ns.SpellIDWindow:ObserveLossOfControl(12345,'Disarming Smash','Disarm',nil,'loc:1'))
@@ -579,7 +580,7 @@ castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(assignments[5].sp
 auras.player={{auraInstanceID=73,spellId=777,name='Unattributed'}}
 fire('UNIT_AURA','player',{})
 debuffPortrait.scripts.OnEnter(debuffPortrait)
-assert(GameTooltip.lines[2]:find('unverified',1,true) and debuff.strings[6].text=='Target:')
+assert(debuff.strings[2].text~=777,'unattributed player effects are ignored')
 -- Secret IDs render but never enter a tooltip concatenation or assignment.
 casting,castID=true,secret;fire('UNIT_SPELLCAST_START','target');casting=false
 assert(castPortrait.shown and rawequal(cast.strings[2].text,secret))
@@ -602,8 +603,29 @@ fire('UNIT_AURA','target',{});assert(not buffPortrait.shown)
 C_UnitAuras.GetAuraDataByIndex=normalAura
 -- All row portraits follow expiry, dismissal, hiding and blacklist settings.
 instantPortrait.scripts.OnClick(instantPortrait,'RightButton');assert(not instantPortrait.shown)
-ns.SpellIDWindow:AddBlacklist(777);assert(not debuffPortrait.shown)
+ns.SpellIDWindow:AddBlacklist(6713);assert(not debuffPortrait.shown)
 settings.displaySpellIDWindow=false;ns.SpellIDWindow:ApplySettings()
 for i=8,12 do assert(not frames[i].shown) end
 ''')
 print('PASS: cast/channel/instant/buff/debuff portraits, secret IDs and capture races')
+
+lua.execute(r'''
+local window=ns.SpellIDWindow
+local normalGUID=UnitGUID
+for _,guid in ipairs({'Player-1-2','Pet-0-1-2-3-42-1','Vehicle-0-1-2-3-42-1',secret}) do
+    window:Initialize({displaySpellIDWindow=true})
+    controlled=false;exists=true;enemy=true
+    UnitGUID=function() return guid end
+    auras.player={{auraInstanceID=991,spellId=991,name='Excluded',sourceUnit='target'}}
+    fire('UNIT_AURA','player',{})
+    fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,991,991)
+    assert(not frames[3].shown and not frames[5].shown,'non-creature sources excluded')
+end
+UnitGUID=normalGUID
+controlled=secret
+UnitPlayerControlled=function() return secret end
+window:Initialize({displaySpellIDWindow=true})
+fire('UNIT_AURA','player',{})
+assert(not frames[5].shown,'unknown ownership excluded')
+''')
+print('PASS: player, pet, vehicle, secret identity and unknown ownership exclusions')

@@ -115,7 +115,7 @@ local function Eligible()
     if issecretvalue(exists) or issecretvalue(enemy) or issecretvalue(controlled) then
         return false
     end
-    return exists and enemy and not controlled
+    return exists == true and enemy == true and controlled == false
 end
 
 local function Present(kind, spellID)

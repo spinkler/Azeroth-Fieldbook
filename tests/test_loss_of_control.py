@@ -66,51 +66,30 @@ def client(account=False):
 
 
 class LossOfControlTests(unittest.TestCase):
-    def test_manual_portrait_assignment_keeps_captured_target(self):
+    def test_manual_portrait_assignment_keeps_verified_source(self):
         lua = client()
-        lua.execute('''
-            auras={};apply(nil,nil,10)
-            local candidate=displayed[1].candidate
-            assert(candidate.id==43 and candidate.name=='Creature B')
-            assert(not next(journal.entries),'capturing a target must not mutate the Bestiary')
-            units.target=units.nameplate1
-            fire('LOSS_OF_CONTROL_UPDATE','player')
-            assert(#displayed==1 and candidate.assign())
-            assert(ability(43).state=='confirmed' and ability(43).origin=='Your note')
-            assert(not ability(43).playerLossOfControl and not ability(42))
-            local revision=journal.revision;assert(candidate.assign())
-            assert(journal.revision==revision and abilityCount(43)==1)
-            local log=journal:GetEventLog().entries
-            assert(log[#log].details.kind=='manual Loss of Control')
-            assert(log[#log].details.creatureID==43);publicTree(AzerothFieldbookDB)
-        ''')
+        lua.execute('''journal:SetAutoRecordAbilities(false);apply(nil,nil,10);local candidate=displayed[1].candidate;assert(candidate.id==42);units.target=nil;units.nameplate1=nil;assert(candidate.assign() and ability(42) and not ability(43))''')
 
     def test_manual_assignment_without_name_or_automatic_recording(self):
         lua = client()
-        lua.execute('''
-            journal:SetAutoRecordAbilities(false)
-            auras={};apply('ROOT',54321,10)
-            local candidate=displayed[1].candidate;units.target=nil
-            assert(candidate.assign())
-            local a=journal.entries[43].abilities['Spell ID 54321']
-            assert(a.state=='confirmed' and a.origin=='Your note' and not a.playerLossOfControl)
-        ''')
+        lua.execute('''journal:SetAutoRecordAbilities(false);apply('ROOT',54321,10);local candidate=displayed[1].candidate;units.target=nil;assert(candidate.assign());assert(journal.entries[42].abilities['Spell ID 54321'].origin=='Your note')''')
 
     def test_manual_assignment_preserves_notes_and_deduplicates_by_id(self):
         lua = client()
         lua.execute('''
-            journal:Ensure(43,false,'Creature B')
-            local entry=journal.entries[43]
+            journal:SetAutoRecordAbilities(false)
+            journal:Ensure(42,false,'Creature B')
+            local entry=journal.entries[42]
             entry.abilities['Custom name']={spellID=12345,state='pending',origin='Report',note='Keep this',effects={Disarm=true},showInTooltip=false}
-            auras={};apply(nil,nil,10)
+            apply(nil,nil,10)
             assert(displayed[1].candidate.assign())
             local a=entry.abilities['Custom name']
-            assert(abilityCount(43)==1 and a.state=='confirmed' and a.origin=='Your note')
+            assert(abilityCount(42)==1 and a.state=='confirmed' and a.origin=='Your note')
             assert(a.note=='Keep this' and a.effects.Disarm and a.showInTooltip==false and not a.playerLossOfControl)
             active={};fire('LOSS_OF_CONTROL_UPDATE','player');clock=clock+4
             a.origin='Automatic cast observation';a.playerLossOfControl=true
-            apply(nil,nil,11);assert(displayed[2].candidate.assign())
-            assert(a.origin=='Automatic cast observation' and a.playerLossOfControl and abilityCount(43)==1)
+            auras[11]={auraInstanceID=11,sourceUnit='nameplate1'};apply(nil,nil,11);assert(displayed[2].candidate.assign())
+            assert(a.origin=='Automatic cast observation' and a.playerLossOfControl and abilityCount(42)==1)
         ''')
 
     def test_manual_assignment_respects_lock_reset_and_deleted_entry(self):
@@ -118,42 +97,25 @@ class LossOfControlTests(unittest.TestCase):
             with self.subTest(change=change):
                 lua = client();lua.globals().change=change
                 lua.execute('''
-                    journal:Ensure(43,false,'Creature B');auras={};apply(nil,nil,10)
+            journal:SetAutoRecordAbilities(false)
+                    journal:Ensure(42,false,'Creature B');apply(nil,nil,10)
                     local candidate=displayed[1].candidate
-                    if change=='lock' then journal:SetEntryConfirmed(43,true)
+                    if change=='lock' then journal:SetEntryConfirmed(42,true)
                     elseif change=='reset' then journal:Reset()
-                    elseif change=='delete' then journal:DeleteEntry(43)
+                    elseif change=='delete' then journal:DeleteEntry(42)
                     else ns.InitializationBlocked=true end
                     local revision=journal.revision
-                    assert(not candidate.assign() and not ability(43))
+                    assert(not candidate.assign() and not ability(42))
                     assert(journal.revision==revision)
                 ''')
 
-    def test_portrait_target_identity_restrictions_and_capture_race(self):
-        for change in ('absent', 'controlled', 'guid', 'name', 'race'):
-            with self.subTest(change=change):
-                lua = client();lua.globals().change=change
-                lua.execute('''
-                    auras={}
-                    if change=='absent' then units.target=nil
-                    elseif change=='controlled' then units.target.controlled=true
-                    elseif change=='guid' then units.target.guid=secret
-                    elseif change=='name' then units.target.name=secret
-                    else UnitName=function() units.target=units.nameplate1;return 'Creature B' end end
-                    apply(nil,nil,10)
-                    assert(not displayed[1].candidate and not next(journal.entries))
-                    publicTree(AzerothFieldbookDB)
-                ''')
-
-    def test_verified_source_replaces_unverified_target_action(self):
+    def test_player_controlled_source_has_no_portrait(self):
         lua = client()
-        lua.execute('''
-            local aura=auras[10];auras={};apply(nil,nil,10)
-            assert(displayed[1].candidate.id==43)
-            auras[10]=aura;fire('UNIT_AURA','player',{})
-            assert(#displayed==2 and not displayed[2].candidate and displayed[2].caster=='Creature A')
-            assert(ability(42) and not ability(43))
-        ''')
+        lua.execute('''units.nameplate1.controlled=true;apply(nil,nil,10);assert(#displayed==0 and not next(journal.entries) and fallbackCount()==0)''')
+
+    def test_missing_source_waits_for_verified_aura(self):
+        lua = client()
+        lua.execute('''local aura=auras[10];auras={};apply(nil,nil,10);assert(#displayed==0);auras[10]=aura;fire('UNIT_AURA','player',{});assert(#displayed==1 and displayed[1].caster=='Creature A' and ability(42) and not ability(43))''')
 
     def test_attribution_discovers_source_not_target_and_deduplicates(self):
         lua = client()
@@ -173,14 +135,7 @@ class LossOfControlTests(unittest.TestCase):
 
     def test_missing_source_does_not_mutate_current_or_previous_target(self):
         lua = client()
-        lua.execute('''
-            fire('PLAYER_TARGET_CHANGED');local rev=journal.revision
-            auras={};apply(nil,nil,10)
-            assert(journal.revision==rev and not ability(43) and not journal.entries[42])
-            assert(fallbackCount()==1 and output():find('12345',1,true) and output():find('Disarm',1,true))
-            fire('LOSS_OF_CONTROL_UPDATE','player');assert(fallbackCount()==1)
-            units.target=nil;fire('LOSS_OF_CONTROL_UPDATE','player');assert(fallbackCount()==1)
-        ''')
+        lua.execute('''auras={};apply(nil,nil,10);fire('LOSS_OF_CONTROL_UPDATE','player');assert(#displayed==0 and #messages==0 and not next(journal.entries))''')
 
     def test_target_switch_race_and_no_target(self):
         for source in (True, False):
@@ -209,9 +164,9 @@ class LossOfControlTests(unittest.TestCase):
                         active={effect(kind,12345,hasSource and 10 or nil)}
                         active[1].displayText=nil
                         fire('LOSS_OF_CONTROL_UPDATE','player')
-                        assert(displayed[1].effect==kind and displayed[1].id==12345)
+                        if hasSource then assert(displayed[1].effect==kind and displayed[1].id==12345) else assert(#displayed==0) end
                         assert((ability()~=nil)==hasSource)
-                        assert(fallbackCount()==(hasSource and 0 or 1))
+                        assert(fallbackCount()==0)
                     ''')
 
     def test_aura_payload_only_exact_correlation_and_full_updates(self):
@@ -223,20 +178,20 @@ class LossOfControlTests(unittest.TestCase):
             assert(ability() and auraReads==0 and fallbackCount()==0)
             active={effect('ROOT',4321,11)}
             fire('UNIT_AURA','player',{isFullUpdate=true,addedAuras={{auraInstanceID=11,sourceUnit='nameplate1'}}})
-            assert(not ability(42,4321) and fallbackCount()==1)
+            assert(not ability(42,4321) and fallbackCount()==0)
             fire('UNIT_AURA','player',{addedAuras={{auraInstanceID=999,sourceUnit='nameplate1'}}})
-            assert(not ability(42,4321) and fallbackCount()==1)
+            assert(not ability(42,4321) and fallbackCount()==0)
             C_UnitAuras.GetAuraDataByAuraInstanceID=function(_,id) return {auraInstanceID=id,sourceUnit='nameplate1'} end
             fire('UNIT_AURA','player',{isFullUpdate=true})
-            assert(ability(42,4321) and fallbackCount()==1)
+            assert(ability(42,4321) and fallbackCount()==0)
         ''')
 
     def test_added_before_aura_can_upgrade_but_aura_token_is_never_cached(self):
         lua = client()
         lua.execute('''
-            auras={};apply(nil,nil,10);assert(fallbackCount()==1)
+            auras={};apply(nil,nil,10);assert(fallbackCount()==0)
             fire('UNIT_AURA','player',{addedAuras={{auraInstanceID=10,sourceUnit='nameplate1'}}})
-            assert(ability() and fallbackCount()==1 and #displayed==2)
+            assert(ability() and fallbackCount()==0 and #displayed==1)
             active={};fire('LOSS_OF_CONTROL_UPDATE','player')
             fire('UNIT_AURA','player',{addedAuras={{auraInstanceID=20,sourceUnit='target'}}})
             units.target=units.nameplate1
@@ -246,16 +201,7 @@ class LossOfControlTests(unittest.TestCase):
 
     def test_several_effects_same_spell_and_no_aura_timing(self):
         lua = client()
-        lua.execute('''
-            auras={};active={effect('STUN',12345,10),effect('SILENCE',12345,11),effect('SCHOOL_INTERRUPT',999)}
-            active[3].startTime=nil;active[3].duration=nil;active[3].timeRemaining=nil
-            fire('LOSS_OF_CONTROL_UPDATE','player');assert(fallbackCount()==3)
-            for i=1,20 do clock=clock+10;fire('LOSS_OF_CONTROL_UPDATE','player') end
-            assert(fallbackCount()==3 and not next(journal.entries))
-            active={};fire('LOSS_OF_CONTROL_UPDATE','player');clock=clock+3
-            active={effect('SCHOOL_INTERRUPT',999)};active[1].startTime=nil;active[1].duration=nil
-            fire('LOSS_OF_CONTROL_ADDED','player',1);assert(fallbackCount()==4)
-        ''')
+        lua.execute('''auras={};active={effect('STUN',12345,10),effect('SILENCE',12345,11),effect('SCHOOL_INTERRUPT',999)};fire('LOSS_OF_CONTROL_UPDATE','player');assert(fallbackCount()==0 and #displayed==0 and not next(journal.entries))''')
 
     def test_secret_and_invalid_fields_fail_closed(self):
         fixtures = [
@@ -284,15 +230,8 @@ class LossOfControlTests(unittest.TestCase):
                 ''')
 
     def test_optional_secret_fields_do_not_discard_readable_spell(self):
-        lua=client()
-        lua.execute('''
-            active={effect('DISARM',12345,10)}
-            for _,k in ipairs({'locType','displayText','startTime','duration','timeRemaining','lockoutSchool','auraInstanceID'}) do active[1][k]=secret end
-            C_Spell.GetSpellName=function() return secret end
-            fire('LOSS_OF_CONTROL_UPDATE','player')
-            assert(fallbackCount()==1 and displayed[1].id==12345 and not ability())
-            assert(output():find('Spell ID 12345',1,true));publicTree(AzerothFieldbookDB)
-        ''')
+        lua = client()
+        lua.execute('''active={effect('DISARM',12345,10)};for _,k in ipairs({'locType','displayText','startTime','duration','timeRemaining','lockoutSchool'}) do active[1][k]=secret end;fire('LOSS_OF_CONTROL_UPDATE','player');assert(ability() and #displayed==1);active[1].auraInstanceID=secret;fire('LOSS_OF_CONTROL_UPDATE','player');assert(#displayed==1)''')
 
     def test_accessible_tables_with_secret_contents_and_api_errors(self):
         lua=client()
@@ -302,12 +241,12 @@ class LossOfControlTests(unittest.TestCase):
             auras[10].name=secret;apply(nil,nil,10);assert(ability())
             active={effect('ROOT',4321,11)}
             C_UnitAuras.GetAuraDataByAuraInstanceID=function() error(secret) end
-            fire('LOSS_OF_CONTROL_UPDATE','player');assert(fallbackCount()==1 and not ability(42,4321))
+            fire('LOSS_OF_CONTROL_UPDATE','player');assert(fallbackCount()==0 and not ability(42,4321))
             C_LossOfControl.GetActiveLossOfControlDataCount=function() return secret end
             fire('LOSS_OF_CONTROL_UPDATE','player');fire('LOSS_OF_CONTROL_ADDED','player',1)
-            assert(fallbackCount()==1)
+            assert(fallbackCount()==0)
             active={effect('SILENCE',777)};fire('LOSS_OF_CONTROL_ADDED','player',1)
-            assert(fallbackCount()==2)
+            assert(fallbackCount()==0)
             C_LossOfControl=nil;fire('LOSS_OF_CONTROL_UPDATE','player')
         ''')
 
@@ -369,7 +308,7 @@ class LossOfControlTests(unittest.TestCase):
             fire('LOSS_OF_CONTROL_ADDED','pet',1);fire('LOSS_OF_CONTROL_UPDATE',secret)
             assert(not next(journal.entries) and #displayed==0 and #messages==0)
             journal:SetAutoRecordAbilities(false);fire('LOSS_OF_CONTROL_UPDATE','player')
-            assert(not next(journal.entries) and fallbackCount()==1 and #displayed==1)
+            assert(not next(journal.entries) and fallbackCount()==0 and #displayed==1)
             journal:SetAutoRecordAbilities(true);fire('LOSS_OF_CONTROL_UPDATE','player');assert(ability())
             SlashCmdList.AZEROTHFIELDBOOK('wipe');SlashCmdList.AZEROTHFIELDBOOK('wipe confirm')
             fire('LOSS_OF_CONTROL_UPDATE','player');fire('PLAYER_ENTERING_WORLD')
@@ -396,7 +335,7 @@ class LossOfControlTests(unittest.TestCase):
                     end
                 end
                 apply(nil,nil,10)
-                assert(not ability() and not ability(43) and fallbackCount()==1)
+                assert(not ability() and not ability(43) and fallbackCount()==0)
             ''')
 
     def test_account_import_merges_loc_evidence_without_replacing_origin(self):
@@ -416,15 +355,8 @@ class LossOfControlTests(unittest.TestCase):
         ''')
 
     def test_restricted_loc_scan_does_not_reset_application_deduplication(self):
-        lua=client()
-        lua.execute('''
-            auras={};apply(nil,nil,10)
-            local data=active[1]
-            active[1]=secret;clock=clock+10;fire('LOSS_OF_CONTROL_UPDATE','player')
-            active[1]=data;clock=clock+10;fire('LOSS_OF_CONTROL_UPDATE','player')
-            assert(fallbackCount()==1)
-            assert(not next(journal.entries));publicTree(AzerothFieldbookDB)
-        ''')
+        lua = client()
+        lua.execute('''apply(nil,nil,10);assert(#displayed==1);C_LossOfControl.GetActiveLossOfControlDataCount=function() return secret end;fire('LOSS_OF_CONTROL_UPDATE','player');assert(#displayed==1 and abilityCount(42)==1)''')
 
     def test_guid_used_to_parse_id_must_match_aura_source_guid(self):
         lua=client()
@@ -438,7 +370,7 @@ class LossOfControlTests(unittest.TestCase):
                 return originalGUID(unit)
             end
             apply(nil,nil,10)
-            assert(not next(journal.entries) and fallbackCount()==1)
+            assert(not next(journal.entries) and fallbackCount()==0)
         ''')
 
     def test_locked_entry_allows_loc_and_repeated_application_keeps_saved_data(self):

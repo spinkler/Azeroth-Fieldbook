@@ -64,19 +64,26 @@ local function targetUnit(unit)
     local same = read(UnitIsUnit, unit, "target")
     return public(same) and same == true
 end
+local function npcUnit(unit)
+    if not public(unit) or type(unit) ~= "string" or unit == "" then return false end
+    local controlled = read(UnitPlayerControlled, unit)
+    if not public(controlled) or controlled ~= false then return false end
+    local guid = read(UnitGUID, unit)
+    return public(guid) and type(guid) == "string" and guid:match("^Creature%-%d+%-%d+%-%d+%-%d+%-%d+%-") ~= nil
+end
 local function npcTarget()
     local exists = read(UnitExists, "target")
     local player = read(UnitIsPlayer, "target")
     local controlled = read(UnitPlayerControlled, "target")
     return public(exists) and public(player) and public(controlled)
-        and exists == true and not player and not controlled
+        and exists == true and player == false and controlled == false and npcUnit("target")
 end
 local function enemyTarget()
     local exists = read(UnitExists, "target")
     local enemy = read(UnitIsEnemy, "player", "target")
     local controlled = read(UnitPlayerControlled, "target")
     return public(exists) and public(enemy) and public(controlled)
-        and exists == true and enemy == true and not controlled
+        and exists == true and enemy == true and controlled == false and npcUnit("target")
 end
 local function clear(row)
     row.observed = nil
@@ -398,6 +405,9 @@ local function scanAuras(unit, updates)
             problem = "aura table access unavailable"
             return
         end
+        local auraSource = read(function() return aura.sourceUnit end)
+        if unit == "player" and not npcUnit(auraSource) then return end
+        if unit == "target" and (not public(auraSource) or auraSource ~= nil and not npcUnit(auraSource)) then return end
         local ok, instance, spellID, name, effect = pcall(function()
             return aura.auraInstanceID, aura.spellId, aura.name, aura.dispelName
         end)
