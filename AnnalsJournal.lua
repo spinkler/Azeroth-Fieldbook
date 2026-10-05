@@ -190,6 +190,42 @@ function ns.CreateAnnalsJournal(saved)
         table.sort(out,function(a,b) if a.event.at==b.event.at then return (a.event.sequence or a.id)<(b.event.sequence or b.id) end;return a.event.at<b.event.at end)
         return out
     end
+    -- Display filters must never change which offline intervals are skipped.
+    function j:PlaybackClock(first,last)
+        local clock={first=first,last=last,gaps={}}
+        local exit
+        for _,row in ipairs(self:Range(0,9999999999)) do
+            local e=row.event
+            if e.kind=='logout' then exit=e.at
+            elseif e.kind=='login' then
+                if exit and e.at>exit then
+                    local lo,hi=math.max(first,exit),math.min(last,e.at)
+                    if hi>lo then clock.gaps[#clock.gaps+1]={lo=lo,hi=hi} end
+                end
+                exit=nil
+            elseif exit then exit=nil end
+        end
+        function clock:Offset(at)
+            at=math.max(self.first,math.min(self.last,at))
+            local value=at-self.first
+            for _,gap in ipairs(self.gaps) do
+                if at<=gap.lo then break end
+                value=value-math.min(at-gap.lo,gap.hi-gap.lo)
+            end
+            return value
+        end
+        function clock:Stamp(value,backward)
+            value=math.max(0,math.min(self.total,value))
+            local at=self.first+value
+            for _,gap in ipairs(self.gaps) do
+                if at<gap.lo or (backward and at==gap.lo) then break end
+                at=at+gap.hi-gap.lo
+            end
+            return math.min(self.last,at)
+        end
+        clock.total=clock:Offset(last)
+        return clock
+    end
     function j:Bounds()
         local lo,hi
         for _,row in ipairs(self.events) do local t=row.event.at;lo=math.min(lo or t,t);hi=math.max(hi or t,t) end

@@ -1102,6 +1102,29 @@ class AnnalsTests(unittest.TestCase):
             for _,texture in ipairs(map.lines) do assert(not texture:IsShown()) end
         ''')
 
+    def test_offline_time_is_skipped_by_playback_slider_and_wheel(self):
+        l=full_client();l.execute(ENV);l.execute('''
+            local c=ns.AnnalsController;local j=c.journal
+            for _,v in ipairs({{'login',100},{'logout',400},{'login',4000},{'logout',4300}}) do
+                j:Append(v[1],v[1],nil,{},v[2],true)
+            end
+            c.shell:ShowSection('annals');c:SetRange(100,4300)
+            assert(c.main.rangeDuration:GetText()=='10m00s / 10m00s')
+            c:SetEventFilter('all',false)
+            c:Seek(399);c:TogglePlayback();c:TickPlayback(2)
+            assert(c.at==4001)
+            c.main.slider.scripts.OnValueChanged(c.main.slider,300)
+            assert(c.at==4000 and not c.playing)
+            c.main.slider.scripts.OnMouseWheel(c.main.slider,-1);assert(c.at==399)
+            c.main.slider.scripts.OnMouseWheel(c.main.slider,1);assert(c.at==4000)
+            c.sliderSpan=60;c.sliderStart=nil;c:SyncSlider()
+            assert(c.main.rangeDuration:GetText()=='30s / 1m00s')
+            local clock=j:PlaybackClock(200,4100)
+            assert(clock.total==300 and clock:Stamp(200)==4000)
+            c:SetRange(100,4300);c.sliderSpan=nil;c:Seek(4299)
+            c:TogglePlayback();c:TickPlayback(2);assert(c.at==4300 and not c.playing)
+        ''')
+
     def test_playback_rates_pause_bounds_and_precise_relative_slider(self):
         l=full_client();l.execute(ENV)
         l.execute('''
@@ -1119,7 +1142,7 @@ class AnnalsTests(unittest.TestCase):
             c:TogglePlayback();assert(c.at==c.first and c.playing)
             m.scripts.OnHide(m);assert(not c.playing)
             c:Seek(c.first+500);c.sliderSpan=60;c.sliderStart=nil;c:SyncSlider()
-            assert(c.sliderStart==c.first+470)
+            assert(c.sliderStart==470)
             m.slider.scripts.OnValueChanged(m.slider,31)
             assert(c.at==c.first+501 and not c.playing)
             m.slider.scripts.OnMouseWheel(m.slider,1);assert(c.at==c.first+502)

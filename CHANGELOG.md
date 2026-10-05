@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.29.1 - 2026-10-05
+
+Release-channel correction since v0.29.0 and previous-push baseline 89aa4100b567385b36a2e186d13ced5bfd97ebef.
+
+- Bugfix: Annals journey playback and scrubbing counted offline time. Skip confirmed logout-to-login gaps and show elapsed and total logged-in time while retaining historical timestamps and events. Display filters do not affect timing; gaps without recorded logout markers remain unchanged.
+
+- Add regression coverage for offline-gap playback, slider and mouse-wheel navigation, zoomed durations, filtered markers and clipped date ranges.
+
 ## v0.29.0 - 2026-10-05
 
 Release-channel update covering the complete batch since v0.28.0 and previous-push baseline 788bec9b1776c1668de193d2a19c53b0d62a0dbf.
