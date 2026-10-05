@@ -1,6 +1,8 @@
 # Changelog
 
-## v0.28.0 - Unreleased
+## v0.28.0 - 2026-10-05
+
+Release-channel update covering the complete batch since v0.27.0 and previous-push baseline e8a87605af69890f8967e35c3ac5a526ef663626.
 
 - Add a master AFB tooltip toggle, on by default, retaining individual choices and gating the client-wide aura spell-ID preference.
 - Separate automatic spell/ID chat feedback from discovery announcements; spell feedback starts off. Explicit commands and manual assignment responses remain available.
