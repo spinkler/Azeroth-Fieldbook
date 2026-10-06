@@ -161,7 +161,7 @@ class KillDiagnostics(unittest.TestCase):
     def test_live_decisions_report_actual_awards_duplicates_and_expiry(self):
         lua = new_client(diagnostics=True)
         lua.execute(r'''
-            for i=1,8 do beginKill('earlier'..i); finishKill() end
+            for i=1,23 do beginKill('earlier'..i); finishKill() end
             SlashCmdList.AZEROTHFIELDBOOK('debug kills on')
             beginKill('first'); finishKill()
             beginKill('earned'); finishKill()
@@ -173,11 +173,11 @@ class KillDiagnostics(unittest.TestCase):
         ''')
         report = lua.eval('copiedReport')
         self.assertIn('qualified kill tracking active', report)
-        self.assertIn('accepted; killAward=1; killPointsAward=1', report)
+        self.assertIn('accepted; killAward=1; killPointsAward=0', report)
         self.assertIn('accepted; killAward=1; killPointsAward=1', report)
         self.assertIn('duplicate; killAward=0; killPointsAward=0', report)
         self.assertIn('expired: observation or pending evidence', report)
-        self.assertEqual(lua.eval('kills()'), 10)
+        self.assertEqual(lua.eval('kills()'), 25)
 
 
 if __name__ == '__main__':

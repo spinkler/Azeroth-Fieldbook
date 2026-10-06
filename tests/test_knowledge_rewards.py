@@ -10,7 +10,7 @@ class KnowledgeRewards(unittest.TestCase):
                 lua = new_client()
                 lua.globals().rank = rank
                 lua.execute("function UnitClassification() return rank end")
-                for limit, total in zip([1, 10, 25, 50], expected):
+                for limit, total in zip([1, 25, 50, 100], expected):
                     lua.globals().limit = limit
                     lua.execute("for i=(AzerothFieldbookDB.bestiary.entries[42] and kills() or 0)+1,limit do beginKill('rank'..i);finishKill() end")
                     self.assertEqual(lua.eval('points()'), total)

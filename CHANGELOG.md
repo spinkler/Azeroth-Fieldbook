@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.34.2 - 2026-10-06
+
+- Raise Bestiary kill milestones to silver at 25, gold at 50 and crown at 100 kills. Update announcements, Help and documentation while preserving earned knowledge and preventing credited rewards from paying again.
+- Improve Bestiary Behaviour and Defenses heading colours and sizes. Add a shallow dragon edge fade and keep Index and alphabet controls above illustration masks.
+- Expand Rumours over the viewer controls, hide the covered buttons until it closes, explain empty Rumours on hover and close it when selecting another creature.
+- Fix stale or blank Bestiary portraits and models by clearing outgoing textures, isolating native callbacks by creature, preserving completed live-unit appearances and retrying stalled loads. Add regression coverage for delayed callbacks and recovery.
+- Refresh Ledger Training colours and level eligibility on level-up while preserving historical observations and explicit unverified requirements. Expand Goods and Training overlays over the left-pane controls and restore them on close.
+- Centre the Adventurer's Annals map legend vertically. Improve Atlas Expeditions and map-position guidance, move Map position between Add Discovery and Expeditions, use a glowing Cancel toggle during placement and explain disabled detail actions on hover.
+- Restyle Atlas map details with dark parchment footers, aligned scrollbars, scrolling fades, gold headings, cyan labels and grey text. Add animated expand/collapse below the zone controls and move larger Observed Weather text beside the map filter.
+- Correct the remaining reward, sharing and kill-diagnostics test fixtures to exercise the 25/50/100 milestones, reload preservation and duplicate-credit protection, resolving the automated test failures that blocked the 0.34.0 and 0.34.1 releases.
+
 ## v0.34.1 - 2026-10-06
 
 - Fix the Bestiary Rumours overlay leaving covered damage, loot, offense, defense and behaviour controls clickable. The controls now hide while Rumours is open and restore when it closes.

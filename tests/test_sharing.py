@@ -85,7 +85,7 @@ end
 eq(decoded.recipient,'Bob Stonewell','full recipient name survives wire encoding')
 
 local legacyDB={bestiary={entries={[42]={id=42,name='Defias Pillager',category='Humanoid',levelMin=9,levelMax=11,
-    locations={Elwynn=true},abilities={},kills=25}},creatures={}}}
+    locations={Elwynn=true},abilities={},kills=50}},creatures={}}}
 local legacy=ns.CreateBestiaryJournal(legacyDB,identify)
 eq(legacy:GetSharingBalance(),6,'legacy entry + endpoint + gold')
 assert(legacy:ReserveShare('migration',2))
@@ -153,10 +153,13 @@ creditedDeath('death1'); eq(j:GetSharingBalance(),zero+1)
 j=ns.CreateBestiaryJournal(importedDB,identify); assert(not j:RecordKill('target'),'same death survives reload')
 creditedDeath('death2'); eq(j:GetSharingBalance(),zero+1)
 for i=3,24 do creditedDeath('death'..i) end
-eq(j:GetSharingBalance(),zero+2,'silver remains the only kill reward until 25')
-creditedDeath('death25'); eq(j:GetSharingBalance(),zero+4)
+eq(j:GetSharingBalance(),zero+1,'first kill remains the only kill reward until 25')
+creditedDeath('death25'); eq(j:GetSharingBalance(),zero+2)
+for i=26,49 do creditedDeath('death'..i) end
+eq(j:GetSharingBalance(),zero+2,'silver remains the highest kill reward until 50')
+creditedDeath('death50'); eq(j:GetSharingBalance(),zero+4)
 j:DeleteEntry(42); j:Observe('target')
-for i=1,25 do creditedDeath('repeated'..i) end
+for i=1,50 do creditedDeath('repeated'..i) end
 eq(j:GetSharingBalance(),zero+4,'already credited kill stars cannot pay twice')
 dead=false
 UnitGUID,UnitExists,UnitPlayerControlled,UnitIsTapDenied,GetTime=oldGUID,oldExists,oldControlled,oldTap,oldTime
