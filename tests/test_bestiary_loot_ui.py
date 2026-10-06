@@ -130,8 +130,14 @@ lua.execute(r"""
     eq(rumours:GetWidth(),b.damageBorder:GetWidth());eq(rumours:GetHeight(),b.damageBorder:GetHeight())
     assert(rumours.title:IsShown() and not rumours.closeButton:IsShown())
     assert(not rumours.paper:IsShown() and not b.damageHeading:IsShown() and not b.damageScroll:IsShown())
+    for _,button in ipairs({b.damageButton,b.lootButton,b.offenseButton,b.defenseButton,b.behaviourButton}) do
+        assert(not button:IsShown(),'Rumours hides the covered controls')
+    end
     assert(-rumours.area.point[3]+rumours.area:GetHeight()<=rumours:GetHeight())
     b.rumoursButton.scripts.OnClick();assert(not rumours:IsShown())
+    for _,button in ipairs({b.damageButton,b.lootButton,b.offenseButton,b.defenseButton,b.behaviourButton}) do
+        assert(button:IsShown(),'Closing Rumours restores the controls')
+    end
     b.rumoursButton.scripts.OnClick();b.lootButton.scripts.OnClick()
     assert(not rumours:IsShown() and not b.lootMode,'Show Damage replaces Rumours')
     b.lootButton.scripts.OnClick()

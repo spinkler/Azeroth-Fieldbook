@@ -2474,6 +2474,9 @@ local ink = { 0.75, 0.8, 0.8 }
                         book.damageBorder:SetHeight(shown and book.modelBorder:GetHeight() or 115)
                         if shown then rumoursWindow:Refresh() end
                         book.damageHeading:SetShown(not shown);book.damageScroll:SetShown(not shown)
+                        for _,button in ipairs({book.damageButton,book.lootButton,book.offenseButton,book.defenseButton,book.behaviourButton}) do
+                            button:SetShown(not shown)
+                        end
                         local entry=selected and journal.entries[selected]
                         book.lootFilter:SetShown(not shown and book.lootMode and entry~=nil and entry.loot~=nil and next(entry.loot.items or {})~=nil)
                         if shown then book.lootFilterMenu:Hide() end

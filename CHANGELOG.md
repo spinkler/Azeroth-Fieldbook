@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.34.1 - 2026-10-06
+
+- Fix the Bestiary Rumours overlay leaving covered damage, loot, offense, defense and behaviour controls clickable. The controls now hide while Rumours is open and restore when it closes.
+
 ## v0.34.0 - 2026-10-06
 
 - Increase Bestiary Behaviour's Combat style and Traits headings and Defenses' Magic school, Resistant and Immune headings by 2 points and colour them yellow; increase Behaviour checkbox labels by 1 point.
