@@ -317,6 +317,22 @@ test workflow so failing tagged commits cannot publish.
 Help, Options and Event log contents. See `tests/ARCHITECTURE.md` before adding
 sections. Preserve existing window-position keys and Bestiary data compatibility.
 
+## Decorative icon artwork workflow
+
+For future icon-based parchment illustrations, use the Chronicle chained-book
+process approved by the operator: start from an actual Blizzard game icon,
+enlarge and clean its edges, then use imagegen with the kobold drawing as a
+stroke-quality reference. Prefer loose pencil contours, variable pressure,
+broken/searching lines and restrained cross-hatching over smooth vector outlines.
+Preserve icon identity, geometry and orientation unless a flip is requested.
+Remove paper and interior white fills; match the original kobold ink
+(sampled RGB 75,32,2), retain alpha details, and use direct RGBA TGA rendering.
+Do not replace cropped artwork with solid-colour native ink masks: that smeared
+the drawings on this client. Default to 33% opacity, parchment edge fades and
+dark-mode desaturation; respect each illustration's established exceptions.
+Keep the prior asset as a fallback and visually inspect the new result before
+installation. User-requested changes to placement and opacity take precedence.
+
 ## Scope
 
 The operator reserves the 1.0 milestone for successful live Beast Lore testing

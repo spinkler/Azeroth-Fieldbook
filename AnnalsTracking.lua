@@ -444,7 +444,15 @@ function ns.CreateAnnalsTracking(j)
             end
             j.trail:Break(event);return
         end
-        if event=='PLAYER_ALIVE' or event=='PLAYER_UNGHOST' or event=='PLAYER_LEVEL_UP' then
+        if event=='PLAYER_LEVEL_UP' then
+            -- UnitLevel can still report the old level during this event.
+            if not A.Int(id,1,1000) then return end
+            local location=A.Location();location.level=id
+            j.trail:Break(event)
+            j:Append('levelup','Reached level '..id,nil,location,A.Now())
+            return
+        end
+        if event=='PLAYER_ALIVE' or event=='PLAYER_UNGHOST' then
             local dead=A.Read(UnitIsDeadOrGhost,'player')
             if event=='PLAYER_UNGHOST' or (event=='PLAYER_ALIVE' and (dead==false or dead==0)) then t.dead=false end
             j.trail:Break(event);return

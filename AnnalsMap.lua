@@ -1,11 +1,12 @@
 local _,ns=...
 local A=ns.Annals
-A.eventNames={accepted='Accepted',removed='Abandoned / removed',completed='Completed',discovery='Fieldbook discovery',flight='Flight path',death='Death',hearth='Hearth / recall',teleport='Teleport',crossing='Cross-continent crossing',battleground='Battleground transfer',instance='Instance entry / exit',login='Login',logout='Logout'}
+A.eventNames={accepted='Accepted',removed='Abandoned / removed',completed='Completed',discovery='Fieldbook discovery',flight='Flight path',death='Death',levelup='Level ups',hearth='Hearth / recall',teleport='Teleport',crossing='Cross-continent crossing',battleground='Battleground transfer',instance='Instance entry / exit',login='Login',logout='Logout'}
 A.icons={accepted='Interface\\GossipFrame\\AvailableQuestIcon',removed='Interface\\Icons\\INV_Misc_Note_01',
     completed='Interface\\GossipFrame\\ActiveQuestIcon',discovery='Interface\\Icons\\INV_Misc_Map_01',flight='Interface\\Minimap\\Tracking\\FlightMaster',death='Interface\\TargetingFrame\\UI-TargetingFrame-Skull',
+    levelup='Interface\\Icons\\Spell_Holy_HolyNova',
     hearth='Interface\\Icons\\INV_Misc_Rune_01',teleport='Interface\\Icons\\Spell_Arcane_TeleportStormWind',
     crossing='Interface\\Icons\\Creatureportrait_Darkshoreboat',battleground='Interface\\Icons\\Achievement_BG_winWSG',instance='Interface\\Icons\\INV_Misc_Key_10',login='Interface\\Icons\\Spell_Holy_Resurrection',logout='Interface\\Icons\\INV_Misc_PocketWatch_01'}
-A.eventColours={discovery='55ddee',accepted='55ddee',completed='77dd88',removed='eeaa66',flight='77dd88',death='ee7777',hearth='bb99ff',teleport='bb99ff',crossing='55ddee',battleground='eeaa66',instance='bb99ff',login='77dd88',logout='eeaa66'}
+A.eventColours={discovery='55ddee',accepted='55ddee',completed='77dd88',removed='eeaa66',flight='77dd88',death='ee7777',levelup='ffd100',hearth='bb99ff',teleport='bb99ff',crossing='55ddee',battleground='eeaa66',instance='bb99ff',login='77dd88',logout='eeaa66'}
 function A.InstanceDirection(parent,icon,e,shadowAlpha,scale)
     scale=scale or 1
     local action=e.kind=='instance' and e.instanceAction

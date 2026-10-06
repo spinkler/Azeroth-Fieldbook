@@ -1,5 +1,11 @@
 # Adventurer's Annals
 
+Observed PLAYER_LEVEL_UP events record Reached level X using the event's new
+level, time and location. Level ups have a golden Holy Nova icon, a separate
+timeline/map filter and a Journey legend entry. They record with Journey
+recording off; previous levels are not backfilled. Native level-up and icon
+acceptance remain pending.
+
 Login and Logout are separate event types with timeline/map icons, filters and
 Journey legend entries. The first `PLAYER_ENTERING_WORLD(true, false)` records
 login once per loaded session. `PLAYER_LOGOUT` also fires for UI reloads, so its

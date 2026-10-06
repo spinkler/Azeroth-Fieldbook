@@ -140,5 +140,27 @@ class FieldbookShellTests(unittest.TestCase):
         ''')
 
 
+    def test_dark_mode_desaturates_ink_and_dividers_and_restores_colour(self):
+        self.lua.execute('''
+            local root=shell:EnsureFrame()
+            local ink=root:CreateTexture()
+            ink.SetDesaturated=function(self,value) self.desaturated=value end
+            shell:AddBackgroundLayer(ink,1,1,1,true)
+            local divider=ns.FieldbookUI.EntryDivider(root,0,224)
+            local original=divider[1].colorTexture
+            shell:SetDarkMode(true)
+            assert(ink.desaturated==true)
+            local dark=divider[1].colorTexture
+            assert(dark[1]==dark[2] and dark[2]==dark[3])
+            assert(dark[4]==original[4])
+            local late=ns.FieldbookUI.EntryDivider(root,-20,224)
+            assert(late[1].colorTexture[1]==late[1].colorTexture[2])
+            shell:SetDarkMode(false)
+            assert(ink.desaturated==false)
+            for i=1,4 do assert(divider[1].colorTexture[i]==original[i]) end
+            assert(late[1].colorTexture[1]~=late[1].colorTexture[2])
+        ''')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -24,6 +24,33 @@ LOG_REWARDS = '''
 
 
 class AnnalsTests(unittest.TestCase):
+    def test_level_up_capture_and_filter(self):
+        l=client();l.execute("""
+            UnitLevel=function() return 22 end
+            db.settings.trail=false
+            t:Event('PLAYER_LEVEL_UP',23)
+            local e=db.events[1]
+            assert(e.kind=='levelup' and e.title=='Reached level 23')
+            assert(e.level==23 and e.at==now and e.zone=='Synthetic coast')
+            assert(#j:Range(now,now,{levelup=true},23)==1)
+            assert(#j:Range(now,now,{levelup=false})==0)
+            assert(#j:Range(now,now,nil,22)==0)
+            for _,bad in ipairs({0,-1,1001,23.5,'24'}) do t:Event('PLAYER_LEVEL_UP',bad) end
+            t:Event('PLAYER_LEVEL_UP',nil);assert(#db.events==1)
+            reset(db);assert(#j.events==1 and j.events[1].event.level==23)
+            j.readOnly=true;t:Event('PLAYER_LEVEL_UP',24);assert(#db.events==1)
+        """)
+
+    def test_level_up_ui_filter(self):
+        l=full_client();l.execute(ENV);l.execute("""
+            local c=ns.AnnalsController;local j=c.journal
+            j:Append('levelup','Reached level 24',nil,{level=24,mapID=101,x=100,y=100},110)
+            c.shell:ShowSection('annals');c:SetRange(100,120)
+            assert(#c.rows==1 and c.main.legend.icons.levelup)
+            c:SetEventFilter('levelup',false);assert(#c.rows==0)
+            c:SetEventFilter('levelup',true);assert(#c.rows==1)
+        """)
+
     def test_details_follow_playhead_until_manually_selected(self):
         l=full_client();l.execute(ENV);l.execute('''
             local c=ns.AnnalsController;local j=c.journal

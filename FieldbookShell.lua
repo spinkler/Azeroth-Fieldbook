@@ -148,6 +148,20 @@ local function styleMenuRow(row)
 end
 
 -- A fixed page-relative footer keeps Share stationary across unequal panes.
+local dividerColours=setmetatable({},{__mode="k"})
+local function applyDividerColour(texture,colour)
+    local red,green,blue=colour[1],colour[2],colour[3]
+    if ns.FieldbookDarkMode then
+        local grey=0.2126*red+0.7152*green+0.0722*blue
+        red,green,blue=grey,grey,grey
+    end
+    texture:SetColorTexture(red,green,blue,colour[4])
+end
+local function registerDividerColour(texture,red,green,blue,alpha)
+    local colour={red,green,blue,alpha}
+    dividerColours[texture]=colour
+    applyDividerColour(texture,colour)
+end
 local function entryDivider(parent,y,width,colour,thickness)
     local count=thickness and 128 or 32
     local segmentWidth=(width or 224)/count
@@ -162,8 +176,8 @@ local function entryDivider(parent,y,width,colour,thickness)
             line:SetHeight(thickness*fade)
             line:ClearAllPoints();line:SetPoint("TOPLEFT",(segment-1)*segmentWidth,y-(thickness-thickness*fade)/2)
         end
-        if colour then line:SetColorTexture(colour[1],colour[2],colour[3],fade)
-        else line:SetColorTexture(0.25,0.13,0.055,0.35*fade) end
+        if colour then registerDividerColour(line,colour[1],colour[2],colour[3],fade)
+        else registerDividerColour(line,0.25,0.13,0.055,0.35*fade) end
         segments[#segments+1]=line
     end
     -- A one-unit line can straddle different pixel rows as scrolling or layout
@@ -196,6 +210,41 @@ local function shareButton(parent,action)
 end
 ns.FieldbookUI = {Label=label, SectionTitle=sectionTitle, EntryCount=entryCount, Button=button, ShareButton=shareButton, MenuButton=menuButton, FilterButton=filterButton, DismissOnOutsideClick=dismissOnOutsideClick, StyleMenuArrow=styleMenuArrow, Close=cornerClose, Edit=edit, Search=search, StyleMenuRow=styleMenuRow}
 ns.FieldbookUI.EntryDivider=entryDivider
+function ns.FieldbookUI.IllustrationCornerFade(parent,shell,bottom)
+    -- Feather diagonally away from the lower-left corner using the exact paper
+    -- underneath; keep this below controls and responsive to brightness/theme.
+    local tiles={}
+    local extent,steps=180,30
+    local size=extent/steps
+    bottom=bottom or 6
+    for row=0,steps-1 do
+        for column=0,steps-1-row do
+            local progress=(row+column+1)/steps
+            local alpha=1-progress*progress*progress*(progress*(6*progress-15)+10)
+            if alpha>0 then
+                local tile=parent:CreateTexture(nil,"BACKGROUND",nil,5)
+                local x,y=6+column*size,bottom+row*size
+                tile:SetPoint("BOTTOMLEFT",parent,"BOTTOMLEFT",x,y)
+                tile:SetSize(size,size)
+                tile:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+                tile:SetAlpha(alpha)
+                shell:AddBackgroundLayer(tile,0.504,0.504,0.48888)
+                tiles[#tiles+1]={texture=tile,x=x,y=y}
+            end
+        end
+    end
+    local function update()
+        local width,height=parent:GetWidth()-8,parent:GetHeight()-15
+        if width<=0 or height<=0 then return end
+        for _,tile in ipairs(tiles) do
+            local x,y=tile.x-6,tile.y-6
+            tile.texture:SetTexCoord(x/width,(x+size)/width,1-(y+size)/height,1-y/height)
+        end
+    end
+    parent:HookScript("OnSizeChanged",update)
+    update()
+    return tiles
+end
 function ns.FieldbookUI.PageDivider(parent)
     local frame=CreateFrame("Frame",nil,parent)
     frame:SetPoint("TOPLEFT",306,-41);frame:SetSize(2,685);frame:EnableMouse(false)
@@ -206,7 +255,7 @@ function ns.FieldbookUI.PageDivider(parent)
         line:SetPoint("TOPLEFT",(2-2*fade)/2,-(i-1)*height);line:SetSize(2*fade,height)
         if line.SetSnapToPixelGrid then line:SetSnapToPixelGrid(false) end
         if line.SetTexelSnappingBias then line:SetTexelSnappingBias(0) end
-        line:SetColorTexture(0.25,0.13,0.055,0.35*fade)
+        registerDividerColour(line,0.25,0.13,0.055,0.35*fade)
     end
     return frame
 end
@@ -381,12 +430,13 @@ function ns.CreateFieldbookShell(settings)
         book:SetScript("OnDragStop", stopBookDrag)
         local backgroundBrightness = (settings.getBrightness and settings.getBrightness() or 1)
         local darkMode = settings.getDarkMode and settings.getDarkMode() or false
+        ns.FieldbookDarkMode=darkMode==true
         local backgroundLayers = {}
         local function applyBackgroundLayer(layer)
             local brightness = backgroundBrightness
             local red, green, blue = layer.red, layer.green, layer.blue
+            layer.texture:SetDesaturated(darkMode)
             if not layer.fixedStyle then
-                layer.texture:SetDesaturated(darkMode)
                 if darkMode then
                     -- Match the Locations parchment at every slider position.
                     brightness = brightness * 0.34
@@ -402,6 +452,8 @@ function ns.CreateFieldbookShell(settings)
         end
         function book:SetDarkMode(enabled)
             darkMode = enabled == true
+            ns.FieldbookDarkMode=darkMode
+            for texture,colour in pairs(dividerColours) do applyDividerColour(texture,colour) end
             for _, layer in ipairs(backgroundLayers) do applyBackgroundLayer(layer) end
         end
         function book:SetBackgroundBrightness(value)
@@ -517,7 +569,7 @@ function ns.CreateFieldbookShell(settings)
             local bottomLeft = edge("UI-Frame-BotCornerLeft",14,14)
             bottomLeft:SetPoint("BOTTOMLEFT",0,0)
             local bottomRight = edge("UI-Frame-BotCornerRight",11,11)
-            bottomRight:SetPoint("BOTTOMRIGHT",0,0)
+            bottomRight:SetPoint("BOTTOMRIGHT",-1,0)
             local bottom = edge("_UI-Frame-Bot",256,9,true)
             bottom:SetPoint("BOTTOMLEFT",bottomLeft,"BOTTOMRIGHT",0,0)
             bottom:SetPoint("BOTTOMRIGHT",bottomRight,"BOTTOMLEFT",0,0)
@@ -526,7 +578,8 @@ function ns.CreateFieldbookShell(settings)
             left:SetPoint("BOTTOMLEFT",bottomLeft,"TOPLEFT",0,0)
             local right = edge("!UI-Frame-RightTile",10,256,false,true)
             right:SetPoint("TOPRIGHT",book,"TOPRIGHT",0,-27)
-            right:SetPoint("BOTTOMRIGHT",bottomRight,"TOPRIGHT",0,0)
+            -- Keep the right border fixed while the corner art shifts left.
+            right:SetPoint("BOTTOMRIGHT",bottomRight,"TOPRIGHT",1,0)
         end
         book.windowTitle=book.titleBar:CreateFontString(nil,"OVERLAY",textFont("GameFontNormal"))
         book.windowTitle:SetPoint("CENTER",book,"TOP",0,-15)

@@ -409,6 +409,44 @@ function ns.CreateGatheringBook(journal,shell)
     end
     local function build(content)
         book=content;controller.frame=book
+        -- Match the Bestiary's lower-left parchment illustration treatment.
+        local mill=content:CreateTexture(nil,"BACKGROUND",nil,3)
+        mill:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\GatheringTwilightJasmine.tga")
+        -- Let the full sprig extend below the page, cropping at the paper inset.
+        mill:SetSize(281,284)
+        mill:SetPoint("BOTTOMLEFT",content,"BOTTOMLEFT",6,6)
+        -- Shift artwork 15 pixels left, clipping it at the paper edge.
+        mill:SetTexCoord(39/320,1,0,284/320)
+        mill:SetAlpha(0.33)
+        shell:AddBackgroundLayer(mill,1,1,1,true)
+        book.jasmineIllustration=mill
+        local fades={}
+        local function fadeStrip(x,y,width,height,alpha)
+            local strip=content:CreateTexture(nil,"BACKGROUND",nil,4)
+            strip:SetPoint("BOTTOMLEFT",content,"BOTTOMLEFT",x,y)
+            strip:SetSize(width,height)
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+            strip:SetAlpha(alpha)
+            shell:AddBackgroundLayer(strip,0.504,0.504,0.48888)
+            fades[#fades+1]={texture=strip,x=x,y=y,width=width,height=height}
+        end
+        for i=1,28 do
+            local alpha=1-(i-1)/27
+            fadeStrip(5+i,6,1,284,alpha)
+            fadeStrip(6,5+i,281,1,alpha)
+        end
+        local function updateJasmineFade()
+            local width,height=content:GetWidth()-8,content:GetHeight()-15
+            if width<=0 or height<=0 then return end
+            for _,fade in ipairs(fades) do
+                local x,y=fade.x-6,fade.y-6
+                fade.texture:SetTexCoord(x/width,(x+fade.width)/width,
+                    1-(y+fade.height)/height,1-y/height)
+            end
+        end
+        content:HookScript("OnSizeChanged",updateJasmineFade)
+        updateJasmineFade()
+        book.jasmineCornerFade=ui.IllustrationCornerFade(content,shell,6)
         book.pageTitle=ui.SectionTitle(book,"Gatherer's Compendium")
         book.spine=ns.FieldbookUI.PageDivider(book)
         book.entryCount=ui.EntryCount(book)

@@ -256,6 +256,42 @@ function ns.CreateTreasureBook(journal,tracking,shell)
     T.InstallEditors(c)
     local function build(content)
         c.frame=content;local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
+        local chest=content:CreateTexture(nil,"BACKGROUND",nil,0)
+        chest:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\TreasureChestSketch.tga")
+        chest:SetSize(296,296)
+        -- Reverse horizontal sampling so the chest side faces left.
+        chest:SetTexCoord(296/320,0,0,296/320)
+        chest:SetPoint("BOTTOMLEFT",content,"BOTTOMLEFT",6,41)
+        chest:SetAlpha(0.23)
+        shell:AddBackgroundLayer(chest,1,1,1,true)
+        c.chestIllustration=chest
+        local fades={}
+        local function fadeStrip(x,y,width,height,alpha)
+            local strip=content:CreateTexture(nil,"BACKGROUND",nil,4)
+            strip:SetPoint("BOTTOMLEFT",content,"BOTTOMLEFT",x,y)
+            strip:SetSize(width,height)
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+            strip:SetAlpha(alpha)
+            shell:AddBackgroundLayer(strip,0.504,0.504,0.48888)
+            fades[#fades+1]={texture=strip,x=x,y=y,width=width,height=height}
+        end
+        for i=1,28 do
+            local alpha=1-(i-1)/27
+            fadeStrip(5+i,41,1,296,alpha)
+            fadeStrip(6,40+i,296,1,alpha)
+        end
+        local function updateMillFade()
+            local width,height=content:GetWidth()-8,content:GetHeight()-15
+            if width<=0 or height<=0 then return end
+            for _,fade in ipairs(fades) do
+                local x,y=fade.x-6,fade.y-6
+                fade.texture:SetTexCoord(x/width,(x+fade.width)/width,
+                    1-(y+fade.height)/height,1-y/height)
+            end
+        end
+        content:HookScript("OnSizeChanged",updateMillFade)
+        updateMillFade()
+        c.chestCornerFade=ns.FieldbookUI.IllustrationCornerFade(content,shell,41)
         local spine=ns.FieldbookUI.PageDivider(m)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Treasure Journal")
         m.directory=CreateFrame("Frame",nil,m);m.directory:SetAllPoints();local d=m.directory
