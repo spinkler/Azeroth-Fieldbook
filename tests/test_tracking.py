@@ -25,7 +25,7 @@ function open(db)
     local selected=ns.InitializeTracking(db)
     return ns.CreateBestiaryJournal(db,function() end,selected),selected
 end
-alice=character(12,'Fireball',9,'Elwynn')
+alice=character(25,'Fireball',9,'Elwynn')
 alice.bestiary.entries[42].idNotes={spells={1,2},text='Alice notes'}
 alice.bestiary.entries[42].damage[9]={low=5,high=10,reports=1}
 alice.bestiary.entries[42].offenses={Fire=true}
@@ -40,16 +40,16 @@ local localAlice=alice.bestiary
 local a,account=open(alice)
 assert(alice.accountWideTracking and account==AzerothFieldbookAccountDB)
 assert(a.entries~=alice.bestiary.entries and a.entries[42]~=alice.bestiary.entries[42],'imports deep-copy character records')
-eq(a.entries[42].kills,12);eq(select(2,a:GetTotals()),3)
+eq(a.entries[42].kills,25);eq(select(2,a:GetTotals()),3)
 eq(a:GetSharingStorage().outgoing.id,'outgoing','migrated transfer stays owned by Alice')
 eq(a:GetSharingBalance(),1,'old spending and reservation survive migration')
 local key=alice.accountTrackingKey
 local again=open(alice)
-eq(again.entries[42].kills,12,'reload does not import the same kills twice')
+eq(again.entries[42].kills,25,'reload does not import the same kills twice')
 eq(select(2,again:GetTotals()),3,'reload does not add historical points twice')
 eq(alice.accountTrackingKey,key)
 
-bob=character(13,'Frostbolt',11,'Westfall')
+bob=character(25,'Frostbolt',11,'Westfall')
 bob.uiScale=1.25
 bob.bestiary.entries[42].idNotes={spells={2,3},text='Bob notes'}
 bob.bestiary.entries[42].damage[9]={low=7,high=20,reports=1}
@@ -61,7 +61,7 @@ bob.bestiary.entries[43]={id=43,name='Other creature',category='Beast',kills=0,a
 ns.CreateBestiaryJournal(bob,function() end):Ensure(43,false,nil,{level=9})
 local b,bobAccount=open(bob)
 assert(bobAccount==account and bob.accountTrackingKey~=key)
-eq(b.entries[42].kills,25,'different characters contribute their recorded kills')
+eq(b.entries[42].kills,50,'different characters contribute their recorded kills')
 assert(b.entries[42].abilities.Fireball and b.entries[42].abilities.Frostbolt and b.entries[43])
 assert(b.entries[42].offenses.Fire and b.entries[42].resistances.Frost)
 eq(b.entries[42].beastLore.rows[1].right,'Fish');eq(b.entries[42].beastLoreSource,'gameTooltip')
@@ -79,9 +79,9 @@ assert(b:GetSharingStorage().outgoing==nil,'Bob cannot resume Alice transfers')
 assert(b:GetSharingStorage()~=a:GetSharingStorage())
 eq(a:GetUIScale(),0.75);eq(b:GetUIScale(),1.25,'UI preferences stay per character')
 open(bob);a=open(alice)
-eq(account.bestiary.entries[42].kills,25);eq(account.bestiary.points.earned,8)
-eq(localAlice.entries[42].kills,12,'original character journal remains unchanged')
-eq(bob.bestiary.entries[42].kills,13)
+eq(account.bestiary.entries[42].kills,50);eq(account.bestiary.points.earned,8)
+eq(localAlice.entries[42].kills,25,'original character journal remains unchanged')
+eq(bob.bestiary.entries[42].kills,25)
 
 -- Reload cancellation only releases the active character's uncommitted offer.
 local environment={ready=true,addonVersion='0.9.3',character='Bob',now=function() return 1000 end,blocked=function() return false end}
@@ -96,13 +96,13 @@ assert(a:IsTrackingChangePending() and a:IsAccountWideTrackingActive())
 a:Ensure(99,false,'Account-only observation')
 local personal,personalDB=open(alice)
 assert(personalDB==alice and not personal:IsAccountWideTrackingActive())
-eq(personal.entries[42].kills,12);assert(not personal.entries[99])
+eq(personal.entries[42].kills,25);assert(not personal.entries[99])
 personal:Ensure(98,false,'Personal-only observation')
 assert(not account.bestiary.entries[98])
 personal:SetAccountWideTracking(true)
 a=open(alice)
 assert(a.entries[99] and not a.entries[98],'switching profiles does not repeatedly import old histories')
-eq(a.entries[42].kills,25)
+eq(a.entries[42].kills,50)
 
 -- Account reset leaves the original personal journal intact and its migration
 -- marker survives, so neither known character can resurrect cleared progress.
@@ -143,11 +143,11 @@ open(broken);eq(account.bestiary.entries[42].kills,5,'retry imports only once af
 
 -- Combined account kills can cross the crown tier; award only its new credit.
 AzerothFieldbookAccountDB=nil
-local crownAlice=character(25,'Fireball',9,'Elwynn')
-local crownBob=character(25,'Frostbolt',9,'Elwynn')
+local crownAlice=character(50,'Fireball',9,'Elwynn')
+local crownBob=character(50,'Frostbolt',9,'Elwynn')
 open(crownAlice)
 local crown=open(crownBob)
-eq(crown.entries[42].kills,50);eq(select(2,crown:GetKillReward(42)),'crown')
+eq(crown.entries[42].kills,100);eq(select(2,crown:GetKillReward(42)),'crown')
 eq(select(2,crown:GetTotals()),13,'two migrated five-point journals plus the new three-point crown')
 crown=open(crownBob)
 eq(select(2,crown:GetTotals()),13,'account crown is not credited again on reload')

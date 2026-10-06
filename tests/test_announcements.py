@@ -71,13 +71,13 @@ class AnnouncementTests(unittest.TestCase):
         ''')
 
     def test_kill_milestones_have_exact_punctuation_and_no_level_or_zone(self):
-        self.lua.execute("for i=1,51 do beginKill('kill'..i); finishKill() end")
+        self.lua.execute("for i=1,101 do beginKill('kill'..i); finishKill() end")
         self.assertEqual(self.messages(), [
             announcement('New discovery!', 'Beast • Lvl11', None),
             announcement('First kill!', 'Beast'),
-            announcement('10 kills!', 'Beast'),
-            announcement('25 kills!!', 'Beast', 2),
-            announcement('50 kills!!!', 'Beast', 3),
+            announcement('25 kills!', 'Beast'),
+            announcement('50 kills!!', 'Beast', 2),
+            announcement('100 kills!!!', 'Beast', 3),
         ])
 
     def test_both_announcement_settings_remain_effective(self):
@@ -186,11 +186,11 @@ class AnnouncementTests(unittest.TestCase):
             assert(points()==before and activeJournal.entries[42].levelMax==12)
             zone='New location';fire('UPDATE_MOUSEOVER_UNIT')
             assert(points()==before)
-            for i=1,50 do beginKill('credited'..i);finishKill() end
+            for i=1,100 do beginKill('credited'..i);finishKill() end
             local milestoneBalance=points()
             assert(milestoneBalance==before+7)
             activeJournal:DeleteEntry(42)
-            for i=1,50 do beginKill('after-delete'..i);finishKill() end
+            for i=1,100 do beginKill('after-delete'..i);finishKill() end
             assert(points()==milestoneBalance,'previously credited kill milestones survive deletion')
         ''')
 

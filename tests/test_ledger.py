@@ -237,6 +237,27 @@ class LedgerTests(unittest.TestCase):
             assert(c:Details(e,true):find('|cffffffff',1,true))
         ''')
 
+    def test_training_eligibility_uses_current_level_without_changing_observations(self):
+        self.lua.execute("""
+            shell:ShowSection('merchants')
+            local e=visit()
+            trainer={{name='Sword lesson',status='unavailable',level=20,rank='',category='',price=100}}
+            fire('TRAINER_SHOW');flush();c:Select(e.id);c:Catalogue('training')
+            local before=snapshot(e)
+            UnitLevel=function() return 19 end
+            local text=c:Details(e,true,'training')
+            assert(text:find('|cffff8080Sword lesson|r',1,true))
+            assert(text:find('Cannot learn yet: requires level 20',1,true))
+            UnitLevel=function() return 20 end
+            c.main.scripts.OnEvent(c.main,'PLAYER_LEVEL_UP',20)
+            text=c:Details(e,true,'training')
+            assert(text:find('|cff80e680Sword lesson|r',1,true))
+            assert(text:find('Can learn at your current level',1,true))
+            assert(snapshot(e)==before,'Level-based display must preserve the observation')
+            local lesson=one(e.lessons);lesson.requirements={'Required level: 20','Sword proficiency (100)'}
+            assert(c:Details(e,true,'training'):find('additional requirements must be met',1,true))
+        """)
+
     def test_goods_training_overlays_toggle_and_leave_notes_visible(self):
         self.lua.execute('''
             local e=visit();e.note='Use the side entrance'
@@ -249,16 +270,19 @@ class LedgerTests(unittest.TestCase):
             assert(not m.contactList:IsShown() and m.search:IsVisible())
             assert(m.detailButtons.goods:IsVisible() and m.detailButtons.training:IsVisible())
             assert(panel.point[2]==42 and panel.point[3]==-170)
-            assert(panel.read:GetHeight()==458)
+            assert(panel.read:GetHeight()==524)
+            for _,button in ipairs(m.catalogueHiddenButtons) do assert(not button:IsShown()) end
             assert(panel.read.point[3]==panel.sort.point[3])
             assert(m.detailButtons.goods.afbSelected and not m.detailButtons.training.afbSelected)
             m.detailButtons.training.scripts.OnClick()
             assert(c.panel==panel and panel.kind=='training')
+            for _,button in ipairs(m.catalogueHiddenButtons) do assert(not button:IsShown()) end
             assert(not m.detailButtons.goods.afbSelected and m.detailButtons.training.afbSelected)
             assert(m.details.text:GetText()==notes)
             m.detailButtons.training.scripts.OnClick()
             assert(c.panel==nil and m.directory:IsShown() and not m.detailButtons.training.afbSelected)
             assert(panel.back==nil)
+            for _,button in ipairs(m.catalogueHiddenButtons) do assert(button:IsShown()) end
             m.detailButtons.goods.scripts.OnClick();m.detailButtons.goods.scripts.OnClick()
             assert(c.panel==nil and not m.detailButtons.goods.afbSelected)
         ''')
@@ -1072,6 +1096,7 @@ class LedgerUITests(unittest.TestCase):
     def test_training_rich_rows_icons_colours_and_historical_cost_units(self):
         self.lua.execute(r'''
             local e=visit()
+            UnitLevel=function() return 20 end
             trainer={{name='Sword lesson',status='available',level=20,rank='Rank 2',category='Swords',price=12345}}
             fire('TRAINER_SHOW');flush();c:Select(e.id);c:Catalogue('training')
             local area=c.panels.catalogue.read;local lesson=one(e.lessons)
@@ -1107,7 +1132,7 @@ class LedgerUITests(unittest.TestCase):
             assert(area.blocks[3].point[2]==46 and area.blocks[3]:GetWidth()==182)
             assert(not area.blocks[2]:GetText():find('|T',1,true))
             assert(snapshot(e)==before,'Display must not change observations')
-            for status,color in pairs({unavailable='ffff8080',used='ff999999',unknown='ffffd100'}) do
+            for status,color in pairs({unavailable='ff80e680',used='ff999999',unknown='ff80e680'}) do
                 lesson.availability=status
                 assert(c:Details(e,true,'training'):find('|c'..color..'Sword lesson|r',1,true))
             end

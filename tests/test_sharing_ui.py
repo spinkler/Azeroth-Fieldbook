@@ -421,8 +421,8 @@ book:Refresh();eq(notes.creature.text,'Creature 43 |cff999999[#43]|r','unchanged
 eq(rumours.creature.text,'Creature 42','Rumours follows the book independently of Notes target')
 book:OpenAtUnit('target');eq(rumours.creature.text,'Creature 43','changing book selection updates Rumours')
 assert(rumours.rows[1].text.text:find('No unverified rumours',1,true))
-j:DeleteEntry(43);book:Refresh();assert(main.rumoursButton.enabled,'open window can still be closed after deletion')
-main.rumoursButton.scripts.OnClick();assert(not rumours.shown and not main.rumoursButton.enabled)
+assert(not rumours.shown,'changing creatures closes Rumours')
+j:DeleteEntry(43);book:Refresh();assert(not main.rumoursButton.enabled,'empty Rumours is disabled')
 book:OpenAtUnit('target')
 
 -- The live receive dialog performs consent only; import still requires commit.
@@ -545,7 +545,7 @@ do
     main.help.scripts.OnShow(main.help)
     local block=main.help.pointsBlock
     eq(block.title.text,'Knowledge')
-    assert(block.awards.text:find('+3 for crown (50 kills)',1,true))
+    assert(block.awards.text:find('+3 for crown (100 kills)',1,true))
     assert(block.spending.text:find('1 knowledge per selected rumour',1,true))
     assert(block.spending.text:find('free if the recipient already knows it',1,true))
     local bottom=0

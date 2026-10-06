@@ -297,24 +297,41 @@ local ink = { 0.75, 0.8, 0.8 }
         book.model:SetPoint("TOPLEFT",346,-135)
         book.model:SetHeight(isBeast and 135 or 164)
     end
+    local function setPortrait(setter,value)
+        -- A native portrait setter can return without replacing its texture.
+        -- Clear first so a failed request cannot reveal the outgoing portrait.
+        book.portrait:SetTexture(nil)
+        book.portrait:Hide();book.portraitUnknown:Show()
+        local ok=pcall(setter,book.portrait,value)
+        local readable,texture=pcall(book.portrait.GetTexture,book.portrait)
+        if ok and readable and not (issecretvalue and issecretvalue(texture)) and texture then
+            book.portrait:Show();book.portraitUnknown:Hide()
+            return true
+        end
+    end
     local function requestModel()
+        if not book.modelPending then return end
+        local model,id=book.model,book.modelEntryID
         book.modelAttempts=book.modelAttempts+1
         book.modelRetryElapsed=0
         -- A creature ID can choose a different racial/visual variant. A live
         -- unit preserves the individual appearance, including its equipment.
         -- Revalidate tokens on every retry: target/mouseover can change midway.
-        if book.modelAttempts < 4 and type(book.model.SetUnit)=="function" then
+        if book.modelAttempts%4~=0 and type(model.SetUnit)=="function" then
             local first=book.modelPreferredUnit or "target"
             for _,unit in ipairs({first,first=="target" and "mouseover" or "target"}) do
-                if journal:MatchesModelUnit(unit,book.modelEntryID) then
-                    local ok,loaded=pcall(book.model.SetUnit,book.model,unit)
-                    if ok and not (issecretvalue and issecretvalue(loaded)) and loaded==true then return end
+                if journal:MatchesModelUnit(unit,id) then
+                    local ok,loaded=pcall(model.SetUnit,model,unit)
+                    -- Cached loads can finish inside SetUnit, including clients
+                    -- that return nil. Never overwrite that completed scene.
+                    if model~=book.model or not book.modelPending then return end
+                    if ok and not (issecretvalue and issecretvalue(loaded)) and loaded~=false then return end
                 end
             end
         end
         -- SetCreature can return normally before the client has the appearance.
         -- Only OnModelLoaded completes the request; retries never clear it.
-        pcall(book.model.SetCreature, book.model, book.modelEntryID)
+        pcall(model.SetCreature,model,id)
     end
     local function safeModel(id)
         local entry=id and journal.entries[id]
@@ -322,11 +339,13 @@ local ink = { 0.75, 0.8, 0.8 }
         book.modelEntryID,book.modelPersonal=id,personal
         book.modelPending=false
         book.portraitFrame:SetShown(entry~=nil)
+        book.portrait:SetTexture(nil)
         book.portrait:Hide();book.portraitUnknown:Show()
         if personal and type(SetPortraitTexture)=="function" then
-            for _,unit in ipairs({book.modelPreferredUnit or "target","mouseover"}) do
-                if journal:MatchesModelUnit(unit,id) and pcall(SetPortraitTexture,book.portrait,unit) then
-                    book.portrait:Show();book.portraitUnknown:Hide();break
+            local first=book.modelPreferredUnit or "target"
+            for _,unit in ipairs({first,first=="target" and "mouseover" or "target"}) do
+                if journal:MatchesModelUnit(unit,id) and setPortrait(SetPortraitTexture,unit) then
+                    break
                 end
             end
         end
@@ -335,6 +354,24 @@ local ink = { 0.75, 0.8, 0.8 }
         book.model:SetAlpha(0)
         book.model:Hide()
         book.model:ClearModel()
+        if personal then
+            -- OnModelLoaded has no request identity. Keep each native frame
+            -- assigned to one creature for its lifetime, so an outgoing load
+            -- can never be mistaken for a different entry's completion.
+            local model=book.modelFrames[id]
+            if not model then
+                model=not book.model.afbEntryID and book.model or book.createModel()
+                model.afbEntryID=id
+                book.modelFrames[id]=model
+            end
+            if model~=book.model then
+                book.model=model
+                book.modelIsBeast=nil
+                model:SetAlpha(0);model:Hide();model:ClearModel()
+            end
+            model:SetRotation(0)
+            model.afbRotation=0
+        end
         -- Unload the outgoing scene before changing either the lore header,
         -- surrounding border or native viewport. Load only after layout ends.
         local basic=entry and basicInfo(id)
@@ -379,6 +416,7 @@ local ink = { 0.75, 0.8, 0.8 }
             book.beastLore.area:SetVerticalScroll(0)
             book.beastLore.status:SetText("Free to send • 0 Knowledge")
         end
+        if id~=selected and rumoursWindow then rumoursWindow:Hide() end
         selected, abilityOffset = id, 0
         safeModel(id)
         if creatureNotes then creatureNotes:SetCreature(id) end
@@ -503,7 +541,7 @@ local ink = { 0.75, 0.8, 0.8 }
             or book.modelIsBeast~=isBeast then safeModel(selected) end
         book.damageBorder:ClearAllPoints()
         book.damageBorder:SetPoint("TOPLEFT",579,-133)
-        book.damageBorder:SetHeight(115)
+        book.damageBorder:SetHeight(rumoursWindow and rumoursWindow:IsShown() and book.modelBorder:GetHeight() or 115)
         book.damageScroll:ClearAllPoints()
         book.damageScroll:SetPoint("TOPLEFT",592,-163)
         book.damageScroll:SetHeight(75)
@@ -526,8 +564,8 @@ local ink = { 0.75, 0.8, 0.8 }
         if rumoursWindow then rumoursWindow:Refresh() end
         book.creatureNotesButton:SetEnabled(e ~= nil)
         book.creatureLocationsButton:SetEnabled(e ~= nil and creatureLocations ~= nil)
-        book.rumoursButton:SetEnabled(rumoursWindow ~= nil and (e ~= nil or rumoursWindow:IsShown()))
         local hasRumours=e ~= nil and journal.GetRumours and #journal:GetRumours(selected)>0
+        book.rumoursButton:SetEnabled(rumoursWindow ~= nil and (hasRumours or rumoursWindow:IsShown()))
         book.rumoursButton:SetText(hasRumours and "|cff72d65bRumours|r" or "Rumours")
         book.shareButton:SetEnabled(sharingWindow~=nil and (e~=nil or journal.sharing:HasActiveOutgoing()))
         book.killCount:SetShown(e ~= nil)
@@ -974,6 +1012,24 @@ local ink = { 0.75, 0.8, 0.8 }
         dragon:SetAlpha(0.33)
         applyIllustrationInk(dragon,"BestiaryDragon.png",0,302/540,0,1)
         book.dragonIllustration[1]=dragon
+        -- A shallow 12-pixel fade softens the dragon's cropped right edge.
+        local dragonEdge={}
+        for i=1,12 do
+            local strip=book:CreateTexture(nil,"BACKGROUND",nil,1)
+            strip:SetPoint("TOPRIGHT",book,"TOPRIGHT",-2-(i-1),-122);strip:SetSize(1,360)
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
+            strip:SetAlpha(1-(i-1)/11);addBackgroundLayer(strip,0.504,0.504,0.48888)
+            dragonEdge[i]=strip;book.dragonIllustration[#book.dragonIllustration+1]=strip
+        end
+        local function updateDragonFade()
+            local width,height=book:GetWidth()-8,book:GetHeight()-15
+            if width<=0 or height<=0 then return end
+            for i,strip in ipairs(dragonEdge) do
+                local x=book:GetWidth()-2-i-6
+                strip:SetTexCoord(x/width,(x+1)/width,113/height,473/height)
+            end
+        end
+        book:HookScript("OnSizeChanged",updateDragonFade);updateDragonFade()
         if type(book.CreateMaskTexture)=="function" and type(dragon.AddMaskTexture)=="function" then
             local mask=book:CreateMaskTexture()
             mask:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryKoboldSilhouetteMask.png")
@@ -1364,7 +1420,9 @@ local ink = { 0.75, 0.8, 0.8 }
         book.indexButton:SetNormalFontObject(textFont("GameFontNormalSmall"))
         book.indexButton:SetHighlightFontObject(textFont("GameFontHighlightSmall"))
         styleSelection(book.indexButton)
-        book.indexButton:SetFrameLevel(shell:GetFrame().titleIcon:GetFrameLevel()-1)
+        -- Index controls must remain above the page's illustration fade textures.
+        local indexFrameLevel=math.max(book:GetFrameLevel()+1,shell:GetFrame().titleIcon:GetFrameLevel()-1)
+        book.indexButton:SetFrameLevel(indexFrameLevel)
         book.letterButtons = {}
         for i=1,26 do
             local letter = string.char(64+i)
@@ -1381,7 +1439,7 @@ local ink = { 0.75, 0.8, 0.8 }
             -- in its centre so the letter keeps its original screen position.
             local text=tab:GetFontString()
             if text then text:ClearAllPoints();text:SetPoint("CENTER",tab,"CENTER",0.5,0) end
-            tab:SetFrameLevel(shell:GetFrame().titleIcon:GetFrameLevel()-1)
+            tab:SetFrameLevel(indexFrameLevel)
             tab:SetDisabledFontObject(textFont("GameFontDisable"))
             tab.letter=letter; styleSelection(tab)
             tab:Hide()
@@ -1436,6 +1494,14 @@ local ink = { 0.75, 0.8, 0.8 }
         book.rumoursButton=button(book,"Rumours",710,-60,76,function()
             if rumoursWindow then rumoursWindow:Toggle(selected) end
         end)
+        book.rumoursButton:SetMotionScriptsWhileDisabled(true)
+        book.rumoursButton:SetScript("OnEnter",function(self)
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Rumours")
+            GameTooltip:AddLine("Review unverified creature information shared by other players, then verify or reject it."..(not self:IsEnabled() and " No rumours are available for this creature." or ""),1,1,1,true)
+            GameTooltip:Show()
+        end)
+        book.rumoursButton:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         book.rumoursButton:ClearAllPoints()
         book.rumoursButton:SetPoint("RIGHT",book.creatureLocationsButton,"LEFT",-6,0)
         book.creatureNotesButton:SetPoint("RIGHT",book.rumoursButton,"LEFT",-6,0)
@@ -1489,6 +1555,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.model:SetPoint("TOPLEFT", 346, -135); book.model:SetSize(223, 164)
         book.model:SetPortraitZoom(0); book.model:SetCamDistanceScale(1.25)
         book.model:EnableMouse(true)
+        book.modelFrames={}
         book.modelUnknown=book.modelBorder:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
         book.modelUnknown:SetPoint("CENTER",book.modelBorder,"CENTER",0,6)
         book.modelUnknown:SetFont(STANDARD_TEXT_FONT,72,"OUTLINE")
@@ -1531,39 +1598,62 @@ local ink = { 0.75, 0.8, 0.8 }
             local scale=UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1
             return x and x/scale
         end
-        book.model:SetScript("OnMouseDown", function()
-            if book.modelPending then return end
+        book.model:SetScript("OnMouseDown", function(self)
+            if self~=book.model or book.modelPending then return end
+            rotation=self.afbRotation or 0
             rotating=true; lastCursorX=cursorX()
         end)
         book.model:SetScript("OnMouseUp", function() rotating=false; lastCursorX=nil end)
         book.model:SetScript("OnUpdate", function(self,elapsed)
-            if book.modelPending and book.modelAttempts<4 then
+            if self~=book.model then return end
+            if book.modelPending then
                 book.modelRetryElapsed=book.modelRetryElapsed+(elapsed or 0)
-                if book.modelRetryElapsed>=0.5 then requestModel() end
+                local interval=book.modelAttempts<4 and 0.5 or 5
+                if book.modelRetryElapsed>=interval then requestModel() end
             end
             if rotating then
                 local x=cursorX()
-                if x and lastCursorX then rotation=rotation+(x-lastCursorX)*0.015; book.model:SetRotation(rotation) end
+                if x and lastCursorX then
+                    rotation=rotation+(x-lastCursorX)*0.015
+                    self.afbRotation=rotation;self:SetRotation(rotation)
+                end
                 lastCursorX=x
             end
         end)
         book.model:SetScript("OnHide", function() rotating=false; lastCursorX=nil end)
         book.modelCaption = label(book.modelBorder, "", 8, -76, 211, "GameFontHighlightSmall")
         book.modelCaption:SetJustifyH("CENTER")
-        book.model:SetScript("OnModelLoaded", function()
-            if not book.modelPending then return end
-            book.modelPending=false
-            if book.modelPersonal and type(book.model.GetDisplayInfo)=="function" and type(SetPortraitTextureFromCreatureDisplayID)=="function" then
-                local ok,displayID=pcall(book.model.GetDisplayInfo,book.model)
-                if ok and not (issecretvalue and issecretvalue(displayID)) and type(displayID)=="number" and displayID>0 then
-                    if pcall(SetPortraitTextureFromCreatureDisplayID,book.portrait,displayID) then
-                        book.portrait:Show();book.portraitUnknown:Hide()
-                    end
-                end
+        book.model:SetScript("OnModelLoaded", function(self)
+            local entry=journal.entries[book.modelEntryID]
+            if self~=book.model or self.afbEntryID~=book.modelEntryID
+                or not book.modelPersonal or not entry or entry.personalEncountered~=true then
+                self:SetAlpha(0);self:ClearModel()
+                return
             end
-            book.model:SetAlpha(1)
+            if not book.modelPending then return end
+            local ok,displayID=pcall(self.GetDisplayInfo,self)
+            if not ok or (issecretvalue and issecretvalue(displayID))
+                or type(displayID)~="number" or displayID<=0 then return end
+            if type(SetPortraitTextureFromCreatureDisplayID)=="function" then
+                setPortrait(SetPortraitTextureFromCreatureDisplayID,displayID)
+            end
+            book.modelPending=false
+            self:SetAlpha(1)
             book.modelCaption:SetText("")
         end)
+        local modelScripts={}
+        for _,event in ipairs({"OnMouseDown","OnMouseUp","OnUpdate","OnHide","OnModelLoaded"}) do
+            modelScripts[event]=book.model:GetScript(event)
+        end
+        book.createModel=function()
+            local model=CreateFrame("PlayerModel",nil,detail)
+            model:SetAlpha(0);model:Hide()
+            model:SetPoint("TOPLEFT",346,-135);model:SetSize(223,164)
+            model:SetPortraitZoom(0);model:SetCamDistanceScale(1.25)
+            model:EnableMouse(true)
+            for event,handler in pairs(modelScripts) do model:SetScript(event,handler) end
+            return model
+        end
         book.confirm = CreateFrame("Button", nil, book)
         book.confirm:SetSize(24, 24)
         book.confirm:SetPoint("TOPLEFT",book.modelBorder,"TOPLEFT",6,-6)
@@ -2104,9 +2194,12 @@ local ink = { 0.75, 0.8, 0.8 }
         offensePicker:Hide(); book.offensePicker=offensePicker; book.refreshOffensePicker=refreshOffensePicker
 
         local defensePicker=createObservationPicker("AzerothFieldbookBestiaryDefenses","Observed defenses","Record observed defenses. [Type] means expected, not verified.\nUncheck expectations to override; unmarked means unknown.")
-        label(defensePicker,"Magic school",35,-88,120,"GameFontHighlightSmall")
-        label(defensePicker,"Resistant",170,-88,80,"GameFontHighlightSmall"):SetJustifyH("CENTER")
-        label(defensePicker,"Immune",265,-88,70,"GameFontHighlightSmall"):SetJustifyH("CENTER")
+        for _,spec in ipairs({{"Magic school",35,120,"LEFT"},{"Resistant",170,80,"CENTER"},{"Immune",265,70,"CENTER"}}) do
+            local heading=label(defensePicker,spec[1],spec[2],-88,spec[3],"GameFontHighlightSmall")
+            heading:SetJustifyH(spec[4]);heading:SetTextColor(1,0.82,0.14)
+            local font,size,flags=heading:GetFont()
+            if font and size then heading:SetFont(font,size+2,flags) end
+        end
         defensePicker.rows={}
         local refreshDefensePicker
         for i,school in ipairs(magicSchools) do
@@ -2187,7 +2280,10 @@ local ink = { 0.75, 0.8, 0.8 }
         local refreshBehaviourPicker
         local groupY={-88,-182}
         for groupIndex,group in ipairs(behaviourGroups) do
-            label(behaviourPicker,group[1],30,groupY[groupIndex],180,"GameFontHighlightSmall")
+            local heading=label(behaviourPicker,group[1],30,groupY[groupIndex],180,"GameFontHighlightSmall")
+            local headingFont,headingSize,headingFlags=heading:GetFont()
+            if headingFont and headingSize then heading:SetFont(headingFont,headingSize+2,headingFlags) end
+            heading:SetTextColor(1,0.82,0.14)
             for i,name in ipairs(group[2]) do
                 local column=(i-1)%2
                 local row=math.floor((i-1)/2)
@@ -2196,6 +2292,8 @@ local ink = { 0.75, 0.8, 0.8 }
                 control:SetPoint("TOPLEFT",30+column*180,y); control:SetSize(24,24)
                 control.behaviourName=name
                 control.text=label(behaviourPicker,name,60+column*180,y-5,column==0 and 135 or 85,"GameFontHighlightSmall")
+                local checkboxFont,checkboxSize,checkboxFlags=control.text:GetFont()
+                if checkboxFont and checkboxSize then control.text:SetFont(checkboxFont,checkboxSize+1,checkboxFlags) end
                 control:SetScript("OnClick",function(self)
                     journal:SetBehaviour(selected,self.behaviourName,self:GetChecked()==true)
                     refresh(); refreshBehaviourPicker()
@@ -2373,6 +2471,8 @@ local ink = { 0.75, 0.8, 0.8 }
                 controller:SetVisibilityCallback(function(shown)
                     control:SetSelected(shown)
                     if controller==rumoursWindow then
+                        book.damageBorder:SetHeight(shown and book.modelBorder:GetHeight() or 115)
+                        if shown then rumoursWindow:Refresh() end
                         book.damageHeading:SetShown(not shown);book.damageScroll:SetShown(not shown)
                         local entry=selected and journal.entries[selected]
                         book.lootFilter:SetShown(not shown and book.lootMode and entry~=nil and entry.loot~=nil and next(entry.loot.items or {})~=nil)

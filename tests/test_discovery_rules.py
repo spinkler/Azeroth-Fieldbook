@@ -142,7 +142,7 @@ class DiscoveryRules(unittest.TestCase):
             local content=AzerothFieldbookBestiarySection
             local row=content.rows[1]
             assert(row.skullMark:IsShown() and not row.unknownMark:IsShown() and not row.killReward:IsShown())
-            j.entries[42].kills=50;j:Touch();book:Refresh()
+            j.entries[42].kills=100;j:Touch();book:Refresh()
             assert(row.skullMark:IsShown() and not row.killReward:IsShown(),'skull occupies the reward slot')
             assert(hasText('While flying, including flight paths'))
             assert(hasText('Qualifying kills earn knowledge even at an unknown/skull level'))
@@ -155,12 +155,12 @@ class DiscoveryRules(unittest.TestCase):
     def test_kills_pay_without_level_and_do_not_repeat(self):
         lua = client()
         lua.execute('''
-            for i=1,10 do
+            for i=1,25 do
                 beginKill('skull'..i)
                 units.target.effective=-1
                 finishKill()
             end
-            assert(kills()==10 and points()==2)
+            assert(kills()==25 and points()==2)
             fire('ADDON_LOADED','AzerothFieldbook');assert(points()==2)
             units.target=mob(20);fire('PLAYER_TARGET_CHANGED')
             assert(points()==2,'first kill and silver milestone')

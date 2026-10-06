@@ -3,6 +3,21 @@ local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or b
 local L,U,R=ns.Ledger,ns.AtlasUI,ns.LedgerReports
 local date=L.Date
 local trainingColors={available="ff80e680",unavailable="ffff8080",used="ff999999",unknown="ffffd100"}
+local function trainingAvailability(lesson,currentLevel)
+    if lesson.availability=="used" then return "used","Already known when inspected" end
+    local level=L.Read(UnitLevel,"player")
+    if L.Integer(currentLevel,1,255) then level=math.max(L.Integer(level,1,255) and level or 0,currentLevel) end
+    if L.Integer(level,1,255) and L.Integer(lesson.requiredLevel,1,255) then
+        if level<lesson.requiredLevel then return "unavailable","Cannot learn yet: requires level "..lesson.requiredLevel end
+        for _,requirement in ipairs(lesson.requirements or {}) do
+            if requirement~="Required level: "..lesson.requiredLevel then
+                return "unknown","Current level requirement met; additional requirements must be met"
+            end
+        end
+        return "available","Can learn at your current level"
+    end
+    return "unknown","Current level eligibility unknown"
+end
 local function trainingIcon(v)
     if L.Integer(v.icon,1,2147483647) then return v.icon end
     -- Older observations and reports have no retained texture. Cached artwork
@@ -158,13 +173,16 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             return (a.value.name or ""):lower()<(b.value.name or ""):lower()
         end)
         for _,row in ipairs(rows) do
-            local v=row.value;lines[#lines+1]="\n"..(row.reported and "REPORTED: " or "")..(v.name or ("Item #"..tostring(v.itemID).." — metadata pending"))..
+            local v=row.value
+            local availability,availabilityLabel
+            if training then availability,availabilityLabel=trainingAvailability(v,self.currentPlayerLevel) end
+            lines[#lines+1]="\n"..(row.reported and "REPORTED: " or "")..(v.name or ("Item #"..tostring(v.itemID).." — metadata pending"))..
                 (training and v.rank~="" and " ("..v.rank..")" or "")..(v.recipe and " • Recipe"..(v.profession and " / "..v.profession or "") or "")
             offeringHeadings[#lines]=row
             if rich and training then
                 trainingHeadings[#lines]=v
                 headings[#lines]="\n"..(row.reported and "|cff80cfffREPORTED: |r" or "")..
-                    "|T"..trainingIcon(v)..":18:18:0:0|t |c"..(trainingColors[v.availability] or trainingColors.unknown)..
+                    "|T"..trainingIcon(v)..":18:18:0:0|t |c"..(trainingColors[availability] or trainingColors.unknown)..
                     L.Safe(v.name).."|r"..(v.rank~="" and " |cffb0b0b0("..L.Safe(v.rank)..")|r" or "")
             elseif rich and L.Integer(v.itemID,1,2147483647) then
                 local icon=v.icon or L.Read(C_Item and C_Item.GetItemIconByID,v.itemID)
@@ -184,9 +202,8 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             end
             if rich and not headings[#lines] then headings[#lines]=L.Safe(lines[#lines]) end
             if training then
-                local labels={available="Available when inspected",unavailable="Unavailable when inspected",used="Already known when inspected",unknown="Availability unknown"}
-                lines[#lines+1]=labels[v.availability] or "Availability unknown"
-                styled[#lines]="|c"..(trainingColors[v.availability] or trainingColors.unknown)..lines[#lines].."|r"
+                lines[#lines+1]=availabilityLabel
+                styled[#lines]="|c"..(trainingColors[availability] or trainingColors.unknown)..lines[#lines].."|r"
                 local cost=v.costUnit=="copper" and goodsMoney(v.price) or tostring(v.price or "Unknown")..(v.costUnit=="training points" and " training points" or " (unit unknown)")
                 lines[#lines+1]="Price: "..cost;prices[#lines]=v.costUnit=="copper"
                 local requirements={"Level "..(v.requiredLevel or "unknown")}
@@ -452,6 +469,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
     function c:ClosePanel()
         for _,p in pairs(self.panels) do p:Hide();for _,input in ipairs(p.inputs or {}) do input:ClearFocus() end end
         self.main.directory:Show();self.panel=nil
+        for _,button in ipairs(self.main.catalogueHiddenButtons or {}) do button:Show() end
         self.main.contactList:Show()
         self.main.contactList.topFade:Show();self.main.contactList.bottomFade:Show()
         self.switchingSearch=true;self.main.search:SetText(state.query);self.switchingSearch=nil
@@ -466,7 +484,8 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             self.panels[key]=p
         end
         if key=="catalogue" then
-            p:ClearAllPoints();p:SetPoint("TOPLEFT",42,-170);p:SetSize(250,462)
+            p:ClearAllPoints();p:SetPoint("TOPLEFT",42,-170);p:SetSize(250,528)
+            for _,button in ipairs(self.main.catalogueHiddenButtons or {}) do button:Hide() end
             self.main.contactList:Hide()
             self.main.contactList.topFade:Hide();self.main.contactList.bottomFade:Hide()
         else self.main.directory:Hide() end
@@ -604,7 +623,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         p.query=query
         self.switchingSearch=true;self.main.search:SetText(query);self.switchingSearch=nil
         if not p.read then
-            p.read=self:GoodsReadArea(p,0,-4,228,458)
+            p.read=self:GoodsReadArea(p,0,-4,228,524)
             -- Reserve the scrollbar's top corner for the training sort button.
             if p.read.ScrollBar then
                 p.read.ScrollBar:ClearAllPoints()
@@ -1097,6 +1116,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                 button:SetScript("OnLeave",hideTooltip);button:HookScript("OnHide",hideTooltip)
             end
         end
+        m.catalogueHiddenButtons={m.detailButtons.services,m.manual,m.remove,m.reports}
         m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.favourite,"TOPLEFT",-8,0)
         m.footerBackground=U.FooterBackground(m,shell)
         m.details=U.ReadArea(m,342,-594,555,107)
@@ -1105,8 +1125,12 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         local path,size,flags=m.details.text:GetFont()
         if path and type(size)=="number" then m.details.text:SetFont(path,size+2,flags) end
         m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall");m.message:SetWordWrap(false)
-        for _,event in ipairs({"ZONE_CHANGED","ZONE_CHANGED_INDOORS","ZONE_CHANGED_NEW_AREA","PLAYER_ENTERING_WORLD"}) do m:RegisterEvent(event) end
-        m:SetScript("OnEvent",function()
+        for _,event in ipairs({"ZONE_CHANGED","ZONE_CHANGED_INDOORS","ZONE_CHANGED_NEW_AREA","PLAYER_ENTERING_WORLD","PLAYER_LEVEL_UP"}) do m:RegisterEvent(event) end
+        m:SetScript("OnEvent",function(_,event,level)
+            if event=="PLAYER_LEVEL_UP" then
+                if L.Integer(level,1,255) then c.currentPlayerLevel=level end
+                c:Refresh();return
+            end
             if state.currentZone and m:IsVisible() then c:Filter() end
         end)
         content:SetScript("OnHide",function()

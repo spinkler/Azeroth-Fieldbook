@@ -549,7 +549,7 @@ local function initializeImpl()
         end
         if ns.CreateLossOfControlObserver then lossOfControl = ns.CreateLossOfControlObserver(journal, watchedEnemy, function(message) if db.spellFeedback == true then say(message) end end) end
         journal:SetPointsRecordedCallback(function(entry, amount, reason, observation)
-            local killTitles = { ["first kill"] = "First kill!", ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
+            local killTitles = { ["first kill"] = "First kill!", ["silver star"] = "25 kills!", ["gold star"] = "50 kills!!", ["gold crown"] = "100 kills!!!" }
             local discoveryTitles = { location = "New Location Observed" }
             local title = killTitles[reason] or (reason == "new creature entry" and "New discovery!")
                 or (observation and discoveryTitles[observation.kind])

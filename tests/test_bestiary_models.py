@@ -1,6 +1,22 @@
 """Model request lifecycle; native appearance rendering still needs WoW."""
 import unittest
-from ui_test_harness import new_ui_client
+from ui_test_harness import new_ui_client as base_ui_client
+
+
+def new_ui_client(files):
+    lua = base_ui_client(files)
+    lua.execute('''
+        local create=CreateFrame
+        function CreateFrame(kind,...)
+            local frame=create(kind,...)
+            if kind=='PlayerModel' then
+                function frame:GetDisplayInfo() return 1234 end
+                if modelSetup then modelSetup(frame) end
+            end
+            return frame
+        end
+    ''')
+    return lua
 
 
 class BestiaryModelTests(unittest.TestCase):
@@ -9,8 +25,8 @@ class BestiaryModelTests(unittest.TestCase):
             'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
             'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
         lua.execute(r'''
-            function SetPortraitTexture(texture,unit) texture.appearance=unit end
-            function SetPortraitTextureFromCreatureDisplayID(texture,id) texture.appearance=id end
+            function SetPortraitTexture(texture,unit) texture.appearance=unit;texture:SetTexture(unit) end
+            function SetPortraitTextureFromCreatureDisplayID(texture,id) texture.appearance=id;texture:SetTexture(id) end
             j=ns.CreateBestiaryJournal({},function() return npcID end)
             c=ns.CreateBestiaryBook(j);c:OpenAtUnit('target')
             local section=AzerothFieldbookBestiarySection
@@ -162,10 +178,16 @@ class BestiaryModelTests(unittest.TestCase):
             controller:OpenAtUnit('target')
             assert(model.alpha==0, 'previous creature remains visible during replacement')
             for i=1,20 do model.scripts.OnUpdate(model,0.5) end
-            assert(#requests==4 and section.modelCaption:GetText()=='')
+            assert(#requests==5 and section.modelCaption:GetText()=='')
             assert(model.alpha==0)
             -- A new selection replaces the pending request immediately.
+            local outgoing=model
+            function modelSetup(frame)
+                frame.ClearModel=outgoing.ClearModel;frame.SetCreature=outgoing.SetCreature
+            end
             npcID=43;controller:OpenAtUnit('target')
+            model=section.model
+            assert(model~=outgoing and not outgoing:IsShown())
             assert(model.alpha==0)
             model.scripts.OnUpdate(model,0.5)
             assert(requests[#requests]==43)
@@ -192,15 +214,113 @@ class BestiaryModelTests(unittest.TestCase):
             function model:ClearAllPoints()
                 assert(not self:IsShown(), 're-anchored a visible model')
             end
+            local previous=model
+            function modelSetup(frame)
+                frame.ClearModel=previous.ClearModel;frame.SetCreature=previous.SetCreature
+                frame.SetHeight=previous.SetHeight;frame.ClearAllPoints=previous.ClearAllPoints
+            end
             complete=true
             function UnitCreatureType() return 'Beast' end
             npcID=44;controller:OpenAtUnit('target')
+            model=section.model
             assert(model.height==135 and model.alpha==1 and resizes==1)
             controller:Refresh();controller:Refresh()
             assert(resizes==1)
             function UnitCreatureType() return 'Humanoid' end
             npcID=45;controller:OpenAtUnit('target')
+            model=section.model
             assert(model.height==164 and model.alpha==1 and resizes==2)
+        ''')
+
+    def test_late_callbacks_and_silent_portrait_failures_cannot_show_previous_entry(self):
+        lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
+            'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
+            'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
+        lua.execute('''
+            function SetPortraitTexture(texture,unit)
+                if not silent then texture:SetTexture(npcID) end
+            end
+            function SetPortraitTextureFromCreatureDisplayID(texture,id) texture:SetTexture(id) end
+            j=ns.CreateBestiaryJournal({},function() return npcID end)
+            c=ns.CreateBestiaryBook(j);c:OpenAtUnit('target')
+            local section=AzerothFieldbookBestiarySection
+            local outgoing=section.model
+            function outgoing:ClearModel() self.scene=nil end
+            assert(section.portrait:GetTexture()==42 and section.portrait:IsShown())
+            silent=true;npcID=43;c:OpenAtUnit('target')
+            local current=section.model
+            function current:ClearModel() self.scene=nil end
+            assert(current~=outgoing and not outgoing:IsShown() and outgoing.alpha==0)
+            assert(section.portrait:GetTexture()==nil and not section.portrait:IsShown())
+            assert(section.portraitUnknown:IsShown())
+            outgoing.scene=42;outgoing.scripts.OnModelLoaded(outgoing)
+            outgoing.scripts.OnUpdate(outgoing,10)
+            assert(section.modelPending and current.alpha==0 and outgoing.alpha==0)
+            assert(outgoing.scene==nil,'late outgoing scenes must be unloaded again')
+            assert(section.portrait:GetTexture()==nil)
+            function current:GetDisplayInfo() return nil end
+            current.scripts.OnModelLoaded(current)
+            assert(section.modelPending and current.alpha==0,'empty callback must not end loading')
+            function current:GetDisplayInfo() return 4300 end
+            current.scripts.OnModelLoaded(current)
+            assert(not section.modelPending and current.alpha==1)
+            assert(section.portrait:GetTexture()==4300 and section.portrait:IsShown())
+            npcID=42;c:OpenAtUnit('target')
+            assert(section.model==outgoing,'revisiting a creature reuses its own frame')
+            assert(not current:IsShown() and current.alpha==0)
+            current.scripts.OnModelLoaded(current)
+            assert(section.modelPending and section.portrait:GetTexture()==nil)
+            j.entries[42].personalEncountered=false;c:Refresh()
+            outgoing.scripts.OnModelLoaded(outgoing)
+            assert(not section.modelPending and not outgoing:IsShown())
+            assert(section.portrait:GetTexture()==nil and section.portraitUnknown:IsShown())
+        ''')
+
+    def test_slow_load_recovers_after_initial_retries(self):
+        lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
+            'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
+            'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
+        lua.execute('''
+            j=ns.CreateBestiaryJournal({},function() return npcID end)
+            c=ns.CreateBestiaryBook(j);c:OpenAtUnit('target')
+            local section=AzerothFieldbookBestiarySection
+            local model=section.model;local requests=0
+            function model:SetCreature(id)
+                assert(id==42);requests=requests+1
+                if requests==5 then self.scripts.OnModelLoaded(self) end
+            end
+            c:OpenAtUnit('target')
+            for i=1,3 do model.scripts.OnUpdate(model,.5) end
+            assert(requests==4 and section.modelPending and model.alpha==0)
+            c:Refresh();assert(requests==4,'routine refresh must not restart an in-flight load')
+            model.scripts.OnUpdate(model,4.5);assert(requests==4)
+            model.scripts.OnUpdate(model,.5)
+            assert(requests==5 and not section.modelPending and model.alpha==1)
+            model.scripts.OnUpdate(model,60);assert(requests==5)
+        ''')
+
+    def test_nil_return_live_load_is_not_overwritten(self):
+        lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
+            'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
+            'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
+        lua.execute('''
+            j=ns.CreateBestiaryJournal({},function() return npcID end)
+            c=ns.CreateBestiaryBook(j);c:OpenAtUnit('target')
+            local section=AzerothFieldbookBestiarySection
+            local model=section.model;local fallback=0
+            function model:SetCreature(id) fallback=fallback+1 end
+            function model:SetUnit(unit) self.scripts.OnModelLoaded(self) end
+            c:OpenAtUnit('target')
+            assert(fallback==0 and not section.modelPending and model.alpha==1)
+            function model:SetUnit(unit) end
+            c:OpenAtUnit('target')
+            assert(fallback==0 and section.modelPending and model.alpha==0)
+            for i=1,3 do model.scripts.OnUpdate(model,.5) end
+            assert(fallback==1,'stalled nil-return live load still gets a creature fallback')
+            function model:SetUnit(unit) return false end
+            c:OpenAtUnit('target');assert(fallback==2)
+            function model:SetUnit(unit) error('unavailable') end
+            c:OpenAtUnit('target');assert(fallback==3)
         ''')
 
     def test_live_unit_priority_identity_recheck_and_fallback(self):

@@ -162,9 +162,9 @@ Raid-wide attribution is not added; the clarified policy is player/pet/party.
   fixtures now include qualifying kill evidence; their other assertions remain.
 - `README.md`, `CHANGELOG.md`, and this report document the change.
 
-As of 0.9.21, thresholds are **10 kills: silver/+1; 25 kills: gold/+2 more;
-50 kills: gold crown/+3 more**, 6 cumulative kill points. Existing personal entries
-receive newly available crown credit once on load; old silver credit is preserved.
+Current thresholds are **25 kills: silver/+1; 50 kills: gold/+2 more;
+100 kills: gold crown/+3 more**, 6 cumulative kill points. Previously earned
+knowledge remains credited when thresholds increase and cannot be awarded again.
 Discovery, notes, abilities, locks, spending and sharing transactions
 are preserved. No historical counts are reset or points removed. Historical data
 cannot reliably distinguish legitimate kills from the old incorrect attribution.

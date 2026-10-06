@@ -85,6 +85,7 @@ def new_ui_client(modules=()):
     function methods:SetTextColor(...) self.textColor={...} end
     function methods:SetTexCoord(...) self.texCoord={...} end
     function methods:SetTexture(value) self.texture=value;return true end
+    function methods:GetTexture() return self.texture end
     function methods:SetColorTexture(...) self.colorTexture={...} end
     function methods:SetVertexColor(...) self.vertexColor={...} end
     function methods:SetAtlas(value) self.atlas=value end
@@ -156,7 +157,11 @@ def new_ui_client(modules=()):
             if k:match('^%u') then return function() end end
         end})
         objects[#objects+1]=f; if name then _G[name]=f end
-        if kind=='ModelScene' then
+        if kind=='PlayerModel' then
+            -- This host has no live-unit renderer. Tests that exercise a
+            -- successful or asynchronous SetUnit install their own loader.
+            function f:SetUnit() return false end
+        elseif kind=='ModelScene' then
             function f:CreateActor()
                 local actor=CreateFrame('Actor',nil,self)
                 function actor:SetModelByFileID(id)

@@ -89,7 +89,7 @@ class AutoLockTests(unittest.TestCase):
             fire('ADDON_LOADED','AzerothFieldbook')
             beginKill('stable10');finishKill()
             assert(entry.confirmed and entry.unchangedKills==10)
-            assert(AzerothFieldbookDB.eventLog.entries[#AzerothFieldbookDB.eventLog.entries-1].details.kind=='autoLock')
+            assert(AzerothFieldbookDB.eventLog.entries[#AzerothFieldbookDB.eventLog.entries].details.kind=='autoLock')
         ''')
 
     def test_content_cache_releases_deleted_entries_and_handles_replacement(self):

@@ -270,9 +270,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     -- Round each milestone award down before adding it to the lifetime total.
     local killMilestones = {
-        { kills = 50, points = 3, star = "crown" },
-        { kills = 25, points = 2, star = "gold" },
-        { kills = 10, points = 1, star = "silver" },
+        { kills = 100, points = 3, star = "crown" },
+        { kills = 50, points = 2, star = "gold" },
+        { kills = 25, points = 1, star = "silver" },
         { kills = 1, points = 1 },
     }
     function journal:GetKnowledgeMultiplier(id)

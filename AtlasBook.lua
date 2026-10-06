@@ -194,7 +194,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.empty:SetShown(#rows==0)
         m.empty:SetText((next(journal.records) or (journal.entrances and next(journal.entrances.records))) and "No matching discoveries.\nTry all zones or clear your search." or "Your atlas starts empty.\n\nChoose Add Discovery to record a place at your current position, or enable entrance discovery as you explore.")
         m.count:SetCounts(#entries:List("",nil,true),#rows)
-        m.cancelPlace:SetShown(m.map.placing==true)
+        self:UpdatePositionButton()
         m.subzones:SetChecked(state.showSubzones==true)
         m.subzoneLabels:SetChecked(state.showSubzoneLabels==true)
         m.subzonePoints:SetChecked(state.showSubzonePoints==true)
@@ -230,13 +230,74 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             for _,r in ipairs(e.references) do local target,title=adapters:Resolve(r);detail[#detail+1]=title..": "..target.name..(target.missing and " (unavailable)" or "") end
             for _,n in ipairs(journal:Associated(e.id)) do detail[#detail+1]="Expedition: "..n.name end
         else detail={"Select a discovery to read your field notes.","Record entrances deliberately; an interior position is not an outdoor entrance."} end
-        if mapCaption~="" then table.insert(detail,1,mapCaption) end
-        m.details:SetText(table.concat(detail,"\n"))
+        local formatted={}
+        for i,line in ipairs(detail) do
+            local label,value=line:match("^([^:]+: )(.*)$")
+            if e and i==1 then formatted[#formatted+1]=U.DetailPaint(line,"ffd100")
+            elseif e and (i==2 or i==4) then formatted[#formatted+1]=U.DetailPaint(line,"9ba7ad")
+            elseif label then formatted[#formatted+1]=U.DetailPaint(label,"74c7d5")..U.DetailPaint(value,"c5cdcf")
+            else formatted[#formatted+1]=U.DetailPaint(line,"c5cdcf") end
+        end
+        if mapCaption~="" then table.insert(formatted,1,U.DetailPaint(mapCaption,"cfad64")) end
+        m.details.text:SetText(table.concat(formatted,"\n"))
+        self:SizeDetails()
         m.reveal:SetShown(e~=nil and not entries:Layer(e.category))
         for _,b in ipairs(m.entryButtons) do b:SetEnabled(e~=nil) end
         for _,b in ipairs(m.deliberateButtons) do b:SetEnabled(e~=nil and not e.entrance) end
         m.deleteButton:SetEnabled(e~=nil and not journal.readOnly and not (e.entrance and journal.entrances.readOnly))
         m.route:SetEnabled(e~=nil and e.category=="route" and not e.entrance)
+        self:UpdatePositionButton()
+    end
+    function c:UpdatePositionButton()
+        local button=self.main.position
+        local placing=self.main.map.placing==true
+        button:SetText(placing and "Cancel" or "Map position")
+        button:SetSelected(placing)
+        button:SetEnabled(placing or entries:Get(state.selected)~=nil)
+    end
+    function c:CancelPlacement()
+        self.main.map.placing=false;self.placeCallback=nil;self.placeReturn=nil
+        self:Message("");self:UpdatePositionButton()
+        self:Show();self:Refresh()
+    end
+    function c:SizeDetails()
+        local m=self.main
+        m.detailBody:SetHeight(math.max(m.details:GetHeight(),m.details.text:GetStringHeight()+12))
+        m.details:UpdateScrollChildRect();m.details:RefreshScrollBar()
+        m.details:SetVerticalScroll(math.min(m.details:GetVerticalScroll(),math.max(0,m.detailBody:GetHeight()-m.details:GetHeight())))
+    end
+    function c:LayoutDetails(progress)
+        local m=self.main
+        m.notesProgress=progress
+        -- Expanded paper starts at -201, just above the map at -205 and
+        -- below the zone selector and sub-zone controls ending at -198.
+        m.notesOverlay:ClearAllPoints();m.notesOverlay:SetPoint("TOPLEFT",342,-588+383*progress)
+        m.notesOverlay:SetHeight(113+383*progress)
+        m.details:SetHeight(80+383*progress)
+        m.notesPaper:Show()
+        self:SizeDetails()
+        m.notesOverlay:EnableMouse(progress>0)
+    end
+    function c:Expand()
+        local m=self.main
+        m.notesExpanded=not m.notesExpanded
+        m.expand:SetSelected(m.notesExpanded)
+        local from=m.notesProgress or 0
+        local target=m.notesExpanded and 1 or 0
+        for row,stroke in ipairs(m.notesArrow) do
+            stroke:ClearAllPoints();stroke:SetPoint("CENTER",0,m.notesExpanded and 3-row or row-3)
+        end
+        local elapsed=0
+        m.notesOverlay:SetScript("OnUpdate",function(frame,delta)
+            elapsed=math.min(0.18,elapsed+delta)
+            local t=elapsed/0.18;local eased=1-(1-t)^3
+            c:LayoutDetails(from+(target-from)*eased)
+            if t>=1 then
+                frame:SetScript("OnUpdate",nil)
+                c:SizeDetails()
+                m.details:SetVerticalScroll(math.min(m.details:GetVerticalScroll(),math.max(0,m.detailBody:GetHeight()-m.details:GetHeight())))
+            end
+        end)
     end
     local function build(content)
         c.frame=content
@@ -353,7 +414,16 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.empty=U.Label(m,"",50,-194,233,"GameFontHighlight");m.empty:SetWordWrap(true);m.empty:SetSpacing(4)
         -- Center the 580-pixel control rows between the divider and inner right edge.
         U.Button(m,"Add Discovery",342,-60,140,function() c:OpenEditor(nil,false,A.CurrentLocation()) end)
-        U.Button(m,"Expeditions",488,-60,116,function() c:Expeditions() end)
+        m.expeditions=U.Button(m,"Expeditions",618,-60,116,function() c:Expeditions() end)
+        m.expeditions:SetScript("OnEnter",function(self)
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Expeditions")
+            GameTooltip:AddLine("Keep longer journals for your journeys, exploration plans and field notes. Link an expedition to Atlas discoveries to bring related places and notes together.",1,1,1,true)
+            GameTooltip:Show()
+        end)
+        local function hideExpeditionTooltip() if GameTooltip then GameTooltip:Hide() end end
+        m.expeditions:SetScript("OnLeave",hideExpeditionTooltip)
+        m.expeditions:HookScript("OnHide",hideExpeditionTooltip)
         m.shareButton=U.ShareButton(m,function() c:Report() end)
         m.capacity=U.Label(m,"Archive: calculating…",42,-701,250,"GameFontDisableSmall")
         m.capacity:SetWordWrap(false)
@@ -529,7 +599,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end
         m.map=ns.CreateAtlasMap(m,entries,function(id) c:Select(id) end,function(x,y)
             if c.placeCallback then
-                local callback=c.placeCallback;c.placeCallback=nil;m.map.placing=false;c:Message("")
+                local callback=c.placeCallback;c.placeCallback=nil;m.map.placing=false;c:UpdatePositionButton();c:Message("")
                 callback(x,y,state.mapID,state.zone)
             end
         end,function(id,name) c:SetZone(id,name) end)
@@ -538,28 +608,93 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.layerMenu:SetParent(m.map);m.layerMenu:ClearAllPoints()
         m.layerMenu:SetPoint("TOPLEFT",m.map,"TOPLEFT",8,-8)
         m.layerMenu:SetFrameLevel(m.map:GetFrameLevel()+25)
-        m.map.weatherText=U.Label(m,"",342,-587,580,"GameFontHighlightSmall")
+        m.map.weatherText=U.Label(m.layerMenu,"",0,0,460,"GameFontHighlightSmall")
+        m.map.weatherText:ClearAllPoints()
+        m.map.weatherText:SetPoint("LEFT",m.layerMenu,"RIGHT",8,0)
         m.map.weatherText:SetWordWrap(false)
-        m.details=U.ReadArea(m,342,-606,555,64)
+        m.map.weatherText:SetShadowColor(0,0,0,0.85);m.map.weatherText:SetShadowOffset(1,-1)
+        local weatherFont,weatherSize,weatherFlags=m.map.weatherText:GetFont()
+        if weatherFont and weatherSize then m.map.weatherText:SetFont(weatherFont,weatherSize+2,weatherFlags) end
+        m.notesOverlay=CreateFrame("Frame",nil,m)
+        m.notesOverlay:SetSize(580,113);m.notesOverlay:SetFrameLevel(m:GetFrameLevel()+30)
+        m.notesPaper=m.notesOverlay:CreateTexture(nil,"BACKGROUND")
+        m.notesPaper:SetPoint("TOPLEFT",m.notesOverlay,"TOPLEFT",-10,4)
+        m.notesPaper:SetPoint("BOTTOMRIGHT",m.notesOverlay,"BOTTOMRIGHT",10,-6)
+        m.notesPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png");m.notesPaper:SetDesaturated(true)
+        shell:AddBackgroundLayer(m.notesPaper,0.17,0.17,0.17,true)
+        for _,edge in ipairs({{"TOPLEFT","TOPRIGHT",true},{"BOTTOMLEFT","BOTTOMRIGHT",true},{"TOPLEFT","BOTTOMLEFT",false},{"TOPRIGHT","BOTTOMRIGHT",false}}) do
+            local border=m.notesOverlay:CreateTexture(nil,"OVERLAY")
+            border:SetColorTexture(unpack(U.DetailGold))
+            border:SetPoint(edge[1],m.notesPaper,edge[1]);border:SetPoint(edge[2],m.notesPaper,edge[2])
+            if edge[3] then border:SetHeight(1) else border:SetWidth(1) end
+        end
+        m.expand=U.Button(m.notesOverlay,"",438,0,22,function() c:Expand() end);m.expand:SetSize(22,22)
+        m.expand:ClearAllPoints();m.expand:SetPoint("TOPRIGHT",m.notesPaper,"TOPRIGHT",-4,-4)
+        U.StyleSelection(m.expand)
+        m.notesArrow={}
+        for row=0,4 do
+            local stroke=m.expand:CreateTexture(nil,"OVERLAY")
+            stroke:SetSize(9-row*2,1);stroke:SetPoint("CENTER",0,row-2);stroke:SetColorTexture(1,0.82,0.14,1)
+            m.notesArrow[#m.notesArrow+1]=stroke
+        end
+        m.expand:SetScript("OnEnter",function(self)
+            if GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(m.notesExpanded and "Collapse notes" or "Expand notes");GameTooltip:Show() end
+        end)
+        m.expand:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        m.footerBackground=m.notesPaper
+        m.details,m.detailBody=U.ReadArea(m.notesOverlay,0,-33,555,80)
+        m.details.text:SetShadowColor(0,0,0,0.85);m.details.text:SetShadowOffset(1,-1)
+        U.AlignFooterScrollBar(m.details,m.notesPaper,m.expand)
+        U.FooterFades(m.details,shell,37)
+        c:LayoutDetails(0)
         m.reveal=U.Button(m,"Reveal layer",788,-513,114,function()
             local e=entries:Get(state.selected);if e then entries:SetLayer(e.category,true);c:Refresh() end
         end)
         -- Leave a separate line for the hidden-layer affordance, never cover text.
         m.reveal:ClearAllPoints();m.reveal:SetPoint("TOPLEFT",174,-638)
         local edit=U.Button(m,"Edit",42,-638,120,function() c:OpenEditor(state.selected) end)
-        local links=U.Button(m,"Connections",428,-680,128,function() c:Connections(state.selected,false) end)
-        m.route=U.Button(m,"Route stops",562,-680,112,function() c:Stops(state.selected) end)
-        local notes=U.Button(m,"Linked notes",680,-680,112,function() c:Expeditions(state.selected) end)
-        local position=U.Button(m,"Map position",798,-680,124,function() c:OpenEditor(state.selected);c:ChoosePosition() end)
+        local links=U.Button(m.notesOverlay,"Connections",0,0,128,function() c:Connections(state.selected,false) end)
+        m.route=U.Button(m.notesOverlay,"Route stops",134,0,112,function() c:Stops(state.selected) end)
+        local notes=U.Button(m.notesOverlay,"Linked notes",252,0,112,function() c:Expeditions(state.selected) end)
+        local position=U.Button(m,"Map position",488,-60,124,function()
+            if m.map.placing then c:CancelPlacement()
+            else c:OpenEditor(state.selected);c:ChoosePosition() end
+        end)
+        m.position=position;U.StyleSelection(position)
+        position:SetMotionScriptsWhileDisabled(true)
+        position:SetScript("OnEnter",function(self)
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+            GameTooltip:SetText(m.map.placing and "Cancel placement" or "Map position")
+            local explanation=m.map.placing and "Cancel choosing a position and return to the Atlas map. The saved position stays unchanged."
+                or (not entries:Get(state.selected) and "Select a discovery first to choose its position on the displayed map."
+                or "Choose a position for the selected discovery by clicking the displayed map. Review the chosen coordinates in the editor, then Save to keep them.")
+            GameTooltip:AddLine(explanation,1,1,1,true);GameTooltip:Show()
+        end)
+        local function hidePositionTooltip() if GameTooltip then GameTooltip:Hide() end end
+        position:SetScript("OnLeave",hidePositionTooltip);position:HookScript("OnHide",hidePositionTooltip)
         m.entryButtons={edit,links,notes,position}
         m.deliberateButtons={links,notes}
-        m.cancelPlace=U.Button(m,"Cancel placement",42,-638,128,function()
-            m.map.placing=false;c.placeCallback=nil;m.cancelPlace:Hide();c:Message("")
-            if c.placeReturn then c:Show(c.placeReturn) end
-        end);m.cancelPlace:Hide()
+        for _,action in ipairs({{links,"Connections"},{m.route,"Route stops"},{notes,"Linked notes"}}) do
+            local button,title=action[1],action[2]
+            button:SetMotionScriptsWhileDisabled(true)
+            button:SetScript("OnEnter",function(self)
+                if self:IsEnabled() or not GameTooltip then return end
+                local e=entries:Get(state.selected)
+                local reason
+                if not e then reason="Select a discovery first."
+                elseif e.entrance then reason="Automatically discovered entrances do not support this action. Record a deliberate Atlas discovery to use it."
+                else reason="Route stops are available only for Route / Passage discoveries." end
+                GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(title)
+                GameTooltip:AddLine(reason,1,1,1,true);GameTooltip:Show()
+            end)
+            button:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+            button:HookScript("OnHide",function() if GameTooltip then GameTooltip:Hide() end end)
+        end
         m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall")
         ns.InstallAtlasEditors(c);ns.InstallAtlasReportUI(c)
         content:SetScript("OnHide",function()
+            m.notesOverlay:SetScript("OnUpdate",nil);c:LayoutDetails(m.notesExpanded and 1 or 0)
             m.map:SuspendPlayer()
             if GameTooltip then GameTooltip:Hide() end
             m.search:ClearFocus()

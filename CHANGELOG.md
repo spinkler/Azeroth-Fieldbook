@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.34.0 - 2026-10-06
+
+- Increase Bestiary Behaviour's Combat style and Traits headings and Defenses' Magic school, Resistant and Immune headings by 2 points and colour them yellow; increase Behaviour checkbox labels by 1 point.
+- Raise Bestiary kill milestones to silver at 25, gold at 50 and crown at 100 kills. Update reward announcements, Help and documentation; preserve previously earned knowledge without paying credited rewards again.
+
+- Add a shallow right-edge fade to the Bestiary dragon. Expand Rumours over the viewer controls, disable empty Rumours with explanatory hover text, and close it when selecting another creature.
+
+- Keep the Bestiary Index button and alphabet tabs above the illustration fade mask so the lower letters remain clear.
+- Explain the intended purpose of Atlas Expeditions in its button tooltip: longer journey journals, exploration plans and field notes linked to discoveries. Add Map position guidance for selecting coordinates, saving them and cancelling placement.
+- Make Atlas Map position glow yellow and change to Cancel while choosing a map position, replacing the separate cancel control that overlapped Edit. Cancelling returns to the Atlas map without reopening the discovery editor or changing the saved position.
+
+- Recalculate Ledger Training colours and level eligibility from the current player level, refreshing on level-up while preserving historical observations. Keep additional unverified requirements explicit.
+
+- Centre the Adventurer's Annals legend vertically in the map. Extend Merchant's Ledger Goods and Training overlays over the left-pane controls and restore those controls when closed. Move Atlas Map position between Add Discovery and Expeditions, and explain disabled Connections, Route stops and Linked notes actions on hover.
+
+- Match Traveller's Atlas to the dark parchment footers in Angler's Almanac and Treasure Journal, with the four map-detail actions at the top-left, aligned scrollbars and scrolling text fades. Add the matching animated expand/collapse control, keep the expanded panel below the zone selector and sub-zone controls, and style detail headings in gold, labels in cyan, body text in pale grey and metadata in muted grey. Place Observed Weather inside the map beside the filter button and increase its text by 2 points.
+- Fix Bestiary portraits and models retaining a previous creature or remaining blank after a stalled load. Clear portrait textures before replacement, isolate native model callbacks by creature, preserve completed live-unit appearances and continue slow retries after the initial loading attempts. Add regression coverage for late callbacks, silent portrait failures, nil-return live loads and delayed recovery.
+
 ## v0.33.1 - 2026-10-06
 
 - Convert all runtime illustrations, masks, parchment and custom icons to lossless PNG, reducing active artwork from 18.96 MB to 3.24 MB without changing pixels, transparency, placement, opacity or fades. All artwork was verified in-game on the Forever beta client.

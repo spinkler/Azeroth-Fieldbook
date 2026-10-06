@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.33.1 (Release)
+# Azeroth Fieldbook 0.34.0 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -921,8 +921,8 @@ a skull; qualifying kills can earn points regardless of readable level.
 Flying and flight paths require active targeting or the mouseover-open keybinding;
 passive hovering does not record observations from the air.
 
-Each creature awards +1 for the first kill, +1 for silver (10 kills), +2 for gold
-(25 kills), and +3 for a crown (50 kills). Multiply each award by 1.5 for Elite
+Each creature awards +1 for the first kill, +1 for silver (25 kills), +2 for gold
+(50 kills), and +3 for a crown (100 kills). Multiply each award by 1.5 for Elite
 or 2 for Rare, then round down to a whole point. Rare Elites use 2x, without
 stacking. Normal creatures earn 7 total, Elites 9, and Rares 14.
 Previously earned balances and spending are preserved; existing personal kills
@@ -1106,7 +1106,7 @@ one another by default; disable that option to keep multiple windows open.
 Knowledge award chat messages are enabled by default and can be disabled. Discoveries
 and their knowledge awards share one Bestiary announcement, using the creature's
 resolved name and observed type, level and location; unavailable details are
-omitted. Kill rewards show the name and type with 10/25/50-kill milestones.
+omitted. Kill rewards show the name and type with 25/50/100-kill milestones.
 The addon prefix is cyan, bracketed rewards are yellow and parenthesized details
 are grey. With knowledge messages disabled, the separate discovery setting can still
 show a discovery notice without its knowledge amount.

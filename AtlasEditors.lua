@@ -38,7 +38,7 @@ function ns.InstallAtlasEditors(c)
         end
         self.placeReturn=returnView;self.placeCallback=callback;self.main.map.placing=true
         if self.main.microMap then self.main.microMap:SetEnabled(false) end
-        self.main.cancelPlace:Show();self:Show()
+        self:UpdatePositionButton();self:Show()
         self:Message("Click the displayed map to choose a position. This is not your current position.")
     end
     function c:ChoosePosition()
@@ -47,7 +47,7 @@ function ns.InstallAtlasEditors(c)
         self:PlaceOnMap(function(x,y,mapID,zone)
             d.x,d.y,d.mapID,d.zone,d.subzone=x,y,mapID,zone,""
             p.draft=d;p:Fill();p.message:SetText("Position selected on the displayed map. Save to keep it.")
-            c.main.cancelPlace:Hide();c:Show(p)
+            c:UpdatePositionButton();c:Show(p)
         end,p)
     end
     function c:OpenEditor(id,expedition,initial)
@@ -334,7 +334,7 @@ function ns.InstallAtlasEditors(c)
             p.name=U.Field(p,"Waypoint name",25,-66,816,160);locationFields(p,25,-139,816)
             U.Button(p,"Use my current position",29,-274,253,function() fillLocation(p,A.CurrentLocation()) end)
             U.Button(p,"Choose on displayed map",294,-274,261,function()
-                c:PlaceOnMap(function(x,y,mapID,zone) fillLocation(p,{mapID=mapID,zone=zone,x=x,y=y});c.main.cancelPlace:Hide();c:Show(p) end,p)
+                c:PlaceOnMap(function(x,y,mapID,zone) fillLocation(p,{mapID=mapID,zone=zone,x=x,y=y});c:UpdatePositionButton();c:Show(p) end,p)
             end)
             U.Label(p,"A waypoint belongs to this route. It may be unpositioned. It does not create a second place record.",29,-331,807,"GameFontHighlight")
             U.Button(p,"Save waypoint",25,-572,195,function()

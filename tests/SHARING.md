@@ -151,8 +151,10 @@ sender attribution are not cryptographic truth or anti-cheat guarantees.
   per-NPC discovery/level/zone/kill-milestone credit. The one-time migration uses
   the previous derived total and its legacy endpoint logic. No intervening levels
   are invented. Previously deleted legacy records cannot be reconstructed.
-- Original rewards remain: first creature 1; subsequent sighting revealing a new
-  level, zone or both 1; silver at 2 kills gives 1; gold at 25 kills gives another 2.
+- Legacy rewards were first creature 1, subsequent new level/zone 1, silver at
+  2 kills +1 and gold at 25 kills +2. Existing credit is retained. Current rewards
+  are first kill +1, silver at 25 kills +1, gold at 50 kills +2 and crown at 100
+  kills +3, with rank multipliers; discovery, levels and zones award no knowledge.
   Spending cannot change the display entry's kills/stars. A short per-creature
   death-GUID history also prevents repeat corpse events across normal reloads.
 - Imports create a display container through `Ensure(id, true)` with no personal

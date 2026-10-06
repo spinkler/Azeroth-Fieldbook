@@ -386,9 +386,16 @@ class AtlasUITests(unittest.TestCase):
             local id=assert(p:Save());assert(j:Get(id).x==2500 and not j:Get(id).explored)
             p.location.x:SetText('invalid');assert(not p:Save())
             p.location.x:SetText('25');c:ChoosePosition();assert(m.map.placing and c.activePage==m)
+            assert(m.position:GetText()=='Cancel' and m.position.afbSelected and m.position.enabled)
+            click(m.position)
+            assert(not m.map.placing and not c.placeCallback and not c.placeReturn and c.activePage==m)
+            assert(not p:IsShown() and j:Get(id).x==2500)
+            assert(m.position:GetText()=='Map position' and not m.position.afbSelected)
+            c:ChoosePosition()
             m.map.left,m.map.top=100,700;cursorX=100+m.map:GetWidth()/2;cursorY=700-m.map:GetHeight()/2
             m.map.scripts.OnMouseUp(m.map,'LeftButton')
             assert(not m.map.placing and c.activePage==p and p.location.x:GetText()=='50.00')
+            assert(m.position:GetText()=='Map position' and not m.position.afbSelected)
             assert(p:Save()==id and j:Get(id).x==5000)
             assert(not p.delete:IsShown());c:Show(m);c:Select(id)
             click(m.deleteButton);click(m.deleteForm.confirm);assert(not j:Get(id))
@@ -667,6 +674,25 @@ class AtlasUITests(unittest.TestCase):
             m.zone.scripts.OnClick(m.zone);assert(chosen);chosen()
             assert(j.state.mapID==102 and #j:List('',nil,true)==before)
         ''')
+
+    def test_footer_expansion_reversal_and_scroll_clamping(self):
+        self.lua.execute("""
+            m.details.text:SetText(string.rep('Long field note\\n',100))
+            c:SizeDetails()
+            local contentHeight=m.detailBody:GetHeight()
+            m.details:SetVerticalScroll(math.max(0,contentHeight-m.details:GetHeight()))
+            c:Expand();m.notesOverlay.scripts.OnUpdate(m.notesOverlay,0.09)
+            assert(m.details:GetHeight()>80 and m.details:GetHeight()<463)
+            c:Expand();m.notesOverlay.scripts.OnUpdate(m.notesOverlay,0.18)
+            assert(not m.notesExpanded and m.details:GetHeight()==80)
+            c:Expand();m.notesOverlay.scripts.OnUpdate(m.notesOverlay,0.18)
+            assert(m.notesExpanded and m.details:GetHeight()==463)
+            assert(m.details:GetVerticalScroll()<=math.max(0,m.detailBody:GetHeight()-463))
+            m.details.text:SetText('Short note');c:SizeDetails()
+            assert(m.details:GetVerticalScroll()==0)
+            c:Expand();m.notesOverlay.scripts.OnUpdate(m.notesOverlay,0.18)
+            assert(m.details:GetHeight()==80 and m.details:GetVerticalScroll()==0)
+        """)
 
     def test_weather_history_selected_zone(self):
         self.lua.execute("""

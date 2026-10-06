@@ -537,12 +537,12 @@ check(not abilityBook.abilityScrollBar:IsShown(),'scrollbar hides when abilities
 journal.entries[42].abilities=savedAbilities; controller:Refresh()
 journal:SetEntryConfirmed(42,savedLock);controller:Refresh()
 local savedKills=journal.entries[42].kills
-for _,sample in ipairs({{9,false,false},{10,true,false},{25,true,false},{50,true,true},{49,true,false}}) do
+for _,sample in ipairs({{24,false,false},{25,true,false},{50,true,false},{100,true,true},{99,true,false}}) do
     journal.entries[42].kills=sample[1]; controller:Refresh()
     check(abilityBook.killStar:IsShown()==sample[2],'reward icon visibility follows kill threshold')
     check(#abilityBook.killStar.crownParts>0,'crown has its own silhouette')
     for _,part in ipairs(abilityBook.killStar.parts) do check(part:IsShown()~=sample[3],'crown replaces the star') end
-    for _,part in ipairs(abilityBook.killStar.crownParts) do check(part:IsShown()==sample[3],'crown only appears at 50 kills') end
+    for _,part in ipairs(abilityBook.killStar.crownParts) do check(part:IsShown()==sample[3],'crown only appears at 100 kills') end
     for _,row in ipairs(abilityBook.rows) do
         if row.id==42 then
             check(row.killReward:IsShown()==sample[2],'index reward matches the kill counter')
@@ -606,13 +606,13 @@ check(#ranksJournal:List(nil,'Rank 4',false,nil,nil,{['World Boss']=true})==1,'r
 check(#ranksJournal:List(nil,'Rank 1',false,nil,nil,{Rare=true})==0,'rank and text both required')
 local rewards=ns.CreateBestiaryJournal({},function() return nil end)
 local first=rewards:Ensure(1,false,'First creature')
-for _,sample in ipairs({{0,0},{1,1},{2,1},{9,1},{10,2,'silver'},{24,2,'silver'},{25,4,'gold'},{49,4,'gold'},{50,7,'crown'},{51,7,'crown'}}) do
+for _,sample in ipairs({{0,0},{1,1},{2,1},{24,1},{25,2,'silver'},{49,2,'silver'},{50,4,'gold'},{99,4,'gold'},{100,7,'crown'},{101,7,'crown'}}) do
     first.kills=sample[1]
     local points,star=rewards:GetKillReward(1)
     check(points==sample[2] and star==sample[3],'kill reward threshold')
 end
-first.kills=26
-rewards:Ensure(2,false,'Second creature').kills=10
+first.kills=51
+rewards:Ensure(2,false,'Second creature').kills=25
 -- Saved legacy kills are credited exactly once during migration, rather than
 -- by mutating a live display entry and asking the totals getter to award them.
 local rewardsDB={bestiary={entries=rewards.entries,creatures={}}}
@@ -670,22 +670,22 @@ local function awardDeath(suffix)
 end
 awardDeath('first')
 check(#notifications==1 and notifications[1][1]==1 and notifications[1][2]=='first kill','first kill awards one point')
-for i=2,9 do awardDeath('kill'..i) end
-check(#notifications==1,'no silver reward before 10 kills')
+for i=2,24 do awardDeath('kill'..i) end
+check(#notifications==1,'no silver reward before 25 kills')
 awardDeath('silver')
-check(#notifications==2 and notifications[2][1]==1 and notifications[2][2]=='silver star','tenth kill awards silver once')
-for i=11,24 do awardDeath('kill'..i) end
-check(#notifications==2,'kills below 25 do not announce gold')
+check(#notifications==2 and notifications[2][1]==1 and notifications[2][2]=='silver star','25th kill awards silver once')
+for i=26,49 do awardDeath('kill'..i) end
+check(#notifications==2,'kills below 50 do not announce gold')
 awardDeath('gold')
-check(#notifications==3 and notifications[3][1]==2 and notifications[3][2]=='gold star','25th kill announces two additional points')
+check(#notifications==3 and notifications[3][1]==2 and notifications[3][2]=='gold star','50th kill announces two additional points')
 awardDeath('afterGold')
-check(#notifications==3,'kills above 25 do not repeat gold points')
-for i=27,49 do awardDeath('kill'..i) end
-check(#notifications==3,'no crown reward before 50 kills')
+check(#notifications==3,'kills above 50 do not repeat gold points')
+for i=52,99 do awardDeath('kill'..i) end
+check(#notifications==3,'no crown reward before 100 kills')
 awardDeath('crown')
-check(#notifications==4 and notifications[4][1]==3 and notifications[4][2]=='gold crown','50th kill awards three additional points')
+check(#notifications==4 and notifications[4][1]==3 and notifications[4][2]=='gold crown','100th kill awards three additional points')
 awardDeath('afterCrown')
-check(#notifications==4,'kills above 50 do not repeat crown points')
+check(#notifications==4,'kills above 100 do not repeat crown points')
 awards:SetPointAnnouncements(false); zone='Silent zone'; awards:Observe('target')
 check(#notifications==4,'option disables new award messages')
 local _,silentTotal=awards:GetTotals(); check(silentTotal==7,'muting messages still awards points')
