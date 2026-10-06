@@ -1,30 +1,15 @@
 # Changelog
 
-## Unreleased
+## v0.33.0 - 2026-10-06
 
-- Reduce Atlas, Ledger, Treasure, Almanac, Chronicle and Annals background sketches to 23% opacity; keep the Bestiary kobold at 33% across selection states and match the introductory dragon to 33%.
-
-- Adjust journal sketch placement: Atlas down 40 pixels, Ledger down 30 and rotated 10 degrees clockwise, Treasure down 20, Almanac down 25, and Compendium left 15. Regenerate the Annals clock from its original icon with unequal hand lengths.
-
-- Feather bottom-left illustrations gradually along a diagonal from the corner into the artwork, sampling the matching parchment and following dark mode and brightness.
-- Shift the bottom-right frame corner art one pixel left while keeping the right border fixed.
-- Add Twilight Jasmine icon artwork as a loose botanical pencil sketch in the Gatherer's Compendium, with matching ink, 33% opacity, transparent fills, parchment fades and dark-mode desaturation.
-- Use an original-facing inscription-book sketch in the Chronicle’s lower-left corner with matching brown ink, 33% opacity and diagonal parchment fading.
-- Trial an enlarged chained-book game icon as transparent line art nested into Lorekeeper's Chronicle's lower-right corner, cropped at the paper edge, with matching ink, 33% opacity, parchment fades and dark-mode desaturation.
-- Replace the Annals gryphon with a counter-clockwise Borrowed Time clock sketch, matching the Atlas placement, brown ink and 33% opacity, with distinct hour/minute hand lengths, upright evenly spaced numerals, a shared central pivot and heavier Warcraft-style rim and hands.
-- Add mirrored chest and fish sketches to Treasure Journal and Angler's Almanac with matching ink, opacity and dark-mode desaturation.
-- Replace the Ledger mill with a goblin-face coin sketch, lowered 40 pixels; lower the Almanac fish 20 pixels and correct the chest mirroring.
-- Deepen the diagonal parchment fade on all lower-left illustrations.
-- Add a loose pencil compass illustration based on the explorer trinket colour-1 game icon to the Atlas's lower-left column, with matching ink, 33% opacity, parchment edge fades and dark-mode desaturation.
-- Desaturate all page line art and dividers in dark mode, restoring their original colours when dark mode is disabled.
-- Add a transparent lumber mill line drawing to the Merchant's Ledger lower-left corner above the buttons, matching the Bestiary ink, 33% opacity and parchment edge fades.
-- Add a large sepia gnoll line illustration with transparent white areas at 33% opacity to the lower-left corner of the Bestiary, cropped and faded into the parchment at the left and bottom page edges.
-- Keep the gnoll entirely within the left pane and add a matching lower-right kobold illustration at 50% opacity on the Bestiary front page and 33% while a creature is selected.
-- Add the accepted sepia dragon artwork to the Bestiary intro page at 40% opacity, shifted right and cropped at the page edge, with overlap fading around the kobold's silhouette.
-- Render the illustrations directly to preserve their line detail and prevent cropped ink-mask smearing. Shift the kobold 20 pixels left with its overlap mask and parchment fades.
-- Match the gnoll and dragon texture ink to the original kobold's sampled brown (RGB 75,32,2), preserving every alpha value and the existing opacity settings.
-
-- Record observed level-ups in Adventurer’s Annals with the new level, time and location, a separate Level ups filter, and a golden Holy Nova icon in the timeline, Journey map and legend.
+- Aesthetics update: add parchment pencil sketches across the journals, using consistent brown ink, transparent interiors and gradual diagonal corner fades. Bestiary features a gnoll in the left pane, a kobold in the lower right and a dragon on the introductory page with fading around the kobold silhouette.
+- Add a compass to Traveller's Atlas, a goblin-face coin to Merchant's Ledger, a mirrored chest to Treasure Journal, a mirrored fish to Angler's Almanac, Twilight Jasmine to Gatherer's Compendium and an original-facing inscription book to Lorekeeper's Chronicle.
+- Add a fresh Borrowed Time clock sketch to Adventurer's Annals, rotated counter-clockwise with unequal hands, a shared centre pivot and upright Roman numerals.
+- Refine sketch placement and cropping, including the Ledger coin's clockwise rotation. Use 23% opacity for Atlas, Ledger, Treasure, Almanac, Chronicle and Annals art; keep gathering art and Bestiary illustrations at 33%. The kobold maintains the same opacity across selection states.
+- Desaturate all journal line art and dividers in dark mode, restoring their colours in light mode. Parchment fades follow brightness and theme settings. Preserve direct texture rendering to avoid smeared line art and adjust the bottom-right frame corner alignment.
+- Record observed level-ups in Adventurer's Annals with the new level, time and location, a separate Level ups filter and a golden Holy Nova icon in the timeline, Journey map and legend.
+- Document the reusable icon-sketch process and add regression coverage for dark-mode styling and Annals level-up recording.
+- Cumulative release since v0.32.0 and previous-push baseline d085eac8c85c391610407c511b3ad57a5d6c6d5a.
 
 ## v0.32.0 - 2026-10-06
 
