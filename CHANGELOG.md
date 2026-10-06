@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.31.2 - Unreleased
+
+- Increase Lorekeeper's Chronicle, Angler's Almanac and Traveller's Atlas list name text by 2 points.
+
 ## v0.31.1 - 2026-10-06
 
 Release-channel bug fix since v0.31.0 and previous-push baseline 4b5fbdb89180c4468b59fa57b3e5e13f2d06d842.

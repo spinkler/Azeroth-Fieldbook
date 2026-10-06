@@ -375,6 +375,8 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             for _,line in ipairs(row.divider) do line:SetShown(i>1) end
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",7,-9);row.icon:SetSize(20,20)
             row.name=U.Label(row,"",33,-7,188,"GameFontHighlightSmall");row.name:SetWordWrap(false)
+            local rowTitlePath,rowTitleSize,rowTitleFlags=row.name:GetFont()
+            if rowTitlePath and rowTitleSize then row.name:SetFont(rowTitlePath,rowTitleSize+2,rowTitleFlags) end
             row.context=U.Label(row,"",33,-28,188,"GameFontDisableSmall");row.context:SetWordWrap(false)
             row:SetScript("OnClick",function(self) if self.id then c:Select(self.id) end end);m.rows[i]=row
         end

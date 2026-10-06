@@ -507,6 +507,8 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             for _,line in ipairs(row.divider) do line:SetShown(i>1) end
             row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("TOPLEFT",7,-10);row.icon:SetSize(20,20)
             row.name=U.Label(row,"",32,-6,189,"GameFontHighlightSmall");row.name:SetWordWrap(false)
+            local rowTitlePath,rowTitleSize,rowTitleFlags=row.name:GetFont()
+            if rowTitlePath and rowTitleSize then row.name:SetFont(rowTitlePath,rowTitleSize+2,rowTitleFlags) end
             row.zone=U.Label(row,"",32,-21,189,"GameFontDisableSmall");row.zone:SetWordWrap(false)
             row:SetScript("OnClick",function(self) c:Select(self.id) end)
             row:SetScript("OnEnter",function(self)
