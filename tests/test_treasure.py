@@ -183,6 +183,41 @@ class TreasureCaptureTests(unittest.TestCase):
             assert(v.items[1].recovered==nil and v.capture=='partial')
         """)
 
+    def test_food_crate_autoloot_closed_without_opened_preserves_ready(self):
+        self.world_fixture()
+        self.lua.execute("""
+            worldData.lines[1].leftText='Food Crate'
+            loot={lootrow(3770,4,'GameObject-0-1-2-3-99-ABC')}
+            fire('LOOT_READY');assert(T.Count(j.encounters)==0)
+            worldData=nil;loot={};fire('LOOT_CLOSED')
+            assert(T.Count(j.encounters)==1)
+            local e=next(j.kinds);local v=j:History(e)[1]
+            assert(j:Get(e).name=='Food Crate' and v.items[1].quantity==4)
+            assert(v.capture=='partial' and v.items[1].recovered==nil)
+            fire('LOOT_CLOSED');assert(T.Count(j.encounters)==1)
+        """)
+
+    def test_ready_rejection_survives_close_without_tooltip_or_opened(self):
+        self.world_fixture()
+        self.lua.execute("""
+            worldData=nil
+            loot={lootrow(3770,4,'GameObject-0-1-2-3-99-ABC')}
+            fire('LOOT_READY');loot={};fire('LOOT_CLOSED')
+            assert(T.Count(j.encounters)==0)
+            assert(t.status:find('World loot has no matching',1,true))
+            assert(t.status:find('GameObject-0-1-2-3-99-ABC',1,true))
+        """)
+
+    def test_ready_snapshot_rejected_or_expired_does_not_capture_on_close(self):
+        self.world_fixture()
+        self.lua.execute("""
+            loot={lootrow(3770,4,'GameObject-0-1-2-3-99-ABC')}
+            fire('LOOT_READY');fire('LOOT_OPENED',false,true);fire('LOOT_CLOSED')
+            assert(T.Count(j.encounters)==0)
+            fire('LOOT_READY');now=now+4;loot={};fire('LOOT_CLOSED')
+            assert(T.Count(j.encounters)==0)
+        """)
+
     def test_idless_hover_requires_world_click_and_expires(self):
         self.world_fixture()
         self.lua.execute("""

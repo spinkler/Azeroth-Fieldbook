@@ -79,6 +79,21 @@ states. Acquisition history does not assert that the item is still owned.
 
 ## Pending live observation — 2026-10-04
 
+Food Crate follow-up on 2026-10-06: the player received Mutton Chop ×4,
+but Food Crate was absent from the unfiltered five-entry journal. The status
+remained the default capture guidance, with no rejection diagnostic. The
+screenshots do not establish the loot event sequence or source GUID.
+
+Code now retains a fresh, validated LOOT_READY snapshot if LOOT_CLOSED arrives
+without LOOT_OPENED. It preserves partial inspected contents only, never claims
+personal recovery, and keeps fishing, exact single-source attribution and
+quantity checks. OPENED rejections and expired snapshots cannot use this path.
+READY failures involving a world-source mismatch retain their diagnostic even
+without tooltip context or OPENED. All 68 focused Treasure tests passed,
+including Food Crate close-only capture, retained rejection diagnostics and
+rejected/expired snapshots. Food Crate live capture remains unverified: reload
+and open another crate; check for its contents or the retained status message.
+
 A Battered Chest looted in Redridge did not appear in Treasure Journal.
 The supplied loot screenshot showed Minor Mana Potion ×2, Lesser Healing
 Potion ×3, Linen Cloth ×2 and 98 Copper. Autoloot usage was not confirmed.

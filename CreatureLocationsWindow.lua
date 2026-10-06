@@ -285,8 +285,9 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         local book=getBook and getBook() or UIParent
         frame=CreateFrame("Frame","AzerothFieldbookCreatureLocations",book,"BackdropTemplate")
         -- Keep 24px between the panel and either the divider edge (309) or book edge (960).
-        -- Lower the top by 16px for the shorter Bestiary, preserving the bottom at 714.
-        frame:SetPoint("TOPLEFT",book,"TOPLEFT",333,-87);frame:SetSize(603,627)
+        -- Start at the Beast Lore/Loot row and keep the bottom at 714.
+        -- The Bestiary supplies its detail frame so wrapped summary rows move this panel too.
+        frame:SetPoint("TOPLEFT",book,"TOPLEFT",333,-131);frame:SetSize(603,583)
         frame:SetFrameLevel(book:GetFrameLevel()+30);frame:EnableMouse(true)
         frame:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=20})
         frame.paper=frame:CreateTexture(nil,"BACKGROUND")
@@ -325,13 +326,13 @@ function ns.CreateCreatureLocationsWindow(journal,getBook)
         frame.empty=label(frame.map,"",0,0,596,"GameFontHighlight")
         frame.empty:ClearAllPoints();frame.empty:SetPoint("CENTER",frame.map,"CENTER",0,0)
         frame.empty:SetJustifyH("CENTER");frame.empty:SetHeight(60)
-        frame.status=label(frame,"",18,-476,558);frame.status:SetHeight(36);frame.status:SetWordWrap(true)
-        frame.legend=label(frame,"",18,-522,558);frame.legend:SetTextColor(0.45,0.45,0.45);frame.legend:SetHeight(36);frame.legend:SetWordWrap(true)
+        frame.status=label(frame,"",18,-476,558);frame.status:SetHeight(24);frame.status:SetWordWrap(true)
+        frame.legend=label(frame,"",18,-508,558);frame.legend:SetTextColor(0.45,0.45,0.45);frame.legend:SetHeight(24);frame.legend:SetWordWrap(true)
         frame.brightness=ns.MapBrightness:Attach(frame.map,function() return journal:GetLocationMapBrightness() end,
             function(value) journal:SetLocationMapBrightness(value) end,applyBrightness)
         frame.brightnessValue=frame.brightness.valueLabel
         frame.trackingMode=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); if ns.TextSize then ns.TextSize:StyleControl(frame.trackingMode) end
-        frame.trackingMode:SetPoint("TOPLEFT",376,-582);frame.trackingMode:SetSize(200,24)
+        frame.trackingMode:SetPoint("TOPLEFT",376,-536);frame.trackingMode:SetSize(200,24)
         frame.trackingMode:SetScript("OnClick",function()
             tipLeave()
             journal:SetLocationTrackingMode(mode()=="kills" and "observations" or "kills")

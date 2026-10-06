@@ -56,6 +56,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     trackingDB.bestiary = type(trackingDB.bestiary) == "table" and trackingDB.bestiary or {}
     trackingDB.bestiary.entries = type(trackingDB.bestiary.entries) == "table" and trackingDB.bestiary.entries or {}
     trackingDB.bestiary.creatures = type(trackingDB.bestiary.creatures) == "table" and trackingDB.bestiary.creatures or {}
+    trackingDB.bestiary.deletedEntries=type(trackingDB.bestiary.deletedEntries)=="table" and trackingDB.bestiary.deletedEntries or {}
     local journal = { entries = trackingDB.bestiary.entries, revision = 0 }
     for _,entry in pairs(journal.entries) do ns.MigrateDisposition(entry) end
     local activeAccountWideTracking = db.accountWideTracking ~= false
@@ -116,8 +117,6 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     local function clearTerminal(guid, observed)
         if observed.deadline then decision(guid, "stale: living reset or combat state unknown") end
         observed.dead, observed.eligible, observed.rejected, observed.deadline = nil, nil, nil, nil
-        observed.killLocation=nil
-        observed.killZone,observed.killSubzone,observed.killRawZone,observed.locationCaptured=nil,nil,nil,nil
     end
     local function pruneInstances(at)
         for guid, observed in pairs(killInstances) do
@@ -247,13 +246,6 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local entry=self.entries[id];local names={}
         for name in pairs(entry and entry.subzones and entry.subzones[zone] or {}) do names[#names+1]=name end
         table.sort(names);return names
-    end
-    local function observeSubzone(self,entry,zone,sub,raw)
-        local learned=rememberAlias(sub,zone)
-        if rememberAlias(raw,zone) then learned=true end
-        if learned then self:MigrateLocations() end
-        if addSubzone(entry,zone,sub) then self:Touch() end
-        if raw~=sub and addSubzone(entry,zone,raw) then self:Touch() end
     end
     local function creatureName(value)
         if not str(value) or #value > 100 or value:find("[%c|]") then return end
@@ -425,19 +417,26 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         end
         return credit
     end
+    local locationNotices={}
     local function recordDiscovery(self, entry, level, zone, observation)
         -- Retain observation history without awarding discovery Knowledge.
-        if not number(level) then return end
         local progress = creditFor(entry.id)
         local newLevel=number(level) and not progress.levels[level]
         local newZone=str(zone) and not progress.zones[zone]
         if newLevel then progress.levels[level]=true end
         if newZone then progress.zones[zone]=true end
-        if progress.initial then
-            -- Discovery includes its first location; levels carry no reward.
-            progress.initial=nil
-        elseif newZone and self.onDiscoveryRecorded then
-            self.onDiscoveryRecorded(entry, observation)
+        progress.initial=nil
+        -- A qualified location is separate from creating the creature entry,
+        -- including when its level is unreadable or this is the first encounter.
+        -- Keep recording movement, but announce each creature/zone only once
+        -- this session. Previously known zones and points still announce their
+        -- first qualified observation after reload.
+        local notices=locationNotices[entry.id]
+        if (newZone or observation.locationQualified) and str(zone) and not (notices and notices[zone]) then
+            notices=notices or {};locationNotices[entry.id]=notices;notices[zone]=true
+            if self.onDiscoveryRecorded and not observation.entryAnnouncement then
+                self.onDiscoveryRecorded(entry, observation)
+            end
         end
         if newLevel or newZone then self:Touch() end
     end
@@ -496,10 +495,32 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:SetEntryAddedCallback(callback)
         onEntryAdded = type(callback) == "function" and callback or nil
     end
+    db.deletedBestiarySelections=type(db.deletedBestiarySelections)=="table" and db.deletedBestiarySelections or {}
+    local deletedSelections=db.deletedBestiarySelections
+    function journal:UpdateDeletedSelections()
+        for id,tokens in pairs(deletedSelections) do
+            if not (trackingDB.bestiary.deletedEntries or {})[id] then deletedSelections[id]=nil
+            else
+                for unit,guid in pairs(tokens) do
+                    local current=read(UnitGUID,unit)
+                    if (str(current) and current~=guid) or read(UnitExists,unit)==false then tokens[unit]=nil end
+                end
+                if not next(tokens) then deletedSelections[id]=nil end
+            end
+        end
+    end
     function journal:DeleteEntry(id)
         if not number(id) or not self.entries[id] then return false end
         if self.ClearBeastLoreCapture then self:ClearBeastLoreCapture(id) end
         self.entries[id] = nil
+        trackingDB.bestiary.deletedEntries=trackingDB.bestiary.deletedEntries or {}
+        trackingDB.bestiary.deletedEntries[id]=true
+        local tokens={}
+        for _,unit in ipairs({"target","mouseover"}) do
+            local guid=read(UnitGUID,unit)
+            if str(guid) and (creatureID(guid)==id or identify(unit)==id) then tokens[unit]=guid end
+        end
+        if next(tokens) then deletedSelections[id]=tokens end
         -- Forget transient sightings, but keep the durable discovery/kill credit.
         for guid, observed in pairs(seenGUIDs) do if observed.id == id then seenGUIDs[guid] = nil end end
         for guid, observed in pairs(killInstances) do if observed.id == id then killInstances[guid] = nil end end
@@ -664,6 +685,16 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:GetSpellFeedback() return db.spellFeedback == true end
     function journal:SetSpellFeedback(enabled) db.spellFeedback = enabled == true end
     function journal:GetKillCountTooltips() return db.showKillCountTooltips~=false end
+    function journal:GetSuppressRankInfo() return db.suppressRankInfo~=false end
+    function journal:GetDispositionNameColour() return db.dispositionNameColour~=false end
+    function journal:SetDispositionNameColour(enabled)
+        db.dispositionNameColour=enabled==true
+        self:Touch()
+    end
+    function journal:SetSuppressRankInfo(enabled)
+        db.suppressRankInfo=enabled==true
+        self:Touch()
+    end
     function journal:GetBehaviourTooltips() return db.showBehaviourTooltips~=false end
     function journal:SetBehaviourTooltips(enabled)
         db.showBehaviourTooltips=enabled==true
@@ -722,11 +753,22 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     -- combat aura details as secret values that addons cannot inspect.
     function journal:Ensure(id, sharedOnly, name, observation)
         if not number(id) then return end
+        if not sharedOnly and next(deletedSelections) then
+            self:UpdateDeletedSelections()
+            if deletedSelections[id] then return end
+        end
+        -- Retained combat sessions carry names/IDs, not fresh live observations.
+        -- Keep explicit deletions authoritative across reload and historical scans.
+        if (trackingDB.bestiary.deletedEntries or {})[id] and not sharedOnly and not observation then return end
         name = creatureName(name)
         local wasNamed = self:GetCreatureName(id)
         -- Spell IDs alone cannot establish a creature entry. Shared reports
         -- supply their validated basics immediately after allocating the entry.
         if not sharedOnly and not wasNamed and not name then return end
+        if not sharedOnly and observation then
+            if trackingDB.bestiary.deletedEntries then trackingDB.bestiary.deletedEntries[id]=nil end
+            deletedSelections[id]=nil
+        end
         local entry = self.entries[id]
         if not entry then
             entry = { id = id, category = "Unclassified", abilities = {}, damage = {}, locations = {}, offenses = {}, resistances = {}, immunities = {}, behaviours = {}, kills = 0, confirmed = false }
@@ -807,9 +849,69 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             self:Touch()
         end
     end
+    local locationCapture=setmetatable({}, {__mode="k"})
+    local function prototypeObservation(self,entry,unit,guid,observation)
+        local L=ns.CreatureLocations
+        if not L or not L.prototypeEnabled then return end
+        local at=now()
+        if not at then return end
+        local state=locationCapture[entry]
+        if state and at>=state.at and at-state.at<1 then return end
+        state=state or {};locationCapture[entry]=state;state.at=at
+        -- Location capture has its own cadence. Ordinary creature/combat scans
+        -- continue, but do no range or border work for stationary captures.
+        local candidate=L.Observation()
+        if not candidate then return end
+        local last=state.last
+        if last and last.mapID==candidate.mapID then
+            if not candidate.width or not candidate.height then return end
+            local dx=(candidate.point.x-last.point.x)*candidate.width/10000
+            local dy=(candidate.point.y-last.point.y)*candidate.height/10000
+            if dx*dx+dy*dy<100 then return end
+        end
+        local _,sample=L.CheckObservation(unit,guid)
+        if not sample then return end
+        state.last=sample
+        observation.locationQualified=true
+        local zone=sample.zoneName
+        entry.locations=entry.locations or {}
+        local changed=not entry.locations[zone]
+        entry.locations[zone]=true
+        if entry.lockedBasic then
+            entry.lockedBasic.locations=entry.lockedBasic.locations or {}
+            if not entry.lockedBasic.locations[zone] then changed=true end
+            entry.lockedBasic.locations[zone]=true
+        end
+        -- Cyan marks still describe where the observer stood. An outer-zone
+        -- guard supplies no evidence about which named subzone the NPC occupies.
+        local p=sample.point
+        local saved=entry.observationLocations and entry.observationLocations[sample.mapID]
+        local old=saved and saved.points[1+p.x*10001+p.y]
+        if not old then
+            local recorded=L.Record(entry,sample,"observations")
+            saved=entry.observationLocations and entry.observationLocations[sample.mapID]
+            local stored=saved and saved.points[1+p.x*10001+p.y]
+            if recorded and stored then
+                changed=true
+                observation.locationAdded=not old
+                -- Transient diagnostics, separate from SavedVariables. Keep the
+                -- last actual write visible through subsequent unchanged scans.
+                self.prototypeLocationStats=self.prototypeLocationStats or {added=0,refreshed=0}
+                local stats=self.prototypeLocationStats
+                local action=old and "refreshed" or "added"
+                stats[action]=stats[action]+1
+                local total=0;for _ in pairs(saved.points) do total=total+1 end
+                stats.last={action=action,creatureID=entry.id,mapID=sample.mapID,x=p.x,y=p.y,points=total}
+            end
+        end
+        observation.location=zone
+        if changed then self:Touch() end
+        return zone
+    end
     function journal:Observe(unit, explicit, sourceGUID)
+        self:UpdateDeletedSelections()
         local id = identify(unit, explicit, sourceGUID)
-        if not id then return end
+        if not id or deletedSelections[id] then return end
         -- Match Blizzard's target-frame level/skull decision. Never fall back
         -- to the raw level when the effective value is hidden or unknown.
         local levelAPI = type(UnitEffectiveLevel)=="function" and UnitEffectiveLevel or UnitLevel
@@ -820,11 +922,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         }
         local liveGUID = read(UnitGUID, unit)
         if sourceGUID and liveGUID ~= sourceGUID then return end
-        local locationMap = ns.CreatureLocations and ns.CreatureLocations.CurrentMap()
         if str(liveGUID) and read(UnitIsDead, unit) == false then
             observeInstance(id, liveGUID, now())
             local observed = killInstances[liveGUID]
-            if observed and locationMap then observed.locationMapID=locationMap.mapID end
             if observed and read(UnitAffectingCombat, unit) ~= true then
                 clearTerminal(liveGUID, observed)
             end
@@ -843,7 +943,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             end
             self:ObserveTameability(unit)
             local _,discovered=self:Ensure(id, false, nil, observation)
-            recordDiscovery(self, self.entries[id], level, nil, observation)
+            observation.entryAnnouncement=not wasPersonal
+            local zone=prototypeObservation(self,entry,unit,liveGUID,observation)
+            recordDiscovery(self, self.entries[id], level, zone, observation)
             if not wasPersonal and onEntryAdded then onEntryAdded(entry,discovered,observation,creditFor(id).discovered) end
             return id
         end
@@ -855,8 +957,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local unclassified = not self.entries[id] or self.entries[id].category == "Unclassified"
         local entry, discovered = self:Ensure(id, false, name, observation)
         if not entry then return end
+        observation.entryAnnouncement=not wasNamed or not wasPersonal
         self:ObserveTameability(unit)
-        recordDiscovery(self, entry, level, nil, observation)
+        local zone=prototypeObservation(self,entry,unit,liveGUID,observation)
+        recordDiscovery(self, entry, level, zone, observation)
         if entry.confirmed then return id end
         local classification = read(UnitClassification, unit)
         local changed = entry.name ~= name
@@ -1107,19 +1211,6 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local exists, controlled = read(UnitExists, unit), read(UnitPlayerControlled, unit)
         local denied = read(UnitIsTapDenied, unit)
         if read(UnitGUID, unit) ~= guid then return end
-        -- Location evidence is sampled only with terminal kill evidence, never
-        -- while targeting a living creature across a zone boundary.
-        if not observed.locationCaptured then
-            observed.locationCaptured=true
-            local map=ns.CreatureLocations and ns.CreatureLocations.CurrentMap()
-            if not observed.locationMapID or (map and map.mapID==observed.locationMapID) then
-                observed.killZone,observed.killSubzone,observed.killRawZone=currentZone()
-            end
-        end
-        if ns.CreatureLocations and (not observed.killLocation or observed.killLocation.point.approximate) then
-            local sample=ns.CreatureLocations.Sample(unit,guid,observed.locationMapID)
-            if sample and (not observed.killLocation or not sample.point.approximate) then observed.killLocation=sample end
-        end
         if controlled == true or denied == true then
             observed.rejected, observed.eligible = true, nil
         elseif exists == true and controlled == false and denied == false then
@@ -1150,20 +1241,6 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if #credit.killGUIDs > 16 then table.remove(credit.killGUIDs, 1) end
         self:Ensure(id)
         entry.kills = math.max(0, tonumber(entry.kills) or 0) + 1
-        local zone=observed.killZone
-        if str(zone) then
-            entry.locations=entry.locations or {};entry.locations[zone]=true
-            if entry.lockedBasic then
-                entry.lockedBasic.locations=entry.lockedBasic.locations or {}
-                entry.lockedBasic.locations[zone]=true
-            end
-            observeSubzone(self,entry,zone,observed.killSubzone,observed.killRawZone)
-            recordDiscovery(self,entry,entry.levelMin,zone,{category=entry.category,level=entry.levelMin,location=zone})
-        end
-        if ns.CreatureLocations then
-            local sample=observed.killLocation or ns.CreatureLocations.Sample(nil,nil,observed.locationMapID)
-            if sample then ns.CreatureLocations.Record(entry,sample) end
-        end
         self:TrackStableContent(id)
         if not entry.confirmed then
             entry.unchangedKills=self:GetAutoLockEnabled() and ((entry.unchangedKills or 0)+1) or 0
@@ -1604,6 +1681,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if self.ClearBeastLoreCapture then self:ClearBeastLoreCapture() end
         trackingDB.bestiary = { entries = {}, creatures = {} }
         self.entries = trackingDB.bestiary.entries
+        db.deletedBestiarySelections={};deletedSelections=db.deletedBestiarySelections
         initializePoints()
         initializeRecentKills()
         clearSightings()

@@ -72,11 +72,15 @@ class DispositionTests(unittest.TestCase):
             local function text(rows)
                 local result='';for _,row in ipairs(rows) do if row:IsShown() then result=result..row.text end end;return result
             end
-            assert(text(section.summaryBasicRows):find('|cffe6b300Neutral|r',1,true))
+            assert(not text(section.summaryBasicRows):find('Neutral',1,true))
+            assert(section.title.textColor[1]==0.9,'neutral disposition colours the creature name')
             assert(not text(section.summaryCombatRows):find('Neutral',1,true))
             j:SetEntryConfirmed(42,true);reaction=2;j:Observe('target');book:Refresh()
             assert(j:GetBasicInfo(42).disposition=='Hostile')
-            assert(text(section.summaryBasicRows):find('|cffcc2121Hostile|r',1,true))
+            assert(not text(section.summaryBasicRows):find('Hostile',1,true))
+            assert(section.title.textColor[1]==0.8,'hostile disposition colours the creature name')
+            j:SetDispositionNameColour(false);book:Refresh()
+            assert(text(section.summaryBasicRows):find('Hostile',1,true),'turning the option off restores hostility text')
             local saved=assert(ns.BestiaryBackups.Decode(assert(ns.BestiaryBackups.Encode(assert(j:CreateBackup())))))
             assert(saved.bestiary.entries[42].disposition=='Hostile');assert(j:RestoreBackup(saved))
             settings.accountWideTracking=true;local account=ns.InitializeTracking(settings)

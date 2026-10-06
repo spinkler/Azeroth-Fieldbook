@@ -440,7 +440,7 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             catches="Browse recorded catch items. Select an item to see where and how it was caught.",
         }
         for i,view in ipairs({"waters","pools","catches"}) do
-            local key=view;m.views[key]=U.Button(m,({waters="Waters",pools="Pool Types",catches="Catches"})[key],42+(i-1)*84,-146,82,function() c:SetView(key) end)
+            local key=view;m.views[key]=U.Button(m,({waters="Waters",pools="Pool Types",catches="Catches"})[key],42+(i-1)*84,-140,82,function() c:SetView(key) end)
             m.views[key]:SetScript("OnEnter",function(self)
                 if GameTooltip then
                     GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(self:GetText())

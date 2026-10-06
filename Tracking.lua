@@ -221,11 +221,18 @@ function ns.InitializeTracking(settings)
         local mergedDB = {bestiary=copy(account.bestiary or {})}
         local combined = ns.CreateBestiaryJournal(mergedDB, function() end)
         local target, source = mergedDB.bestiary, sourceDB.bestiary
+        target.deletedEntries=target.deletedEntries or {}
+        for id,deleted in pairs(source.deletedEntries or {}) do
+            if deleted and not target.entries[id] and not source.entries[id] then target.deletedEntries[id]=true end
+        end
         for id, entry in pairs(source.entries) do
-            if target.entries[id] then mergeEntry(target.entries[id], entry)
-            else target.entries[id] = copy(entry) end
+            if not (target.deletedEntries or {})[id] then
+                if target.entries[id] then mergeEntry(target.entries[id], entry)
+                else target.entries[id] = copy(entry) end
+            end
         end
         mergeMissing(target.creatures, source.creatures)
+        for id,deleted in pairs(target.deletedEntries or {}) do if deleted then target.creatures[id]=nil end end
         target.zoneTerritories=target.zoneTerritories or {}
         for zone,territories in pairs(source.zoneTerritories or {}) do
             if target.zoneTerritories[zone] then mergeMissing(target.zoneTerritories[zone],territories)

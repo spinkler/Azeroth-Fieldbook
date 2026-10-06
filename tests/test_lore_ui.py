@@ -67,7 +67,8 @@ class LoreUITests(unittest.TestCase):
             local seen={}
             for _,row in ipairs(m.rows) do if row.id then
                 seen[row.id]=true
-                assert((row.name:GetText():find(tag,1,true)~=nil)==(row.id==captured.id))
+                assert(not row.name:GetText():find(tag,1,true))
+                assert((row.context:GetText():sub(1,#tag)==tag)==(row.id==captured.id))
             end end
             assert(seen[captured.id] and seen[manual.id] and seen[reported.id])
             c:Select(manual.id);assert(m.name:GetText()=='Manual writing with captured pages')

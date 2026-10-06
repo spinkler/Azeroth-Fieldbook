@@ -1,8 +1,38 @@
 # Changelog
 
-## v0.31.2 - Unreleased
+## v0.32.0 - 2026-10-06
 
-- Increase Lorekeeper's Chronicle, Angler's Almanac and Traveller's Atlas list name text by 2 points.
+- Stable release covering the complete accumulated batch since v0.31.1 and previous-push baseline 80615d1caffb9fd4d881dcfa5136bc49309d7ed1.
+
+- Increase Lorekeeper’s Chronicle, Angler’s Almanac and Traveller’s Atlas list name text by 2 points.
+
+- Raise the Locations overlay's top edge by 2 pixels while preserving its bottom edge.
+
+- Show Record Damage Taken in place of Recorded Abilities, using the same on-page overlay as the other observation views.
+
+- Scroll the Bestiary list to the selected creature when clearing its search with the clear button.
+
+- Match Beast Lore text to Merchant's Ledger with blue field labels, pale values and spaced lines.
+
+- Hide the manual ability-entry form on locked creatures and expand Recorded Abilities into the freed space. Unlocking restores the form and normal list height.
+
+- Indent the creature header's information and behaviour rows by 6 pixels, with 2 additional pixels above the behaviour summary.
+
+- Present Offenses, Defenses and Observed Behaviour directly on the page in place of Recorded Abilities, matching Known Beast Lore without a separate panel background. Move Known Beast Lore to the observation-button row and move the creature viewer above it.
+
+- Prevent historical damage-meter records from creating or restoring Bestiary entries; retain ability collection for existing creatures. Persist deletion suppression and held selections across reloads, preserve deletion markers in backups and account imports, and centre the Delete creature entry heading.
+
+- Keep deleted Bestiary creatures suppressed while still targeted or hovered; require leaving the selection before rediscovery. Replace the entire list, search/index/filter/sort controls and Share/Delete buttons with confirmation until cancelled or confirmed. Enlarge its heading and first sentence, highlight the creature name yellow, and preserve earned credit. Use the underlying parchment without a dark panel, match the normal left-pane text margins, and place confirmation/cancellation together in the bottom button row with the text field above. Combine simultaneous creature/location discovery into one announcement. Remove the redundant creature name from the Beast Lore overlay and use its row to enlarge the lore box.
+
+- Add an Appearance option to replace hostility text in the info bar with creature name colours: red for hostile, yellow for neutral and green for friendly. On by default, with gold retained for unknown disposition; toggling off restores the normal name and hostility labels.
+- Add an Appearance option to hide Elite, Rare and Rare Elite text from the creature info bar while keeping portrait dragon artwork. On by default and applied immediately; World Boss remains visible.
+- Remove the white border and texture bevel from the creature viewer's Tameable icon.
+- Make Known Beast Lore toggle between lore and Recorded abilities below the horizontal divider. Fit the scrollable lore and sharing controls inside the page without an outer window or close button. Lower Locations to the Beast Lore/Loot row so the portrait and all creature information remain visible; preserve the map size and panel bottom edge.
+- Restore automatic nearby Bestiary zone names and cyan observer points for live testing: require a positive range check at 40 yards or less and agreement with the player's zone at all 25 samples within a fixed 42-yard radius. Use a 40-yard item check with shorter positive fallbacks; reject missing, mismatching or restricted map results directly. Replace adaptive guard sizes and inferred gap retries with the fixed rule, and remove bypass/world/wider-probe comparisons from the optional read-only report. Recording starts automatically after reload; an optional command pauses it until reload. Keep creature-entry creation independent of location checks and announce the first qualified observation as New Location Observed once per creature and zone per session, including already saved points, so feedback cannot disappear merely because the coordinate is known. Give location capture its own one-second interval and roughly 10-yard movement threshold after accepted captures; skip stationary range/border checks and writes, remove timestamp-only refreshes, and sort point history only when eviction is needed. Creature discovery and combat scans retain their existing cadence. Kills no longer capture zone names, subzones or coordinates; their credit and rewards continue. Preserve saved history and update locked location snapshots through qualified observations. Live range and map-boundary accuracy remain under test.
+- Display Azeroth Fieldbook in the minimap button tooltip heading.
+- Preserve validated Treasure contents when autoloot closes after LOOT_READY without LOOT_OPENED, and retain unmatched world-source diagnostics even after the tooltip disappears. Food Crate live capture still needs retesting.
+- Move Lorekeeper's Chronicle automatic-entry tags to the start of the second index line so long titles cannot hide them.
+- Raise Angler's Almanac Waters, Pool Types and Catches buttons to align with Merchant's Ledger Goods and Training.
 
 ## v0.31.1 - 2026-10-06
 

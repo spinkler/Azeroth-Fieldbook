@@ -84,9 +84,16 @@ function report.CopyLore(value)
     for i,row in ipairs(value.rows) do copy.rows[i]={left=row.left,right=row.right} end
     return copy
 end
-function report.LoreText(value)
+function report.LoreText(value, formatted)
     local lines={"Observed at creature level " .. value.level}
     for _,row in ipairs(value.rows) do lines[#lines+1]=row.left .. (row.right and ("  " .. row.right) or "") end
+    if formatted then
+        lines[1]="|cff80d0ffObserved at creature level:|r "..value.level
+        for i=2,#lines do
+            local heading,body=lines[i]:match("^([^:]+:)(.*)$")
+            if heading then lines[i]="|cff80d0ff"..heading.."|r"..body end
+        end
+    end
     return table.concat(lines,"\n")
 end
 function report.ClaimText(claim)

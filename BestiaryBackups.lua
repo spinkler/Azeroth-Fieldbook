@@ -140,7 +140,7 @@ local entry=record({id=positive,name=names,category=names,rank=names,levelMin=po
     beastLore=record({level=positive,observed=timestamp,rows=array(record({left=names,right=names},{"left"}))},{"level","observed","rows"}),
     beastLoreSource=enum({gameTooltip=true,WHISPER=true}),beastLoreSender=names,
     discoveryProgress=progress,sharedReports=array(shared),rumours=array(rumour),unchangedKills=natural},{"id"})
-local bestiary=record({entries=map(positive,entry),creatures=map(positive,record({names=flags,spells=map(positive,record({name=names},{"name"}))})),
+local bestiary=record({entries=map(positive,entry),deletedEntries=map(positive,boolean),creatures=map(positive,record({names=flags,spells=map(positive,record({name=names},{"name"}))})),
     zoneTerritories=boundedMap(names,map(enum({Alliance=true,Horde=true,Neutral=true}),
         enum({friendly=true,hostile=true,contested=true,sanctuary=true,arena=true,combat=true,none=true})),1024),
     points=record({version=positive,earned=natural,spent=natural,credits=map(positive,progress)},{"earned","spent","credits"}),

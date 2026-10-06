@@ -6,7 +6,7 @@ local dragging, suppressClick = false, false
 local function tooltip()
     if not GameTooltip then return end
     GameTooltip:SetOwner(button,"ANCHOR_LEFT")
-    GameTooltip:SetText("AFB")
+    GameTooltip:SetText("Azeroth Fieldbook")
     GameTooltip:AddLine("Click to open or close the journal.",1,1,1)
     GameTooltip:AddLine(db.minimapButtonLocked and "Locked. Shift-click to unlock." or "Drag around the minimap. Shift-click to lock.",1,0.82,0.14)
     GameTooltip:Show()

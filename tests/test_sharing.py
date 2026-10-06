@@ -134,7 +134,8 @@ zone='Westfall'; j:Observe('target'); eq(j:GetSharingBalance(),zero,'new real lo
 local r=report('1000000-5-1'); r.locations={'Westfall','Duskwood'}
 assert(j:ImportReport(r,'Alice Sunstrider',now)); eq(j:GetSharingBalance(),zero)
 zone='Duskwood'; j:Observe('target'); eq(j:GetSharingBalance(),zero,'personal locations award no points')
-j:DeleteEntry(42); j:ImportReport(r,'Alice Sunstrider',now); j:Observe('target')
+j:DeleteEntry(42); j:ImportReport(r,'Alice Sunstrider',now)
+guid='left-selection';j:UpdateDeletedSelections();guid='one';j:Observe('target')
 eq(j:GetSharingBalance(),zero,'delete/reimport/rediscover cannot mint points')
 local oldGUID,oldExists,oldControlled,oldTap,oldTime=UnitGUID,UnitExists,UnitPlayerControlled,UnitIsTapDenied,GetTime
 UnitGUID=function(unit) if unit=='player' then return 'Player-1-1' elseif unit=='target' then return guid end end

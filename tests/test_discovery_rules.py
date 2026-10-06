@@ -53,7 +53,7 @@ class DiscoveryRules(unittest.TestCase):
                         units[watchedToken].dead=true
                         fire('UNIT_DIED',units[watchedToken].guid);tick()
                         assert(e.kills==1 and points()==1 and not e.killLocations)
-                        assert(e.locations['The Hall of Thanes'])
+                        assert(not next(e.locations) and not next(e.subzones or {}))
                     ''')
 
     def test_airborne_mouseover_excluded_target_allowed(self):

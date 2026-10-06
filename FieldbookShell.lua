@@ -220,17 +220,24 @@ function ns.FieldbookUI.DeletePanel(parent,shell,title,typed)
     local paper=p:CreateTexture(nil,"BACKGROUND");paper:SetPoint("TOPLEFT",5,-5);paper:SetPoint("BOTTOMRIGHT",-5,5)
     paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga");paper:SetDesaturated(true)
     shell:AddBackgroundLayer(paper,0.17,0.17,0.17,true)
+    p.paper=paper
     p.title=label(p,title,14,-18,232,"GameFontNormalSmall")
     p.title:SetTextColor(1,0.82,0.14)
     local scroll=CreateFrame("ScrollFrame",nil,p,"UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT",14,-52);scroll:SetSize(210,286)
     local body=CreateFrame("Frame",nil,scroll);body:SetSize(210,286);scroll:SetScrollChild(body)
+    p.scroll,p.body=scroll,body
     if scroll.ScrollBar then ns.StyleScrollBarTrack(scroll.ScrollBar,0.4) end
     ns.AutoHideScrollBar(scroll,function() return body:GetHeight() end)
     p.description=label(body,"",0,0,210,"GameFontHighlightSmall")
     p.description:SetWordWrap(true);p.description:SetSpacing(3)
-    local function describe(text)
-        p.description:SetText(text);body:SetHeight(math.max(286,p.description:GetStringHeight()+12))
+    p.lead=label(body,"",0,0,210,"GameFontHighlight")
+    p.lead:SetWordWrap(true);p.lead:SetSpacing(3);p.lead:Hide()
+    local function describe(text,lead)
+        p.lead:SetText(lead or "");p.lead:SetShown(lead~=nil)
+        local offset=lead and p.lead:GetStringHeight()+16 or 0
+        p.description:ClearAllPoints();p.description:SetPoint("TOPLEFT",0,-offset)
+        p.description:SetText(text);body:SetHeight(math.max(286,offset+p.description:GetStringHeight()+12))
         scroll:SetVerticalScroll(0);scroll:UpdateScrollChildRect();scroll:RefreshScrollBar()
     end
     local function accept()
@@ -243,7 +250,7 @@ function ns.FieldbookUI.DeletePanel(parent,shell,title,typed)
         end
     end
     if typed then
-        label(p,"Type delete to confirm.",14,-354,232,"GameFontHighlightSmall")
+        p.confirmationHint=label(p,"Type delete to confirm.",14,-354,232,"GameFontHighlightSmall")
         p.input=edit(p,19,-380,222,20)
         p.input:SetScript("OnEscapePressed",function() p:Hide() end)
         p.input:SetScript("OnEnterPressed",accept)
@@ -256,8 +263,8 @@ function ns.FieldbookUI.DeletePanel(parent,shell,title,typed)
         if self.input then self.input:ClearFocus();self.input:SetText("") end
     end)
     parent:HookScript("OnHide",function() p:Hide() end)
-    function p:Open(description,action)
-        describe(description);self.action=action
+    function p:Open(description,action,lead)
+        describe(description,lead);self.action=action
         self.confirm:SetEnabled(not typed)
         if self.input then self.input:SetText("") end
         self:Show()

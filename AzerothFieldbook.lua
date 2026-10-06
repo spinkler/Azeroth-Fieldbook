@@ -550,7 +550,7 @@ local function initializeImpl()
         if ns.CreateLossOfControlObserver then lossOfControl = ns.CreateLossOfControlObserver(journal, watchedEnemy, function(message) if db.spellFeedback == true then say(message) end end) end
         journal:SetPointsRecordedCallback(function(entry, amount, reason, observation)
             local killTitles = { ["first kill"] = "First kill!", ["silver star"] = "10 kills!", ["gold star"] = "25 kills!!", ["gold crown"] = "50 kills!!!" }
-            local discoveryTitles = { location = "New observed location" }
+            local discoveryTitles = { location = "New Location Observed" }
             local title = killTitles[reason] or (reason == "new creature entry" and "New discovery!")
                 or (observation and discoveryTitles[observation.kind])
             if title then announceBestiary(entry, title, amount, observation, killTitles[reason] ~= nil,journal:GetPointAnnouncements()) end
@@ -562,7 +562,7 @@ local function initializeImpl()
             announceBestiary(entry,title,nil,observation,false,chatEnabled)
         end)
         journal:SetDiscoveryRecordedCallback(function(entry, observation)
-            announceBestiary(entry,"New observed location",nil,observation,false,journal:GetCreatureAnnouncement())
+            announceBestiary(entry,"New Location Observed",nil,observation,false,journal:GetCreatureAnnouncement())
         end)
     end
     if ns.SpellIDWindow then ns.SpellIDWindow:Initialize(db) end
@@ -615,9 +615,10 @@ local function initializeImpl()
     if ns.MinimapButton then ns.MinimapButton:Initialize(db, fieldbook or book) end
     if ns.CreateBestiaryEncounterReader then
         encounters = ns.CreateBestiaryEncounterReader(function(id, spellID, creatureName)
+            -- Historical combat records can enrich an observed creature, but
+            -- cannot discover or restore an entry without a live observation.
+            if not journal or not journal.entries[id] or not journal:GetCreatureName(id) then return false end
             return storeObserved(id, spellID, nil, creatureName)
-        end, function(id, creatureName)
-            return journal and journal:ObserveEncounter(id, creatureName)
         end)
     end
     if encounters and db.ignoreEncounterHistory then encounters:ForgetHistory() end
@@ -705,11 +706,13 @@ frame:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_LOGIN" then
         remindAboutUnboundBookKey()
     elseif event == "PLAYER_TARGET_CHANGED" then
+        if journal then journal:UpdateDeletedSelections() end
         afterWipeHold = false
         observeCurrent("target", true)
         if journal and journal.ObserveBuffs then journal:ObserveBuffs("target") end
         if book then book:FollowNotesTarget() end
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
+        if journal then journal:UpdateDeletedSelections() end
         afterWipeHold = false
         observeCurrent("mouseover")
         if journal and journal.ObserveBuffs then journal:ObserveBuffs("mouseover") end
@@ -829,6 +832,26 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         if encounters then encounters:Report(say) else say("Encounter module unavailable.") end
     elseif command == "scan" then
         if encounters then encounters:Scan(); encounters:Report(say) else say("Encounter module unavailable.") end
+    elseif command == "debug locations on" or command == "debug locations off" then
+        local L=ns.CreatureLocations
+        if not L then say("Location module unavailable; reload the UI.");return end
+        L.SetPrototypeEnabled(command=="debug locations on")
+        say(L.prototypeEnabled and "Nearby creature locations on (live-test default): within 40 yards and matching 42-yard zone samples."
+            or "Nearby creature locations paused until /reload. Saved locations are retained.")
+        say("/fieldbook debug locations opens the current range and border checks.")
+    elseif command == "debug locations zone" or command == "debug locations continent" then
+        local L=ns.CreatureLocations
+        if not L then say("Location module unavailable; reload the UI.");return end
+        L.SetPrototypeLookup(command:match("(%w+)$"))
+        say("Location prototype lookup: "..L.prototypeLookup.." until /reload. Run /fieldbook debug locations to inspect it.")
+    elseif command == "debug locations" then
+        local L=ns.CreatureLocations
+        if not L then say("Location module unavailable; reload the UI.");return end
+        local lines={}
+        L.ReportPrototype(function(line) lines[#lines+1]=line end,journal)
+        if ns.ShowDebugReport then ns.ShowDebugReport(table.concat(lines,"\n"))
+        else for _,line in ipairs(lines) do say(line) end end
+        say("Location snapshot opened. Live-test recording is on by default; off pauses it until /reload.")
     elseif command == "debug kills on" or command == "debug kills off" then
         if not ns.KillDiagnostics then say("Kill diagnostic module unavailable; reload the UI."); return end
         local enabled = command == "debug kills on"
@@ -857,6 +880,7 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
     elseif command == "debug ?" then
         say("/fieldbook debug opens a copyable diagnostic report; /fieldbook debug on | off toggles cast ID diagnostic text.")
         say("/fieldbook debug kills on | off controls the temporary kill evidence recorder; /fieldbook debug kills opens its report.")
+        say("/fieldbook debug locations opens nearby-map/range checks; append on | off for temporary observation recording, or zone | continent to compare lookup maps.")
     elseif command == "debug" then
         local lines = {}
         local function say(line)

@@ -29,6 +29,7 @@ def client():
             dead=true;assert(j:RecordKill('target'));dead=false
         end
         killHere()
+        e.locations[zone]=true -- retained historical location for colour rendering
         section=AzerothFieldbookBestiarySection
         function summary()
             local text='';for _,row in ipairs(section.summaryBasicRows) do
@@ -47,7 +48,7 @@ class ZoneColourTests(unittest.TestCase):
                 {'Enemy zone','hostile','ff1a1a'},{'Contested zone','contested','ffb300'},
                 {'Sanctuary','sanctuary','69ccf0'},{'Arena','arena','ff1a1a'},
                 {'Other zone','combat','ffd100'}}) do
-                zone,territory=case[1],case[2];killHere();book:Refresh()
+                zone,territory=case[1],case[2];e.locations[zone]=true;killHere();book:Refresh()
                 assert(summary():find('|cff'..case[3]..zone..'|r',1,true))
             end
             assert(summary():find('|cff1aff1aFriendly zone|r',1,true),'old location retains observed colour')

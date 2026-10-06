@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.31.2 (Release)
+# Azeroth Fieldbook 0.32.0 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -580,21 +580,53 @@ It starts at the book's right edge with aligned tops and follows **Always attemp
 to anchor to main window**. Its greyscale parchment and zone dropdown stay 66% darker than UI background
 brightness; the separate map slider changes only terrain brightness.
 A single known zone appears as a heading; multiple zones use a dropdown. The map
-uses the client's own artwork and explored terrain. Kill locations begin with
-new credited kills after this update; old totals have no coordinates to recover.
+uses the client's own artwork and explored terrain. Previously saved kill
+locations remain available; kill totals cannot recover missing coordinates.
 
 The **Tracking: Kills / Observations** button at the bottom of Locations switches
-between violet kill positions and cyan observation positions, each with a bright
-border. New zone names, subzones and map positions are recorded only for credited
-kills. Targeting, hovering and background scans do not add creature locations.
-The Observations layer preserves historical cyan points from earlier versions;
-no new targeting points are added. The selected layer is saved per character,
-and existing saved locations remain intact.
+between violet kill positions and cyan observer positions, each with a bright
+border. Kills count toward credit and rewards without recording locations.
+Nearby target and mouseover observations add zone names and cyan player-position points
+under the live-test rule below. The selected layer is saved per character, and
+existing saved locations remain intact.
 
-Readable creature coordinates are preferred. When those are unavailable, the
-addon uses your position when the kill is credited and labels it **approximate**.
-Hover a dot to see its coordinates and whether it is approximate. If neither
-position is readable, the kill still counts but receives no map marker.
+Nearby creature location recording is **enabled automatically after reload for
+live testing**. A living creature needs a positive range check of 40 yards or
+less, and every nearby map sample must resolve to your current zone. The fixed
+42-yard circular guard uses 25 samples: your position plus eight directions at
+14, 28 and 42 yards. Diagonal samples stay within the same radius. Missing,
+restricted or mismatching results skip the observation location; no gap retries
+or adaptive guard sizes are used. No surveying or debug commands are required.
+Clicking a creature still creates its entry even when location recording is
+suppressed. The first qualified observation per creature and zone each session
+announces **New Location Observed** when creature announcements are enabled,
+including already known zones and saved points. When the entry is discovered at
+the same time, its discovery message includes the zone without a separate
+location notice. Further captures stay silent.
+Kills never add zones, subzones or coordinates; saved history remains available.
+
+Location capture is separate from the ordinary creature/combat scan: at most one
+attempt per second per creature. After an accepted capture, you must move about
+10 yards or change maps before range and border checks run again. Stationary
+captures perform no repeated border sampling or point writes. New captures use
+the current position's guard; an old safe result is never reused after moving.
+Previously saved points are not refreshed just to update their timestamps.
+Point history is sorted for eviction only when adding beyond its 256-point limit.
+
+`/fieldbook debug locations off` pauses nearby observation locations until the
+next reload; `on` resumes them. Saved points are retained. The optional
+`/fieldbook debug locations` report shows range evidence, the fixed guard and
+actual added/refreshed point totals, including existing creatures. It is read-only
+and also works without a selected creature. `zone` (default) or `continent`
+selects the lookup map until reload. The report no longer runs bypass comparisons,
+world-coordinate comparisons or wider compass probes.
+
+This is a finite sampling heuristic. UI-map classifications can differ from
+terrain zone lines; live accuracy remains under test.
+
+New cyan points describe where you stood during the qualified observation.
+Historical violet kill points may contain readable creature coordinates or an
+**approximate** player-position fallback. Hover a dot to inspect its coordinates.
 
 One or two distinct positions remain dots. Three or more nearby positions can
 form translucent triangles with a soft glow around their outer
@@ -671,15 +703,14 @@ Hover over an overflowing
 name to slowly reveal the full text; leaving the row resets it to the beginning.
 Bestiary **Locations** lists zones, using the client’s parent zone map when
 available. Hover an individual zone name in the creature summary to see the
-sorted subzones recorded at credited kills. These are observer
-locations, not exact creature positions. Fresh kill subzones are retained
-while an entry is locked; they do not award extra zone-discovery Knowledge.
-Subzone history survives backups and account-wide merges.
+sorted historical subzones. New automatic observations record only the zone
+and observer position; kills add no subzone evidence. Historical subzones
+survive backups and account-wide merges.
 
 Existing location data is repaired where a subzone’s parent zone is supported by
 recorded evidence. This includes Sentinel Tower when Westfall is also recorded
-as a location or observation/kill map. Known associations learned from later
-observations can repair other entries with matching zone evidence. Repairs also
+as a location or observation/kill map. Known associations retained in saved
+subzone history can repair other entries with matching zone evidence. Repairs also
 update locked location snapshots and discovery-credit keys, preserving earned
 Knowledge. Ambiguous old names remain intact rather than being guessed or deleted.
 Reports continue to share zone names only; private subzone history is not added
@@ -851,7 +882,10 @@ Unreadable spells leave the record unchanged. Resolve is hidden once the ability
 is confirmed with a spell ID; pending or unlinked abilities retain it.
 
 Delete removes the selected creature and its saved records after you type
-`delete` and press Enter. Hover over the creature again to add a fresh entry;
+`delete` and press Enter. Deselect the creature before targeting or hovering over it again to add a fresh entry;
+this suppression survives reloads. Historical damage-meter records can enrich
+abilities on existing entries but cannot create or restore a creature. Deletion
+markers also survive Bestiary backups and protect against character imports.
 the Event log calls this **Entry restored**, with no repeat discovery award. Previously
 credited milestones and spending survive deletion, so deleting and rediscovering
 an entry cannot repeatedly earn its knowledge. Ability effects include
@@ -991,8 +1025,11 @@ label. Received reports never supply class identity. Local names
 and creature types win conflicts. A locked page retains its displayed basics;
 additional reports remain available in Rumours and after unlocking.
 
-Beast pages include **Known Beast Lore** above the **Damage taken** panel. Its
-window is available even on locked entries. Casting Beast Lore on an identified
+Beast pages include **Known Beast Lore** below the creature viewer, alongside
+Offenses, Defenses and Behaviour. Click it to
+replace Recorded abilities with the lore view below the horizontal divider.
+Click the button again to restore Recorded abilities. The lore view is available
+even on locked entries. Casting Beast Lore on an identified
 target or mouseover records the public native tooltip's revealed fields in a
 scrollable box: damage, health, armour, resistances, diet, tameability, abilities
 and other revealed text where the client provides it. The record includes the
@@ -1012,9 +1049,9 @@ take precedence over received lore. Sender provenance comes from the message
 transport; addon messages cannot independently authenticate another client's
 observation. Lore survives reloads, account migration and backup/restore.
 
-The damage panel gives up one button row to make room for the Beast Lore button;
-the rest of the page and all non-beast layouts retain their positions. Beast Lore
-progression rewards remain future work. See [in-game checks](tests/BEAST_LORE.md)
+The Beast Lore button uses the row above the creature viewer; the rest of the
+page and all non-beast layouts retain their positions. Beast Lore progression
+rewards remain future work. See [in-game checks](tests/BEAST_LORE.md)
 for the capture and delivery checks still required on the live Forever client.
 
 Click **Rumours** between the kill counter and **Notes** to open a

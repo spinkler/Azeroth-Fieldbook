@@ -74,7 +74,6 @@ class AnnouncementTests(unittest.TestCase):
         self.lua.execute("for i=1,51 do beginKill('kill'..i); finishKill() end")
         self.assertEqual(self.messages(), [
             announcement('New discovery!', 'Beast • Lvl11', None),
-            announcement('New observed location', 'Beast • Lvl11 • Loch Modan', None),
             announcement('First kill!', 'Beast'),
             announcement('10 kills!', 'Beast'),
             announcement('25 kills!!', 'Beast', 2),
@@ -132,6 +131,23 @@ class AnnouncementTests(unittest.TestCase):
         self.assertEqual(self.messages(), [announcement('Entry observed', 'Unclassified', points=None)])
 
 
+    def test_deleted_target_requires_selection_to_leave_before_restore(self):
+        self.lua.execute("""
+            local create=ns.CreateBestiaryJournal
+            ns.CreateBestiaryJournal=function(...) activeJournal=create(...);return activeJournal end
+            fire('ADDON_LOADED','AzerothFieldbook');observe()
+            units.mouseover=units.target
+            assert(activeJournal:DeleteEntry(42))
+            for i=1,10 do tick();fire('PLAYER_TARGET_CHANGED');fire('UPDATE_MOUSEOVER_UNIT') end
+            assert(not activeJournal.entries[42])
+            assert(not activeJournal:ObserveEncounter(42,'Forest Lurker'))
+            local held=units.target;units.target=nil;fire('PLAYER_TARGET_CHANGED');tick()
+            assert(not activeJournal.entries[42],'held mouseover must also leave')
+            units.mouseover=nil;fire('UPDATE_MOUSEOVER_UNIT')
+            units.target=held;fire('PLAYER_TARGET_CHANGED')
+            assert(activeJournal.entries[42] and points()==0)
+        """)
+
     def test_deleted_creature_returns_on_hover_without_duplicate_knowledge(self):
         self.lua.execute('''
             local create=ns.CreateBestiaryJournal
@@ -147,7 +163,10 @@ class AnnouncementTests(unittest.TestCase):
             assert(activeJournal:DeleteEntry(42))
             assert(not activeJournal.entries[42])
             messages={}
-            fire('UPDATE_MOUSEOVER_UNIT')
+            fire('UPDATE_MOUSEOVER_UNIT');tick()
+            assert(not activeJournal.entries[42],'held mouseover cannot restore the deleted entry')
+            local held=units.mouseover;units.mouseover=nil;fire('UPDATE_MOUSEOVER_UNIT')
+            units.mouseover=held;fire('UPDATE_MOUSEOVER_UNIT')
             local restored=activeJournal.entries[42]
             assert(restored and restored~=original and restored.sightings==1)
             assert(points()==before and #messages==1)
@@ -157,7 +176,10 @@ class AnnouncementTests(unittest.TestCase):
             activeJournal:DeleteEntry(42)
             fire('ADDON_LOADED','AzerothFieldbook')
             assert(not activeJournal.entries[42],'reload alone keeps the entry deleted')
-            fire('UPDATE_MOUSEOVER_UNIT')
+            fire('UPDATE_MOUSEOVER_UNIT');tick()
+            assert(not activeJournal.entries[42],'reload must preserve the held-selection deletion guard')
+            local held=units.mouseover;units.mouseover=nil;fire('UPDATE_MOUSEOVER_UNIT')
+            units.mouseover=held;fire('UPDATE_MOUSEOVER_UNIT')
             assert(activeJournal.entries[42] and points()==before)
             -- Levels are recorded without rewards; new locations announce without rewards.
             units.mouseover.level=12;fire('UPDATE_MOUSEOVER_UNIT')

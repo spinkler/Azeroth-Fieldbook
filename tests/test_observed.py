@@ -323,11 +323,11 @@ C_DamageMeter = {
 castName, castID = nil, nil
 frames[4].handler(frames[4], 'PLAYER_REGEN_ENABLED')
 frames[4].OnUpdate(frames[4], 1.1)
-check(AzerothFieldbookDB.bestiary.creatures[42].spells[601].name == 'Test ability 601', 'encounter result persisted in Bestiary section')
+check(not AzerothFieldbookDB.bestiary.creatures[42], 'historical encounter results cannot create Bestiary entries')
 guid = 'Creature-0-1-2-3-42-000001'
 GameTooltip.lines = {}
 tooltipHook(GameTooltip)
-check(GameTooltip.lines[2] == 'Test ability 601', 'encounter result rendered in tooltip')
+check(#GameTooltip.lines == 0, 'unattached historical spell data is not rendered')
 SlashCmdList.AZEROTHFIELDBOOK('wipe')
 SlashCmdList.AZEROTHFIELDBOOK('wipe confirm')
 frames[4].OnUpdate(frames[4], 4)

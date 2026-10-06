@@ -290,7 +290,7 @@ end
 controller=ns.CreateBestiaryBook(journal)
 controller:Toggle()
 check(AzerothFieldbookBestiarySection:IsShown(),'book opens')
-check(#UISpecialFrames==10 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration; embedded delete panel and filter submenus follow their parents')
+check(#UISpecialFrames==9 and BINDING_NAME_CLASSICBESTIARY_BOOK and BINDING_NAME_CLASSICBESTIARY_MOUSEOVER_BOOK,'escape and keybinding registration; embedded delete panel and filter submenus follow their parents')
 check(controller:OpenAtUnit('mouseover'),'mouseover binding opens the observed NPC page')
 for _,o in ipairs(objects) do check(o.text~='Your note','empty manual field note stays visually empty') end
 local function click(text)
@@ -517,12 +517,17 @@ resolvedRow.tooltipArea.scripts.OnLeave(); check(not GameTooltip.shown,'ability 
 check(not resolvedRow.scripts.OnEnter,'button area and gaps cannot open ability tooltip')
 GetCVarBool,GameTooltip=oldCVar,oldTooltip
 journal:SetEntryConfirmed(42,savedLock)
+journal:SetEntryConfirmed(42,false)
 journal.entries[42].abilities={}
 for i=1,3 do journal.entries[42].abilities['Ability '..i]={state='confirmed',spellID=i} end
 controller:Refresh()
 check(not abilityBook.abilityScrollBar:IsShown(),'three abilities fit without scrollbar')
 journal.entries[42].abilities['Ability 4']={state='confirmed',spellID=4}; controller:Refresh()
 check(abilityBook.abilityScrollBar:IsShown(),'fourth ability enables scrollbar')
+journal:SetEntryConfirmed(42,true);controller:Refresh()
+check(not abilityBook.abilityEditor:IsShown() and abilityBook.abilities[4]:IsShown(),'lock replaces the editor with additional abilities')
+journal:SetEntryConfirmed(42,false);controller:Refresh()
+check(abilityBook.abilityEditor:IsShown() and not abilityBook.abilities[4]:IsShown(),'unlock restores editor and compact list')
 abilityBook.abilityScrollBar.scripts.OnValueChanged(abilityBook.abilityScrollBar,1)
 check(abilityBook.abilities[1].name=='Ability 2','scrollbar changes displayed abilities')
 abilityBook.abilities[1].scripts.OnMouseWheel(abilityBook.abilities[1],1)
@@ -530,6 +535,7 @@ check(abilityBook.abilities[1].name=='Ability 1','mouse wheel changes displayed 
 journal.entries[42].abilities['Ability 4']=nil; controller:Refresh()
 check(not abilityBook.abilityScrollBar:IsShown(),'scrollbar hides when abilities fit again')
 journal.entries[42].abilities=savedAbilities; controller:Refresh()
+journal:SetEntryConfirmed(42,savedLock);controller:Refresh()
 local savedKills=journal.entries[42].kills
 for _,sample in ipairs({{9,false,false},{10,true,false},{25,true,false},{50,true,true},{49,true,false}}) do
     journal.entries[42].kills=sample[1]; controller:Refresh()
@@ -586,7 +592,7 @@ check(journal.entries[43] and not AzerothFieldbookBestiarySection.deleteButton.e
 check(notes.count.text=='0/10','deleted creature notes cleared from window')
 local reloaded=ns.CreateBestiaryJournal(db,function() return nil end)
 check(not reloaded.entries[42],'deleted entry does not return through legacy migration')
-check(reloaded:Ensure(42,false,'Rediscovered creature')~=nil and reloaded.entries[42],'deletion allows immediate rediscovery')
+check(not reloaded:Ensure(42,false,'Rediscovered creature') and not reloaded.entries[42],'reload cannot replay deleted historical identities')
 local ranksDB={bestiary={entries={},creatures={}}}
 local ranksJournal=ns.CreateBestiaryJournal(ranksDB,function() return nil end)
 for i, rank in ipairs({'Elite','Rare','Rare Elite','World Boss'}) do

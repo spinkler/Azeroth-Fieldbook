@@ -1,4 +1,4 @@
-"""Real kill-credit path, bounded location data, geometry and native-widget calls."""
+"""Kill-credit isolation, bounded historical location data, geometry and native-widget calls."""
 import unittest
 from kill_test_harness import new_client, ROOT
 from ui_test_harness import new_ui_client
@@ -62,99 +62,80 @@ def geometry_client():
 
 
 class LocationStorageTests(unittest.TestCase):
-    def test_credited_kills_only_exact_coordinates_and_deduplication(self):
-        lua=kills_client()
-        lua.execute('''
-            beginKill('1');assert(count(pointsIn())==0,'sighting has no location markers')
-            local guid=finishKill('Pet-0-1-2-3-9-1')
-            assert(kills()==1 and count(pointsIn())==1)
-            local p=select(2,next(pointsIn()))
-            assert(p.x==4000 and p.y==5000 and not p.approximate)
-            assert(p.seenAt==stamp and entry().killLocations[37].width==4000)
-            fire('UNIT_DIED',guid);tick();tick();assert(count(pointsIn())==1 and kills()==1)
-            beginKill('2');units.target.denied=true;finishKill();assert(count(pointsIn())==1 and kills()==1)
-            beginKill('3');nx=0.41;finishKill();assert(kills()==2 and count(pointsIn())==2)
-            publicTree(AzerothFieldbookDB)
-        ''')
-
-    def test_zone_names_require_credit_and_reject_cross_map_capture(self):
+    def test_kills_and_replays_never_create_zone_subzone_or_coordinate_history(self):
         lua=kills_client()
         lua.execute("""
-            zone='Border sighting'
-            function GetRealZoneText() return zone end
-            beginKill('border')
-            assert(not next(entry().locations))
-            mapID=38;mapName='Other zone';zone='Other zone'
-            finishKill()
-            assert(kills()==1 and not next(entry().locations))
-            beginKill('denied');units.target.denied=true;finishKill()
-            assert(not next(entry().locations))
-            beginKill('credited');finishKill()
-            assert(entry().locations['Other zone'])
-            assert(not entry().locations['Border sighting'])
+            function GetSubZoneText() return 'Small settlement' end
+            beginKill('1');assert(not next(entry().locations))
+            local guid=finishKill('Pet-0-1-2-3-9-1')
+            assert(kills()==1 and points()==1)
+            fire('UNIT_DIED',guid);tick();tick();assert(kills()==1)
+            beginKill('2');units.target.denied=true;finishKill();assert(kills()==1)
+            beginKill('3');nx=0.41;finishKill();assert(kills()==2)
+            assert(not next(entry().locations) and not next(entry().subzones or {}))
+            assert(not entry().killLocations and not entry().observationLocations)
+            publicTree(AzerothFieldbookDB)
         """)
 
-    def test_secret_or_missing_npc_position_uses_labelled_player_fallback(self):
+    def test_kill_location_apis_are_never_queried_even_after_map_changes(self):
         lua=kills_client()
-        lua.execute('''
-            nx=secret;beginKill('1');finishKill()
-            local p=select(2,next(pointsIn()))
-            assert(p.x==2000 and p.y==3000 and p.approximate)
-            UnitPosition=function() error('not available for NPCs') end
-            px=0.25;beginKill('2');finishKill();assert(count(pointsIn())==2)
-            assert(pointsIn()[1+2500*10001+3000].approximate)
-            -- Player coordinates are never substituted without the approximation flag.
-            publicTree(AzerothFieldbookDB)
-        ''')
+        lua.execute("""
+            ns.CreatureLocations.Sample=function() error('kills must not sample positions') end
+            ns.CreatureLocations.Record=function() error('kills must not save positions') end
+            beginKill('border');mapID=38;mapName='Other zone';finishKill()
+            assert(kills()==1 and not next(entry().locations))
+            beginKill('denied');units.target.denied=true;finishKill()
+            beginKill('credited');finishKill()
+            assert(kills()==2 and not next(entry().locations) and not entry().killLocations)
+        """)
 
-    def test_secret_player_map_and_coordinate_failures_do_not_change_credit(self):
+    def test_secret_or_missing_coordinates_do_not_affect_kill_credit(self):
         lua=kills_client()
-        lua.execute('''
+        lua.execute("""
             nx=secret;px=secret;beginKill('1');finishKill()
-            assert(kills()==1 and count(pointsIn())==0)
-            mapID=secret;beginKill('2');finishKill();assert(kills()==2 and count(pointsIn())==0)
-            mapID=37;px=0.2
+            mapID=secret;beginKill('2');finishKill()
+            UnitPosition=function() error('not available') end
             C_Map.GetPlayerMapPosition=function() error('blocked') end
-            beginKill('3');finishKill();assert(kills()==3 and count(pointsIn())==0)
+            beginKill('3');finishKill()
+            assert(kills()==3 and not next(entry().locations) and not pointsIn())
             publicTree(AzerothFieldbookDB)
-        ''')
+        """)
 
-    def test_first_death_sample_retained_no_delayed_player_drift_or_target_swap(self):
+    def test_legacy_sampler_rejects_identity_and_map_changes(self):
         lua=kills_client()
-        lua.execute('''
-            nx=nil;local guid=beginKill('1')
-            fire('PARTY_KILL','Player-1-1',guid)
-            px=0.9;py=0.9;units.target.dead=true;fire('UNIT_DIED',guid);tick()
-            local p=select(2,next(pointsIn()))
-            assert(p.x==2000 and p.y==3000,'retain event-time position')
-            local original=UnitPosition
+        lua.execute("""
+            local guid=beginKill('1')
             UnitPosition=function() units.target=spawn('other',false);return 0.8,0.8,0,0 end
-            assert(not ns.CreatureLocations.Sample('target',guid,37),'changed identity cannot supply precise coordinates')
-            UnitPosition=original;mapID=52;mapName='Other zone'
-            assert(not ns.CreatureLocations.Sample(nil,nil,37),'delayed death cannot move to another zone')
-        ''')
+            assert(not ns.CreatureLocations.Sample('target',guid,37))
+            mapID=52;mapName='Other zone'
+            assert(not ns.CreatureLocations.Sample(nil,nil,37))
+        """)
 
-    def test_locked_pages_new_zones_and_saved_variables_reload(self):
+    def test_historical_kill_points_survive_locked_kills_and_reload(self):
         lua=kills_client()
-        lua.execute('''
-            beginKill('1');finishKill();entry().confirmed=true
-            mapID=52;mapName='Other zone';beginKill('2');finishKill()
-            assert(count(entry().killLocations)==2 and count(pointsIn(52))==1)
+        lua.execute("""
+            beginKill('1')
+            ns.CreatureLocations.Record(entry(),{mapID=37,name='Test zone',
+                point={x=4000,y=5000,seenAt=stamp,approximate=false}})
+            entry().locations['Test zone']=true;entry().subzones={['Test zone']={Old=true}}
+            entry().confirmed=true
+            finishKill();mapID=52;mapName='Other zone';beginKill('2');finishKill()
+            assert(kills()==2 and count(entry().killLocations)==1 and count(pointsIn())==1)
+            assert(not entry().locations['Other zone'] and count(entry().subzones['Test zone'])==1)
             local j=ns.CreateBestiaryJournal(AzerothFieldbookDB,function() return 42 end)
             assert(j.entries[42].killLocations[37].points[1+4000*10001+5000])
-            assert(#ns.CreatureLocations.Zones(j.entries[42])==2)
+            assert(#ns.CreatureLocations.Zones(j.entries[42])==1)
             j:DeleteEntry(42);assert(not j.entries[42])
-        ''')
+        """)
 
-    def test_evade_clears_a_previous_uncredited_kill_sample(self):
+    def test_pending_kill_and_living_reset_do_not_record_positions(self):
         lua=kills_client()
-        lua.execute('''
-            nx=nil;local guid=beginKill('1');fire('PARTY_KILL','Player-1-1',guid)
-            -- A living reset invalidates both terminal evidence and its position.
-            units.target.combat=false;tick();px=0.7;units.target.combat=true
-            finishKill();local p=select(2,next(pointsIn()))
-            assert(p.x==7000 and p.approximate)
-        ''')
+        lua.execute("""
+            local guid=beginKill('1');fire('PARTY_KILL','Player-1-1',guid)
+            px=0.9;py=0.9;units.target.combat=false;tick()
+            px=0.7;units.target.combat=true;finishKill()
+            assert(kills()==1 and not pointsIn() and not next(entry().locations))
+        """)
 
     def test_legacy_zone_name_resolution_rejects_ambiguous_and_secret_maps(self):
         lua=geometry_client()
@@ -414,8 +395,9 @@ class LocationsWindowTests(unittest.TestCase):
             local map=AzerothFieldbookCreatureLocations
             map.scripts.OnShow(map) -- The mock's Show omits native OnShow dispatch.
             assert(map:IsShown() and content.creatureLocationsButton.afbSelected)
-            eq(map:GetWidth(),603);eq(map:GetHeight(),627)
-            eq(map.point[1],'TOPLEFT');eq(map.point[3],'TOPLEFT');eq(map.point[4],333);eq(map.point[5],-87)
+            eq(map:GetWidth(),603);eq(map:GetHeight(),583)
+            eq(map.point[1],'TOPLEFT');eq(map.point[2],content.detail)
+            eq(map.point[3],'TOPLEFT');eq(map.point[4],333);eq(map.point[5],-131)
             eq(map.point[4]-309,960-map.point[4]-map:GetWidth(),"balanced panel margins")
             assert(map.zoneButton.arrow and map.zoneButton.arrowShadow)
             assert(map.map:GetWidth()<=558 and map.map:GetHeight()<=372)

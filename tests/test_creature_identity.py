@@ -51,7 +51,7 @@ def client():
 
 
 class CreatureIdentityTests(unittest.TestCase):
-    def test_roster_recovers_creature_without_live_identity_or_abilities(self):
+    def test_historical_roster_does_not_create_a_creature_without_live_identity(self):
         for kind in ('party', 'raid'):
             with self.subTest(kind=kind):
                 lua = client()
@@ -65,13 +65,10 @@ class CreatureIdentityTests(unittest.TestCase):
                     assert(not next(journal.entries),'hidden live identity must stay excluded')
                     C_DamageMeter.GetCombatSessionSourceFromID=function() return {combatSpells={}} end
                     scan()
-                    local e=journal.entries[creatureID]
-                    assert(e and e.name==creatureName and e.personalEncountered)
-                    assert(not next(e.abilities) and e.kills==0 and not e.levelMin and not next(e.locations))
-                    assert(not e.killLocations and not e.observationLocations and points()==0)
-                    assert(#journal:GetEventLog().entries==1)
+                    assert(not next(journal.entries) and not AzerothFieldbookDB.bestiary.creatures[creatureID])
+                    assert(points()==0 and #journal:GetEventLog().entries==0)
                     scan();fire('ADDON_LOADED','AzerothFieldbook');scan()
-                    assert(#journal:GetEventLog().entries==1 and #journal:List()==1)
+                    assert(not next(journal.entries) and #journal:GetEventLog().entries==0)
                 ''')
 
     def test_roster_recovery_does_not_require_spell_detail_api_or_category(self):
@@ -80,22 +77,21 @@ class CreatureIdentityTests(unittest.TestCase):
             C_DamageMeter.GetCombatSessionSourceFromID=nil
             Enum.DamageMeterType.DamageTaken=nil
             scan()
-            assert(journal.entries[creatureID].name==creatureName)
-            assert(not next(journal.entries[creatureID].abilities))
+            assert(not journal.entries[creatureID], 'historical records cannot create an entry even without ability detail APIs')
         ''')
 
     def test_roster_recovery_preserves_wipe_boundary(self):
         lua = client()
         lua.execute(r'''
             C_DamageMeter.GetCombatSessionSourceFromID=function() return {combatSpells={}} end
-            scan();assert(journal.entries[creatureID])
+            scan();assert(not journal.entries[creatureID])
             SlashCmdList.AZEROTHFIELDBOOK('wipe')
             SlashCmdList.AZEROTHFIELDBOOK('wipe confirm')
             scan();assert(not next(journal.entries))
             fire('ADDON_LOADED','AzerothFieldbook');scan()
             assert(not next(journal.entries),'reload cannot reimport wiped roster history')
             C_DamageMeter.GetAvailableCombatSessions=function() return {{sessionID=2}} end
-            scan();assert(journal.entries[creatureID])
+            scan();assert(not journal.entries[creatureID], 'a new retained session still cannot create an entry')
         ''')
 
     def test_restriction_change_retries_roster_only_recovery_outside_combat(self):
@@ -118,7 +114,7 @@ class CreatureIdentityTests(unittest.TestCase):
             assert(not next(journal.entries),'restriction event never enables in-combat imports')
             combat=false
             for _=1,10 do tick() end
-            assert(journal.entries[creatureID].name==creatureName)
+            assert(not next(journal.entries),'readable retained history still cannot create entries')
         ''')
 
     def test_roster_only_import_rejects_restricted_owned_and_conflicting_identities(self):
@@ -151,18 +147,17 @@ class CreatureIdentityTests(unittest.TestCase):
         lua.execute(r'''
             assert(not next(units))
             scan()
-            local entry=journal.entries[1176]
-            assert(entry and entry.name=='Tunnel Rat Forager', 'meter identity must reach the journal')
-            assert(entry.abilities['Bottle of Poison'].state=='pending')
-            assert(journal:GetBasicInfo(1176).name==entry.name, 'book and Creature Notes use the same named record')
-            assert(journal:List()[1].name==entry.name and select(1,journal:GetTotals())==1)
-            assert(output():find('[Entry observed]|r |cff80d0ffBestiary:|r |cffffffffTunnel Rat Forager',1,true))
-            assert(not output():find('Creature #',1,true))
-            local _, announcements=output():gsub('|cff80d0ffBestiary:|r ', '')
-            assert(announcements==1, 'discovery announces once without points alongside scan diagnostics')
+            assert(not next(journal.entries) and not AzerothFieldbookDB.bestiary.creatures[1176], 'meter identity alone cannot create an entry')
+            assert(not output():find('[Entry observed]',1,true), 'historical data does not announce a new entry')
             scan()
             assert(select(2,journal:GetTotals())==0, 'meter names without levels earn no discovery points')
-            assert(not entry.levelMin and not next(entry.locations), 'meter cannot invent level or location')
+            units.target=spawn('1176',false);units.target.guid='Creature-0-1-2-3-1176-live';units.target.name='Tunnel Rat Forager'
+            fire('PLAYER_TARGET_CHANGED')
+            local entry=journal.entries[1176]
+            assert(entry and entry.name=='Tunnel Rat Forager', 'a live named observation creates the entry')
+            assert(entry.levelMin==5, 'the level comes from the live unit')
+            scan()
+            assert(entry.abilities['Bottle of Poison'].state=='pending', 'existing entries can receive retained abilities')
         ''')
 
     def test_live_discovery_announces_name_before_points_callback(self):
@@ -207,6 +202,9 @@ class CreatureIdentityTests(unittest.TestCase):
             end
             creatureName='Tunnel Rat Forager'
             scan()
+            assert(not journal.entries[1176], 'a valid historical name still cannot create an entry')
+            units.target=spawn('1176-live',false);units.target.guid='Creature-0-1-2-3-1176-live';units.target.name=creatureName
+            fire('PLAYER_TARGET_CHANGED')
             assert(journal.entries[1176].name==creatureName)
         ''')
 
@@ -214,11 +212,10 @@ class CreatureIdentityTests(unittest.TestCase):
         lua = client()
         lua.execute(r'''
             scan()
-            journal:Ensure(1176,false,nil,{level=9}) -- Previously earned legacy credit.
+            journal:Ensure(1176,false,'Tunnel Rat Forager',{level=9}) -- Previously earned legacy credit.
             local saved=journal.entries[1176]
             saved.name=nil
-            saved.abilities['Bottle of Poison'].note='Keep my evidence'
-            saved.abilities['Bottle of Poison'].state='rejected'
+            saved.abilities['Bottle of Poison']={note='Keep my evidence',state='rejected'}
             saved.confirmed=true
             saved.lockedBasic={category='Unclassified',locations={}}
             saved.idNotes={spells={7365},text='Keep these notes'}
@@ -228,6 +225,9 @@ class CreatureIdentityTests(unittest.TestCase):
             assert(select(2,journal:GetTotals())==1, 'earned credit is preserved')
             messages={}
             scan()
+            assert(#journal:List()==0 and select(1,journal:GetTotals())==0, 'historical data does not repair an unresolved entry')
+            units.target=spawn('1176-live',false);units.target.guid='Creature-0-1-2-3-1176-live';units.target.name='Tunnel Rat Forager'
+            fire('PLAYER_TARGET_CHANGED')
             local entry=journal.entries[1176]
             assert(entry==saved and entry.name=='Tunnel Rat Forager')
             assert(journal:GetBasicInfo(1176).name==entry.name, 'repair also fills missing locked identity')
@@ -268,11 +268,12 @@ class CreatureIdentityTests(unittest.TestCase):
     def test_nameless_records_survive_account_migration_and_repair(self):
         lua = client()
         lua.execute(r'''
-            scan()
+            journal:Ensure(1176,false,'Tunnel Rat Forager',{level=9})
             journal.entries[1176].name=nil
             journal.entries[1176].idNotes={spells={7365},text='Keep account migration notes'}
             local original=AzerothFieldbookDB.bestiary
             originalEntry=original.entries[1176]
+            originalPoints=select(2,journal:GetTotals())
         ''')
         lua.execute(ROOT.joinpath('Tracking.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
         lua.execute(r'''
@@ -280,10 +281,14 @@ class CreatureIdentityTests(unittest.TestCase):
             assert(journal.entries==AzerothFieldbookAccountDB.bestiary.entries)
             assert(#journal:List()==0 and select(1,journal:GetTotals())==0)
             scan()
+            assert(not journal.entries[1176].name, 'historical data cannot repair an unresolved account entry')
+            units.target=spawn('1176-live',false);units.target.guid='Creature-0-1-2-3-1176-live';units.target.name='Tunnel Rat Forager'
+            fire('PLAYER_TARGET_CHANGED')
             assert(journal.entries[1176].name=='Tunnel Rat Forager')
             assert(journal.entries[1176].idNotes.text=='Keep account migration notes')
+            scan()
             assert(journal.entries[1176].abilities['Bottle of Poison'])
-            assert(select(2,journal:GetTotals())==0)
+            assert(select(2,journal:GetTotals())==originalPoints,'repair cannot award duplicate credit')
             assert(originalEntry.name==nil, 'character backup remains independent')
             fire('ADDON_LOADED','AzerothFieldbook')
             assert(journal:List()[1].name=='Tunnel Rat Forager' and select(2,journal:GetTotals())==0)

@@ -71,6 +71,241 @@ function locations.Observation()
     map.point={x=x,y=y,approximate=false,seenAt=finite(stamp,0,9999999999) and math.floor(stamp) or 0}
     return map
 end
+
+-- Automatic live-test observations: positive range <=40 yards and a fixed
+-- 42-yard map guard. Unknown samples reject; no gap inference or surveying.
+locations.prototypeEnabled=true
+locations.prototypeLookup="zone"
+locations.BORDER_YARDS=42
+locations.RANGE_ITEM_ID=4945 -- Faintly Glowing Skull, 40 yards (LibRangeCheck Era/Forever).
+locations.SHORT_RANGE_ITEM_ID=18904 -- Zorbin's Ultra-Shrinker, 35-yard fallback.
+local borderCache,requestedRangeItems
+local function mapDetails(id)
+    local info=read(C_Map and C_Map.GetMapInfo,id)
+    if type(info)~="table" then return end
+    local kind,parent,label=read(function() return info.mapType end),
+        read(function() return info.parentMapID end),read(function() return info.name end)
+    if not finite(kind,0,6) or not name(label) then return end
+    return {mapID=id,mapType=kind,parentMapID=positive(parent) and parent or nil,name=label}
+end
+local function zoneDetails(id)
+    local seen={}
+    for _=1,16 do
+        if not positive(id) or seen[id] then return end
+        seen[id]=true
+        local info=mapDetails(id)
+        if not info or info.mapType==4 then return end -- Dungeon/floor has no outdoor proof.
+        if info.mapType==3 then return info end
+        id=info.parentMapID
+    end
+end
+local function queryMap(zone,lookup)
+    if lookup=="zone" then return zone end
+    local id,seen=zone.parentMapID,{}
+    for _=1,16 do
+        if not positive(id) or seen[id] then return end
+        seen[id]=true
+        local info=mapDetails(id)
+        if not info then return end
+        if info.mapType==2 then return info end
+        id=info.parentMapID
+    end
+end
+local function rangeRead(fn,...)
+    if type(fn)~="function" then return nil,"API missing" end
+    local ok,value=pcall(fn,...)
+    if not ok then return nil,"API error" end
+    if not public(value) then return nil,"secret" end
+    if value==true or value==1 then return true,"in range" end
+    if value==false or value==0 then return false,"out of range" end
+    return nil,"unavailable"
+end
+function locations.Nearby(unit)
+    if not requestedRangeItems and C_Item and type(C_Item.RequestLoadItemDataByID)=="function" then
+        requestedRangeItems=true
+        for _,id in ipairs({locations.RANGE_ITEM_ID,locations.SHORT_RANGE_ITEM_ID}) do
+            pcall(C_Item.RequestLoadItemDataByID,id)
+        end
+    end
+    local item40,state40=rangeRead(C_Item and C_Item.IsItemInRange,locations.RANGE_ITEM_ID,unit)
+    local item35,state35=rangeRead(C_Item and C_Item.IsItemInRange,locations.SHORT_RANGE_ITEM_ID,unit)
+    local interact,interactState=rangeRead(CheckInteractDistance,unit,4)
+    -- Shorter positive checks also prove <=40 yards. Errors, secrets and nil
+    -- never establish proximity. No unreliable 0-0 spell range checks are used.
+    local yards=item40==true and 40 or (item35==true and 35 or (interact==true and 28 or nil))
+    return yards~=nil,{item40=state40,item=state35,interact=interactState,yards=yards}
+end
+local function classifyPosition(row,id,zone)
+    if not public(id) then row.detail="secret map ID";return end
+    if not positive(id) then row.detail="missing or invalid map ID";return end
+    local classified=zoneDetails(id)
+    if classified then
+        row.zoneID,row.zoneName=classified.mapID,classified.name
+        row.state=classified.mapID==zone.mapID and "same zone" or "different zone"
+    else
+        local raw=mapDetails(id)
+        row.detail="returned "..(raw and (raw.name.." ("..id..", type "..raw.mapType..")") or ("map "..id)).."; no readable zone ancestor"
+    end
+end
+local function lookupPosition(row,query,x,y,zone)
+    local fn=C_Map.GetMapInfoAtPosition
+    if type(fn)~="function" then row.detail="position lookup API missing";return end
+    local ok,info=pcall(fn,query.mapID,x,y)
+    if not ok then row.detail="position lookup API error";return end
+    if not public(info) then row.detail="secret lookup result";return end
+    if info==nil then row.detail="position lookup returned nil";return end
+    if type(info)~="table" then row.detail="invalid lookup result";return end
+    classifyPosition(row,read(function() return info.mapID end),zone)
+end
+-- Centre plus eight directions at three radii: all 25 probes lie within
+-- 42 yards, including diagonals (unlike a +/-42-yard square).
+local probeOffsets={{0,0}}
+local diagonal=math.sqrt(0.5)
+for _,radius in ipairs({14,28,locations.BORDER_YARDS}) do
+    for _,direction in ipairs({{-1,0},{1,0},{0,-1},{0,1},
+        {-diagonal,-diagonal},{diagonal,-diagonal},{-diagonal,diagonal},{diagonal,diagonal}}) do
+        probeOffsets[#probeOffsets+1]={direction[1]*radius,direction[2]*radius}
+    end
+end
+function locations.BorderCheck(force,lookup)
+    local result={allowed=false,reason="map unavailable",rows={},lookup=lookup or locations.prototypeLookup,
+        guardYards=locations.BORDER_YARDS,counts={same=0,different=0,unknown=0}}
+    local map=locations.CurrentMap()
+    if not map then return result end
+    result.map=map
+    local inside=read(IsInInstance)
+    if inside==true then result.reason="outdoor prototype only";return result end
+    local zone=zoneDetails(map.mapID)
+    if not zone then result.reason="outdoor zone unavailable";return result end
+    result.zone=zone
+    local query=queryMap(zone,result.lookup)
+    if not query then result.reason="query map unavailable";return result end
+    result.query=query
+    local p=read(C_Map.GetPlayerMapPosition,query.mapID,"player")
+    if type(p)~="table" then result.reason="player position unavailable";return result end
+    local x,y=read(function() return p.x end),read(function() return p.y end)
+    if not finite(x,0,1) or not finite(y,0,1) or (x==0 and y==0) then
+        result.reason="player position unavailable";return result
+    end
+    result.x,result.y=x,y
+    local at=read(GetTime)
+    -- Reuse only while stationary; movement always rechecks the full guard.
+    if not force and borderCache and finite(at,0,1e12) and at>=borderCache.at and at-borderCache.at<0.5
+        and borderCache.result.map.mapID==map.mapID and borderCache.result.query.mapID==query.mapID
+        and borderCache.result.lookup==result.lookup and borderCache.result.x==x and borderCache.result.y==y then
+        return borderCache.result
+    end
+    local ok,w,h=pcall(function() return C_Map.GetMapWorldSize(query.mapID) end)
+    if not ok or not finite(w,1,100000) or not finite(h,1,100000) then
+        result.reason="yard scale unavailable";return result
+    end
+    result.width,result.height=w,h
+    result.allowed=true;result.reason="all 42-yard samples agree"
+    for _,offset in ipairs(probeOffsets) do
+        local dx,dy=offset[1],offset[2]
+        local qx,qy=x+dx/w,y+dy/h
+        local row={dx=dx,dy=dy,x=qx,y=qy,state="unavailable"}
+        if finite(qx,0,1) and finite(qy,0,1) then lookupPosition(row,query,qx,qy,zone)
+        else row.state="outside query map" end
+        result.rows[#result.rows+1]=row
+        local category=row.state=="same zone" and "same" or (row.state=="different zone" and "different" or "unknown")
+        result.counts[category]=result.counts[category]+1
+        if row.state~="same zone" then
+            result.allowed=false
+            if dx==0 and dy==0 then result.reason="centre does not resolve to current zone"
+            elseif result.reason=="all 42-yard samples agree" then
+                result.reason=row.state=="different zone" and "another zone within border guard" or "border lookup unavailable"
+            end
+        end
+    end
+    result.centre=result.rows[1]
+    result.centreMismatch=result.centre.state=="different zone"
+    if result.counts.same>0 and result.counts.different>0 then result.reason="another zone within border guard" end
+    if finite(at,0,1e12) then borderCache={at=at,result=result} end
+    return result
+end
+function locations.CheckObservation(unit,guid,force)
+    local result={allowed=false,reason="creature unavailable"}
+    if not public(unit) then return result end
+    if unit~="target" and unit~="mouseover" then return result end
+    if not name(guid) or read(UnitGUID,unit)~=guid then return result end
+    if read(UnitIsDead,unit)~=false then result.reason="living creature required";return result end
+    local nearby,range=locations.Nearby(unit)
+    result.range=range
+    if not nearby and not force then result.reason="no positive proximity check";return result end
+    local border=locations.BorderCheck(force)
+    result.border=border
+    if not nearby then result.reason="no positive proximity check";return result end
+    if not border.allowed then result.reason=border.reason;return result end
+    local sample=locations.Observation()
+    if not sample or (sample.point.x==0 and sample.point.y==0) or sample.mapID~=border.map.mapID or read(UnitGUID,unit)~=guid then
+        result.reason="identity or map changed";return result
+    end
+    result.allowed=true;result.reason="within 40 yards and all 42-yard samples agree"
+    sample.zoneID,sample.zoneName=border.zone.mapID,border.zone.name
+    return result,sample
+end
+function locations.SetPrototypeEnabled(enabled)
+    locations.prototypeEnabled=enabled==true;borderCache=nil
+end
+function locations.SetPrototypeLookup(mode)
+    if mode~="zone" and mode~="continent" then return end
+    locations.prototypeLookup=mode;borderCache=nil
+end
+function locations.ReportPrototype(say,journal)
+    say("Creature location live test: "..(locations.prototypeEnabled and "recording on (default)" or "recording paused until /reload"))
+    say("Probe revision 6: positive range <=40 yards; all 25 samples within a 42-yard radius must match the player's zone.")
+    say("Automatic target/mouseover observations. No retries or surveying; kills do not record locations.")
+    if journal then
+        local stats=journal.prototypeLocationStats
+        say("Prototype writes this session: "..(stats and stats.added or 0).." points added; "..(stats and stats.refreshed or 0).." points refreshed")
+        local last=stats and stats.last
+        if last then
+            say(string.format("Last actual write: %s point %.2f, %.2f; creature %d; map %d; %d saved observer points on that map",
+                last.action,last.x/100,last.y/100,last.creatureID,last.mapID,last.points))
+        end
+    end
+    local reportedBorder
+    local function reportBorder(b)
+        say("  Border: "..b.reason.."; lookup="..b.lookup)
+        if b.map then say("  Player map: "..b.map.name.." ("..b.map.mapID..")") end
+        if b.query then say("  Query map: "..b.query.name.." ("..b.query.mapID..")") end
+        if b.x then say(string.format("  Query position: %.4f, %.4f",b.x,b.y)) end
+        if b.width then say(string.format("  Query size: %.1f x %.1f yards; negative X=west, negative Y=north",b.width,b.height)) end
+        say("  Guard: 42-yard radius; centre and eight directions at 14, 28, 42 yards")
+        say("  Samples: "..b.counts.same.." current zone; "..b.counts.different.." other zone; "..b.counts.unknown.." unavailable")
+        for _,r in ipairs(b.rows) do
+            say(string.format("  Offset %.2f, %.2f yd: %s",r.dx,r.dy,r.state)
+                ..(r.zoneID and ("; "..r.zoneName.." ("..r.zoneID..")") or "")
+                ..string.format("; query %.2f, %.2f",r.x*100,r.y*100)..(r.detail and ("; "..r.detail) or ""))
+        end
+    end
+    for _,unit in ipairs({"target","mouseover"}) do
+        local result=locations.CheckObservation(unit,read(UnitGUID,unit),true)
+        say(unit..": "..(result.allowed and "PASS: " or "SKIP: ")..result.reason)
+        if result.range then
+            say("  Item 4945 (40 yd): "..result.range.item40.."; item 18904 (35 yd fallback): "..result.range.item
+                .."; interaction 4 (~28 yd): "..result.range.interact)
+        end
+        local b=result.border
+        if b then
+            reportedBorder=b
+            if b.map and journal and journal.ExistingUnitEntry then
+                local id=journal:ExistingUnitEntry(unit)
+                local entry=id and journal.entries[id]
+                local saved=entry and entry.observationLocations and entry.observationLocations[b.map.mapID]
+                local total=0;for _ in pairs(saved and saved.points or {}) do total=total+1 end
+                say("  Saved observer points for this creature on player map: "..total)
+            end
+            reportBorder(b)
+        end
+    end
+    if not reportedBorder then
+        local b=locations.BorderCheck(true)
+        say("Player-only border check: "..(b.allowed and "PASS: " or "SKIP: ")..b.reason)
+        reportBorder(b)
+    end
+end
 local function count(values) local n=0;for _ in pairs(values) do n=n+1 end;return n end
 local function field(mode) return mode=="observations" and "observationLocations" or "killLocations" end
 function locations.RememberMap(entry,map,mode)
@@ -109,7 +344,7 @@ function locations.Record(entry,sample,mode)
     -- upgrades an approximation; a later approximation never downgrades it.
     saved.points[key]={x=p.x,y=p.y,seenAt=p.seenAt,
         approximate=p.approximate and (not previous or previous.approximate) or false}
-    locations.TrimPoints(saved.points)
+    if not previous and count(saved.points)>locations.MAX_POINTS then locations.TrimPoints(saved.points) end
     return true
 end
 function locations.Merge(target,source,mode)

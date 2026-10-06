@@ -238,13 +238,13 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             local e=rows[first+i];row.id=e and e.id;row:SetShown(e~=nil)
             row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-(first+i-1)*ROW_HEIGHT)
             if e then
-                row.name:SetText(L.AutomaticLabel(journal:Title(e),L.IsAutomatic(e)));row.icon:SetTexture(icons[e.kind]);row:SetSelected(e.id==state.selected)
+                row.name:SetText(L.Safe(journal:Title(e)));row.icon:SetTexture(icons[e.kind]);row:SetSelected(e.id==state.selected)
                 local text=L.kinds[e.kind]
                 if e.kind=="writing" then text=text.." • "..(journal:WritingSummary(e).complete and "complete" or "partial") end
                 if e.kind=="mystery" then text=text.." • "..(mysteryNames[e.status] or "Open") end
                 if e.revisit then text=text.." • revisit" end
                 if #(e.reports or {})>0 then text=text.." • reports" end
-                row.context:SetText(L.Safe(text))
+                row.context:SetText((L.IsAutomatic(e) and "|cff80d0ff[A]|r " or "")..L.Safe(text))
             end
         end
         m.empty:SetShown(#rows==0);m.empty:SetText(next(journal.entries) and "No matching entries.\nTry clearing the filters." or

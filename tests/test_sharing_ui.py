@@ -265,6 +265,29 @@ j.entries[42].rank='Rare';book:Refresh()
 assert(composer.cost.text:find('Total cost: 2 knowledge',1,true),'composer applies rare price')
 j.entries[42].rank='Elite';book:Refresh()
 assert(composer.cost.text:find('Total cost: 1 knowledge',1,true),'composer rounds elite base price down')
+do
+    local function summaryText()
+        local parts={}
+        for _,row in ipairs(main.summaryBasicRows) do
+            if row:IsShown() then parts[#parts+1]=row.text end
+        end
+        return table.concat(parts,' ')
+    end
+    assert(j:GetSuppressRankInfo(),'rank suppression starts on')
+    main.options.scripts.OnShow(main.options)
+    assert(main.options.suppressRankInfo:GetChecked())
+    for _,rank in ipairs({'Elite','Rare','Rare Elite'}) do
+        j.entries[42].rank=rank;book:Refresh()
+        assert(not summaryText():find(rank,1,true) and main.portraitBorder:IsShown())
+        main.options.suppressRankInfo:SetChecked(false)
+        main.options.suppressRankInfo.scripts.OnClick(main.options.suppressRankInfo);book:Refresh()
+        assert(summaryText():find(rank,1,true) and main.portraitBorder:IsShown())
+        main.options.suppressRankInfo:SetChecked(true)
+        main.options.suppressRankInfo.scripts.OnClick(main.options.suppressRankInfo);book:Refresh()
+    end
+    j.entries[42].rank='World Boss';book:Refresh()
+    assert(summaryText():find('World Boss',1,true))
+end
 j.entries[42].rank=nil;book:Refresh()
 assert(composer.send.enabled,'funded report ready outside combat')
 for _,selfName in ipairs({'Alice Sunstrider','alice sunstrider','  ALICE   SUNSTRIDER  '}) do
@@ -320,7 +343,7 @@ for id in pairs(j.entries) do j:DeleteEntry(id) end
 book:Refresh();assert(main.shareButton.enabled,'active transfer remains accessible after entry deletion')
 composer.cancel.scripts.OnClick();eq(tx.stage,'cancelled');eq(select(4,j:GetSharingBalance()),0)
 
-npcID=42;book:OpenAtUnit('target');book:OpenNotes()
+npcID=43;j:UpdateDeletedSelections();npcID=42;book:OpenAtUnit('target');book:OpenNotes()
 local notes=AzerothFieldbookCreatureNotes
 notes.scripts.OnShow(notes) -- Native Show dispatch, before any pin interaction.
 assert(main.creatureNotesButton.afbSelected,'first notes opening highlights its launcher without pinning')
@@ -539,14 +562,15 @@ local windows={window,main.help,main.options,
     AzerothFieldbookBestiaryDamageNotes,
     notes,composer,receiver,AzerothFieldbookDebugReport}
 for _,frame in ipairs({window,main.help,main.options,
-    main.notesForm,
-    main.effectPicker,main.damageForm,notes,composer,receiver,AzerothFieldbookDebugReport}) do
+    main.notesForm,main.effectPicker,notes,composer,receiver,AzerothFieldbookDebugReport}) do
     assert(frame.parent==UIParent and frame.strata=='MEDIUM' and frame.toplevel,
-        'each independent window must be able to raise above every other addon window')
+        'independent window state: '..tostring(frame.name)..'; strata='..tostring(frame.strata)..'; toplevel='..tostring(frame.toplevel))
     frame.scripts.OnMouseDown(frame); eq(focusedWindow,frame)
 end
+assert(main.damageForm.parent==main.detail,'damage observations are an in-page view')
 composer.recipient.scripts.OnMouseDown(composer.recipient)
 eq(focusedWindow,composer,'clicking a text field raises its own window')
+npcID=42;book:OpenAtUnit('target');book:OpenNotes()
 notes.notesArea.scripts.OnMouseDown(notes.notesArea,'LeftButton')
 eq(focusedWindow,notes); assert(notes.notes.focus,'focus hooks preserve the original control handler')
 window.titleBar.scripts.OnMouseDown(window.titleBar)
@@ -584,10 +608,11 @@ for _,frame in pairs(windows) do
     frame.scripts.OnDragStop(frame)
     assert(db.windowPositions[frame:GetName()],frame:GetName()..' must save its position')
 end
-for key,frame in pairs({AbilityEffects=main.effectPicker,DamageObservation=main.damageForm}) do
+for key,frame in pairs({AbilityEffects=main.effectPicker}) do
     frame.left=240; frame.top=600; frame.scripts.OnDragStop(frame)
     assert(db.windowPositions[key],key..' must save its position')
 end
+assert(not db.windowPositions.DamageObservation,'in-page damage observations do not save a separate window position')
 GetCursorPosition=function() return 10,20 end
 window.titleBar.scripts.OnDragStart()
 window.left=360; window.top=740; window.titleBar.scripts.OnDragStop()
@@ -952,20 +977,23 @@ local window=book:GetShell():GetFrame()
     eq(main.damageBorder:GetHeight(),115);eq(main.damageScroll:GetHeight(),75)
     eq(main.modelBorder:GetHeight(),139);eq(main.model:GetHeight(),135)
     eq(main.beastLoreButton.point[2],344);eq(main.beastLoreButton:GetWidth(),227)
-    eq(main.damageButton.point[3],-248);eq(main.beastLoreButton.point[3],-133)
+    eq(main.damageButton.point[3],-248);eq(main.beastLoreButton.point[3],-277)
     eq(main.damageBorder.point[3],-133);eq(main.damageScroll.point[3],-163)
-    eq(main.modelBorder.point[3],-162);eq(main.model.point[3],-164)
+    eq(main.modelBorder.point[3],-133);eq(main.model.point[3],-135)
     for _,pair in ipairs({{main.detail,detailPoint},
         {main.offenseButton,offensePoint},{main.defenseButton,defensePoint},{main.behaviourButton,behaviourPoint}}) do
         for index,value in ipairs(pair[2]) do eq(pair[1].point[index],value,'existing anchor stays fixed') end
     end
     main.beastLoreButton.scripts.OnClick();assert(main.beastLore.shown)
-    eq(main.beastLore.creature.text,j:GetBasicInfo(42).name)
-    eq(main.beastLore.creature.textColor[1],1);eq(main.beastLore.creature.textColor[2],0.82)
+    main.beastLore.scripts.OnShow(main.beastLore)
+    assert(not main.abilityPanel.shown,'lore replaces ability rows and editing controls')
+    assert(main.beastLore.closeButton==nil,'lore is a page view without a close button')
+    assert(main.beastLore.creature==nil,'overlay uses the creature name above it')
+    eq(main.beastLore.area:GetHeight(),194,'name row space enlarges the lore box')
     assert(not main.beastLore.send.enabled,'empty lore cannot be sent')
     e.beastLore={level=12,observed=now,rows={{left='Health:',right='244'},{left='Diet:',right='Meat'}}}
     e.beastLoreSource='gameTooltip';j:Touch();book:Refresh()
-    assert(main.beastLore.content.text:find('Health:  244',1,true))
+    assert(main.beastLore.content.text:find('|cff80d0ffHealth:|r  244',1,true))
     assert(main.beastLore.provenance.text:find('Locked',1,true))
     local sentRecipient
     local oldSharing=j.sharing
@@ -979,7 +1007,9 @@ local window=book:GetShell():GetFrame()
     j.sharing=oldSharing
     j:SetEntryConfirmed(42,true);book:Refresh()
     assert(main.beastLore.shown and main.beastLoreButton.enabled~=false,'locked beasts can read lore')
-    main.beastLore.closeButton.scripts.OnClick();assert(not main.beastLore.shown)
+    main.beastLoreButton.scripts.OnClick();assert(not main.beastLore.shown)
+    main.beastLore.scripts.OnHide(main.beastLore)
+    assert(main.abilityPanel.shown,'toggling lore off restores abilities')
     main.beastLoreButton.scripts.OnClick();assert(main.beastLore.shown)
     local other=rowFor(43);other.scripts.OnClick(other)
     assert(not main.beastLore.shown and not main.beastLoreButton.shown)

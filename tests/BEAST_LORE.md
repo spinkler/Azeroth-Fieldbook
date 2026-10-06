@@ -11,6 +11,8 @@ delivery or visual correctness. Use two players on the same addon version.
 1. On a hunter, select a beast and open Known Beast Lore. Check both headings are
    yellow, the empty text fits the dark inset box, and the full-name field and
    Send Beast Lore button fit below it without changing the main book layout.
+   The lore view replaces Recorded abilities below the divider without an outer
+   window or close button. Toggle Known Beast Lore off to restore the abilities.
 2. Cast Beast Lore on the target. Compare every field in the native tooltip with
    the saved box (both columns, including resistances, diet and any abilities).
    Wait five seconds for delayed fields. Check the observed level and source.
@@ -35,3 +37,7 @@ delivery or visual correctness. Use two players on the same addon version.
 9. Resize using the UI-scale option, change parchment brightness, drag the lore
    window, close/reopen it and use Escape. Verify scrolling with a long report
    and switch between beasts and non-beasts to check visibility/layout restoration.
+
+The page overlay omits the repeated creature name. Its provenance row moves up
+24 pixels and the lore viewport grows from 170 to 194 pixels, keeping sharing
+controls fixed. Confirm the name above the overlay still identifies the creature.

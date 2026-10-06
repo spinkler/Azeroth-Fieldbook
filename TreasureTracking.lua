@@ -238,6 +238,10 @@ function ns.CreateTreasureTracking(journal)
             if C_Timer and type(C_Timer.After)=="function" then C_Timer.After(0.25,scan) else scan() end
         elseif event=="LOOT_READY" then
             self.active=nil;self.pending,self.pendingReason=self:ReadLoot()
+            if not self.pending and (self.world or self.interaction or self.cast
+                or (self.pendingReason and self.pendingReason:find("World loot",1,true))) then
+                self:Status("Capture skipped: "..(self.pendingReason or "Source unavailable."))
+            end
         elseif event=="LOOT_OPENED" then
             local _,isFromItem=...
             if not T.Public(isFromItem) or (isFromItem~=nil and type(isFromItem)~="boolean") or T.Read(IsFishingLoot)~=false then
@@ -269,6 +273,10 @@ function ns.CreateTreasureTracking(journal)
             local sample=self.active and self:ReadLoot()
             if sample and sample.guid==self.active.guid then self:Capture(sample) end
         elseif event=="LOOT_CLOSED" then
+            -- Autoloot can close without OPENED. READY already checked fishing,
+            -- every slot's exact source and readable item quantities. Preserve
+            -- only that fresh snapshot; OPENED rejections clear it beforehand.
+            if fresh(self.pending,3) then self:Capture(self.pending) end
             self.active=nil;self.pending=nil;self.interaction=nil;self.cast=nil
             for guid,v in pairs(self.recent) do if v.suppressed then self.recent[guid]=nil end end
         elseif event=="GET_ITEM_INFO_RECEIVED" or event=="ITEM_DATA_LOAD_RESULT" then
