@@ -21,7 +21,7 @@ def render(vertices, name):
     mask = mask.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
     image = Image.new('RGBA', (SIZE, SIZE), 'white')
     image.putalpha(mask)
-    image.save(ROOT / 'Artwork' / name, compression=None)
+    image.save(ROOT / 'Artwork' / name, optimize=True)
 
 
 if __name__ == '__main__':
@@ -30,5 +30,5 @@ if __name__ == '__main__':
         angle = -math.pi / 2 + i * math.pi / 5
         radius = 7 if i % 2 == 0 else 3
         star.append((7 + math.cos(angle) * radius, 7 + math.sin(angle) * radius))
-    render(star, 'RewardStar.tga')
-    render([(1, 3), (4, 6), (7, 1), (10, 6), (13, 3), (12, 13), (2, 13)], 'RewardCrown.tga')
+    render(star, 'RewardStar.png')
+    render([(1, 3), (4, 6), (7, 1), (10, 6), (13, 3), (12, 13), (2, 13)], 'RewardCrown.png')

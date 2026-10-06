@@ -1,6 +1,7 @@
 package-as: AzerothFieldbook
 
 ignore:
+  - Artwork/Sources
   - tests
   - .github
 

@@ -199,7 +199,7 @@ end
 function U.FooterBackground(parent,shell)
     local paper=parent:CreateTexture(nil,"BACKGROUND")
     paper:SetPoint("TOPLEFT",332,-584);paper:SetSize(600,123)
-    paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga");paper:SetDesaturated(true)
+    paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png");paper:SetDesaturated(true)
     shell:AddBackgroundLayer(paper,0.17,0.17,0.17,true)
     for _,edge in ipairs({{"TOPLEFT","TOPRIGHT",true},{"BOTTOMLEFT","BOTTOMRIGHT",true},{"TOPLEFT","BOTTOMLEFT",false},{"TOPRIGHT","BOTTOMRIGHT",false}}) do
         local border=parent:CreateTexture(nil,"BORDER")
@@ -234,7 +234,7 @@ function U.FooterFades(scroll,shell,topInset)
         for i=1,steps do
             local strip=edge:CreateTexture(nil,"ARTWORK")
             strip:SetPoint(top and "TOPLEFT" or "BOTTOMLEFT",0,(top and -1 or 1)*(i-1)*fadeHeight/steps)
-            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga");strip:SetDesaturated(true)
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png");strip:SetDesaturated(true)
             strip:SetAlpha(1-(i-1)/(steps-1));shell:AddBackgroundLayer(strip,0.17,0.17,0.17,true)
             edge.strips[i]=strip
         end
@@ -270,7 +270,7 @@ function U.ContactListFades(scroll,shell,parent,x,y)
         for i=1,steps do
             local strip=frame:CreateTexture(nil,"ARTWORK")
             strip:SetPoint(top and "TOPLEFT" or "BOTTOMLEFT",0,(top and -1 or 1)*(i-1)*fadeHeight/steps)
-            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
             strip:SetAlpha(1-(i-1)/(steps-1))
             shell:AddBackgroundLayer(strip,0.504,0.504,0.48888)
             frame.strips[i]=strip
@@ -315,7 +315,7 @@ function U.Panel(parent,shell,title,back)
     p:SetPoint("TOPLEFT",38,-53);p:SetSize(884,652);p:EnableMouse(true)
     p:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=20})
     local paper=p:CreateTexture(nil,"BACKGROUND");paper:SetPoint("TOPLEFT",5,-5);paper:SetPoint("BOTTOMRIGHT",-5,5)
-    paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga");paper:SetDesaturated(true)
+    paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png");paper:SetDesaturated(true)
     shell:AddBackgroundLayer(paper,0.17,0.17,0.17,true)
     p.title=U.Label(p,title,20,-18,720,"GameFontNormalLarge");p.title:SetWordWrap(false)
     p.back=ui.Button(p,"Back",770,-12,90,back)

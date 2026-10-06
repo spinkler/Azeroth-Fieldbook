@@ -87,8 +87,8 @@ local function createKillReward(parent,crownOffset)
         texture.shadow=shadow
         parts[1]=texture
     end
-    artwork("RewardStar.tga",reward.parts)
-    artwork("RewardCrown.tga",reward.crownParts)
+    artwork("RewardStar.png",reward.parts)
+    artwork("RewardCrown.png",reward.crownParts)
     reward.crownParts[1]:ClearAllPoints()
     reward.crownParts[1]:SetPoint("TOPLEFT",reward,"TOPLEFT",0,crownOffset)
     reward.crownParts[1]:SetPoint("BOTTOMRIGHT",reward,"BOTTOMRIGHT",0,crownOffset)
@@ -948,35 +948,35 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         -- Quiet illustration on the paper, below all interactive content.
         book.gnollIllustration=book:CreateTexture(nil,"BACKGROUND",nil,3)
-        book.gnollIllustration:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryGnoll.tga")
+        book.gnollIllustration:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryGnoll.png")
         -- Full image is 360 x 440 at (-58,-16); keep it left of the divider.
         book.gnollIllustration:SetSize(296,418)
         book.gnollIllustration:SetPoint("BOTTOMLEFT",book,"BOTTOMLEFT",6,6)
         book.gnollIllustration:SetTexCoord(64/360,1,0,1-22/440)
         book.gnollIllustration:SetAlpha(0.33)
-        applyIllustrationInk(book.gnollIllustration,"BestiaryGnoll.tga",64/360,1,0,1-22/440)
+        applyIllustrationInk(book.gnollIllustration,"BestiaryGnoll.png",64/360,1,0,1-22/440)
         book.koboldIllustration=book:CreateTexture(nil,"BACKGROUND",nil,3)
-        book.koboldIllustration:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryKobold.tga")
+        book.koboldIllustration:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryKobold.png")
         book.koboldIllustration:SetSize(334,418)
         book.koboldIllustration:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-22,6)
         book.koboldIllustration:SetTexCoord(0,334/360,0,1-22/440)
         book.koboldIllustration:SetAlpha(0.33)
-        applyIllustrationInk(book.koboldIllustration,"BestiaryKobold.tga",0,334/360,0,1-22/440)
+        applyIllustrationInk(book.koboldIllustration,"BestiaryKobold.png",0,334/360,0,1-22/440)
         book.koboldFades={}
         -- Mask only the kobold silhouette, keeping surrounding dragon lines.
         book.dragonIllustration={}
         local dragon=book:CreateTexture(nil,"BACKGROUND",nil,0)
-        dragon:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryDragon.tga")
+        dragon:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryDragon.png")
         -- Shift the full illustration 202 pixels right, cropping at the paper edge.
         dragon:SetSize(302,360)
         dragon:SetPoint("TOPRIGHT",book,"TOPRIGHT",-2,-122)
         dragon:SetTexCoord(0,302/540,0,1)
         dragon:SetAlpha(0.33)
-        applyIllustrationInk(dragon,"BestiaryDragon.tga",0,302/540,0,1)
+        applyIllustrationInk(dragon,"BestiaryDragon.png",0,302/540,0,1)
         book.dragonIllustration[1]=dragon
         if type(book.CreateMaskTexture)=="function" and type(dragon.AddMaskTexture)=="function" then
             local mask=book:CreateMaskTexture()
-            mask:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryKoboldSilhouetteMask.tga")
+            mask:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryKoboldSilhouetteMask.png")
             mask:SetSize(960,740)
             mask:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-20,0)
             dragon:AddMaskTexture(mask)
@@ -990,7 +990,7 @@ local ink = { 0.75, 0.8, 0.8 }
             local strip=book:CreateTexture(nil,"BACKGROUND",nil,4)
             strip:SetPoint("BOTTOMLEFT",book,"BOTTOMLEFT",x,y)
             strip:SetSize(width,height)
-            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
             strip:SetAlpha(alpha)
             addBackgroundLayer(strip,0.504,0.504,0.48888)
             gnollFades[#gnollFades+1]={texture=strip,x=x,y=y,width=width,height=height,right=right}
@@ -2007,7 +2007,7 @@ local ink = { 0.75, 0.8, 0.8 }
         effectPicker:SetScript("OnHide",function(self) self:StopMovingOrSizing() end)
         local effectPaper=effectPicker:CreateTexture(nil,"BACKGROUND",nil,1)
         effectPaper:SetPoint("TOPLEFT",effectPicker,"TOPLEFT",6,-6); effectPaper:SetPoint("BOTTOMRIGHT",effectPicker,"BOTTOMRIGHT",-6,6)
-        effectPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+        effectPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
         effectPaper:SetTexCoord(0,1,0,1)
         addBackgroundLayer(effectPaper, 0.504,0.504,0.48888)
         label(effectPicker,"Effects",25,-25,350,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
@@ -2274,7 +2274,7 @@ local ink = { 0.75, 0.8, 0.8 }
         notesForm:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
         local notesPaper=notesForm:CreateTexture(nil,"BACKGROUND",nil,1)
         notesPaper:SetPoint("TOPLEFT",notesForm,"TOPLEFT",6,-6); notesPaper:SetPoint("BOTTOMRIGHT",notesForm,"BOTTOMRIGHT",-6,6)
-        notesPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+        notesPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
         notesPaper:SetTexCoord(0,1,0,1)
         addBackgroundLayer(notesPaper, 0.504,0.504,0.48888)
         notesForm.title=label(notesForm,"Damage observations",24,-25,400,"GameFontNormalLarge")

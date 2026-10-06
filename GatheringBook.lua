@@ -411,7 +411,7 @@ function ns.CreateGatheringBook(journal,shell)
         book=content;controller.frame=book
         -- Match the Bestiary's lower-left parchment illustration treatment.
         local mill=content:CreateTexture(nil,"BACKGROUND",nil,3)
-        mill:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\GatheringTwilightJasmine.tga")
+        mill:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\GatheringTwilightJasmine.png")
         -- Let the full sprig extend below the page, cropping at the paper inset.
         mill:SetSize(281,284)
         mill:SetPoint("BOTTOMLEFT",content,"BOTTOMLEFT",6,6)
@@ -425,7 +425,7 @@ function ns.CreateGatheringBook(journal,shell)
             local strip=content:CreateTexture(nil,"BACKGROUND",nil,4)
             strip:SetPoint("BOTTOMLEFT",content,"BOTTOMLEFT",x,y)
             strip:SetSize(width,height)
-            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
             strip:SetAlpha(alpha)
             shell:AddBackgroundLayer(strip,0.504,0.504,0.48888)
             fades[#fades+1]={texture=strip,x=x,y=y,width=width,height=height}

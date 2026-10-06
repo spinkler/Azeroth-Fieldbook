@@ -326,11 +326,20 @@ stroke-quality reference. Prefer loose pencil contours, variable pressure,
 broken/searching lines and restrained cross-hatching over smooth vector outlines.
 Preserve icon identity, geometry and orientation unless a flip is requested.
 Remove paper and interior white fills; match the original kobold ink
-(sampled RGB 75,32,2), retain alpha details, and use direct RGBA TGA rendering.
+(sampled RGB 75,32,2), retain alpha details, and render textures directly.
+Use lossless PNG files as the source of truth and for runtime artwork; all
+artwork has been verified in the Forever beta client. Keep archived or
+superseded PNG artwork in `Artwork/Sources` (excluded from release packages).
+Do not retain duplicate TGA versions when a verified PNG equivalent exists. The
+experimental palette BLP2 files triggered the Forever beta client image-loader
+assertion (`StaticImage.cpp:876`, build 70235); decoder round-trip tests alone
+are insufficient to establish client compatibility. Do not reintroduce that
+conversion. Preserve approved geometry, colour and alpha when optimising files.
+Archive superseded art with the PNG source masters rather than packaging it.
 Do not replace cropped artwork with solid-colour native ink masks: that smeared
 the drawings on this client. Default to 33% opacity, parchment edge fades and
 dark-mode desaturation; respect each illustration's established exceptions.
-Keep the prior asset as a fallback and visually inspect the new result before
+Keep the prior PNG asset as a fallback and visually inspect the new result before
 installation. User-requested changes to placement and opacity take precedence.
 
 ## Scope

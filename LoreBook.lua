@@ -294,7 +294,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         c.frame=content
         -- Original-facing inscription book in the lower-left paper corner.
         local loreBook=content:CreateTexture(nil,"BACKGROUND",nil,0)
-        loreBook:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\LoreInscriptionBookSketch.tga")
+        loreBook:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\LoreInscriptionBookSketch.png")
         loreBook:SetSize(296,296)
         loreBook:SetTexCoord(24/320,1,0,296/320)
         loreBook:SetPoint("BOTTOMLEFT",content,"BOTTOMLEFT",6,61)
@@ -306,7 +306,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             local strip=content:CreateTexture(nil,"BACKGROUND",nil,4)
             strip:SetPoint("BOTTOMLEFT",content,"BOTTOMLEFT",x,y)
             strip:SetSize(width,height)
-            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
             strip:SetAlpha(alpha)
             shell:AddBackgroundLayer(strip,0.504,0.504,0.48888)
             fades[#fades+1]={texture=strip,x=x,y=y,width=width,height=height}

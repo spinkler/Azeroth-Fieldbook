@@ -903,7 +903,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         c.frame=content
         -- Match the Bestiary's lower-left parchment illustration treatment.
         local mill=content:CreateTexture(nil,"BACKGROUND",nil,3)
-        mill:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\LedgerCoinSketch.tga")
+        mill:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\LedgerCoinSketch.png")
         mill:SetSize(296,296)
         mill:SetPoint("BOTTOMLEFT",content,"BOTTOMLEFT",6,31)
         mill:SetTexCoord(24/320,1,0,296/320)
@@ -916,7 +916,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             local strip=content:CreateTexture(nil,"BACKGROUND",nil,4)
             strip:SetPoint("BOTTOMLEFT",content,"BOTTOMLEFT",x,y)
             strip:SetSize(width,height)
-            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.tga")
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
             strip:SetAlpha(alpha)
             shell:AddBackgroundLayer(strip,0.504,0.504,0.48888)
             fades[#fades+1]={texture=strip,x=x,y=y,width=width,height=height}

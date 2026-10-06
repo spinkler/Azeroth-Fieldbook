@@ -860,7 +860,7 @@ class GatheringUITests(unittest.TestCase):
             for _,dot in ipairs(markers) do
                 assert(dot:GetWidth()==6 and dot:GetHeight()==6)
                 assert(not rawget(dot.border,"mask") and not rawget(dot.texture,"mask"))
-                assert(dot.texture.texture:find('GatheringDot.tga',1,true))
+                assert(dot.texture.texture:find('GatheringDot.png',1,true))
                 assert(dot.point[4]==dot.location.x/10000*map.map:GetWidth())
                 assert(dot.point[5]==-dot.location.y/10000*map.map:GetHeight())
             end

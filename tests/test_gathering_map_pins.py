@@ -90,7 +90,7 @@ class GatheringMapPinsTests(unittest.TestCase):
             journal:SetShowNodesOn('minimap',true);pins:Refresh()
             for _,p in ipairs({pins.worldPins[1],pins.miniPins[1]}) do
                 assert(p:GetWidth()==6 and p:GetHeight()==6)
-                assert(p.border.texture:find('GatheringDot.tga',1,true) and p.texture.texture==p.border.texture)
+                assert(p.border.texture:find('GatheringDot.png',1,true) and p.texture.texture==p.border.texture)
                 assert(not rawget(p.border,'mask') and not rawget(p.texture,'mask'),'no scroll-frame mask dependency')
                 assert(p.border.vertexColor[4]==1 and p.texture.vertexColor[4]==1)
                 assert(p.texture.vertexColor[1]==0.3 and p.texture.vertexColor[2]==1

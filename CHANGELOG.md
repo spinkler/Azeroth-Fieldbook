@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.33.1 - 2026-10-06
+
+- Convert all runtime illustrations, masks, parchment and custom icons to lossless PNG, reducing active artwork from 18.96 MB to 3.24 MB without changing pixels, transparency, placement, opacity or fades. All artwork was verified in-game on the Forever beta client.
+- Adopt PNG as the artwork source of truth and remove equivalent TGA files. Archive superseded illustrations outside release packages so CurseForge downloads contain only the required runtime artwork.
+- Update the reward-art generator and artwork guidance to use PNG. Remove the experimental palette BLP conversion that caused a client image-loader assertion.
+
 ## v0.33.0 - 2026-10-06
 
 - Aesthetics update: add parchment pencil sketches across the journals, using consistent brown ink, transparent interiors and gradual diagonal corner fades. Bestiary features a gnoll in the left pane, a kobold in the lower right and a dragon on the introductory page with fading around the kobold silhouette.

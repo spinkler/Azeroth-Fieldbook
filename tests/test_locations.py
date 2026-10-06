@@ -476,7 +476,7 @@ class LocationsWindowTests(unittest.TestCase):
                 ns.CreatureLocations.Record(e,{mapID=37,name='Test zone',point={x=p[1],y=p[2],seenAt=now,approximate=false}})
             end
             window:Open(42);local f=window:GetFrame()
-            assert(f.paper.textureID:find('ParchmentBook.tga',1,true))
+            assert(f.paper.textureID:find('ParchmentBook.png',1,true))
             j:SetBackgroundBrightness(1.2);window:Refresh()
             eq(f.paper.tint[1],0.504*1.2*0.34);eq(f.paper.tint[3],f.paper.tint[1])
             assert(f.paper.desaturated and f.menu.paper.desaturated)

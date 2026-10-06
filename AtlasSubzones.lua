@@ -1426,7 +1426,7 @@ function S.InstallMap(map,journal,cursorPoint)
                     cells[cell]=true;n=n+1
                     local t=dots[n] or target.frame:CreateTexture(nil,"ARTWORK",nil,-6);dots[n]=t
                     t:ClearAllPoints();t:SetPoint("CENTER",self.canvas,"TOPLEFT",p.x/10000*width,-p.y/10000*height)
-                    t:SetSize(3/self.zoom,3/self.zoom);t:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\GatheringDot.tga")
+                    t:SetSize(3/self.zoom,3/self.zoom);t:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\GatheringDot.png")
                     t:SetVertexColor(1,0.94,0.72,0.85);t:Show()
                 end
             end
