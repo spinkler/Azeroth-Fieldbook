@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.34.2 (Release)
+# Azeroth Fieldbook 0.35.0 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -90,6 +90,22 @@ character mode. Sharing has tested
 report-builder, validator, preview and merge hooks; delivery/import/export UI
 awaits an extension to the existing transport and points policy. See
 [Treasure model, capture limits and pending in-game checks](tests/TREASURE.md).
+
+**Merchant’s Ledger** includes a **Cash Flow** toggle beside Favourite, covering
+the left panel including bottom controls, with its own search and filter in the
+usual positions. Search dates or recorded item/ability action names and filter
+Gold in or Gold out. Nearby merchant purchases and training are recorded as
+unverified action context. It records this character's
+observed gold in, gold out and net change while playing, retaining ongoing
+balance history and cumulative totals with no row limit. A usage meter beneath
+Back to contacts shows the stored row count and estimated saved-data size.
+Initial gold establishes the starting balance. Login and logout balances are saved
+quietly; differences from the last saved balance appear as Login balance
+discrepancy entries, including changes while the addon was disabled. All observed
+balance changes are recorded, with unidentified sources left unverified;
+finances remain character-specific even with account-wide contact tracking.
+Consecutive confirmed loot cash is consolidated into one row with a collection
+count. Other income or any expenditure starts a new run; totals remain unchanged.
 
 **Merchant’s Ledger** is now a personal directory of encountered merchants,
 trainers and services. Class trainers with recognized English trainer titles

@@ -3,7 +3,43 @@ local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or b
 local L,U,R=ns.Ledger,ns.AtlasUI,ns.LedgerReports
 local date=L.Date
 local trainingColors={available="ff80e680",unavailable="ffff8080",used="ff999999",unknown="ffffd100"}
+local function learnedTraining(lesson)
+    -- Match spellbook names and ranks, rather than resolving a name to an
+    -- arbitrary spell ID. Knowing Rank 1 must not mark Rank 2 as learned.
+    if lesson.costUnit=="training points" then return false end
+    local modern=C_SpellBook and type(C_SpellBook.GetSpellBookItemName)=="function"
+    local count=L.Read(modern and C_SpellBook.GetNumSpellBookSkillLines or GetNumSpellTabs)
+    if not L.Integer(count,0,100) then return false end
+    local bank=modern and Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or (BOOKTYPE_SPELL or "spell")
+    for tab=1,count do
+        local offset,slots
+        if modern then
+            local info=L.Read(C_SpellBook.GetSpellBookSkillLineInfo,tab)
+            if type(info)=="table" and L.Public(info) then offset,slots=info.itemIndexOffset,info.numSpellBookItems end
+        elseif type(GetSpellTabInfo)=="function" then
+            local ok,_,_,start,size=pcall(GetSpellTabInfo,tab)
+            if ok then offset,slots=start,size end
+        end
+        if L.Integer(offset,0,10000) and L.Integer(slots,0,1000) then
+            for index=offset+1,offset+slots do
+                local fn=modern and C_SpellBook.GetSpellBookItemName or GetSpellBookItemName
+                if type(fn)=="function" then
+                    local ok,name,rank=pcall(fn,index,bank)
+                    if ok and L.Name(name) and name==lesson.name and L.Public(rank) then
+                        rank=L.Name(rank) or ""
+                        local wanted=lesson.rank or ""
+                        if wanted=="" or wanted==rank or (wanted=="Passive" and rank=="") then return true end
+                        local a,b=wanted:match("^Rank (%d+)$"),rank:match("^Rank (%d+)$")
+                        if a and b and tonumber(b)>=tonumber(a) then return true end
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
 local function trainingAvailability(lesson,currentLevel)
+    if learnedTraining(lesson) then return "used","Learned by this character" end
     if lesson.availability=="used" then return "used","Already known when inspected" end
     local level=L.Read(UnitLevel,"player")
     if L.Integer(currentLevel,1,255) then level=math.max(L.Integer(level,1,255) and level or 0,currentLevel) end
@@ -597,6 +633,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         p.description:SetText("Different NPCs may share a name, sublabel or template. This contact keeps its own inventory.\n\nFor a recognized returning or travelling NPC, select its earlier record and confirm the same individual. You can also link a personally encountered record to an imported report without confirming its reported goods.\n\nThis is an explicit identity annotation; no stock is combined until confirmation.",true)
     end
     function c:UpdateDetailToggles()
+        if self.main.cashFlowButton then self.main.cashFlowButton:SetSelected(self.panel~=nil and self.panel==self.panels.cashFlow) end
         for key,button in pairs(self.main.detailButtons or {}) do
             if button.SetSelected then
                 local active=self.panel~=nil and ((key=="services" and self.panel==self.panels.notes) or
@@ -604,6 +641,137 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                 button:SetSelected(active)
             end
         end
+    end
+    function c:RefreshCashFlow()
+        local p=self.panels.cashFlow;if not p or self.panel~=p then return end
+        local function money(value,amountColour)
+            local text=value==0 and "0c" or goodsMoney(value)
+            local colours={g="ffffd100",s="ffc7c7cf",c="ffb87333"}
+            return (text:gsub("([gsc])",function(unit)
+                return "|c"..colours[unit]..unit.."|r"..(amountColour and "|c"..amountColour or "")
+            end))
+        end
+        local cash=AzerothFieldbookLedgerDB and AzerothFieldbookLedgerDB.cashFlow or {}
+        local income,expense=cash.income or 0,cash.expense or 0
+        local net=income-expense
+        p.character:SetText(L.Safe(L.Player()))
+        local lines={
+            "|cff80e680Gold in:|r "..money(income),
+            "|cffff8080Gold out:|r "..money(expense),
+            "|cff71d5ffNet change:|r "..(net<0 and "-" or "")..money(math.abs(net)),"",
+            "All observed balance changes are recorded. Login differences from the last saved balance appear as discrepancies, including changes while this addon was disabled. Other sources remain unverified unless identified.","",
+            "|cffffd100Recent activity|r"}
+        if #(cash.entries or {})==0 then lines[#lines+1]="No gold changes recorded yet." end
+        local header=table.concat(lines,"\n")
+        local transactions={}
+        local matches=0
+        local query=(p.search:GetText() or ""):lower()
+        for _,entry in ipairs(cash.entries or {}) do
+            local stamp=L.Safe(date(entry.at))
+            if entry.last and entry.last~=entry.at then stamp=stamp.." – "..L.Safe(date(entry.last)) end
+            local iso=L.Read(_G.date,"%Y-%m-%d %H:%M",entry.at) or ""
+            if entry.last then iso=iso.." "..(L.Read(_G.date,"%Y-%m-%d %H:%M",entry.last) or "") end
+            local party=entry.source=="loot" and "Looted cash" or entry.source=="discrepancy" and "Login balance discrepancy"
+                or entry.counterparty or (entry.context and "Purchase / training") or (entry.amount>0 and "Unidentified income" or "Unidentified expenditure")
+            local searchable=(stamp.." "..iso.." "..(entry.context or "").." "..party):lower()
+            if (not p.direction or (p.direction=="income" and entry.amount>0) or (p.direction=="expense" and entry.amount<0))
+                and searchable:find(query,1,true) then
+                matches=matches+1
+                local firstLine=#lines+1
+                lines[#lines+1]="|cffffffff"..stamp.."|r\n"..(entry.amount>0 and "|cff80e680+" or "|cffff8080-")..money(math.abs(entry.amount),entry.amount>0 and "ff80e680" or "ffff8080").."|r  •  "..(entry.amount>0 and "|cff80e680Balance:|r " or "|cffff8080Balance:|r ").."|cffffffff"..money(entry.balance,"ffffffff").."|r"
+                lines[#lines+1]="|cff71d5ff"..(entry.amount>0 and "From: " or "To: ").."|r"..L.Safe(party)
+                if entry.counterparty and not entry.source then lines[#lines+1]="Observed interaction; attribution unverified" end
+                if entry.context and entry.source~="loot" and entry.source~="discrepancy" then lines[#lines+1]="|cff71d5ffObserved action:|r |cffffffff"..L.Safe(entry.context).."|r" end
+                if entry.source=="discrepancy" then lines[#lines+1]="|cffffd100Login balance discrepancy|r\nPreviously recorded: "..money(entry.previousBalance or 0) end
+                if entry.source=="loot" then lines[#lines+1]="Looted cash • "..tostring(entry.lootCount or 1).." collections" end
+                transactions[#transactions+1]=table.concat(lines,"\n",firstLine,#lines)
+            end
+        end
+        if matches==0 and #(cash.entries or {})>0 then
+            lines[#lines+1]="No activity matches your search and filter."
+            header=header.."\n"..lines[#lines]
+        end
+        local function size(value,depth)
+            if type(value)=="string" then return #string.format("%q",value) end
+            if type(value)~="table" then return #tostring(value) end
+            local bytes=3+depth
+            for key,item in pairs(value) do bytes=bytes+depth+size(key,depth+1)+size(item,depth+1)+8 end
+            return bytes
+        end
+        local bytes=size(cash,0)
+        local usage=bytes>=1048576 and string.format("%.2f MB",bytes/1048576) or string.format("%.1f KB",bytes/1024)
+        p.usage:SetText(string.format("%d rows • ~%s saved\nOngoing history • No row limit",#(cash.entries or {}),usage))
+        p.read:SetText(table.concat(lines,"\n"))
+        p.read:SetTransactions(header,transactions)
+    end
+    function c:CashFlow()
+        if self.panel and self.panel==self.panels.cashFlow then self:ClosePanel();return end
+        local p=self:Panel("cashFlow","Cash Flow")
+        p.title:Hide()
+        p:SetHeight(646)
+        if not p.read then
+            p.character=ns.FieldbookUI.EntryCount(p)
+            p.character:ClearAllPoints();p.character:SetPoint("TOPLEFT",self.main,"TOPLEFT",37,-88)
+            p.usage=U.Label(p,"",4,-614,250,"GameFontDisableSmall")
+            p.usage:SetWordWrap(true)
+            p.search=U.Search(p,32,-20,168,200)
+            p.search:HookScript("OnTextChanged",function() c:RefreshCashFlow();if p.read then p.read:SetVerticalScroll(0) end end)
+            p.inputs={p.search}
+            p.filters=ns.FieldbookUI.FilterButton(p,206,-20,function(button)
+                p.search:ClearFocus()
+                c:Menu(button,function(_,root)
+                    root:CreateTitle("Cash Flow")
+                    for _,choice in ipairs({{"all","All activity"},{"income","Gold in"},{"expense","Gold out"}}) do
+                        local key=choice[1]
+                        root:CreateButton(choice[2],function() p.direction=key~="all" and key or nil;c:RefreshCashFlow();p.read:SetVerticalScroll(0) end)
+                    end
+                end)
+            end,function() p.direction=nil;c:RefreshCashFlow() end)
+            local body
+            p.read,body=U.ReadArea(p,4,-65,228,506)
+            p.fadeHost=CreateFrame("Frame",nil,p);p.fadeHost:SetAllPoints(self.main)
+            U.ContactListFades(p.read,shell,p.fadeHost,42,-155)
+            -- This view assembles its own colour markup and escapes dynamic names.
+            -- The ordinary ReadArea setter escapes all pipes for untrusted prose.
+            function p.read:SetText(text,reset)
+                self.text:SetText(text)
+                body:SetHeight(math.max(506,self.text:GetStringHeight()+12))
+                if reset then self:SetVerticalScroll(0) end
+                self:UpdateScrollChildRect();self:RefreshScrollBar()
+            end
+            p.read.transactionRows={}
+            p.read.header=U.Label(body,"",0,0,228,"GameFontHighlightSmall")
+            p.read.header:SetWordWrap(true);p.read.header:SetSpacing(3)
+            function p.read:SetTransactions(header,transactions)
+                self.text:Hide()
+                self.header:SetText(header)
+                local y=self.header:GetStringHeight()+12
+                for i,text in ipairs(transactions) do
+                    local row=self.transactionRows[i]
+                    if not row then
+                        row=CreateFrame("Frame",nil,body);row:SetWidth(228)
+                        row.text=U.Label(row,"",0,0,228,"GameFontHighlightSmall")
+                        row.text:SetWordWrap(true);row.text:SetSpacing(3)
+                        row.dividerHost=CreateFrame("Frame",nil,row)
+                        row.dividerHost:SetSize(228,1)
+                        row.divider=ns.FieldbookUI.EntryDivider(row.dividerHost,0,228)
+                        self.transactionRows[i]=row
+                    end
+                    row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-y)
+                    row.text:SetText(text)
+                    row.text:SetTextColor(1,1,1)
+                    local height=row.text:GetStringHeight()+16
+                    row:SetHeight(height)
+                    row.dividerHost:ClearAllPoints()
+                    row.dividerHost:SetPoint("TOPLEFT",row,"TOPLEFT",0,-height+8)
+                    row:Show();y=y+height
+                end
+                for i=#transactions+1,#self.transactionRows do self.transactionRows[i]:Hide() end
+                body:SetHeight(math.max(506,y+4))
+                self:UpdateScrollChildRect();self:RefreshScrollBar()
+            end
+        end
+        self:RefreshCashFlow()
     end
     function c:HasOfferings(e,kind)
         if not e then return false end
@@ -1065,6 +1233,9 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         m.name:SetShadowColor(0,0,0,0.85);m.name:SetShadowOffset(1,-1)
         local titlePath,titleSize,titleFlags=m.name:GetFont()
         if titlePath and titleSize then m.name:SetFont(titlePath,titleSize+2,titleFlags) end
+        m.cashFlowButton=U.Button(m,"Cash Flow",700,-60,104,function() c:CashFlow() end)
+        U.StyleSelection(m.cashFlowButton)
+        ns.RefreshLedgerCashFlow=function() c:RefreshCashFlow() end
         m.favourite=U.SavedButton(m,"Favourite",812,-60,110,function() journal:Favourite(state.selected) end)
         m.sublabel=U.Label(m,"",392,-85,254,"GameFontHighlight");m.sublabel:SetWordWrap(false)
         m.services=U.Label(m,"",392,-108,254,"GameFontHighlightSmall");m.services:SetWordWrap(false)
@@ -1117,7 +1288,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             end
         end
         m.catalogueHiddenButtons={m.detailButtons.services,m.manual,m.remove,m.reports}
-        m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.favourite,"TOPLEFT",-8,0)
+        m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.cashFlowButton,"TOPLEFT",-8,0)
         m.footerBackground=U.FooterBackground(m,shell)
         m.details=U.ReadArea(m,342,-594,555,107)
         U.AlignFooterScrollBar(m.details,m.footerBackground,nil)
@@ -1125,8 +1296,9 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         local path,size,flags=m.details.text:GetFont()
         if path and type(size)=="number" then m.details.text:SetFont(path,size+2,flags) end
         m.message=U.Label(m,"",342,-712,580,"GameFontHighlightSmall");m.message:SetWordWrap(false)
-        for _,event in ipairs({"ZONE_CHANGED","ZONE_CHANGED_INDOORS","ZONE_CHANGED_NEW_AREA","PLAYER_ENTERING_WORLD","PLAYER_LEVEL_UP"}) do m:RegisterEvent(event) end
+        for _,event in ipairs({"ZONE_CHANGED","ZONE_CHANGED_INDOORS","ZONE_CHANGED_NEW_AREA","PLAYER_ENTERING_WORLD","PLAYER_LEVEL_UP","SPELLS_CHANGED"}) do m:RegisterEvent(event) end
         m:SetScript("OnEvent",function(_,event,level)
+            if event=="SPELLS_CHANGED" then c:Refresh();return end
             if event=="PLAYER_LEVEL_UP" then
                 if L.Integer(level,1,255) then c.currentPlayerLevel=level end
                 c:Refresh();return

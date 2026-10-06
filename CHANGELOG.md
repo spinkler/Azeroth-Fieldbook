@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.35.0 - 2026-10-06
+
+- Add Cash Flow beside Merchant's Ledger Favourite, with a character-specific ongoing transaction history, gold in/out totals and net change. The overlay covers the left panel and bottom controls, with its own search and filters in the usual positions. Search dates, recorded item/ability names and transaction sources; filter income or expenditure.
+- Consolidate uninterrupted looted cash into a running total until another transaction breaks the group. Support coin-icon loot messages and delayed event ordering, and repair the latest unclassified loot run identified during testing without changing totals.
+- Quietly save balance checkpoints during play, login and logout. Record positive or negative login discrepancies, including changes while the addon was disabled, once per login. Continue recording all observed balance changes, with no row limit and a row-count/estimated-storage meter beneath Back to contacts.
+- Show From/To on each transaction, including loot, login discrepancies, matching quest rewards and recorded merchant/trainer or mail/trade/auction/transport/bank interaction context. Leave unidentified sources explicit and interaction-only attribution unverified.
+- Place the character name beneath the title using the common entry-count formatting. Add shared parchment scrolling fades and thin fading transaction dividers with stable scrolling anchors. Keep dates, balance figures and observed ability names white; colour action/source labels cyan, Balance labels by income/expense and currency suffixes gold/silver/copper. Fix literal colour codes and remove the redundant Cash Flow heading.
+- Check the current character's spellbook in Training and mark learned abilities grey with rank-aware matching. Refresh through SPELLS_CHANGED without the unsupported LEARNED_SPELL_IN_TAB event, preserve saved observations and keep pet training separate.
+- Add regression coverage for Cash Flow tracking, consolidation, retained history, login discrepancies, search/filter behavior, formatting and dividers, plus learned-ability checks and rank matching.
+
 ## v0.34.2 - 2026-10-06
 
 - Raise Bestiary kill milestones to silver at 25, gold at 50 and crown at 100 kills. Update announcements, Help and documentation while preserving earned knowledge and preventing credited rewards from paying again.

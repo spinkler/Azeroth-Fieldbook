@@ -176,6 +176,138 @@ local function trainerItem(index)
 end
 function ns.CreateLedgerTracking(journal)
     local t={journal=journal,pending={},pendingCount=0,visits={},opening={}}
+    -- Repair the existing latest run identified as loot before icon-format
+    -- detection was fixed. New histories never infer loot from income alone.
+    local personal=AzerothFieldbookLedgerDB
+    local existing=type(personal)=="table" and personal.cashFlow
+    if not ns.InitializationBlocked and not journal.readOnly and type(existing)=="table"
+        and not existing.lootGroupingMigration and (personal.schema or 0)<=L.SCHEMA then
+        existing.lootGroupingMigration=1
+        local entries=existing.entries or {}
+        local first=entries[1]
+        if first and first.amount>0 and not first.source and not first.context then
+            local count=1
+            while entries[count+1] and entries[count+1].amount>0 and not entries[count+1].source and not entries[count+1].context do count=count+1 end
+            if count>1 then
+                first.last=first.at;first.at=entries[count].at
+                for i=count,2,-1 do first.amount=first.amount+entries[i].amount;table.remove(entries,i) end
+                first.source="loot";first.context="Looted cash";first.lootCount=count
+            end
+        end
+    end
+    function t:ConsolidateLoot(cash,entry)
+        if cash.entries[1]~=entry or entry.amount<=0 then return end
+        entry.source="loot";entry.context="Looted cash"
+        local prior=cash.entries[2]
+        if prior and prior.source=="loot" and prior.amount>0 and self.lootRun==prior then
+            prior.amount=prior.amount+entry.amount;prior.balance=entry.balance
+            prior.last=entry.at;prior.lootCount=(prior.lootCount or 1)+1
+            table.remove(cash.entries,1);entry=prior
+        else entry.lootCount=1 end
+        self.lootRun=entry
+        if ns.RefreshLedgerCashFlow then ns.RefreshLedgerCashFlow() end
+    end
+    function t:LootMoney(message)
+        if ns.InitializationBlocked or journal.readOnly or not L.Public(message) or type(message)~="string" or #message>2000 then return end
+        local plain=message:gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r","")
+        local amount=0
+        for _,unit in ipairs({{GOLD_AMOUNT,10000},{SILVER_AMOUNT,100},{COPPER_AMOUNT,1}}) do
+            local template=unit[1]
+            if type(template)=="string" then
+                local marker="AFBMONEYNUMBER"
+                local pattern=template:gsub("%%d",marker):gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])","%%%1"):gsub(marker,"(%%d+)")
+                local number=plain:match(pattern)
+                if number then amount=amount+tonumber(number)*unit[2] end
+            end
+        end
+        -- Coin-icon chat formats do not contain the localized unit words.
+        -- CHAT_MSG_MONEY itself is the loot signal in that case.
+        self.pendingLoot=amount>0 and amount or true
+        self:Money()
+        local candidate=self.moneyCandidate
+        local cash=AzerothFieldbookLedgerDB and AzerothFieldbookLedgerDB.cashFlow
+        if candidate and cash and (amount==0 or candidate.amount==amount) and cash.entries[1]==candidate then
+            self.lootRun=self.candidateRun
+            self:ConsolidateLoot(cash,candidate);self.pendingLoot=nil;self.moneyCandidate=nil
+            self.candidateRun=nil
+        end
+        local pending=self.pendingLoot
+        if C_Timer and C_Timer.After then C_Timer.After(1,function() if self.pendingLoot==pending then self.pendingLoot=nil end end) end
+    end
+    -- Money belongs to this character even when the contact directory is shared.
+    function t:Money(baseline)
+        if ns.InitializationBlocked or journal.readOnly then return end
+        local balance=L.Read(GetMoney)
+        if not L.Integer(balance,0,9007199254740991) then return end
+        local saved=AzerothFieldbookLedgerDB
+        if type(saved)~="table" or (type(saved.schema)=="number" and saved.schema>L.SCHEMA) then return end
+        if type(saved.cashFlow)~="table" then saved.cashFlow={income=0,expense=0,entries={},started=L.Now(),lootGroupingMigration=1} end
+        local cash=saved.cashFlow
+        local previous=self.moneyBalance
+        local checkpoint=cash.lastBalance
+        if checkpoint==nil and type(cash.entries)=="table" and cash.entries[1] then checkpoint=cash.entries[1].balance end
+        local discrepancy=not self.moneySessionStarted and L.Integer(checkpoint,0,9007199254740991)
+        if not self.moneySessionStarted then
+            previous=discrepancy and checkpoint or balance
+            self.moneySessionStarted=true
+            self.moneyContext=nil;self.pendingLoot=nil;self.moneyCandidate=nil;self.candidateRun=nil;self.lootRun=nil
+            cash.loginBalance=balance;cash.loginAt=L.Now()
+        end
+        self.moneyBalance=balance
+        cash.lastBalance=balance;cash.lastBalanceAt=L.Now()
+        if previous==nil or previous==balance then return end
+        local delta=balance-previous
+        local key=delta>0 and "income" or "expense"
+        cash[key]=(L.Integer(cash[key],0,9007199254740991) and cash[key] or 0)+math.abs(delta)
+        if type(cash.entries)~="table" then cash.entries={} end
+        local interaction=self.moneyActivity
+        if self.visits.merchant then
+            local contact=journal:Get(self.visits.merchant.contact)
+            interaction="Merchant: "..(contact and contact.name or "Unknown merchant")
+        elseif self.visits.trainer then
+            local contact=journal:Get(self.visits.trainer.contact)
+            interaction="Trainer: "..(contact and contact.name or "Unknown trainer")
+        end
+        local entry={at=L.Now(),amount=delta,balance=balance,context=discrepancy and "Login balance discrepancy" or (delta<0 and self.moneyContext or nil),
+            source=discrepancy and "discrepancy" or nil,previousBalance=discrepancy and previous or nil,
+            counterparty=not discrepancy and interaction or nil}
+        table.insert(cash.entries,1,entry)
+        self.moneyCandidate=not discrepancy and delta>0 and entry or nil
+        if not discrepancy and delta>0 and (self.pendingLoot==true or self.pendingLoot==delta) then
+            self:ConsolidateLoot(cash,entry);self.moneyCandidate=nil
+        else
+            -- Keep the preceding run available only until this change is
+            -- classified; any non-loot change breaks the run.
+            local precedingRun=self.lootRun
+            self.lootRun=nil
+            self.candidateRun=precedingRun
+        end
+        self.pendingLoot=nil
+        if C_Timer and C_Timer.After then C_Timer.After(1,function()
+            if self.moneyCandidate==entry then self.moneyCandidate=nil;self.candidateRun=nil end
+        end) end
+        self.moneyContext=nil
+        if ns.RefreshLedgerCashFlow then ns.RefreshLedgerCashFlow() end
+    end
+    -- Read the live balance at world entry, after the character is available;
+    -- never overwrite the saved checkpoint during addon construction.
+    -- Nearby actions are searchable context, never proof of the change's source.
+    function t:MoneyAction(name)
+        if not L.Name(name) then return end
+        self.moneyContext=name
+        if C_Timer and C_Timer.After then
+            C_Timer.After(1,function() if self.moneyContext==name then self.moneyContext=nil end end)
+        end
+    end
+    if type(hooksecurefunc)=="function" then
+        if type(BuyMerchantItem)=="function" then pcall(hooksecurefunc,"BuyMerchantItem",function(index)
+            local item=L.Read(C_MerchantFrame and C_MerchantFrame.GetItemInfo,index)
+            t:MoneyAction(type(item)=="table" and item.name or L.Read(GetMerchantItemInfo,index))
+        end) end
+        if type(BuyTrainerService)=="function" then pcall(hooksecurefunc,"BuyTrainerService",function(index)
+            t:MoneyAction(L.Read(GetTrainerServiceInfo,index))
+        end) end
+    end
     function t:Forget(contact)
         for kind,visit in pairs(self.visits) do if visit.contact==contact then
             visit.closed=true;self.visits[kind]=nil;self.opening[kind]=nil
@@ -271,9 +403,30 @@ function ns.CreateLedgerTracking(journal)
     end
     -- Learning a flight path can happen before the flight map opens.
     local services={BANKFRAME_OPENED="banker",AUCTION_HOUSE_SHOW="auctioneer",PET_STABLE_SHOW="stable",NEW_TAXI_PATH="transport",TAXIMAP_OPENED="transport",CONFIRM_BINDER="innkeeper"}
+    local moneyOpen={MAIL_SHOW="Mail",TRADE_SHOW="Player trade",AUCTION_HOUSE_SHOW="Auction house",TAXIMAP_OPENED="Flight transport",BANKFRAME_OPENED="Bank"}
+    local moneyClose={MAIL_CLOSED=true,TRADE_CLOSED=true,AUCTION_HOUSE_CLOSED=true,TAXIMAP_CLOSED=true,BANKFRAME_CLOSED=true}
     function t:OnEvent(event,...)
         if ns.InitializationBlocked then return end
-        if event=="MERCHANT_SHOW" then self:Open("merchant")
+        if moneyOpen[event] then self.moneyActivity=moneyOpen[event] end
+        if moneyClose[event] then self:Money();self.moneyActivity=nil end
+        if event=="CHAT_MSG_MONEY" then self:LootMoney(...)
+        elseif event=="PLAYER_MONEY" then self:Money()
+        elseif event=="PLAYER_ENTERING_WORLD" then self:Money(true)
+        elseif event=="PLAYER_LOGOUT" then
+            self:Money()
+            local cash=AzerothFieldbookLedgerDB and AzerothFieldbookLedgerDB.cashFlow
+            if not journal.readOnly and cash and self.moneyBalance~=nil then cash.logoutBalance=self.moneyBalance;cash.logoutAt=L.Now() end
+        elseif event=="QUEST_TURNED_IN" then
+            local questID,_,reward=...
+            self:Money()
+            local entry=self.moneyCandidate
+            if L.Integer(reward,1,9007199254740991) and entry and entry.amount==reward then
+                local title=L.Read(C_QuestLog and C_QuestLog.GetTitleForQuestID,questID)
+                entry.source="quest";entry.counterparty="Quest reward";entry.context=L.Name(title)
+                self.moneyCandidate=nil;self.candidateRun=nil;self.lootRun=nil
+                if ns.RefreshLedgerCashFlow then ns.RefreshLedgerCashFlow() end
+            end
+        elseif event=="MERCHANT_SHOW" then self:Open("merchant")
         elseif event=="TRAINER_SHOW" then self:Open("trainer")
         elseif event=="MERCHANT_CLOSED" or event=="TRAINER_CLOSED" then
             local kind=event=="MERCHANT_CLOSED" and "merchant" or "trainer"
@@ -312,8 +465,10 @@ function ns.CreateLedgerTracking(journal)
     t.frame=CreateFrame("Frame");t.frame:SetScript("OnEvent",function(_,event,...) t:OnEvent(event,...) end)
     local events={"MERCHANT_SHOW","MERCHANT_CLOSED","MERCHANT_UPDATE","MERCHANT_FILTER_ITEM_UPDATE","TRAINER_SHOW","TRAINER_CLOSED",
         "TRAINER_UPDATE","TRAINER_SERVICE_INFO_NAME_UPDATE","GET_ITEM_INFO_RECEIVED","PLAYER_TARGET_CHANGED","UPDATE_MOUSEOVER_UNIT",
-        "GOSSIP_SHOW","GOSSIP_OPTIONS_REFRESHED"}
+        "GOSSIP_SHOW","GOSSIP_OPTIONS_REFRESHED","PLAYER_MONEY","PLAYER_ENTERING_WORLD","PLAYER_LOGOUT","CHAT_MSG_MONEY","QUEST_TURNED_IN"}
     for event in pairs(services) do events[#events+1]=event end
+    for event in pairs(moneyOpen) do events[#events+1]=event end
+    for event in pairs(moneyClose) do events[#events+1]=event end
     for _,event in ipairs(events) do pcall(t.frame.RegisterEvent,t.frame,event) end
     return t
 end

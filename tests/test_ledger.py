@@ -5,6 +5,183 @@ from ui_test_harness import ROOT
 
 
 class LedgerTests(unittest.TestCase):
+    def test_cash_flow_login_logout_and_disabled_addon_discrepancies(self):
+        lua=new_ledger()
+        lua.execute('''
+            AzerothFieldbookLedgerDB={};balance=1000
+            function GetMoney() return balance end
+            t:OnEvent('PLAYER_ENTERING_WORLD')
+            local cash=AzerothFieldbookLedgerDB.cashFlow
+            assert(cash.loginBalance==1000 and cash.lastBalance==1000 and not cash.entries[1])
+            balance=1200;t:OnEvent('PLAYER_MONEY');t:OnEvent('PLAYER_LOGOUT')
+            assert(cash.logoutBalance==1200 and cash.income==200)
+            -- No tracking events while the addon is disabled.
+            balance=1500;local resumed=ns.CreateLedgerTracking(j)
+            assert(cash.lastBalance==1200,'Construction preserves the saved checkpoint')
+            resumed:OnEvent('PLAYER_ENTERING_WORLD')
+            assert(cash.entries[1].source=='discrepancy' and cash.entries[1].amount==300)
+            assert(cash.entries[1].previousBalance==1200 and cash.income==500)
+            local count=#cash.entries
+            resumed:OnEvent('PLAYER_ENTERING_WORLD');resumed:OnEvent('PLAYER_MONEY')
+            assert(#cash.entries==count,'Login discrepancy is recorded only once')
+            resumed:OnEvent('PLAYER_LOGOUT')
+            balance=1400;resumed=ns.CreateLedgerTracking(j);resumed:OnEvent('PLAYER_ENTERING_WORLD')
+            assert(cash.entries[1].source=='discrepancy' and cash.entries[1].amount==-100 and cash.expense==100)
+            balance=1410;resumed:OnEvent('PLAYER_MONEY')
+            assert(cash.entries[1].amount==10 and not cash.entries[1].source and cash.income==510)
+            resumed:OnEvent('PLAYER_LOGOUT');assert(cash.logoutBalance==1410)
+        ''')
+
+    def test_cash_flow_icon_loot_and_existing_run_repair(self):
+        lua=new_ledger()
+        lua.execute('''
+            AzerothFieldbookLedgerDB={cashFlow={income=38,expense=0,entries={
+                {at=3,amount=1,balance=184},{at=2,amount=4,balance=183},{at=1,amount=33,balance=179}}}}
+            balance=184;function GetMoney() return balance end
+            t=ns.CreateLedgerTracking(j)
+            t:OnEvent('PLAYER_ENTERING_WORLD')
+            local cash=AzerothFieldbookLedgerDB.cashFlow
+            assert(#cash.entries==1 and cash.entries[1].amount==38 and cash.income==38)
+            -- Isolate this tracker because the harness already has another one.
+            balance=balance+2;t:OnEvent('PLAYER_MONEY')
+            t:OnEvent('CHAT_MSG_MONEY','You loot 2|TInterface\\\\MoneyFrame\\\\UI-CopperIcon:0:0|t.')
+            assert(cash.entries[1].source=='loot' and cash.entries[1].amount==2,snapshot(cash.entries))
+            balance=balance+3;t:OnEvent('CHAT_MSG_MONEY','You loot 3|TInterface\\\\MoneyFrame\\\\UI-CopperIcon:0:0|t.')
+            t:OnEvent('PLAYER_MONEY')
+            assert(#cash.entries==2 and cash.entries[1].amount==5 and cash.entries[1].lootCount==2)
+            balance=balance-1;t:OnEvent('PLAYER_MONEY')
+            balance=balance+4;t:OnEvent('CHAT_MSG_MONEY','You loot 4 copper coins.')
+            assert(#cash.entries==4 and cash.entries[1].amount==4 and cash.income==47)
+        ''')
+
+    def test_cash_flow_consolidates_only_uninterrupted_confirmed_loot(self):
+        lua=new_ledger()
+        lua.execute('''
+            AzerothFieldbookLedgerDB={};balance=1000
+            GOLD_AMOUNT='%d Gold';SILVER_AMOUNT='%d Silver';COPPER_AMOUNT='%d Copper'
+            function GetMoney() return balance end
+            fire('PLAYER_ENTERING_WORLD')
+            balance=balance+20;fire('CHAT_MSG_MONEY','You loot 20 Copper.');fire('PLAYER_MONEY');flush()
+            balance=balance+30;fire('PLAYER_MONEY');fire('CHAT_MSG_MONEY','You loot 30 Copper.');flush()
+            local cash=AzerothFieldbookLedgerDB.cashFlow
+            assert(#cash.entries==1 and cash.entries[1].amount==50 and cash.entries[1].lootCount==2)
+            assert(cash.income==50 and cash.entries[1].balance==1050)
+            balance=balance+100;fire('PLAYER_MONEY');flush()
+            balance=balance+10;fire('CHAT_MSG_MONEY','You loot 10 Copper.');fire('PLAYER_MONEY');flush()
+            assert(#cash.entries==3 and cash.entries[1].amount==10)
+            balance=balance-5;fire('PLAYER_MONEY');flush()
+            balance=balance+40;fire('PLAYER_MONEY');fire('CHAT_MSG_MONEY','You loot 40 Copper.');flush()
+            assert(#cash.entries==5 and cash.entries[1].amount==40)
+            balance=balance+50;fire('PLAYER_MONEY');fire('CHAT_MSG_MONEY','You loot 50 Copper.');flush()
+            assert(#cash.entries==5 and cash.entries[1].amount==90 and cash.entries[1].lootCount==2)
+            assert(cash.income==250 and cash.expense==5)
+            -- A message with a different amount must not classify unrelated income.
+            balance=balance+60;fire('PLAYER_MONEY');fire('CHAT_MSG_MONEY','You loot 1 Copper.');flush()
+            assert(#cash.entries==6 and not cash.entries[1].source)
+            fire('PLAYER_ENTERING_WORLD')
+            balance=balance+10;fire('CHAT_MSG_MONEY','You loot 10 Copper.');flush()
+            assert(#cash.entries==7,'World entry cannot bridge an unobserved interval')
+        ''')
+
+    def test_training_checks_current_spellbook_and_rank_without_changing_history(self):
+        lua=new_ledger()
+        lua.execute('''
+            local e=visit();UnitLevel=function() return 20 end
+            trainer={{name='Battle Shout',status='available',level=1,rank='Rank 1',price=10},
+                {name='Battle Shout',status='available',level=10,rank='Rank 2',price=100}}
+            fire('TRAINER_SHOW');flush();shell:ShowSection('merchants');c:Select(e.id);c:Catalogue('training')
+            local before=snapshot(e.lessons)
+            assert(c.main.events.SPELLS_CHANGED and not c.main.events.LEARNED_SPELL_IN_TAB)
+            GetNumSpellTabs=function() return 1 end
+            GetSpellTabInfo=function() return 'Warrior',123,0,1 end
+            local learnedRank='Rank 1'
+            GetSpellBookItemName=function() return 'Battle Shout',learnedRank end
+            fire('SPELLS_CHANGED')
+            local function displayed() local parts={};for _,block in ipairs(c.panels.catalogue.read.blocks) do parts[#parts+1]=block:GetText() or '' end;return table.concat(parts,' ') end
+            local text=displayed()
+            assert(text:find('Learned by this character',1,true))
+            local _,count=text:gsub('Learned by this character','')
+            assert(count==1,'Knowing Rank 1 does not mark Rank 2 learned')
+            learnedRank='Rank 2';fire('SPELLS_CHANGED')
+            text=displayed()
+            _,count=text:gsub('Learned by this character','');assert(count==2)
+            assert(snapshot(e.lessons)==before,'Spellbook checks are display-only')
+            GetNumSpellTabs=nil;GetSpellTabInfo=nil;GetSpellBookItemName=nil
+            Enum.SpellBookSpellBank={Player=0}
+            C_SpellBook={GetNumSpellBookSkillLines=function() return 1 end,
+                GetSpellBookSkillLineInfo=function() return {itemIndexOffset=0,numSpellBookItems=1} end,
+                GetSpellBookItemName=function(index,bank) assert(bank==0);return 'Battle Shout','Rank 1' end}
+            fire('SPELLS_CHANGED')
+            text=displayed()
+            _,count=text:gsub('Learned by this character','');assert(count==1)
+        ''')
+
+    def test_cash_flow_tracks_character_money_without_login_income(self):
+        lua = new_ledger()
+        lua.execute('''
+            AzerothFieldbookLedgerDB={};balance=10000
+            function GetMoney() return balance end
+            fire('PLAYER_ENTERING_WORLD')
+            balance=12345;fire('PLAYER_MONEY');fire('PLAYER_MONEY')
+            balance=12000;fire('PLAYER_MONEY')
+            local cash=AzerothFieldbookLedgerDB.cashFlow
+            assert(cash.income==2345 and cash.expense==345 and #cash.entries==2)
+            assert(not saved.cashFlow,'Shared directory must not own character finances')
+            balance=99999;fire('PLAYER_ENTERING_WORLD');fire('PLAYER_MONEY')
+            assert(cash.income==90344 and #cash.entries==3,'World transitions preserve balance changes')
+            for i=1,205 do balance=balance+1;fire('PLAYER_MONEY') end
+            assert(#cash.entries==208 and cash.income==90549)
+            assert(cash.entries[208].amount==2345,'Old activity remains past 200 rows')
+            ns.InitializationBlocked=true;balance=balance+10;fire('PLAYER_MONEY')
+            assert(cash.income==90549)
+        ''')
+
+    def test_cash_flow_toggle_covers_directory_and_restores_it(self):
+        lua = new_ledger()
+        lua.execute('''
+            shell:ShowSection('merchants');c:CashFlow()
+            assert(c.panel==c.panels.cashFlow and not c.main.directory:IsShown())
+            assert(c.panels.cashFlow.read.topFade and c.panels.cashFlow.read.bottomFade)
+            assert(#c.panels.cashFlow.read.topFade.strips==24,'Cash Flow uses the shared parchment fades')
+            assert(c.panels.cashFlow.usage:GetText():find('No row limit',1,true))
+            assert(c.panels.cashFlow.read.text:GetText():find('No gold changes recorded yet.',1,true))
+            AzerothFieldbookLedgerDB={cashFlow={income=100,expense=50,entries={
+                {at=ns.Ledger.Now(),amount=-50,balance=50,context='Fireball'},
+                {at=ns.Ledger.Now(),amount=100,balance=100,context='Cloth'}}}}
+            local p=c.panels.cashFlow
+            assert(p.character:GetText()==ns.Ledger.Safe(ns.Ledger.Player()))
+            assert(p.character.point[4]==37 and p.character.point[5]==-88)
+            assert(not p.read.header:GetText():find(ns.Ledger.Safe(ns.Ledger.Player()),1,true),'Character name is outside activity text')
+            assert(not p.title:IsShown(),'Cash Flow heading stays hidden')
+            assert(p.read.text:GetText():find('|cff80e680Gold in:|r',1,true),'Colour markup is preserved')
+            assert(p.read.text:GetText():find('0|cffb87333c|r',1,true),'Zero uses the copper suffix colour')
+            assert(not p.read.text:GetText():find('||cff',1,true),'Colour codes must not be escaped')
+            p.search:SetText('fireball');c:RefreshCashFlow()
+            assert(p.usage:GetText():find('2 rows',1,true),'Usage covers the whole history, not search matches')
+            assert(p.read.text:GetText():find('To: ',1,true),'Expenses name a destination')
+            assert(p.read.text:GetText():find('|cff71d5ffObserved action:|r',1,true))
+            assert(p.read.text:GetText():find('|cffffffffFireball|r',1,true),'Observed ability names are white')
+            assert(p.read.text:GetText():find('|cffff8080Balance:|r |cffffffff',1,true),'Balance labels follow transaction colour and figures remain white')
+            assert(p.read.transactionRows[1].text:GetText():sub(1,10)=='|cffffffff','Transaction dates are white')
+            assert(#p.read.transactionRows[1].divider==32 and p.read.transactionRows[1]:IsShown())
+            local transaction=p.read.transactionRows[1]
+            assert(transaction.dividerHost.point[2]==transaction)
+            assert(transaction.dividerHost.point[5]==-transaction:GetHeight()+8,'Divider anchor stays beneath transaction')
+            p.read:SetVerticalScroll(35)
+            assert(transaction.dividerHost.point[5]==-transaction:GetHeight()+8,'Scrolling preserves divider offset')
+            assert(p.read.text:GetText():find('Fireball',1,true))
+            assert(not p.read.text:GetText():find('Cloth',1,true))
+            p.direction='income';c:RefreshCashFlow()
+            assert(p.read.text:GetText():find('No activity matches',1,true))
+            assert(not p.read.transactionRows[1]:IsShown(),'Filtered rows and their dividers are hidden')
+            p.search:SetText('');c:RefreshCashFlow()
+            assert(p.read.text:GetText():find('Cloth',1,true))
+            assert(p.read.text:GetText():find('From: ',1,true),'Income names a source')
+            assert(not p.read.text:GetText():find('Fireball',1,true))
+            c:CashFlow()
+            assert(c.panel==nil and c.main.directory:IsShown())
+        ''')
+
     def setUp(self):
         self.lua = new_ledger()
 
