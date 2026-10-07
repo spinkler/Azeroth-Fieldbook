@@ -99,10 +99,12 @@ local function mergeAtlas(target,source,key)
             return table.concat({p.kind or "crossing",p.name or "",p.from or "",p.to or "",
                 p.x or 0,p.y or 0,p.fromX or 0,p.fromY or 0},"\t")
         end
-        local seen={};for _,p in ipairs(saved) do seen[signature(p)]=true end
+        local seen={};for _,p in ipairs(saved) do seen[signature(p)]=p end
         for _,p in ipairs(rows) do
             local identity=signature(p)
-            if not seen[identity] and #saved<4096 then saved[#saved+1]=copy(p);seen[identity]=true end
+            if seen[identity] then
+                if p.excluded==true then seen[identity].excluded=true end
+            elseif #saved<4096 then saved[#saved+1]=copy(p);seen[identity]=saved[#saved] end
         end
     end
     -- Merge compact survey coverage independently of sample deduplication.

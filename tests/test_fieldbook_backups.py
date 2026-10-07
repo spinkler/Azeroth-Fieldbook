@@ -36,6 +36,7 @@ SUPPORT = r'''
     end
     function populate(j,tag)
         j.atlas.saved.subzoneCoverage={version=1,maps={[1]={Coast='1388138817701770'}}}
+        j.atlas.saved.subzones={[1]={{kind='interior',mapID=1,name='Village',x=2362,y=5554,excluded=true}}}
         local e=j.bestiary:Ensure(42,false,'Forest Lurker',{level=9})
         assert(j.bestiary:SetCreatureNotes(42,tag..' private Bestiary notes'))
         assert(j.bestiary:AddManual(42,'Poison','private observation',123,{Poison=true}))

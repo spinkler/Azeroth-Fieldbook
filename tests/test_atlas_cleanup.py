@@ -6,6 +6,18 @@ from test_player_names_preservation import full_client
 
 
 class AtlasCleanupTests(unittest.TestCase):
+    def test_account_merge_preserves_exclusions_on_duplicate_observations(self):
+        account(self.lua)
+        self.lua.execute('''
+            local first={schema=1,subzones={[101]={{kind='interior',mapID=101,name='Village',x=2362,y=5554}}}}
+            local second={schema=1,subzones={[101]={{kind='interior',mapID=101,name='Village',x=2362,y=5554,excluded=true}}}}
+            local original=snapshot(first.subzones)
+            local shared=ns.SelectSectionStorage('atlas',first)
+            scope(2);shared=ns.SelectSectionStorage('atlas',second)
+            assert(#shared.subzones[101]==1 and shared.subzones[101][1].excluded==true)
+            assert(snapshot(first.subzones)==original and second.subzones[101][1].excluded)
+        ''')
+
     def setUp(self):
         self.lua = new_atlas(ui=True)
         self.lua.execute('''

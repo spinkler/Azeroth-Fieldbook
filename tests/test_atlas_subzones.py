@@ -4,6 +4,127 @@ from atlas_test_harness import new_atlas
 
 
 class SubzoneTests(unittest.TestCase):
+    def test_portal_waits_for_matching_stable_map_and_label_without_crossings(self):
+        self.lua.execute('''
+            C_Map.GetMapWorldSize=function() return 1000,1000 end
+            s:Reset();s.index={};s.store[101]={}
+            sample('Darnassus',.2362,.5554)
+            local before=snapshot(s.store)
+            -- The destination name may arrive before destination coordinates.
+            sample("Rut'theran Village",.2362,.5554)
+            assert(#s:Samples(101)==1,'Do not immediately record an interior under a new label')
+            sample("Rut'theran Village",.65,.85)
+            sample('The Veiled Sea',.65,.85)
+            sample("Rut'theran Village",.65,.85)
+            for i=1,3 do assert(not sample("Rut'theran Village",.65,.85)) end
+            assert(#s:Samples(101)==1 and #s:Crossings(101)==0)
+            assert(sample("Rut'theran Village",.65,.85))
+            local rows=s:Samples(101)
+            assert(#rows==2 and rows[2].name=="Rut'theran Village" and rows[2].x==6500)
+            assert(#s:Crossings(101)==0,'Settling cannot turn a portal into a boundary')
+            sample('Harbour',.651,.85);assert(#s:Crossings(101)==1,'Resume ordinary land crossings')
+
+            -- Loading-screen events must suppress the first stale baseline too.
+            c.subzoneObserver.scripts.OnEvent(c.subzoneObserver,'PLAYER_LEAVING_WORLD')
+            local saved=snapshot(s.store)
+            mapID=102;name="Rut'theran Village";px=.2362;py=.5554
+            c.subzoneObserver.scripts.OnEvent(c.subzoneObserver,'PLAYER_ENTERING_WORLD')
+            assert(snapshot(s.store)==saved)
+            sample('Darnassus',.2362,.5554)
+            for i=1,3 do assert(not sample('Darnassus',.2362,.5554)) end
+            assert(sample('Darnassus',.2362,.5554) and #s:Crossings(102)==0)
+
+            sample('Harbour',.7,.8)
+            px=nil;s:Observe()
+            px=.7;assert(not s:Observe(),'Unreadable coordinates must not cancel transition settling')
+            assert(not sample('Harbour',.7,.8));tick=tick+1
+            assert(s:Observe() and #s:Crossings(102)==0)
+        ''')
+
+    def test_disconnected_village_and_portal_dot_never_bridge_in_either_fill(self):
+        self.lua.execute('''
+            local rows={{kind='interior',mapID=101,name="Rut'theran Village",x=2362,y=5554}}
+            for _,p in ipairs({{6500,8200},{6900,8200},{6900,8600},{6500,8600},{6700,8400}}) do
+                rows[#rows+1]={kind='interior',mapID=101,name="Rut'theran Village",x=p[1],y=p[2]}
+            end
+            local original=snapshot(rows)
+            for _,method in ipairs({'traced','convex'}) do
+                local model=S.Build(rows,nil,nil,nil,method)
+                assert(#model.areas["Rut'theran Village"].components==2)
+                assert(model:At(6700,8400) and not model:At(4500,7000) and not model:At(2362,5554))
+                assert(not model.covered[1] and model.areas["Rut'theran Village"].x>6000)
+                local reversed={};for i=#rows,1,-1 do reversed[#reversed+1]=rows[i] end
+                assert(snapshot(S.Build(reversed,nil,nil,nil,method).areas["Rut'theran Village"].hull)
+                    ==snapshot(model.areas["Rut'theran Village"].hull),'Outline is independent of observation order')
+            end
+            assert(snapshot(rows)==original,'Rendering retains the original evidence')
+            C_Map.GetMapWorldSize=function() return 1000,1000 end
+            s.store[101]=rows;s.index={};s:Changed(101)
+            local removed,message
+            assert(S.CleanInterior(j,101,function(n,t) removed=n;message=t end));settle()
+            assert(removed==0 and snapshot(rows)==original and message:find('Separated observation groups'))
+            local reload=ns.CreateAtlasJournal(j.saved)
+            assert(not S.Build(reload.subzones:Samples(101)):At(4500,7000))
+            -- The same name can have two valid filled islands, sharing a colour.
+            local other={}
+            for _,p in ipairs({{1000,1000},{1400,1000},{1400,1400},{1000,1400},
+                {8000,8000},{8400,8000},{8400,8400},{8000,8400}}) do
+                other[#other+1]={kind='interior',mapID=101,name='Island',x=p[1],y=p[2]}
+            end
+            local model=S.Build(other)
+            assert(model:At(1200,1200)==model:At(8200,8200) and not model:At(5000,5000))
+
+            -- Historical cleanup can leave only sparse corners. Its original
+            -- coverage supplies spacing evidence without restoring old hulls.
+            local sparse={{kind='interior',mapID=101,name='Lake',x=2362,y=5554}}
+            for _,p in ipairs({{6000,6000},{8500,6000},{8500,8500},{6000,8500}}) do
+                sparse[#sparse+1]={kind='interior',mapID=101,name='Lake',x=p[1],y=p[2]}
+            end
+            local support,packed={},{}
+            for x=6000,8500,250 do for y=6000,8500,250 do
+                support[#support+1]={name='Lake',x=x,y=y}
+                packed[#packed+1]=string.format('%04x%04x',x,y)
+            end end
+            local supported=S.Build(sparse,nil,nil,nil,'traced',support)
+            assert(#supported.areas.Lake.components==2 and not supported:At(4500,6000))
+            assert(supported:At(7000,7000) and #supported.areas.Lake.hull==4)
+            s.store[101]=sparse;s.index={};s:Changed(101)
+            j.saved.subzoneCoverage={version=1,maps={[101]={Lake=table.concat(packed)}}}
+            j.state.showSubzones=true;c:Refresh();settle()
+            assert(#m.map.subzoneModel.areas.Lake.components==2 and not m.map.subzoneModel:At(4500,6000))
+        ''')
+
+    def test_alt_right_click_exclusion_is_reversible_and_survives_reload(self):
+        self.lua.execute('''
+            C_Map.GetMapWorldSize=function() return 1000,1000 end
+            local bad={kind='interior',mapID=101,name="Rut'theran Village",x=2362,y=5554,manual=true}
+            s.store[101]={bad};s.index={};s:Changed(101)
+            j.state.showSubzonePoints=true;c:Refresh();settle()
+            m.map.left=100;m.map.top=700
+            cursorX=(100+.2362*m.map:GetWidth())*m.map:GetEffectiveScale()
+            cursorY=(700-.5554*m.map:GetHeight())*m.map:GetEffectiveScale()
+            IsAltKeyDown=function() return true end
+            m.map.scripts.OnMouseUp(m.map,'RightButton');settle()
+            assert(bad.excluded==true and #s.store[101]==1 and bad.manual==true)
+            assert(#m.map.subzoneModel.names==0 and #m.map.subzoneModel.rows==1)
+            m.map.scripts.OnEnter(m.map)
+            local lines='';for _,v in ipairs(GameTooltip.lines) do lines=lines..v.text end
+            assert(lines:find('Excluded from mapping') and lines:find('restore this observation'))
+            local reload=ns.CreateAtlasJournal(j.saved)
+            assert(reload.subzones:Samples(101)[1].excluded)
+            s:Reset();name="Rut'theran Village";px=.2362;py=.5554
+            assert(not s:Observe(),'An excluded label must not be recorded again at the rejected point')
+            s:Reset();name='Darnassus';assert(s:Observe(),'A corrected label remains eligible at this position')
+            local copy=s:Samples(101)[1];local before=snapshot(s.store)
+            j.readOnly=true;assert(not s:ToggleExcluded(101,copy));j.readOnly=false
+            s.cleaning=true;assert(not s:ToggleExcluded(101,copy));s.cleaning=nil
+            assert(snapshot(s.store)==before)
+            -- Excluded dots remain selectable with Points on, using the same gesture.
+            m.map:RenderSubzones();settle()
+            m.map.scripts.OnMouseUp(m.map,'RightButton');settle()
+            assert(bad.excluded==nil and s:Samples(101)[1].excluded==false)
+        ''')
+
     def test_world_label_size_is_independent_persistent_and_follows_zoom(self):
         self.lua.execute('''
             C_Timer=nil
@@ -157,13 +278,17 @@ class SubzoneTests(unittest.TestCase):
                 end
                 rows[#rows+1]=rows[1]
                 local model=S.Build(rows)
-                for _,p in ipairs(rows) do assert(model:At(p.x,p.y),'Never carve away observed samples') end
-                local h=model.areas.Survey.hull
+                for i,p in ipairs(rows) do
+                    assert(model:At(p.x,p.y) or not model.covered[i],'Unfilled observations must remain eligible for a dot')
+                end
                 local function cross(a,b,p) return (b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x) end
+                for _,component in ipairs(model.areas.Survey.components) do
+                local h=component.hull
                 for i,a in ipairs(h) do for k,c in ipairs(h) do
                     local b,d=h[i%#h+1],h[k%#h+1]
                     assert(not (cross(a,b,c)*cross(a,b,d)<0 and cross(c,d,a)*cross(c,d,b)<0),'No self-crossing outlines')
                 end end
+                end
                 assert(#model.triangles<=S.MAX_TRIANGLES)
             end
         ''')
@@ -415,6 +540,7 @@ class SubzoneTests(unittest.TestCase):
             end
             mapID=101
             sample('Inn',.401,.4);assert(#s:Crossings(101)==0,'Map changes cannot invent crossings')
+            for i=1,4 do sample('Inn',.401,.4) end
             sample('Road',.402,.4);assert(#s:Crossings(101)==1,'Ordinary resting areas still map')
         ''')
 
@@ -842,7 +968,8 @@ class SubzoneTests(unittest.TestCase):
             name='B';px=.111;assert(not live:Observe(),'Ten-yard threshold is inclusive')
             name='A';px=.112;assert(live:Observe(),'Keep a point more than ten yards from retained evidence')
             name='C';px=.113;assert(live:Observe(),'Different borders at the same position remain distinct')
-            mapID=102;name='A';live:Observe();name='B';px=.114;assert(live:Observe())
+            mapID=102;name='A';live:Observe();tick=tick+1;live:Observe()
+            name='B';px=.114;assert(live:Observe())
             assert(#live:Crossings(101)==3 and #live:Crossings(102)==1)
         ''')
 
@@ -855,7 +982,7 @@ class SubzoneTests(unittest.TestCase):
             name='C';px=.4;py=.4;survey:Observe(true)
             assert(not survey.index[101].ready)
             name='D';px=.401;survey:Observe(true)
-            assert(#survey.index[101].pending==3 and #data.subzones[101]==1000,'Queue both interior observations and the genuine crossing')
+            assert(#survey.index[101].pending==2 and #data.subzones[101]==1000,'Queue the baseline interior and genuine crossing; let the new label settle')
             local observer=S.Track(journal)
             observer.scripts.OnEvent(observer,'PLAYER_LOGOUT')
             local rows=survey:Crossings(101)
@@ -896,9 +1023,11 @@ class SubzoneTests(unittest.TestCase):
             assert(survey:Observe() and #survey:Samples(101)==1,'Seed the current area without needing a crossing')
             assert(not survey:Observe(),'Stationary polling must not add data')
             px=.125;assert(not survey:Observe(),'Exactly 25 yards is too close')
-            px=.2;assert(survey:Observe(),'Exactly 100 horizontal yards permits a sample')
+            px=.2;assert(not survey:Observe(),'A sudden coordinate jump waits for settled readings')
+            tick=tick+1;assert(survey:Observe(),'Exactly 100 horizontal yards permits a settled sample')
             py=.1125;assert(not survey:Observe(),'Use the map height for vertical yard distances')
-            py=.15;assert(survey:Observe(),'Exactly 100 vertical yards permits a sample')
+            py=.15;assert(not survey:Observe());tick=tick+1
+            assert(survey:Observe(),'Exactly 100 vertical yards permits a settled sample')
             assert(#survey:Samples(101)==3 and #survey:Crossings(101)==0)
             local model=S.Build(survey:Samples(101))
             assert(model.areas.Mine.hasFill and model:At(1800,1100).name=='Mine','Interior samples must expand the estimated region')
@@ -908,8 +1037,9 @@ class SubzoneTests(unittest.TestCase):
             local restored=ns.CreateAtlasJournal(data).subzones
             assert(not restored:Observe() and snapshot(data.subzones)==before,'Reload must not duplicate the initial sample')
             assert(dimensions==2,'Read dimensions once per map index, not each poll')
-            mapID=102;assert(restored:Observe(),'Maps have independent interior coverage')
-            name='Tunnel';assert(restored:Observe(),'A nearby name change still records its crossing')
+            mapID=102;assert(not restored:Observe());tick=tick+1
+            assert(restored:Observe(),'Settled maps have independent interior coverage')
+            name='Tunnel';px=px+.001;assert(restored:Observe(),'A nearby name change still records its crossing')
             assert(#restored:Crossings(102)==1,'The real name change still records a crossing')
             assert(#restored:Samples(102)==2,'A different area does not bypass interior spacing')
             px=nil;assert(not restored:Observe(),'Unavailable coordinates cannot become interior evidence')
@@ -946,6 +1076,7 @@ class SubzoneTests(unittest.TestCase):
             assert(#s:Samples(101)==1 and #s:Crossings(101)==0)
             S.MAX_INTERIORS=1;px=.3;c.subzoneObserver.scripts.OnUpdate(c.subzoneObserver,.25)
             assert(#s:Samples(101)==1,'Interior sample budget must be bounded')
+            tick=tick+1;c.subzoneObserver.scripts.OnUpdate(c.subzoneObserver,.25)
             name='Tunnel';px=.301;c.subzoneObserver.scripts.OnEvent(c.subzoneObserver,'ZONE_CHANGED')
             assert(#s:Crossings(101)==1,'The interior budget must leave room for border observations')
             j.state.showSubzonePoints=true;shell:ShowSection('atlas');settle()

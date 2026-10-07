@@ -132,6 +132,8 @@ local entry=record({id=positive,name=names,category=names,rank=names,levelMin=po
     firstEncounteredAt=timestamp,
     loot=record({samples=natural,items=map(positive,record({quantity=natural,drops=natural},{"quantity","drops"})),
         recent=array(record({guid=names,items=map(positive,natural)},{"guid","items"}))},{"samples","items","recent"}),
+    pickpocketLoot=record({samples=natural,items=map(positive,record({quantity=natural,drops=natural},{"quantity","drops"})),
+        recent=array(record({guid=names,items=map(positive,natural)},{"guid","items"}))},{"samples","items","recent"}),
     kills=natural,sightings=natural,confirmed=boolean,personalEncountered=boolean,lockedBasic=basic,
     locations=flags,subzones=map(names,flags),offenses=flags,resistances=flags,immunities=flags,ignoredTypeImmunities=flags,behaviours=flags,
     behaviourSources=map(names,enum({monsterEmote=true,unitReaction=true})),ignoredBehaviours=flags,

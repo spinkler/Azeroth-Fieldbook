@@ -361,6 +361,7 @@ local function addTooltip(tooltip)
     if not id then tooltipStatus = reason; return end
     local creature = id and trackingDB.bestiary.creatures[id]
     if journal then
+
         journal:ObserveTameability(unit)
         local names = journal:ConfirmedNames(id)
         local behaviours = journal:GetBehaviourTooltips() and journal:TooltipBehaviours(id) or {}
@@ -528,6 +529,17 @@ local function initializeImpl()
     if ns.CastIDs then ns.CastIDs:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
     if journal then
+        if ns.SpellIDWindow and ns.SpellIDWindow.SetRecordedAbilityCheck then
+            ns.SpellIDWindow:SetRecordedAbilityCheck(function(candidate, spellID)
+                -- An unverified target is not evidence of who caused a debuff.
+                if candidate.label == "Target:" then return false end
+                local entry = journal.entries[candidate.id]
+                for _, ability in pairs(entry and entry.abilities or {}) do
+                    if ability.spellID == spellID and ability.state ~= "rejected" then return true end
+                end
+                return false
+            end)
+        end
         if journal.SetAutomaticRecordCallback then journal:SetAutomaticRecordCallback(function(message, details)
             if details and details.spellID then
                 if db.spellFeedback == true then say(message) end
@@ -832,6 +844,15 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         if encounters then encounters:Report(say) else say("Encounter module unavailable.") end
     elseif command == "scan" then
         if encounters then encounters:Scan(); encounters:Report(say) else say("Encounter module unavailable.") end
+    elseif command == "debug pickpocket on" or command == "debug pickpocket off" then
+        local trace=ns.PickpocketDiagnostics
+        if not trace then say("Pickpocket diagnostics unavailable; reload the UI.");return end
+        trace.enabled=command=="debug pickpocket on"
+        if trace.enabled then trace.rows={} end
+        say(trace.enabled and "Pickpocket cash trace on. Perform one coin-only pick, then /fieldbook debug pickpocket to copy the report."
+            or "Pickpocket cash trace off.")
+    elseif command == "debug pickpocket" then
+        if ns.PickpocketDiagnostics and ns.ShowDebugReport then ns.ShowDebugReport(ns.PickpocketDiagnostics:Report()) end
     elseif command == "debug locations on" or command == "debug locations off" then
         local L=ns.CreatureLocations
         if not L then say("Location module unavailable; reload the UI.");return end

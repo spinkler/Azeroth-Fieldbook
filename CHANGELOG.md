@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.36.0 - 2026-10-07
+
+- Add a highlighted Pickpocket Loot toggle beneath the Bestiary viewer, reusing the loot panel and quality filters. Show it when successful picks or pocket items have been recorded, including an empty-items view with the pick count. Thanks to Psyentific for suggesting pickpocket loot tracking!
+- Track successful picks and their items separately from corpse loot, deduplicate repeated cast/loot events, and preserve pocket records in account tracking and local backups. Failed or ambiguous casts do not count. Existing historical loot remains unchanged, and pickpocket data is not shared.
+- Attribute pickpocket coins in Merchant's Ledger Cash Flow to Pickpocketed cash with the creature name, keeping these collections separate from ordinary loot. Retain source evidence with balance changes so delayed money messages are classified correctly. Native item capture and coin-only cash attribution are confirmed working; coins remain outside Bestiary item tables.
+- Add optional, bounded pickpocket diagnostics with a selectable report window via /fieldbook debug pickpocket on and /fieldbook debug pickpocket. Keep diagnostics in memory and redact restricted values. Add capture, UI, account-merge, backup and cash-event regression coverage plus a native testing checklist.
+- Automatically hide readable observed spell IDs already recorded for their captured creature, including clearing observations after recording. Preserve restricted IDs and effects with an unverified caster.
+- Add Gatherer's Compendium model associations for Poor Copper Vein and Stunted Silverleaf, using the Copper Vein and Silverleaf presentation assets.
+- Prioritize recent Treasure opening interactions over later container hovers while preserving source-mismatch rejection. Show the full capture status on hover and add regression coverage. The reported Teldrassil Battered Chest case still needs native confirmation.
+- Let automatic Atlas observations settle after loading screens, map changes and coordinate jumps; delay interior samples under newly changed area labels. Shade separated groups independently in both fill modes so distant portal observations cannot stretch a village across the map. Preserve original cleanup coverage as spacing evidence and skip cleanup on separated maps. Alt-right-click an Atlas observation to reversibly exclude or restore it; excluded points remain grey with Points enabled, survive reload/account imports and suppress repeated automatic capture under the rejected label. Add portal, shading, cleanup, correction, account-merge and backup regression coverage. Live portal traversal still needs native verification.
+
 ## v0.35.0 - 2026-10-06
 
 - Add Cash Flow beside Merchant's Ledger Favourite, with a character-specific ongoing transaction history, gold in/out totals and net change. The overlay covers the left panel and bottom controls, with its own search and filters in the usual positions. Search dates, recorded item/ability names and transaction sources; filter income or expenditure.

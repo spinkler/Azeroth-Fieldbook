@@ -526,6 +526,7 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
     end
     map:SetScript("OnMouseUp",function(self,button)
         if self:FinishPan() then return end
+        if self.HandleSubzoneClick and self:HandleSubzoneClick(button) then return end
         if not self.placing then self:Navigate(button);return end
         if button~="LeftButton" or not self.available then return end
         local x,y=cursorPoint();if not x then return end

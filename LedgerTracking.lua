@@ -197,17 +197,40 @@ function ns.CreateLedgerTracking(journal)
     end
     function t:ConsolidateLoot(cash,entry)
         if cash.entries[1]~=entry or entry.amount<=0 then return end
-        entry.source="loot";entry.context="Looted cash"
-        local prior=cash.entries[2]
-        if prior and prior.source=="loot" and prior.amount>0 and self.lootRun==prior then
-            prior.amount=prior.amount+entry.amount;prior.balance=entry.balance
-            prior.last=entry.at;prior.lootCount=(prior.lootCount or 1)+1
-            table.remove(cash.entries,1);entry=prior
-        else entry.lootCount=1 end
-        self.lootRun=entry
-        if ns.RefreshLedgerCashFlow then ns.RefreshLedgerCashFlow() end
+        local pocket=self.pendingLootContext
+        local priorRun=self.lootRun
+        local function apply()
+            if ns.InitializationBlocked or journal.readOnly or not AzerothFieldbookLedgerDB
+                or AzerothFieldbookLedgerDB.cashFlow~=cash then return end
+            -- Match actual loot income to a successful pick even when coin-only
+            -- autoloot exposes no slots. A cast alone never creates a transaction.
+            local confirmed=pocket and pocket.confirmed and not pocket.invalid
+            if ns.PickpocketDiagnostics then ns.PickpocketDiagnostics:Log("cash classify: amount/cast/confirmed/invalid",entry.amount,pocket and pocket.cast,pocket and pocket.confirmed,pocket and pocket.invalid) end
+            entry.source="loot";entry.context=confirmed and "Pickpocketed cash" or "Looted cash"
+            entry.counterparty=confirmed and L.Name(pocket.name) or nil
+            entry.lootCount=entry.lootCount or 1
+            local prior=cash.entries[2]
+            if cash.entries[1]==entry then
+                if prior and prior.source=="loot" and prior.context==entry.context
+                    and prior.counterparty==entry.counterparty and prior.amount>0 and priorRun==prior then
+                    prior.amount=prior.amount+entry.amount;prior.balance=entry.balance
+                    prior.last=entry.at;prior.lootCount=(prior.lootCount or 1)+1
+                    table.remove(cash.entries,1);entry=prior
+                end
+                self.lootRun=entry
+            end
+            if ns.RefreshLedgerCashFlow then ns.RefreshLedgerCashFlow() end
+        end
+        if pocket and not pocket.confirmed and not pocket.invalid and C_Timer and C_Timer.After then
+            -- Keep this exact transaction separate until the loot event has had
+            -- a chance to arrive, so a later label cannot relabel a combined run.
+            entry.source="loot";entry.context="Looted cash";entry.counterparty=nil;entry.lootCount=1
+            self.lootRun=nil
+            C_Timer.After(0.2,apply)
+        else apply() end
     end
     function t:LootMoney(message)
+        if ns.PickpocketDiagnostics then ns.PickpocketDiagnostics:Log("CHAT_MSG_MONEY",message) end
         if ns.InitializationBlocked or journal.readOnly or not L.Public(message) or type(message)~="string" or #message>2000 then return end
         local plain=message:gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r","")
         local amount=0
@@ -222,17 +245,19 @@ function ns.CreateLedgerTracking(journal)
         end
         -- Coin-icon chat formats do not contain the localized unit words.
         -- CHAT_MSG_MONEY itself is the loot signal in that case.
+        self.pendingLootContext=self.moneyCandidate and self.moneyCandidateContext
+            or (ns.TakePickpocketMoneyContext and ns.TakePickpocketMoneyContext() or nil)
         self.pendingLoot=amount>0 and amount or true
         self:Money()
         local candidate=self.moneyCandidate
         local cash=AzerothFieldbookLedgerDB and AzerothFieldbookLedgerDB.cashFlow
         if candidate and cash and (amount==0 or candidate.amount==amount) and cash.entries[1]==candidate then
             self.lootRun=self.candidateRun
-            self:ConsolidateLoot(cash,candidate);self.pendingLoot=nil;self.moneyCandidate=nil
+            self:ConsolidateLoot(cash,candidate);self.pendingLoot=nil;self.moneyCandidate=nil;self.moneyCandidateContext=nil
             self.candidateRun=nil
         end
         local pending=self.pendingLoot
-        if C_Timer and C_Timer.After then C_Timer.After(1,function() if self.pendingLoot==pending then self.pendingLoot=nil end end) end
+        if C_Timer and C_Timer.After then C_Timer.After(1,function() if self.pendingLoot==pending then self.pendingLoot=nil;self.pendingLootContext=nil end end) end
     end
     -- Money belongs to this character even when the contact directory is shared.
     function t:Money(baseline)
@@ -250,13 +275,14 @@ function ns.CreateLedgerTracking(journal)
         if not self.moneySessionStarted then
             previous=discrepancy and checkpoint or balance
             self.moneySessionStarted=true
-            self.moneyContext=nil;self.pendingLoot=nil;self.moneyCandidate=nil;self.candidateRun=nil;self.lootRun=nil
+            self.moneyContext=nil;self.pendingLoot=nil;self.moneyCandidate=nil;self.moneyCandidateContext=nil;self.candidateRun=nil;self.lootRun=nil
             cash.loginBalance=balance;cash.loginAt=L.Now()
         end
         self.moneyBalance=balance
         cash.lastBalance=balance;cash.lastBalanceAt=L.Now()
         if previous==nil or previous==balance then return end
         local delta=balance-previous
+        if ns.PickpocketDiagnostics then ns.PickpocketDiagnostics:Log("money delta/pending loot",delta,self.pendingLoot) end
         local key=delta>0 and "income" or "expense"
         cash[key]=(L.Integer(cash[key],0,9007199254740991) and cash[key] or 0)+math.abs(delta)
         if type(cash.entries)~="table" then cash.entries={} end
@@ -273,6 +299,13 @@ function ns.CreateLedgerTracking(journal)
             counterparty=not discrepancy and interaction or nil}
         table.insert(cash.entries,1,entry)
         self.moneyCandidate=not discrepancy and delta>0 and entry or nil
+        -- Bind source evidence to the balance change while it is fresh. Money
+        -- chat may arrive after the loot-close grace period has expired.
+        self.moneyCandidateContext=nil
+        if self.moneyCandidate and not self.pendingLoot and ns.TakePickpocketMoneyContext then
+            self.moneyCandidateContext=ns.TakePickpocketMoneyContext()
+            if ns.PickpocketDiagnostics then ns.PickpocketDiagnostics:Log("cash context bound to balance change",delta,self.moneyCandidateContext and self.moneyCandidateContext.cast) end
+        end
         if not discrepancy and delta>0 and (self.pendingLoot==true or self.pendingLoot==delta) then
             self:ConsolidateLoot(cash,entry);self.moneyCandidate=nil
         else
@@ -284,7 +317,7 @@ function ns.CreateLedgerTracking(journal)
         end
         self.pendingLoot=nil
         if C_Timer and C_Timer.After then C_Timer.After(1,function()
-            if self.moneyCandidate==entry then self.moneyCandidate=nil;self.candidateRun=nil end
+            if self.moneyCandidate==entry then self.moneyCandidate=nil;self.moneyCandidateContext=nil;self.candidateRun=nil end
         end) end
         self.moneyContext=nil
         if ns.RefreshLedgerCashFlow then ns.RefreshLedgerCashFlow() end

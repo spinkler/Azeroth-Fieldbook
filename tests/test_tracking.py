@@ -33,6 +33,7 @@ alice.bestiary.entries[42].lockedBasic={name='Locked snapshot',category='Humanoi
 alice.bestiary.entries[42].rumours={{kind='ability',value='Rumour',sender='Carol',dismissed=true,rejected=true}}
 alice.bestiary.entries[42].beastLore={level=9,observed=1000000,rows={{left='Diet:',right='Meat'}}}
 alice.bestiary.entries[42].beastLoreSource='WHISPER';alice.bestiary.entries[42].beastLoreSender='Carol'
+alice.bestiary.entries[42].pickpocketLoot={samples=1,items={[123]={quantity=2,drops=1}},recent={}}
 alice.bestiary.points.spent=1
 alice.bestiary.points.reservations.outgoing=1
 alice.bestiary.sharing={sequence=5,receipts={},incoming={},outgoing={id='outgoing',stage='preflight',recipient='Carol'}}
@@ -50,6 +51,7 @@ eq(select(2,again:GetTotals()),3,'reload does not add historical points twice')
 eq(alice.accountTrackingKey,key)
 
 bob=character(25,'Frostbolt',11,'Westfall')
+bob.bestiary.entries[42].pickpocketLoot={samples=1,items={[123]={quantity=3,drops=1}},recent={}}
 bob.uiScale=1.25
 bob.bestiary.entries[42].idNotes={spells={2,3},text='Bob notes'}
 bob.bestiary.entries[42].damage[9]={low=7,high=20,reports=1}
@@ -60,6 +62,7 @@ bob.bestiary.entries[43]={id=43,name='Other creature',category='Beast',kills=0,a
 -- Ensure the additional entry has genuine credit, as normal observation does.
 ns.CreateBestiaryJournal(bob,function() end):Ensure(43,false,nil,{level=9})
 local b,bobAccount=open(bob)
+eq(b.entries[42].pickpocketLoot.samples,2);eq(b.entries[42].pickpocketLoot.items[123].quantity,5)
 assert(bobAccount==account and bob.accountTrackingKey~=key)
 eq(b.entries[42].kills,50,'different characters contribute their recorded kills')
 assert(b.entries[42].abilities.Fireball and b.entries[42].abilities.Frostbolt and b.entries[43])

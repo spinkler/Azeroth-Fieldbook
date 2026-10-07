@@ -43,6 +43,7 @@ class BackupTests(unittest.TestCase):
         lua = client()
         lua.execute('''
             local j,db,store,e=fresh()
+            e.pickpocketLoot={samples=1,items={[123]={quantity=2,drops=1}},recent={{guid='Cast-1',items={[123]=2}}}}
             e.tameable=true;e.tameabilitySource='gameTooltip'
             e.beastLore={level=10,observed=now,rows={{left='Diet:',right='Meat'}}}
             e.beastLoreSource='gameTooltip'
@@ -60,6 +61,8 @@ class BackupTests(unittest.TestCase):
             assert(not encoded:find('[|%s]'),'clipboard text has no markup or whitespace')
             local decoded=assert(ns.BestiaryBackups.Decode('  '..encoded..'\\n'))
             eq(ns.BestiaryBackups.Encode(decoded),encoded)
+            eq(decoded.bestiary.entries[42].pickpocketLoot.items[123].quantity,2)
+            eq(decoded.bestiary.entries[42].pickpocketLoot.recent[1].guid,'Cast-1')
             eq(decoded.bestiary.entries[42].idNotes.text,e.idNotes.text)
             assert(decoded.bestiary.entries[42].confirmed and decoded.bestiary.entries[42].tameable)
             eq(decoded.bestiary.entries[42].beastLore.rows[1].right,'Meat')

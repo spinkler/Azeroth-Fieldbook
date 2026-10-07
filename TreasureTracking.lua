@@ -57,10 +57,10 @@ function ns.CreateTreasureTracking(journal)
         local active=self.active and self.active.guid==guid and journal.encounters[self.active.id]
         local existing=active and journal:Get(active.kindID)
         if existing and existing.form=="world" then return {kindID=existing.id,world=true} end
-        local seen=self.world
-        if not fresh(seen,15) or not seen.objectID then
-            seen=fresh(self.interaction,3) and self.interaction or nil
-        end
+        -- The opening interaction owns this attribution window. A later hover
+        -- must neither replace it nor bypass a conflicting clicked identity.
+        local seen=fresh(self.interaction,3) and self.interaction or nil
+        if not seen and fresh(self.world,15) and self.world.objectID then seen=self.world end
         if not seen then return end
         if seen.objectID and seen.objectID~=id or seen.guid and seen.guid~=guid then return end
         if not seen.objectID and not fresh(self.interaction,3) then return end

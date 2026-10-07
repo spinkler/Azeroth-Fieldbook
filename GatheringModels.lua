@@ -14,6 +14,8 @@ local models={
     {"herb","Briarthorn",219502,{1621,3729}},
     {"herb","Bruiseweed",219440,{1622,3730}},
     {"mineral","Copper Vein",219514,{1731,2055,3763,103713}},
+    -- Starter variant uses the Copper Vein presentation asset; object ID unverified.
+    {"mineral","Poor Copper Vein",219514,{}},
     {"mineral","Dark Iron Deposit",189103,{165658}},
     {"herb","Dreamfoil",219444,{176584,176639}},
     {"herb","Earthroot",219489,{1619,3726}},
@@ -51,6 +53,7 @@ local models={
     {"mineral","Rich Thorium Vein",219550,{175404}},
     {"mineral","Silver Vein",219569,{1733,105569}},
     {"herb","Silverleaf",219487,{1617,3725}},
+    {"herb","Stunted Silverleaf",219487,{657455}},
     {"mineral","Small Thorium Vein",219566,{324,150082,176643}},
     {"herb","Stranglekelp",219495,{2045}},
     {"herb","Sungrass",219496,{142142,176636}},

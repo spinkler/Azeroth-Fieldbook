@@ -3,6 +3,7 @@ local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local window = {}
 ns.SpellIDWindow = window
+local recordedAbility
 local db, panel, background
 local captureAssignment
 local openCreature
@@ -311,6 +312,10 @@ local function setup()
                     if row.observed and GetTime() - row.observed >= 120 then clear(row) end
                 end
             end
+            for _, row in ipairs(rows) do
+                if row.observed and validID(row.rawID) and row.candidate and recordedAbility
+                    and recordedAbility(row.candidate, row.rawID) then clear(row) end
+            end
         end
         updateFade(delta)
     end)
@@ -318,6 +323,9 @@ local function setup()
 end
 function window:SetAssignmentCapture(callback)
     captureAssignment = callback
+end
+function window:SetRecordedAbilityCheck(callback)
+    recordedAbility = callback
 end
 function window:SetCreatureOpener(callback)
     openCreature = callback
@@ -334,6 +342,9 @@ end
 local function present(index, id, name, effect, caster, token, candidate)
     if public(id) and (type(id) ~= "number" or id <= 0) then return end
     if window:IsBlacklisted(id) then return false,"suppressed" end
+    if validID(id) and candidate and recordedAbility and recordedAbility(candidate, id) then
+        return false,"suppressed"
+    end
     local row = rows[index]
     if token and row.dismissedToken==token then return false,"suppressed" end
     row.dismissedToken=nil;row.dismissedID=nil

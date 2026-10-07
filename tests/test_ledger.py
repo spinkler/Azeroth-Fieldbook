@@ -5,6 +5,146 @@ from ui_test_harness import ROOT
 
 
 class LedgerTests(unittest.TestCase):
+    def test_pickpocket_cash_uses_confirmed_capture_and_separate_runs(self):
+        lua=new_ledger()
+        lua.execute((ROOT/'BestiaryLoot.lua').read_text(encoding='utf-8'),'AzerothFieldbook',lua.globals().ns)
+        lua.execute(r"""
+            AzerothFieldbookLedgerDB={};balance=1000
+            function GetMoney() return balance end
+            function GetTime() return now end
+            GOLD_AMOUNT='%d Gold';SILVER_AMOUNT='%d Silver';COPPER_AMOUNT='%d Copper'
+            fire('PLAYER_ENTERING_WORLD')
+            local guid='Creature-0-1-2-3-42-ABC'
+            local dead=false
+            function UnitGUID(unit) if unit=='target' then return guid end end
+            function UnitName() return 'Gnarlpine Ursa' end
+            function UnitIsDead() return dead end
+            function GetNumLootItems() return 1 end
+            function GetLootSourceInfo() return guid,0 end
+            function GetLootSlotLink() return nil end -- Coins only: no item row.
+            local best={entries={[42]={name='Gnarlpine Ursa',personalEncountered=true}},Touch=function() end}
+            local observer=ns.StartBestiaryLoot(best)
+            local function event(event,...) observer.scripts.OnEvent(observer,event,...) end
+            local function pick(cast)
+                event('UNIT_SPELLCAST_SENT','player','Gnarlpine Ursa',cast,921)
+                event('UNIT_SPELLCAST_SUCCEEDED','player',cast,921)
+                event('LOOT_READY');event('LOOT_OPENED')
+            end
+            pick('Cast-1')
+            event('LOOT_CLOSED') -- Native money notification may trail close.
+            balance=balance+7;fire('PLAYER_MONEY');fire('CHAT_MSG_MONEY','You loot 7 Copper.')
+            local cash=AzerothFieldbookLedgerDB.cashFlow
+            assert(cash.entries[1].context=='Pickpocketed cash')
+            assert(cash.entries[1].counterparty=='Gnarlpine Ursa' and cash.income==7)
+            assert(next(best.entries[42].pickpocketLoot.items)==nil,'No coins in item table')
+            pick('Cast-2')
+            fire('CHAT_MSG_MONEY','You loot 3 Copper.');balance=balance+3;fire('PLAYER_MONEY')
+            assert(#cash.entries==1 and cash.entries[1].amount==10 and cash.entries[1].lootCount==2)
+            event('LOOT_CLOSED');dead=true;event('LOOT_READY')
+            balance=balance+5;fire('CHAT_MSG_MONEY','You loot 5 Copper.')
+            assert(#cash.entries==2 and cash.entries[1].context=='Looted cash')
+            event('LOOT_CLOSED');dead=false;pick('Cast-3');event('LOOT_CLOSED');now=now+2
+            balance=balance+2;fire('CHAT_MSG_MONEY','You loot 2 Copper.')
+            assert(cash.entries[1].context=='Looted cash','Expired capture cannot classify later cash')
+            assert(cash.income==17)
+            shell:ShowSection('merchants');c:CashFlow()
+            c.panels.cashFlow.search:SetText('pickpocket');c:RefreshCashFlow()
+            local text=c.panels.cashFlow.read.text:GetText()
+            assert(text:find('Pickpocketed cash',1,true) and text:find('Gnarlpine Ursa',1,true))
+        """)
+
+    def test_pickpocket_cash_missing_coin_guid_and_early_money_events(self):
+        for early, mismatch, failed in [(False,False,False),(True,False,False),(True,True,False),(True,False,True)]:
+            with self.subTest(early=early,mismatch=mismatch,failed=failed):
+                lua=new_ledger()
+                lua.execute((ROOT/'BestiaryLoot.lua').read_text(encoding='utf-8'),'AzerothFieldbook',lua.globals().ns)
+                lua.globals().early=early;lua.globals().mismatch=mismatch;lua.globals().failed=failed
+                lua.execute(r"""
+                    AzerothFieldbookLedgerDB={};balance=1000
+                    function GetMoney() return balance end
+                    function GetTime() return now end
+                    GOLD_AMOUNT='%d Gold';SILVER_AMOUNT='%d Silver';COPPER_AMOUNT='%d Copper'
+                    fire('PLAYER_ENTERING_WORLD')
+                    local guid='Creature-0-1-2-3-42-ABC'
+                    function UnitGUID(unit) if unit=='target' then return guid end end
+                    function UnitName() return 'Gnarlpine Ursa' end
+                    function UnitIsDead() return false end
+                    function GetNumLootItems() return 1 end
+                    function GetLootSourceInfo() if mismatch then return 'Creature-0-1-2-3-43-DEF',0 end end
+                    function GetLootSlotType() return 2 end
+                    function GetLootSlotLink() return nil end
+                    local best={entries={[42]={name='Gnarlpine Ursa',personalEncountered=true}},Touch=function() end}
+                    local observer=ns.StartBestiaryLoot(best)
+                    local function event(event,...) observer.scripts.OnEvent(observer,event,...) end
+                    event('UNIT_SPELLCAST_SENT','player','Gnarlpine Ursa','Cast-1',921)
+                    local function money()
+                        balance=balance+7;fire('PLAYER_MONEY');fire('CHAT_MSG_MONEY','You loot 7 Copper.')
+                    end
+                    if early then money() end
+                    event('LOOT_READY')
+                    event(failed and 'UNIT_SPELLCAST_FAILED' or 'UNIT_SPELLCAST_SUCCEEDED','player','Cast-1',921)
+                    event('LOOT_OPENED');event('LOOT_CLOSED')
+                    if not early then money() end
+                    flush()
+                    local cash=AzerothFieldbookLedgerDB.cashFlow
+                    assert(cash.income==7 and #cash.entries==1 and cash.entries[1].amount==7)
+                    assert(cash.entries[1].context==((mismatch or failed) and 'Looted cash' or 'Pickpocketed cash'))
+                    if not mismatch and not failed then assert(cash.entries[1].counterparty=='Gnarlpine Ursa') end
+                    -- Consuming the evidence cannot label a subsequent money message.
+                    balance=balance+3;fire('CHAT_MSG_MONEY','You loot 3 Copper.');flush()
+                    assert(cash.entries[1].context=='Looted cash' and cash.income==10)
+                """)
+
+    def test_pickpocket_cash_without_any_readable_loot_slots(self):
+        for ordering in ['no_window','empty_window','early_money','failed','corpse','expired','native_delayed_chat']:
+            with self.subTest(ordering=ordering):
+                lua=new_ledger()
+                lua.execute((ROOT/'BestiaryLoot.lua').read_text(encoding='utf-8'),'AzerothFieldbook',lua.globals().ns)
+                lua.globals().ordering=ordering
+                lua.execute(r"""
+                    AzerothFieldbookLedgerDB={};balance=1000
+                    function GetMoney() return balance end
+                    function GetTime() return now end
+                    GOLD_AMOUNT='%d Gold';SILVER_AMOUNT='%d Silver';COPPER_AMOUNT='%d Copper'
+                    fire('PLAYER_ENTERING_WORLD')
+                    local guid='Creature-0-1-2-3-42-ABC'
+                    local dead=false
+                    function UnitGUID(unit) if unit=='target' then return guid end end
+                    function UnitName() return 'Gnarlpine Ursa' end
+                    function UnitIsDead() return dead end
+                    function GetNumLootItems() return 0 end
+                    GetLootSourceInfo=nil;GetLootSlotType=nil;GetLootSlotLink=nil
+                    local best={entries={[42]={name='Gnarlpine Ursa',personalEncountered=true}},Touch=function() end}
+                    local observer=ns.StartBestiaryLoot(best)
+                    local function event(event,...) observer.scripts.OnEvent(observer,event,...) end
+                    local function money()
+                        balance=balance+2;fire('PLAYER_MONEY');fire('CHAT_MSG_MONEY','You loot 2 Copper.')
+                    end
+                    event('UNIT_SPELLCAST_SENT','player','Gnarlpine Ursa','Cast-coins',921)
+                    if ordering=='early_money' then money() end
+                    event(ordering=='failed' and 'UNIT_SPELLCAST_FAILED' or 'UNIT_SPELLCAST_SUCCEEDED','player','Cast-coins',921)
+                    if ordering=='empty_window' then event('LOOT_READY');event('LOOT_OPENED');event('LOOT_CLOSED') end
+                    if ordering=='corpse' then dead=true end
+                    if ordering=='expired' then now=now+4 end
+                    if ordering=='native_delayed_chat' then
+                        -- Native report: close 931497.772, balance +1 at .948,
+                        -- chat 931498.774 (2ms after the context expires).
+                        local mono=931496.970
+                        function GetTime() return mono end
+                        event('UNIT_SPELLCAST_SENT','player','Gnarlpine Ursa','Cast-native',921)
+                        event('UNIT_SPELLCAST_SUCCEEDED','player','Cast-native',921)
+                        mono=931497.772;event('LOOT_CLOSED');event('LOOT_CLOSED')
+                        mono=931497.948;balance=balance+2;fire('PLAYER_MONEY')
+                        assert(not AzerothFieldbookLedgerDB.cashFlow.entries[1].source,'Balance alone does not prove loot')
+                        mono=931498.774;fire('CHAT_MSG_MONEY','You loot 2 Copper.')
+                    elseif ordering~='early_money' then money() end
+                    flush()
+                    local cash=AzerothFieldbookLedgerDB.cashFlow
+                    local expected=(ordering=='failed' or ordering=='corpse' or ordering=='expired') and 'Looted cash' or 'Pickpocketed cash'
+                    assert(#cash.entries==1 and cash.income==2 and cash.entries[1].amount==2)
+                    assert(cash.entries[1].context==expected,cash.entries[1].context)
+                """)
+
     def test_cash_flow_login_logout_and_disabled_addon_discrepancies(self):
         lua=new_ledger()
         lua.execute('''

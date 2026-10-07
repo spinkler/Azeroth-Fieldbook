@@ -282,6 +282,33 @@ class TreasureCaptureTests(unittest.TestCase):
             assert(t.status:find('tooltip object ID: 100',1,true))
         """)
 
+    def test_completed_chest_opening_takes_priority_over_new_hover(self):
+        for identity in (None, 99):
+            with self.subTest(identity=identity):
+                self.setUp();self.world_fixture()
+                self.lua.globals().chestID=identity
+                self.lua.execute("""
+                    worldData.id=chestID;worldData.lines[1].leftText='Battered Chest'
+                    fire('UNIT_SPELLCAST_SENT','player','Battered Chest','Cast-chest',3365)
+                    now=now+5
+                    fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-chest',3365)
+                    worldData={type=4,id=100,lines={{leftText='Food Crate'}}}
+                    openworld()
+                    local v=assert(j.encounters[t.active.id])
+                    assert(j:Get(v.kindID).name=='Battered Chest' and j:Get(v.kindID).objectID==99)
+                """)
+
+    def test_matching_hover_cannot_override_conflicting_opening(self):
+        self.world_fixture()
+        self.lua.execute("""
+            worldData.id=100;worldData.lines[1].leftText='Battered Chest'
+            fire('UNIT_SPELLCAST_SENT','player','Battered Chest','Cast-chest',3365)
+            now=now+5
+            fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-chest',3365)
+            worldData={type=4,id=99,lines={{leftText='Food Crate'}}}
+            openworld();assert(T.Count(j.encounters)==0)
+        """)
+
     def test_opening_failure_unrelated_cast_and_wrong_source_cancel_fallback(self):
         self.world_fixture()
         self.lua.execute("""

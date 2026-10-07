@@ -530,7 +530,13 @@ local ink = { 0.75, 0.8, 0.8 }
         local e = selected and journal.entries[selected]
         book.koboldIllustration:SetAlpha(0.33)
         for _,strip in ipairs(book.dragonIllustration) do strip:SetShown(e==nil) end
-        local hasLoot=book.lootMode and e and e.loot and next(e.loot.items or {})~=nil
+        local hasPockets=e and e.pickpocketLoot and ((e.pickpocketLoot.samples or 0)>0 or next(e.pickpocketLoot.items or {})~=nil)
+        if book.pocketEntry~=selected or not hasPockets then book.pickpocketMode=false end
+        book.pocketEntry=selected
+        book.pickpocketButton:SetShown(hasPockets==true and not (rumoursWindow and rumoursWindow:IsShown()))
+        book.pickpocketButton:SetSelected(book.pickpocketMode==true)
+        local displayedLoot=e and (book.pickpocketMode and e.pickpocketLoot or e.loot)
+        local hasLoot=book.lootMode and displayedLoot and next(displayedLoot.items or {})~=nil
         book.lootFilter:SetShown(hasLoot==true and not (rumoursWindow and rumoursWindow:IsShown()))
         if not hasLoot then book.lootFilterMenu:Hide() end
         local basic=e and basicInfo(selected)
@@ -547,6 +553,12 @@ local ink = { 0.75, 0.8, 0.8 }
         book.damageScroll:SetHeight(75)
         book.damageButton:ClearAllPoints()
         book.damageButton:SetPoint("TOPLEFT",579,-248)
+        local compact=isBeast or hasPockets==true
+        if book.modelBorder:GetHeight()~=(compact and 139 or 168) then
+            book.modelBorder:SetHeight(compact and 139 or 168)
+            book.model:SetHeight(compact and 135 or 164)
+        end
+        book.beastLoreButton:SetShown(isBeast and not hasPockets)
         if isBeast then
             local lore=e.beastLore
             local valid=ns.SharingReport and ns.SharingReport.ValidLore(lore)
@@ -888,18 +900,18 @@ local ink = { 0.75, 0.8, 0.8 }
         for i=#levels+1,#book.damageRows do book.damageRows[i]:Hide() end
         for _,row in ipairs(book.lootRows or {}) do row:Hide() end
         if book.skinningHeading then book.skinningHeading:Hide() end
-        book.damageHeading:SetText(book.lootMode and ("Loot · "..tostring(e.loot and e.loot.samples or 0).." observed corpses") or "Damage taken")
-        book.noDamage:SetText(book.lootMode and "No item drops observed yet." or "No damage recorded.")
+        book.damageHeading:SetText(book.lootMode and ((book.pickpocketMode and "Pickpocket Loot · " or "Loot · ")..tostring(displayedLoot and displayedLoot.samples or 0)..(book.pickpocketMode and " observed picks" or " observed corpses")) or "Damage taken")
+        book.noDamage:SetText(book.lootMode and (book.pickpocketMode and "No pickpocket items observed yet." or "No item drops observed yet.") or "No damage recorded.")
         local itemIDs={}
         if book.lootMode then
-            for id in pairs(e.loot and e.loot.items or {}) do
+            for id in pairs(displayedLoot and displayedLoot.items or {}) do
                 local getInfo=C_Item and C_Item.GetItemInfo or GetItemInfo
                 local info=type(getInfo)=="function" and {pcall(getInfo,id)} or {}
                 local quality=info[1] and info[4]
                 if (issecretvalue and issecretvalue(quality)) or type(quality)~="number" or quality<0 or quality>5 then quality=-1 end
                 if not book.lootQualityHidden or not book.lootQualityHidden[quality] then itemIDs[#itemIDs+1]=id end
             end
-            if next(e.loot and e.loot.items or {}) and #itemIDs==0 then book.noDamage:SetText("No drops match the quality filter.") end
+            if next(displayedLoot and displayedLoot.items or {}) and #itemIDs==0 then book.noDamage:SetText("No drops match the quality filter.") end
             local skinning={}
             for _,id in ipairs(itemIDs) do
                 local fn=C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
@@ -922,7 +934,7 @@ local ink = { 0.75, 0.8, 0.8 }
             local skinningStarted=false
             book.lootRows=book.lootRows or {}
             for i,id in ipairs(itemIDs) do
-                if skinning[id] and not skinningStarted then
+                if not book.pickpocketMode and skinning[id] and not skinningStarted then
                     skinningStarted=true
                     if not book.skinningHeading then book.skinningHeading=label(book.damageChild,"Skinning",0,0,296,"GameFontNormal") end
                     book.skinningHeading:ClearAllPoints();book.skinningHeading:SetPoint("TOPLEFT",0,-contentHeight-4)
@@ -937,7 +949,7 @@ local ink = { 0.75, 0.8, 0.8 }
                     row.stats:SetTextColor(0.8,0.72,0.52)
                     row:SetScript("OnEnter",function(self)
                         GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetHyperlink("item:"..self.itemID)
-                        GameTooltip:AddLine("Observed rate: corpses with this item / observed loot sources.",0.8,0.72,0.52,true)
+                        GameTooltip:AddLine(book.pickpocketMode and "Observed rate: picks with this item / recorded successful picks, including picks with no items." or "Observed rate: corpses with this item / observed loot sources.",0.8,0.72,0.52,true)
                         if self.skinning then GameTooltip:AddLine("Skinning groups leatherworking materials by item category; historical loot method was not recorded.",0.8,0.72,0.52,true) end
                         GameTooltip:Show()
                     end)
@@ -945,17 +957,17 @@ local ink = { 0.75, 0.8, 0.8 }
                     row:SetScript("OnHide",function(self) if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
                     book.lootRows[i]=row
                 end
-                local item=e.loot.items[id]
+                local item=displayedLoot.items[id]
                 local getInfo=C_Item and C_Item.GetItemInfo or GetItemInfo
                 local name,link,icon
                 if type(getInfo)=="function" then
                     local info={getInfo(id)}
                     name,link,icon=info[1],info[2],info[10]
                 end
-                row.skinning=skinning[id]==true
+                row.skinning=not book.pickpocketMode and skinning[id]==true
                 row.itemID=id;row.name:SetText(link or name or ("Item "..id))
                 row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
-                row.stats:SetText(string.format("%d items · %d/%d corpses · %.1f%%",item.quantity,item.drops,e.loot.samples,100*item.drops/math.max(1,e.loot.samples)))
+                row.stats:SetText(string.format("%d items · %d/%d %s · %.1f%%",item.quantity,item.drops,displayedLoot.samples,book.pickpocketMode and "picks" or "corpses",100*item.drops/math.max(1,displayedLoot.samples)))
                 row:ClearAllPoints();row:SetPoint("TOPLEFT",0,-contentHeight);row:Show()
                 contentHeight=contentHeight+34
             end
@@ -2035,6 +2047,13 @@ local ink = { 0.75, 0.8, 0.8 }
             book.beastLore:SetShown(not book.beastLore:IsShown())
         end)
         book.beastLoreButton:Hide()
+        book.pickpocketButton=button(detail,"Pickpocket Loot",344,-277,227,function()
+            book.pickpocketMode=not book.pickpocketMode
+            book.lootMode=true;book.lootButton:SetSelected(false)
+            book.damageScroll:SetVerticalScroll(0);refresh()
+        end)
+        styleSelection(book.pickpocketButton,nil,true)
+        book.pickpocketButton:Hide()
         -- Lore replaces the abilities view inside the page, using the same heading and footer bounds.
         local beastLore=CreateFrame("Frame","AzerothFieldbookKnownBeastLore",detail)
         beastLore:SetSize(593,389); beastLore:SetPoint("TOPLEFT",342,-325)
@@ -2074,6 +2093,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         book.lootButton=button(detail,"Show Damage",811,-248,111,function()
             if rumoursWindow and rumoursWindow:IsShown() then rumoursWindow:Hide();book.lootMode=true end
+            book.pickpocketMode=false
             book.lootMode=not book.lootMode
             book.lootButton:SetSelected(not book.lootMode)
             book.damageScroll:SetVerticalScroll(0)
@@ -2478,7 +2498,9 @@ local ink = { 0.75, 0.8, 0.8 }
                             button:SetShown(not shown)
                         end
                         local entry=selected and journal.entries[selected]
-                        book.lootFilter:SetShown(not shown and book.lootMode and entry~=nil and entry.loot~=nil and next(entry.loot.items or {})~=nil)
+                        book.pickpocketButton:SetShown(not shown and entry~=nil and entry.pickpocketLoot~=nil and ((entry.pickpocketLoot.samples or 0)>0 or next(entry.pickpocketLoot.items or {})~=nil))
+                        local loot=entry and (book.pickpocketMode and entry.pickpocketLoot or entry.loot)
+                        book.lootFilter:SetShown(not shown and book.lootMode and loot~=nil and next(loot.items or {})~=nil)
                         if shown then book.lootFilterMenu:Hide() end
                     end
                 end)

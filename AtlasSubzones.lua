@@ -6,6 +6,7 @@ S.DEFAULT_WORLD_LABEL_SIZE=14
 S.INTERIOR_YARDS=25
 S.SIMPLIFY_YARDS=5
 S.MAX_INTERIORS=1024
+S.SETTLE_SECONDS=1
 ns.AtlasSubzones=S
 S.WORK_MS=1
 local jobs={}
@@ -186,8 +187,8 @@ function S.Attach(j)
                         local first,second=sampleNames(p)
                         count=count+extra;names[first]=true;if second then names[second]=true end
                         if p.kind=="interior" then
-                            out[#out+1]={kind="interior",mapID=id,x=p.x,y=p.y,name=p.name,manual=p.manual}
-                        else out[#out+1]={mapID=id,x=p.x,y=p.y,fromX=p.fromX,fromY=p.fromY,from=p.from,to=p.to} end
+                            out[#out+1]={kind="interior",mapID=id,x=p.x,y=p.y,name=p.name,manual=p.manual,excluded=p.excluded==true}
+                        else out[#out+1]={mapID=id,x=p.x,y=p.y,fromX=p.fromX,fromY=p.fromY,from=p.from,to=p.to,excluded=p.excluded==true} end
                     end
                 end
             end
@@ -195,7 +196,24 @@ function S.Attach(j)
         return out
     end
     function s:Crossings(id,checkpoint) return self:Samples(id,checkpoint,true) end
-    function s:Reset() self.previous=nil end
+    function s:Reset(transition) self.previous=nil;self.settling=transition and true or nil end
+    function s:ToggleExcluded(id,sample)
+        if j.readOnly or ns.InitializationBlocked or self.cleaning then return false end
+        local index=self:Index(id)
+        if not index.ready then return false end
+        for _,p in ipairs(store[id] or {}) do
+            if (valid(p) or interior(p)) and p.mapID==id and p.kind==sample.kind
+                and p.x==sample.x and p.y==sample.y and p.name==sample.name
+                and p.from==sample.from and p.to==sample.to and p.fromX==sample.fromX and p.fromY==sample.fromY then
+                p.excluded=p.excluded~=true or nil
+                if index.coverage then S.Cancel(index.coverage.job) end
+                self.index[id]=nil;self:Changed(id)
+                if self.onChange then self.onChange(id) end
+                return true
+            end
+        end
+        return false
+    end
     local function spatial(index,row,add,allSamples,radius)
         if not index.width then return index.keys[key(row)] end
         local isInterior=row.kind=="interior"
@@ -229,6 +247,12 @@ function S.Attach(j)
         end end
     end
     local function remember(index,row)
+        if row.excluded==true then
+            -- Suppress repeat automatic capture under the rejected name, while
+            -- allowing a corrected area label to record at the same position.
+            if index.width then spatial(index,row,true) end
+            return
+        end
         local extra=extraNames(index.names,row)
         if index.count+extra>S.MAX_AREAS then return end
         index.keys[key(row)]=true
@@ -276,7 +300,7 @@ function S.Attach(j)
                     if not j.readOnly then row.at=nil end
                     -- Interior simplification must use the border-preserving cleanup,
                     -- never proximity alone during reload/index construction.
-                    if compact and row.kind~='interior' and row.manual~=true and spatial(index,row) then removed=removed+1
+                    if compact and row.excluded~=true and row.kind~='interior' and row.manual~=true and spatial(index,row) then removed=removed+1
                     else remember(index,row);kept[#kept+1]=row end
                 else kept[#kept+1]=row end
             end
@@ -358,7 +382,7 @@ function S.Attach(j)
         -- invented sub-zone called "Unavailable". Blank sub-zones are the zone.
         local name=A.Read(GetSubZoneText)
         if name=="" then name=A.Read(GetRealZoneText) end
-        if not A.Text(name,160) then self:Reset();return end
+        if not A.Text(name,160) then self:Reset(self.settling~=nil);return end
         -- Offshore water can retain a coastal map ID. Check the current area
         -- labels rather than excluding that whole coastal map from surveys.
         if name=="The Great Sea" or A.Read(GetRealZoneText)=="The Great Sea" or A.Read(GetZoneText)=="The Great Sea" then
@@ -370,23 +394,34 @@ function S.Attach(j)
         local position=A.Integer(id,1,2147483647) and A.Read(C_Map and C_Map.GetPlayerMapPosition,id,"player")
         local clock=A.Read(GetTime) or A.Now()
         if type(position)~="table" or not A.Number(position.x,0,1) or not A.Number(position.y,0,1)
-            or (position.x==0 and position.y==0) or not A.Number(clock,0,1e12) then self:Reset();return end
+            or (position.x==0 and position.y==0) or not A.Number(clock,0,1e12) then self:Reset(self.settling~=nil);return end
         local x,y=math.floor(position.x*10000+0.5),math.floor(position.y*10000+0.5)
         local old=self.previous
         local index=self:Index(id,deferred)
         if not old then
             self.previous={mapID=id,x=x,y=y,name=name,clock=clock}
+            if self.settling then self.settling=clock;return end
             return observeInterior(id,name,x,y,index)
         end
         local oldID,oldName,oldX,oldY,oldClock=old.mapID,old.name,old.x,old.y,old.clock
         old.mapID,old.name,old.x,old.y,old.clock=id,name,x,y,clock
+        if oldName~=name then old.labelSince=clock end
         local gap=clock-oldClock
+        local jump=oldID~=id or gap<0 or gap>2 or (x-oldX)^2+(y-oldY)^2>300^2
+        if jump then self.settling=clock;return end
+        if self.settling then
+            if oldName~=name then self.settling=clock end
+            if clock-self.settling<S.SETTLE_SECONDS then return end
+            self.settling=nil
+            return observeInterior(id,name,x,y,index)
+        end
         -- Loading screens, stale samples and large jumps are not boundaries.
         local crossed
-        if oldID==id and oldName~=name and gap>=0 and gap<=2 and (x-oldX)^2+(y-oldY)^2<=300^2 then
+        if oldID==id and oldName~=name and gap>=0 and gap<=2 and (x~=oldX or y~=oldY) and (x-oldX)^2+(y-oldY)^2<=300^2 then
             crossed=record({mapID=id,x=x,y=y,fromX=oldX,fromY=oldY,from=oldName,to=name},index)
         end
-        local sampled=observeInterior(id,name,x,y,index)
+        local sampled
+        if not old.labelSince or clock-old.labelSince>=S.SETTLE_SECONDS then sampled=observeInterior(id,name,x,y,index) end
         return crossed or sampled
     end
     return s
@@ -630,6 +665,82 @@ local function coverageRows(saved,id,checkpoint)
     end
     return out
 end
+-- Infer separate islands from the spacing of the evidence itself. A fixed
+-- radius would break older sparse surveys; a distant dot must not enlarge the
+-- radius used by a densely sampled village. Work only on copies, and yield
+-- during searches so populated maps stay within the shared frame budget.
+local function components(points,checkpoint,support)
+    if support and #support>0 then
+        local combined,observed={},{}
+        for _,p in ipairs(points) do checkpoint();combined[#combined+1]=p;observed[p.x..':'..p.y]=p end
+        for _,p in ipairs(support) do checkpoint();combined[#combined+1]=p end
+        local out={}
+        for _,group in ipairs(components(combined,checkpoint)) do
+            local retained={}
+            for _,p in ipairs(group) do
+                checkpoint();local q=observed[p.x..':'..p.y]
+                if q then retained[#retained+1]=q end
+            end
+            if #retained>0 then out[#out+1]=retained end
+        end
+        return out
+    end
+    local sorted={}
+    for _,p in ipairs(points) do checkpoint();sorted[#sorted+1]=p end
+    sortRange(sorted,1,#sorted,nil,checkpoint,{})
+    local unique={}
+    for _,p in ipairs(sorted) do
+        checkpoint();local last=unique[#unique]
+        if not last or last.x~=p.x or last.y~=p.y then unique[#unique+1]=p end
+    end
+    if #unique<4 then return {unique} end
+    local spacing={}
+    for i,p in ipairs(unique) do
+        local best=math.huge
+        for direction=-1,1,2 do
+            local k=i+direction
+            while unique[k] do
+                checkpoint();local q=unique[k];local dx=q.x-p.x
+                if dx*dx>best then break end
+                best=math.min(best,dx*dx+(q.y-p.y)^2);k=k+direction
+            end
+        end
+        spacing[#spacing+1]=best
+    end
+    table.sort(spacing)
+    local radius=math.max(300,4*math.sqrt(spacing[math.ceil(#spacing/2)]))
+    local grid,seen,out={},{},{}
+    for _,p in ipairs(unique) do
+        checkpoint();local key=math.floor(p.x/radius)..':'..math.floor(p.y/radius)
+        grid[key]=grid[key] or {};grid[key][#grid[key]+1]=p
+    end
+    for _,start in ipairs(unique) do
+        checkpoint()
+        if not seen[start] then
+            local group={start};seen[start]=true;out[#out+1]=group
+            local i=1
+            while group[i] do
+                local p=group[i];i=i+1
+                local cx,cy=math.floor(p.x/radius),math.floor(p.y/radius)
+                for dx=-1,1 do for dy=-1,1 do
+                    local bucket=grid[(cx+dx)..':'..(cy+dy)] or {}
+                    local k=1
+                    while bucket[k] do
+                        checkpoint();local q=bucket[k]
+                        if seen[q] or (p.x-q.x)^2+(p.y-q.y)^2<=radius^2 then
+                            if not seen[q] then seen[q]=true;group[#group+1]=q end
+                            -- Visited evidence need not be searched again by
+                            -- every later point in this connected component.
+                            bucket[k]=bucket[#bucket];bucket[#bucket]=nil
+                        else k=k+1
+                        end
+                    end
+                end end
+            end
+        end
+    end
+    return out
+end
 local function geometry(rows,checkpoint)
     local areas={}
     local function area(name)
@@ -638,8 +749,8 @@ local function geometry(rows,checkpoint)
     end
     for _,p in ipairs(rows) do
         checkpoint()
-        if interior(p) then local a=area(p.name);a.points[#a.points+1]=p;a.anchors[#a.anchors+1]=p
-        elseif valid(p) then
+        if p.excluded~=true and interior(p) then local a=area(p.name);a.points[#a.points+1]=p;a.anchors[#a.anchors+1]=p
+        elseif p.excluded~=true and valid(p) then
             local a,b=area(p.from),area(p.to)
             local mid={x=(p.fromX+p.x)/2,y=(p.fromY+p.y)/2}
             a.points[#a.points+1]=mid;b.points[#b.points+1]=mid
@@ -648,6 +759,7 @@ local function geometry(rows,checkpoint)
         end
     end
     for _,a in pairs(areas) do
+        a.disconnected=#components(a.points,checkpoint)>1
         a.convex=hull(a.points,checkpoint);a.traced=tracedHull(a.points,checkpoint,a.convex)
         a.buckets=traceBuckets(a.traced,checkpoint)
         a.minX,a.minY,a.maxX,a.maxY=10000,10000,0,0
@@ -909,6 +1021,12 @@ local function cleanInterior(journal,id,done,progress,batch)
             checkpoint();rows[#rows+1]={kind='interior',mapID=id,name=p.name,x=p.x,y=p.y}
         end
         local reference=geometry(rows,checkpoint)
+        -- Simplifying each island needs a separate tolerance comparison. Until
+        -- then retain all evidence on disconnected maps, including isolated
+        -- dots, rather than changing their spacing and reconnecting them.
+        for _,a in pairs(reference) do
+            if a.disconnected then return {removed=0,reason='Separated observation groups preserved; cleanup skipped on this map.'} end
+        end
         local seen={}
         for _,p in ipairs(memory) do checkpoint();seen[p.name..':'..p.x..':'..p.y]=true end
         local kept,removed={},0
@@ -916,7 +1034,7 @@ local function cleanInterior(journal,id,done,progress,batch)
         local candidates,planned={},{};local reserved=#memory
         for i,p in ipairs(source) do
             checkpoint()
-            local a=interior(p) and p.mapID==id and areas[p.name]
+            local a=p.excluded~=true and interior(p) and p.mapID==id and areas[p.name]
             if a then stats.interior=stats.interior+1 end
             if a and p.manual~=true then
                 local eligible=#a.traced>=3
@@ -964,7 +1082,7 @@ local function cleanInterior(journal,id,done,progress,batch)
             -- Filtering retains the sorted order established by geometry().
             -- Reject convex changes before paying for a traced reconstruction.
             local convex=hull(points,checkpoint,true)
-            local shape=found and original
+            local shape=found and original and #components(points,checkpoint)==1
                 and S.OutlineWithinTolerance(original.convex,convex,index.width,index.height,checkpoint,reference,list[first].name)
             -- Later recording can make the reconstructed history differ from
             -- the current displayed shape. Never jump farther than 5 yards
@@ -1116,13 +1234,24 @@ local function nearest(node,x,y,best)
     if delta*delta<best then best=nearest(far,x,y,best) end
     return best
 end
-function S.Build(rows,checkpoint,preferredResolution,previousModel,method)
+function S.Build(rows,checkpoint,preferredResolution,previousModel,method,supportRows)
     checkpoint=checkpoint or noWork
     local checking=checkpoint
     method=method=="convex" and "convex" or "traced"
     local contains=method=="convex" and inside or insideTrace
     local outline=method=="convex" and hull or tracedHull
     local model={areas={},names={},rows=rows,strips={},triangles={},method=method}
+    local support,rejected={},{}
+    for _,p in ipairs(rows) do
+        checkpoint()
+        if p.excluded==true and p.kind=='interior' then rejected[p.name..':'..p.x..':'..p.y]=true end
+    end
+    for _,p in ipairs(supportRows or {}) do
+        checkpoint()
+        if not rejected[p.name..':'..p.x..':'..p.y] then
+            support[p.name]=support[p.name] or {};support[p.name][#support[p.name]+1]=p
+        end
+    end
     local function area(name)
         if not model.areas[name] then
             model.names[#model.names+1]=name
@@ -1132,7 +1261,9 @@ function S.Build(rows,checkpoint,preferredResolution,previousModel,method)
     end
     for _,p in ipairs(rows) do
         checkpoint()
-        if p.kind=="interior" then
+        if p.excluded==true then
+            -- Kept for inspection and reversible correction, never geography.
+        elseif p.kind=="interior" then
             local a=area(p.name);local point={x=p.x,y=p.y}
             a.points[#a.points+1]=point;a.anchors[#a.anchors+1]=point
         else
@@ -1147,33 +1278,43 @@ function S.Build(rows,checkpoint,preferredResolution,previousModel,method)
     table.sort(model.names)
     local active={};local minX,minY,maxX,maxY=10000,10000,0,0
     for _,name in ipairs(model.names) do
-        local a=model.areas[name];a.hull=outline(a.points,checkpoint);a.points=nil
-        if method=="traced" then a.traceBuckets=traceBuckets(a.hull,checkpoint) end
-        a.x,a.y=0,0
-        for _,p in ipairs(a.anchors) do checkpoint();a.x=a.x+p.x;a.y=a.y+p.y end
-        a.x,a.y=a.x/#a.anchors,a.y/#a.anchors
-        if #a.hull>=3 then
-            a.minX,a.minY,a.maxX,a.maxY=10000,10000,0,0
-            for _,p in ipairs(a.hull) do
-                checkpoint()
-                a.minX,a.minY=math.min(a.minX,p.x),math.min(a.minY,p.y)
-                a.maxX,a.maxY=math.max(a.maxX,p.x),math.max(a.maxY,p.y)
+        local a=model.areas[name];a.components={};a.hull={}
+        local largest=0
+        for _,group in ipairs(components(a.points,checkpoint,support[name])) do
+            local c={hull=outline(group,checkpoint),owner=a}
+            a.components[#a.components+1]=c
+            if #group>largest then
+                largest=#group;a.hull=c.hull;a.x,a.y=0,0
+                for _,p in ipairs(group) do checkpoint();a.x=a.x+p.x;a.y=a.y+p.y end
+                a.x,a.y=a.x/#group,a.y/#group
             end
-            minX,minY=math.min(minX,a.minX),math.min(minY,a.minY)
-            maxX,maxY=math.max(maxX,a.maxX),math.max(maxY,a.maxY)
-            active[#active+1]=a
+            if method=="traced" then c.traceBuckets=traceBuckets(c.hull,checkpoint) end
+            if #c.hull>=3 then
+                c.minX,c.minY,c.maxX,c.maxY=10000,10000,0,0
+                for _,p in ipairs(c.hull) do
+                    checkpoint()
+                    c.minX,c.minY=math.min(c.minX,p.x),math.min(c.minY,p.y)
+                    c.maxX,c.maxY=math.max(c.maxX,p.x),math.max(c.maxY,p.y)
+                end
+                minX,minY=math.min(minX,c.minX),math.min(minY,c.minY)
+                maxX,maxY=math.max(maxX,c.maxX),math.max(maxY,c.maxY)
+                active[#active+1]=c
+            end
         end
+        a.points=nil
     end
-    for _,a in ipairs(active) do
+    -- Share an owner's nearest-anchor index across its islands.
+    for _,a in pairs(model.areas) do
         if #active>1 then a.tree=tree(a.anchors,0,1,#a.anchors,checkpoint,{}) end
+        a.anchors=nil
     end
-    for _,a in pairs(model.areas) do a.anchors=nil end
     -- Broad-phase bounds reject unseen space without testing hulls or allocating
     -- a point table. A sole enclosing area needs no nearest-neighbour query.
     function model:At(x,y)
         local best,distance
-        for _,a in ipairs(active) do
-            if x>=a.minX and x<=a.maxX and y>=a.minY and y<=a.maxY and contains(a.hull,x,y,checking,a.traceBuckets) then
+        for _,c in ipairs(active) do
+            if x>=c.minX and x<=c.maxX and y>=c.minY and y<=c.maxY and contains(c.hull,x,y,checking,c.traceBuckets) then
+                local a=c.owner
                 if #active==1 then return a end
                 local d=nearest(a.tree,x,y,distance or math.huge)
                 if not distance or d<distance then best,distance=a,d end
@@ -1318,10 +1459,12 @@ function S.Build(rows,checkpoint,preferredResolution,previousModel,method)
     model.covered={}
     for i,p in ipairs(rows) do
         checkpoint()
-        -- Every crossing supplies boundary evidence to both named areas. Once
-        -- either area has rendered shading, its sample no longer needs a dot.
-        local first,second=sampleNames(p)
-        model.covered[i]=model.areas[first].hasFill or (second and model.areas[second].hasFill) or false
+        -- Suppress only samples inside actual shading, keeping isolated dots
+        -- visible even when another island of the same name has a fill.
+        local x,y=p.x,p.y
+        if p.kind~="interior" then x,y=(x+p.fromX)/2,(y+p.fromY)/2 end
+        local a=p.excluded~=true and model:At(x,y)
+        model.covered[i]=a and a.hasFill or false
     end
     checking=noWork -- Hover queries must never resume the completed build job.
     return model
@@ -1333,8 +1476,8 @@ function S.Track(j,onChange)
     observer:SetScript("OnEvent",function(_,event)
         if ns.InitializationBlocked then return end
         if event=="PLAYER_LOGOUT" then s:Flush();return end
-        if event=="PLAYER_LEAVING_WORLD" then away=true;s:Reset();return end
-        if event=="PLAYER_ENTERING_WORLD" or event=="ZONE_CHANGED_NEW_AREA" then away=false;s:Reset() end
+        if event=="PLAYER_LEAVING_WORLD" then away=true;s:Reset(true);return end
+        if event=="PLAYER_ENTERING_WORLD" or event=="ZONE_CHANGED_NEW_AREA" then away=false;s:Reset(true) end
         if not away and s:Observe(true) and onChange then onChange() end
     end)
     for _,event in ipairs({"PLAYER_ENTERING_WORLD","PLAYER_LEAVING_WORLD","PLAYER_LOGOUT","ZONE_CHANGED","ZONE_CHANGED_INDOORS","ZONE_CHANGED_NEW_AREA"}) do
@@ -1422,12 +1565,14 @@ function S.InstallMap(map,journal,cursorPoint)
             for i,p in ipairs((points or regions) and model.rows or {}) do
                 checkpoint()
                 local cell=math.floor(p.x/200)..":"..math.floor(p.y/200)
-                if points or (not self.subzoneStrictPoints and not model.covered[i] and not cells[cell]) then
+                if (p.excluded~=true or points) and (points or (not self.subzoneStrictPoints and not model.covered[i] and not cells[cell])) then
                     cells[cell]=true;n=n+1
                     local t=dots[n] or target.frame:CreateTexture(nil,"ARTWORK",nil,-6);dots[n]=t
                     t:ClearAllPoints();t:SetPoint("CENTER",self.canvas,"TOPLEFT",p.x/10000*width,-p.y/10000*height)
                     t:SetSize(3/self.zoom,3/self.zoom);t:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\GatheringDot.png")
-                    t:SetVertexColor(1,0.94,0.72,0.85);t:Show()
+                    if p.excluded then t:SetVertexColor(0.55,0.55,0.55,0.85)
+                    else t:SetVertexColor(1,0.94,0.72,0.85) end
+                    t:Show()
                 end
             end
         end
@@ -1537,7 +1682,8 @@ function S.InstallMap(map,journal,cursorPoint)
             if cacheID~=id or cacheRevision~=revisionAtStart or not model or model.method~=method then
                 local rows=journal.subzones:Samples(id,checkpoint)
                 local resolution=cacheID==id and model and #rows>=#model.rows*0.75 and model.grid or nil
-                nextModel=S.Build(rows,checkpoint,resolution,cacheID==id and model or journal.subzones:RecallColours(id),method)
+                nextModel=S.Build(rows,checkpoint,resolution,cacheID==id and model or journal.subzones:RecallColours(id),method,
+                    coverageRows(journal.saved,id,checkpoint))
             end
             paint(self,back,nextModel,w,h,regions,names,points,size,hidden,checkpoint)
             return nextModel
@@ -1564,17 +1710,36 @@ function S.InstallMap(map,journal,cursorPoint)
         self.subzonePending=job
     end
     local hoverX,hoverY,hoverModel
+    function map:NearestSubzoneSample()
+        if not self.subzoneModel or self.placing or not width or not height then return end
+        local x,y=cursorPoint();if not x then return end
+        x,y=(x+self.panX)/(width*self.zoom)*10000,(y+self.panY)/(height*self.zoom)*10000
+        local nearest,distance
+        for _,p in ipairs(self.subzoneModel.rows) do
+            local d=((x-p.x)/10000*width*self.zoom)^2+((y-p.y)/10000*height*self.zoom)^2
+            if d<=12^2 and (not distance or d<distance) then nearest,distance=p,d end
+        end
+        return nearest
+    end
+    function map:HandleSubzoneClick(button)
+        if button~='RightButton' or A.Read(IsAltKeyDown)~=true then return false end
+        if journal.readOnly or self.placing or self.subzoneWorldLayers then return false end
+        local sample=self:NearestSubzoneSample()
+        if not sample then return false end
+        if journal.subzones:ToggleExcluded(self.subzoneMapID,sample) then
+            hoverModel=nil
+            if GameTooltip then GameTooltip:Hide() end
+            self:RenderSubzones()
+        end
+        return true
+    end
     function map:SubzoneHover()
         if not self.subzoneHover or not self.subzoneModel or self.placing or not GameTooltip then return end
         local x,y=cursorPoint();if not x then return end
         x,y=(x+self.panX)/(width*self.zoom)*10000,(y+self.panY)/(height*self.zoom)*10000
         if x==hoverX and y==hoverY and hoverModel==model and GameTooltip:IsOwned(self) and GameTooltip:IsShown() then return end
         hoverX,hoverY,hoverModel=x,y,model
-        local a=model:At(x,y);local nearest,distance
-        for _,p in ipairs(model.rows) do
-            local d=((x-p.x)/10000*width*self.zoom)^2+((y-p.y)/10000*height*self.zoom)^2
-            if d<=12^2 and (not distance or d<distance) then nearest,distance=p,d end
-        end
+        local a=model:At(x,y);local nearest=self:NearestSubzoneSample()
         GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText(a and A.Safe(a.name) or "Sub-zone observations")
         GameTooltip:AddLine("Estimated from your crossings and interior observations; unexplored boundaries are unknown.",1,1,1,true)
         if nearest then
@@ -1584,6 +1749,10 @@ function S.InstallMap(map,journal,cursorPoint)
             else
                 GameTooltip:AddLine(A.Safe(nearest.from).." -> "..A.Safe(nearest.to),1,0.82,0.14,true)
                 GameTooltip:AddLine(string.format("Crossed at %.2f, %.2f; from %.2f, %.2f",nearest.x/100,nearest.y/100,nearest.fromX/100,nearest.fromY/100),1,1,1,true)
+            end
+            if nearest.excluded then GameTooltip:AddLine('Excluded from mapping; original observation retained.',0.7,0.7,0.7,true) end
+            if not journal.readOnly and not self.subzoneWorldLayers then
+                GameTooltip:AddLine(nearest.excluded and 'Alt-right-click to restore this observation.' or 'Alt-right-click to exclude this observation from mapping.',1,0.82,0.14,true)
             end
         end
         GameTooltip:AddLine(#model.rows.." observation samples / "..#model.names.." observed areas",0.75,0.8,0.8)

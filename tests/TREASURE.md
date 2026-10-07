@@ -79,6 +79,18 @@ states. Acquisition history does not assert that the item is still owned.
 
 ## Pending live observation — 2026-10-04
 
+Follow-up on 2026-10-07: a Battered Chest in Teldrassil was missed. The
+screenshot shows the world-loot identity rejection, but truncates at `Source:
+GameObject-...`; the observed identity and opening details are not visible.
+Review found that a newer identified container hover could override a fresh
+opening interaction. Attribution now prioritizes that interaction and rejects
+its mismatches without falling back to the hovered object. Regression coverage
+includes both ID-bearing and ID-less openings followed by a different hover,
+and a matching hover that must not override a conflicting opening.
+The full status is now available by hovering the bottom status line. This is
+a code correction, not a confirmed explanation of this particular missed chest;
+live verification remains pending and the missed contents are not backfilled.
+
 Food Crate follow-up on 2026-10-06: the player received Mutton Chop ×4,
 but Food Crate was absent from the unfiltered five-entry journal. The status
 remained the default capture guidance, with no rejection diagnostic. The

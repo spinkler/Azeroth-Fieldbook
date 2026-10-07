@@ -671,7 +671,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             if entry.last and entry.last~=entry.at then stamp=stamp.." – "..L.Safe(date(entry.last)) end
             local iso=L.Read(_G.date,"%Y-%m-%d %H:%M",entry.at) or ""
             if entry.last then iso=iso.." "..(L.Read(_G.date,"%Y-%m-%d %H:%M",entry.last) or "") end
-            local party=entry.source=="loot" and "Looted cash" or entry.source=="discrepancy" and "Login balance discrepancy"
+            local party=entry.source=="loot" and ((entry.context or "Looted cash")..(entry.counterparty and (" — "..entry.counterparty) or "")) or entry.source=="discrepancy" and "Login balance discrepancy"
                 or entry.counterparty or (entry.context and "Purchase / training") or (entry.amount>0 and "Unidentified income" or "Unidentified expenditure")
             local searchable=(stamp.." "..iso.." "..(entry.context or "").." "..party):lower()
             if (not p.direction or (p.direction=="income" and entry.amount>0) or (p.direction=="expense" and entry.amount<0))
@@ -683,7 +683,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                 if entry.counterparty and not entry.source then lines[#lines+1]="Observed interaction; attribution unverified" end
                 if entry.context and entry.source~="loot" and entry.source~="discrepancy" then lines[#lines+1]="|cff71d5ffObserved action:|r |cffffffff"..L.Safe(entry.context).."|r" end
                 if entry.source=="discrepancy" then lines[#lines+1]="|cffffd100Login balance discrepancy|r\nPreviously recorded: "..money(entry.previousBalance or 0) end
-                if entry.source=="loot" then lines[#lines+1]="Looted cash • "..tostring(entry.lootCount or 1).." collections" end
+                if entry.source=="loot" then lines[#lines+1]=L.Safe(entry.context or "Looted cash").." • "..tostring(entry.lootCount or 1).." collections" end
                 transactions[#transactions+1]=table.concat(lines,"\n",firstLine,#lines)
             end
         end
