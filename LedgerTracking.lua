@@ -259,6 +259,18 @@ function ns.CreateLedgerTracking(journal)
         local pending=self.pendingLoot
         if C_Timer and C_Timer.After then C_Timer.After(1,function() if self.pendingLoot==pending then self.pendingLoot=nil;self.pendingLootContext=nil end end) end
     end
+    function t:ConfirmFlightFare(entry,quiet)
+        if ns.InitializationBlocked or journal.readOnly or self.flightFare~=entry then return end
+        local cash=AzerothFieldbookLedgerDB and AzerothFieldbookLedgerDB.cashFlow
+        if L.Now()-entry.at>3 or not cash or cash.entries[1]~=entry or entry.source
+            or self.visits.merchant or self.visits.trainer
+            or (self.moneyActivity and self.moneyActivity~="Flight transport") then self.flightFare=nil;return end
+        local taxi=L.Read(UnitOnTaxi,"player")
+        if taxi~=true and taxi~=1 then return end
+        entry.source="flight";entry.counterparty="Flight transport";entry.context="Flight fare"
+        self.flightFare=nil;self.flightClosedAt=nil;self.flightPaid=true
+        if not quiet and ns.RefreshLedgerCashFlow then ns.RefreshLedgerCashFlow() end
+    end
     -- Money belongs to this character even when the contact directory is shared.
     function t:Money(baseline)
         if ns.InitializationBlocked or journal.readOnly then return end
@@ -276,6 +288,7 @@ function ns.CreateLedgerTracking(journal)
             previous=discrepancy and checkpoint or balance
             self.moneySessionStarted=true
             self.moneyContext=nil;self.pendingLoot=nil;self.moneyCandidate=nil;self.moneyCandidateContext=nil;self.candidateRun=nil;self.lootRun=nil
+            self.flightFare=nil;self.flightClosedAt=nil
             cash.loginBalance=balance;cash.loginAt=L.Now()
         end
         self.moneyBalance=balance
@@ -298,6 +311,16 @@ function ns.CreateLedgerTracking(journal)
             source=discrepancy and "discrepancy" or nil,previousBalance=discrepancy and previous or nil,
             counterparty=not discrepancy and interaction or nil}
         table.insert(cash.entries,1,entry)
+        self.flightFare=nil
+        local flightContext=interaction=="Flight transport" or (not interaction and self.flightClosedAt and L.Now()-self.flightClosedAt<=3)
+        if not discrepancy and delta<0 and flightContext and not self.flightPaid then
+            self.flightFare=entry;self:ConfirmFlightFare(entry,true)
+            -- Taxi-map close, the debit and UnitOnTaxi can arrive in either
+            -- order. Retry only this candidate, briefly; never poll idle play.
+            if self.flightFare==entry and C_Timer and C_Timer.After then
+                for _,delay in ipairs({0.2,1,3}) do C_Timer.After(delay,function() self:ConfirmFlightFare(entry) end) end
+            end
+        end
         self.moneyCandidate=not discrepancy and delta>0 and entry or nil
         -- Bind source evidence to the balance change while it is fresh. Money
         -- chat may arrive after the loot-close grace period has expired.
@@ -440,8 +463,15 @@ function ns.CreateLedgerTracking(journal)
     local moneyClose={MAIL_CLOSED=true,TRADE_CLOSED=true,AUCTION_HOUSE_CLOSED=true,TAXIMAP_CLOSED=true,BANKFRAME_CLOSED=true}
     function t:OnEvent(event,...)
         if ns.InitializationBlocked then return end
-        if moneyOpen[event] then self.moneyActivity=moneyOpen[event] end
+        if moneyOpen[event] then
+            self.moneyActivity=moneyOpen[event];self.flightFare=nil;self.flightClosedAt=nil
+        end
+        if event=="TAXIMAP_OPENED" then self.flightPaid=false end
+        if event=="TAXIMAP_CLOSED" then self.flightClosedAt=L.Now() end
         if moneyClose[event] then self:Money();self.moneyActivity=nil end
+        if event=="MERCHANT_SHOW" or event=="TRAINER_SHOW" or event=="PLAYER_ENTERING_WORLD" or event=="PLAYER_LOGOUT" then
+            self.flightFare=nil;self.flightClosedAt=nil
+        end
         if event=="CHAT_MSG_MONEY" then self:LootMoney(...)
         elseif event=="PLAYER_MONEY" then self:Money()
         elseif event=="PLAYER_ENTERING_WORLD" then self:Money(true)

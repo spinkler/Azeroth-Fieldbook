@@ -471,8 +471,9 @@ class AnnalsTests(unittest.TestCase):
             local choices={};MenuUtil={CreateContextMenu=function(_,build)
                 build(nil,{CreateButton=function(_,label,fn) choices[#choices+1]={label=label,fn=fn} end})
             end}
-            m.timeZoom.scripts.OnClick();assert(#choices==4)
-            for i,expected in ipairs({false,10800,3600,900}) do choices[i].fn();assert((c.sliderSpan or false)==expected) end
+            m.timeZoom.scripts.OnClick();assert(#choices==5)
+            for i,expected in ipairs({false,false,10800,3600,900}) do choices[i].fn();assert((c.sliderSpan or false)==expected) end
+            assert(choices[2].label=='This session')
         ''')
 
     def test_left_detail_overlay_preserves_journey_playback_and_timeline_selection(self):
@@ -772,6 +773,62 @@ class AnnalsTests(unittest.TestCase):
             assert(rewards:find('100 XP',1,true) and not rewards:find('Experience:',1,true) and not rewards:find('Money:',1,true))
         ''')
 
+    def test_session_window_preserves_login_across_reload_and_updates_live(self):
+        l=full_client();l.execute(ENV)
+        l.execute("""
+            local c=ns.AnnalsController;local j=c.journal;local t=c.tracking
+            now=100;t:Event('PLAYER_ENTERING_WORLD',true,false)
+            assert(j.sessionStart==100 and j.db.sessionStart==100)
+            now=150;local reloaded=ns.CreateAnnalsTracking(j)
+            reloaded:Event('PLAYER_ENTERING_WORLD',false,true);assert(j.sessionStart==100)
+            j:Append('death','Old',nil,{},50);j:Append('death','Current',nil,{},140)
+            c.shell:ShowSection('annals')
+            assert(c.allHistory and c.main.allHistory.afbSelected and #c.rows==3)
+            assert(c.main.timeZoom:GetText()=='This session')
+            c.main.allHistory.scripts.OnClick()
+            assert(not c.allHistory and not c.main.allHistory.afbSelected and #c.rows==2)
+            assert(c.first==100 and c.last==150 and c.sessionRange)
+            for _,row in ipairs(c.rows) do assert(row.event.at>=100) end
+            now=200;c:Refresh(true);assert(c.first==100 and c.last==200)
+            c:Seek(140);now=220;c:Refresh(true)
+            assert(c.first==100 and c.last==220 and c.at==140)
+            c:SetTimeWindow('All time',false)
+            assert(c.first==50 and not c.sessionRange and not c.sliderSpan)
+            now=300;reloaded=ns.CreateAnnalsTracking(j)
+            reloaded:Event('PLAYER_ENTERING_WORLD',true,false);assert(j.sessionStart==300)
+        """)
+
+    def test_all_history_toggle_time_windows_filters_and_old_event_selection(self):
+        l=full_client();l.execute(ENV)
+        l.execute("""
+            local c=ns.AnnalsController;local j=c.journal
+            now=5000;j.sessionStart=4000
+            local _,old=j:Append('death','Old match',nil,{mapID=101,x=1000,y=1000},1000)
+            j:Append('death','Edge match',nil,{mapID=101,x=2000,y=2000},4100)
+            j:Append('flight','Current flight',nil,{mapID=101,x=3000,y=3000},4900)
+            j:Append('death','Current match',nil,{mapID=101,x=4000,y=4000},5000)
+            c.shell:ShowSection('annals');local m=c.main
+            assert(c.sessionRange and c.first==4000 and #c.rows==4 and m.allHistory.afbSelected)
+            c:SetTimeWindow('15 minutes',900)
+            assert(#c.rows==4 and c.allHistory)
+            m.allHistory.scripts.OnClick();assert(#c.rows==3 and c.timelineFirst==4100)
+            c:Seek(4999);assert(#c.rows==2 and c.timelineLast==4999)
+            c:SetPlaybackSpeed(1);c:TogglePlayback();c:TickPlayback(1)
+            assert(#c.rows==3 and c.at==5000)
+            c:SetEventFilter('flight',false);assert(#c.rows==2)
+            m.search:SetText('match');c:Refresh(true);assert(#c.rows==2)
+            m.allHistory.scripts.OnClick();assert(#c.rows==3 and c.query=='match' and not c.filter.flight)
+            c:SetTimeWindow('This session','session');assert(#c.rows==3 and c.first==4000)
+            c:Select(old)
+            assert(c.at==1000 and m.map.journeyAt==1000 and c.selected==old)
+            assert(not c.sessionRange and m.timeZoom:GetText()=='All time' and c.allHistory)
+            c:SetRange(4500,5000);assert(#c.rows==3)
+            m.allHistory.scripts.OnClick();assert(#c.rows==1 and c.rows[1].event.at==5000)
+            c.shell:ShowSection('bestiary');c.shell:ShowSection('annals')
+            assert(not c.allHistory and #c.rows==1)
+            m.now.scripts.OnClick();assert(c.sessionRange and c.allHistory and #c.rows==4)
+        """)
+
     def test_now_resets_time_filters_and_symbol_controls(self):
         l=full_client();l.execute(ENV)
         l.execute('''
@@ -782,10 +839,11 @@ class AnnalsTests(unittest.TestCase):
             c:SetEventFilter('all',false);c.level=99;c.sliderSpan=60;c.sliderStart=110;c:SetPlaybackSpeed(128)
             c:TogglePlayback();local m=c.main
             assert(c.playing and m.play:GetText()=='' and not m.play.symbol:IsShown() and m.play.pauseBars[1]:IsShown())
+            j.sessionStart=100;c.allHistory=false
             now=1000;m.now.scripts.OnClick(m.now)
             assert(not c.playing and c.at==1000 and c.last==1000 and c.first==100)
             assert(c.follow and not c.level and not c.selected and not c.sliderSpan and c.playbackSpeed==1)
-            assert(#c.rows==2 and m.level:GetText()=='' and m.timeZoom:GetText()=='Full range')
+            assert(#c.rows==2 and m.level:GetText()=='' and m.timeZoom:GetText()=='This session' and c.allHistory and m.allHistory.afbSelected)
             for kind,value in pairs(c.filter) do assert(value and j.db.settings.eventFilters[kind]) end
             assert(m.map.zoom==1 and m.map.panX==0 and m.map.panY==0)
             assert(m.play.symbol:IsShown() and not m.play.pauseBars[1]:IsShown() and not m.speeds[16] and m.speeds[128])
@@ -1208,7 +1266,7 @@ class AnnalsTests(unittest.TestCase):
             c:SetEventFilter('all',false)
             assert(map.playerArrow:IsShown() and map.historicalPlayer.state=='dead')
             c.main.iconSize.scripts.OnValueChanged(c.main.iconSize,32)
-            assert(j.db.settings.iconSize==32 and map.playerArrow:GetWidth()==48)
+            assert(j.db.settings.iconSize==32 and map.playerArrow:GetWidth()==64)
             c:SetEventFilter('death',true);assert(map.pins[1]:GetWidth()==32)
             j:Append('death','Second death',nil,{mapID=101,x=3000,y=3000,state='dead'},110)
             c.index=nil;c:Journey()
@@ -1222,7 +1280,7 @@ class AnnalsTests(unittest.TestCase):
             assert(math.abs(pin:GetEffectiveScale()/base-4)<0.00001)
             assert(math.abs(pin.text:GetEffectiveScale()/pin:GetEffectiveScale()-32/20)<0.00001)
             c.main.iconSize.scripts.OnValueChanged(c.main.iconSize,6)
-            assert(pin:GetWidth()==6 and pin.text:GetScale()==6/20 and map.zoom==4)
+            assert(pin:GetWidth()==6 and map.playerArrow:GetWidth()==12 and pin.text:GetScale()==6/20 and map.zoom==4)
             map:ZoomBy(-20);assert(map.zoom==1 and pin:GetWidth()==6)
             c.at=120;c:Journey();assert(map.historicalPlayer.state=='flight')
             c.at=99;c.first=0;c.index=nil;c:Journey();assert(not map.playerArrow:IsShown())
@@ -1284,6 +1342,33 @@ class AnnalsTests(unittest.TestCase):
             t:Event('PLAYER_ENTERING_WORLD');t:Event('PLAYER_DEAD');assert(#db.events==2)
             ns.InitializationBlocked=true;t:Event('PLAYER_UNGHOST');t:Event('PLAYER_DEAD');assert(#db.events==2)
         ''')
+
+    def test_small_city_flight_steps_use_world_distance_and_keep_real_gaps(self):
+        l=client();l.execute("""
+            local A=ns.Annals;local calls=0
+            ns.AtlasEnvironment.World=function(p)
+                calls=calls+1;return {continentID=1,x=p.x/10,y=p.y/10}
+            end
+            local function flight(x,y,at)
+                trail:Sample({mapID=1455,x=x,y=y,at=at,flight=true,state='flight'})
+            end
+            -- Recorded Ironforge coordinates: three legitimate two-second
+            -- flight steps exceeded the old 10%-of-map guard.
+            flight(1785,8256,0);flight(2337,7576,2);assert(calls==0)
+            flight(2655,6584,4);flight(4524,4885,10)
+            flight(4765,3817,12);flight(5283,3449,14);flight(5546,4433,16)
+            assert(#db.segments==1 and calls==8)
+            trail:Break('end');local points=A.Decode(db.segments[1])
+            assert(points[#points].x==5546 and #A.JourneyFrame(A.JourneyIndex(j,0,16,1455),16)>0)
+            flight(5546,4433,18);flight(100,100,20)
+            assert(#db.segments==3 and db.segments[3].reason=='discontinuous movement')
+            ns.AtlasEnvironment.World=function() return nil end
+            flight(5000,5000,22);assert(#db.segments==4)
+            trail:Break('loading');local revision=trail.revision
+            trail:Break('position unavailable');trail:Break('position unavailable')
+            assert(trail.revision==revision,'empty breaks must not trigger redraws')
+            flight(5010,5010,40);assert(not db.segments[5].joinFrom)
+        """)
 
     def test_flight_segments_preserve_state_through_codec_and_projection(self):
         l=client()
@@ -1750,6 +1835,34 @@ class AnnalsTests(unittest.TestCase):
             assert(c.filter.accepted==false and c.selected==1)
         ''')
 
+    def test_trail_only_live_updates_are_coalesced_and_do_not_refresh_list_or_storage(self):
+        l=full_client();l.execute(ENV);l.execute("""
+            local c=ns.AnnalsController;local j=c.journal;local trail=j.trail
+            j.sessionStart=now;c.shell:ShowSection('annals');local m=c.main
+            local full,storage,draw=0,0,0
+            local refresh=c.Refresh;function c:Refresh(...) full=full+1;return refresh(self,...) end
+            local estimate=c.RefreshStorage;function c:RefreshStorage(...) storage=storage+1;return estimate(self,...) end
+            local journey=c.Journey;function c:Journey(...) draw=draw+1;return journey(self,...) end
+            local rows=c.rows
+            local function sample(x)
+                trail:Sample({mapID=101,x=x,y=3000,at=now,state='alive'},true)
+            end
+            now=now+2;sample(2000)
+            for i=1,4 do m.scripts.OnUpdate(m,0.2) end
+            assert(draw==0)
+            now=now+2;sample(2050);m.scripts.OnUpdate(m,0.2)
+            assert(draw==1 and full==0 and storage==0 and c.rows==rows and c.last==now and c.at==now)
+            assert(m.map.journeyAt==now and c.index.segments[1].finish==now)
+            for i=1,20 do m.scripts.OnUpdate(m,0.2) end
+            assert(draw==1,'unchanged trail must not redraw')
+            c:Seek(now-1);local held=c.at;draw=0
+            now=now+2;sample(2100);m.scripts.OnUpdate(m,1)
+            assert(draw==1 and c.at==held and c.last==now and full==0 and storage==0 and c.rows==rows)
+            c:SetRange(now-4,now-2);local first,last,at=c.first,c.last,c.at
+            now=now+2;sample(2150);m.scripts.OnUpdate(m,1)
+            assert(c.first==first and c.last==last and c.at==at)
+        """)
+
     def test_visible_live_updates_preserve_scrubbing_and_fixed_ranges(self):
         l=full_client();l.execute(ENV)
         l.execute('''
@@ -1774,7 +1887,7 @@ class AnnalsTests(unittest.TestCase):
             assert(contains(nextID) and c.at==held and c.offset==offset and c.last==now)
             now=now+1;c:Refresh(true)
             assert(c.last==now and c.at==held,'Refresh advances the live range without resetting the playhead')
-            c:SetRange(now-20,now);local fixed=c.last
+            c:ToggleAllHistory();c:SetRange(now-20,now);local fixed=c.last
             now=now+1;local _,outside=j:Append('death','Outside range',nil,{mapID=101,x=2500,y=7500},now)
             m.scripts.OnUpdate(m,0.2)
             assert(c.last==fixed and not contains(outside),'Historical ranges must remain fixed')

@@ -544,7 +544,8 @@ function ns.CreateAtlasBook(journal,shell,adapters)
                 if allMaps and #results>0 then m.cleanPoints.lastCleanup=m.cleanPoints.lastCleanup..'\n\n'..table.concat(results,'\n\n') end
                 storageElapsed=30
                 c:Refresh()
-                if message and DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r "..message) end
+                local completion=count and ((count==0 and "|cff00ff00" or "|cffffd100").."[DONE]|r ") or ""
+                if message and DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r "..completion..message) end
                 c:Message(message or ("Removed "..count.." redundant interior sample"..(count==1 and "." or "s.")))
             end
             local function progress(message)

@@ -328,6 +328,43 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         content:HookScript("OnSizeChanged",updateMillFade)
         updateMillFade()
         c.loreBookCornerFade=ns.FieldbookUI.IllustrationCornerFade(content,shell,61)
+        -- Taller loose-paper sketch disappears into the lower-right window edge.
+        local papers=content:CreateTexture(nil,"BACKGROUND",nil,0)
+        papers:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\LorePaperStackSketch.png")
+        papers:SetSize(380,420)
+        papers:SetPoint("BOTTOMRIGHT",content,"BOTTOMRIGHT",-6,6)
+        papers:SetAlpha(0.23)
+        shell:AddBackgroundLayer(papers,1,1,1,true)
+        c.paperStackIllustration=papers
+        local paperFades={}
+        local function rightFade(offset,y,width,height,alpha)
+            local strip=content:CreateTexture(nil,"BACKGROUND",nil,4)
+            strip:SetPoint("BOTTOMRIGHT",content,"BOTTOMRIGHT",-6-offset,y)
+            strip:SetSize(width,height)
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
+            strip:SetAlpha(alpha)
+            shell:AddBackgroundLayer(strip,0.504,0.504,0.48888)
+            paperFades[#paperFades+1]={texture=strip,offset=offset,y=y,width=width,height=height}
+        end
+        for i=0,79 do
+            local t=i/79
+            local alpha=1-t*t*t*(t*(6*t-15)+10)
+            rightFade(i,6,1,420,alpha)
+            rightFade(0,6+i,380,1,alpha)
+        end
+        local function updatePaperFade()
+            local width,height=content:GetWidth()-8,content:GetHeight()-15
+            if width<=0 or height<=0 then return end
+            for _,fade in ipairs(paperFades) do
+                local x=content:GetWidth()-12-fade.offset-fade.width
+                local y=fade.y-6
+                fade.texture:SetTexCoord(x/width,(x+fade.width)/width,
+                    1-(y+fade.height)/height,1-y/height)
+            end
+        end
+        content:HookScript("OnSizeChanged",updatePaperFade)
+        updatePaperFade()
+        c.paperStackEdgeFades=paperFades
         local m=CreateFrame("Frame",nil,content);m:SetAllPoints();c.main=m
         local spine=ns.FieldbookUI.PageDivider(m)
         m.pageTitle=ns.FieldbookUI.SectionTitle(m,"Lorekeeper's Chronicle")

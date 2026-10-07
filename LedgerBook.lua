@@ -680,8 +680,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                 local firstLine=#lines+1
                 lines[#lines+1]="|cffffffff"..stamp.."|r\n"..(entry.amount>0 and "|cff80e680+" or "|cffff8080-")..money(math.abs(entry.amount),entry.amount>0 and "ff80e680" or "ffff8080").."|r  •  "..(entry.amount>0 and "|cff80e680Balance:|r " or "|cffff8080Balance:|r ").."|cffffffff"..money(entry.balance,"ffffffff").."|r"
                 lines[#lines+1]="|cff71d5ff"..(entry.amount>0 and "From: " or "To: ").."|r"..L.Safe(party)
-                if entry.counterparty and not entry.source then lines[#lines+1]="Observed interaction; attribution unverified" end
-                if entry.context and entry.source~="loot" and entry.source~="discrepancy" then lines[#lines+1]="|cff71d5ffObserved action:|r |cffffffff"..L.Safe(entry.context).."|r" end
+                if entry.context and entry.source~="loot" and entry.source~="discrepancy" then lines[#lines+1]="|cff71d5ff•|r |cffffffff"..L.Safe(entry.context).."|r" end
                 if entry.source=="discrepancy" then lines[#lines+1]="|cffffd100Login balance discrepancy|r\nPreviously recorded: "..money(entry.previousBalance or 0) end
                 if entry.source=="loot" then lines[#lines+1]=L.Safe(entry.context or "Looted cash").." • "..tostring(entry.lootCount or 1).." collections" end
                 transactions[#transactions+1]=table.concat(lines,"\n",firstLine,#lines)

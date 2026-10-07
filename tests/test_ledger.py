@@ -145,6 +145,36 @@ class LedgerTests(unittest.TestCase):
                     assert(cash.entries[1].context==expected,cash.entries[1].context)
                 """)
 
+    def test_flight_fares_handle_close_and_money_order_without_guessing(self):
+        for ordering in ('before_close','after_close','late_taxi','cancelled','expired','competing','income'):
+            with self.subTest(ordering=ordering):
+                lua=new_ledger();lua.globals().ordering=ordering
+                lua.execute("""
+                    AzerothFieldbookLedgerDB={};balance=1000;taxi=false
+                    function GetMoney() return balance end
+                    function UnitOnTaxi() return taxi end
+                    fire('PLAYER_ENTERING_WORLD');fire('TAXIMAP_OPENED')
+                    if ordering~='before_close' then fire('TAXIMAP_CLOSED') end
+                    if ordering=='expired' then now=now+4 end
+                    if ordering=='competing' then fire('MAIL_SHOW') end
+                    taxi=ordering~='late_taxi' and ordering~='cancelled'
+                    balance=balance+(ordering=='income' and 330 or -330);fire('PLAYER_MONEY')
+                    if ordering=='before_close' then fire('TAXIMAP_CLOSED') end
+                    if ordering=='late_taxi' then taxi=true end
+                    flush()
+                    local cash=AzerothFieldbookLedgerDB.cashFlow;local e=cash.entries[1]
+                    local matched=ordering=='before_close' or ordering=='after_close' or ordering=='late_taxi'
+                    assert((e.source=='flight')==matched,ordering)
+                    if matched then assert(e.counterparty=='Flight transport' and e.context=='Flight fare') end
+                    assert(#cash.entries==1 and cash.expense==(ordering=='income' and 0 or 330))
+                    if matched then
+                        balance=balance-1;fire('PLAYER_MONEY');flush()
+                        assert(not cash.entries[1].source,'one departure cannot classify two payments')
+                    end
+                    now=now+4;balance=balance-7;fire('PLAYER_MONEY');flush()
+                    assert(not cash.entries[1].source,'later expenditure inherited the fare')
+                """)
+
     def test_cash_flow_login_logout_and_disabled_addon_discrepancies(self):
         lua=new_ledger()
         lua.execute('''
@@ -299,7 +329,7 @@ class LedgerTests(unittest.TestCase):
             p.search:SetText('fireball');c:RefreshCashFlow()
             assert(p.usage:GetText():find('2 rows',1,true),'Usage covers the whole history, not search matches')
             assert(p.read.text:GetText():find('To: ',1,true),'Expenses name a destination')
-            assert(p.read.text:GetText():find('|cff71d5ffObserved action:|r',1,true))
+            assert(p.read.text:GetText():find('|cff71d5ff•|r',1,true))
             assert(p.read.text:GetText():find('|cffffffffFireball|r',1,true),'Observed ability names are white')
             assert(p.read.text:GetText():find('|cffff8080Balance:|r |cffffffff',1,true),'Balance labels follow transaction colour and figures remain white')
             assert(p.read.transactionRows[1].text:GetText():sub(1,10)=='|cffffffff','Transaction dates are white')

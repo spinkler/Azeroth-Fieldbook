@@ -528,8 +528,6 @@ local ink = { 0.75, 0.8, 0.8 }
         book.entryCount:SetCounts(entryCount,#rows)
         book.pointsCount:SetText(points .. " knowledge")
         local e = selected and journal.entries[selected]
-        book.koboldIllustration:SetAlpha(0.33)
-        for _,strip in ipairs(book.dragonIllustration) do strip:SetShown(e==nil) end
         local hasPockets=e and e.pickpocketLoot and ((e.pickpocketLoot.samples or 0)>0 or next(e.pickpocketLoot.items or {})~=nil)
         if book.pocketEntry~=selected or not hasPockets then book.pickpocketMode=false end
         book.pocketEntry=selected
@@ -988,105 +986,15 @@ local ink = { 0.75, 0.8, 0.8 }
         book=content
         book.lootMode=true
         local function addBackgroundLayer(...) shell:AddBackgroundLayer(...) end
-        local function applyIllustrationInk(texture,asset,left,right,top,bottom)
-            -- Render cropped artwork directly; cropped native ink masks smear
-            -- their edge samples on this client.
-            texture:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\" .. asset)
-            texture:SetTexCoord(left,right,top,bottom)
-            texture:SetDesaturated(false)
-            addBackgroundLayer(texture,1,1,1,true)
-        end
-        -- Quiet illustration on the paper, below all interactive content.
-        book.gnollIllustration=book:CreateTexture(nil,"BACKGROUND",nil,3)
-        book.gnollIllustration:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryGnoll.png")
-        -- Full image is 360 x 440 at (-58,-16); keep it left of the divider.
-        book.gnollIllustration:SetSize(296,418)
-        book.gnollIllustration:SetPoint("BOTTOMLEFT",book,"BOTTOMLEFT",6,6)
-        book.gnollIllustration:SetTexCoord(64/360,1,0,1-22/440)
-        book.gnollIllustration:SetAlpha(0.33)
-        applyIllustrationInk(book.gnollIllustration,"BestiaryGnoll.png",64/360,1,0,1-22/440)
-        book.koboldIllustration=book:CreateTexture(nil,"BACKGROUND",nil,3)
-        book.koboldIllustration:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryKobold.png")
-        book.koboldIllustration:SetSize(334,418)
-        book.koboldIllustration:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-22,6)
-        book.koboldIllustration:SetTexCoord(0,334/360,0,1-22/440)
-        book.koboldIllustration:SetAlpha(0.33)
-        applyIllustrationInk(book.koboldIllustration,"BestiaryKobold.png",0,334/360,0,1-22/440)
-        book.koboldFades={}
-        -- Mask only the kobold silhouette, keeping surrounding dragon lines.
-        book.dragonIllustration={}
-        local dragon=book:CreateTexture(nil,"BACKGROUND",nil,0)
-        dragon:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryDragon.png")
-        -- Shift the full illustration 202 pixels right, cropping at the paper edge.
-        dragon:SetSize(302,360)
-        dragon:SetPoint("TOPRIGHT",book,"TOPRIGHT",-2,-122)
-        dragon:SetTexCoord(0,302/540,0,1)
-        dragon:SetAlpha(0.33)
-        applyIllustrationInk(dragon,"BestiaryDragon.png",0,302/540,0,1)
-        book.dragonIllustration[1]=dragon
-        -- A shallow 12-pixel fade softens the dragon's cropped right edge.
-        local dragonEdge={}
-        for i=1,12 do
-            local strip=book:CreateTexture(nil,"BACKGROUND",nil,1)
-            strip:SetPoint("TOPRIGHT",book,"TOPRIGHT",-2-(i-1),-122);strip:SetSize(1,360)
-            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
-            strip:SetAlpha(1-(i-1)/11);addBackgroundLayer(strip,0.504,0.504,0.48888)
-            dragonEdge[i]=strip;book.dragonIllustration[#book.dragonIllustration+1]=strip
-        end
-        local function updateDragonFade()
-            local width,height=book:GetWidth()-8,book:GetHeight()-15
-            if width<=0 or height<=0 then return end
-            for i,strip in ipairs(dragonEdge) do
-                local x=book:GetWidth()-2-i-6
-                strip:SetTexCoord(x/width,(x+1)/width,113/height,473/height)
-            end
-        end
-        book:HookScript("OnSizeChanged",updateDragonFade);updateDragonFade()
-        if type(book.CreateMaskTexture)=="function" and type(dragon.AddMaskTexture)=="function" then
-            local mask=book:CreateMaskTexture()
-            mask:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryKoboldSilhouetteMask.png")
-            mask:SetSize(960,740)
-            mask:SetPoint("BOTTOMRIGHT",book,"BOTTOMRIGHT",-20,0)
-            dragon:AddMaskTexture(mask)
-            book.dragonKoboldMask=mask
-        end
-        -- Sample the same parchment beneath the illustration. These background
-        -- strips soften the cropped left/bottom edges without covering controls.
-        local gnollFades={}
-        local fadeWidth,steps=28,28
-        local function addGnollFade(x,y,width,height,alpha,right)
-            local strip=book:CreateTexture(nil,"BACKGROUND",nil,4)
-            strip:SetPoint("BOTTOMLEFT",book,"BOTTOMLEFT",x,y)
-            strip:SetSize(width,height)
-            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
-            strip:SetAlpha(alpha)
-            addBackgroundLayer(strip,0.504,0.504,0.48888)
-            gnollFades[#gnollFades+1]={texture=strip,x=x,y=y,width=width,height=height,right=right}
-            if right then book.koboldFades[#book.koboldFades+1]=strip end
-        end
-        for i=1,steps do
-            local offset=(i-1)*fadeWidth/steps
-            local alpha=1-(i-1)/(steps-1)
-            addGnollFade(6+offset,6,fadeWidth/steps,418,alpha)
-            addGnollFade(6,6+offset,296,fadeWidth/steps,alpha)
-            addGnollFade(22+offset,6,fadeWidth/steps,418,alpha,true)
-            addGnollFade(22,6+offset,334,fadeWidth/steps,alpha,true)
-        end
-        local function updateGnollFadeCoords()
-            local width,height=book:GetWidth()-8,book:GetHeight()-15
-            if width<=0 or height<=0 then return end
-            for _,fade in ipairs(gnollFades) do
-                local left=fade.right and book:GetWidth()-fade.x-fade.width or fade.x
-                fade.texture:ClearAllPoints()
-                fade.texture:SetPoint("BOTTOMLEFT",book,"BOTTOMLEFT",left,fade.y)
-                local x,y=left-6,fade.y-6
-                fade.texture:SetTexCoord(x/width,(x+fade.width)/width,
-                    1-(y+fade.height)/height,1-y/height)
-            end
-        end
-        book:HookScript("OnSizeChanged",updateGnollFadeCoords)
-        updateGnollFadeCoords()
-        book.gnollCornerFade=ui.IllustrationCornerFade(book,shell,6)
+        -- Rebuild from retained sources/layout with tests/composite_bestiary_art.py.
+        local collage=book:CreateTexture(nil,"BACKGROUND",nil,3)
+        collage:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryCollage.png")
+        collage:SetPoint("TOPLEFT",book,"TOPLEFT",0,0)
+        collage:SetSize(960,740)
+        collage:SetTexCoord(0,960/1024,0,740/1024)
+        collage:SetAlpha(1) -- Per-creature opacity and fades are baked into alpha.
+        addBackgroundLayer(collage,1,1,1,true)
+        book.collageIllustration=collage
         book.pageTitle=ui.SectionTitle(book,"Bestiary")
         book.spine=ns.FieldbookUI.PageDivider(book)
         book.typeButtons = {}

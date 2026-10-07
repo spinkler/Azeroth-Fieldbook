@@ -91,13 +91,26 @@ function ns.CreateAnnalsTrail(j,options)
                 for _,p in ipairs(simple) do data[#data+1]=A.EncodePoint(p,previous);previous=p.at end
                 current.data=table.concat(data)
             end
-            current.closed=true
+            current.closed=true;self.revision=self.revision+1
         end
-        current,points,lastPoll,pending,idlePoint=nil,nil,nil,nil,nil;self.reason=reason or 'break';self.revision=self.revision+1
+        current,points,lastPoll,pending,idlePoint=nil,nil,nil,nil,nil;self.reason=reason or 'break'
     end
     function t:SetEnabled(enabled)
         if j.readOnly or ns.InitializationBlocked then return end
         self:Break('recording resumed');j.db.settings.trail=enabled==true
+    end
+    local function discontinuous(p)
+        if not lastPoll or distance(lastPoll,p)<=(t.options.jump or 1000) then return false end
+        -- A city covers much less ground than a zone. Only relax the normalized
+        -- jump guard for observed flight with a plausible measured world step.
+        if not t.options.jump and current.flight==true and p.flight==true then
+            local E=ns.AtlasEnvironment
+            local a=E and E.World(lastPoll);local b=E and E.World(p)
+            local seconds=p.at-lastPoll.at
+            if a and b and a.continentID==b.continentID and seconds>0 and seconds<=12
+                and distance(a,b)<=100*seconds then return false end
+        end
+        return true
     end
     function t:Sample(p,anchor)
         if j.readOnly or ns.InitializationBlocked or j.db.settings.trail==false then return end
@@ -121,7 +134,7 @@ function ns.CreateAnnalsTrail(j,options)
                     joinFrom=#j.db.segments
                 end
                 self:Break('map transition')
-            elseif lastPoll and distance(lastPoll,p)>(self.options.jump or 1000) then self:Break('discontinuous movement')
+            elseif discontinuous(p) then self:Break('discontinuous movement')
             elseif p.flight~=nil and p.flight~=(current.flight==true) then
                 joinFrom=#j.db.segments;self:Break('flight state')
             elseif p.mount~=current.mount then
@@ -156,7 +169,7 @@ function ns.CreateAnnalsTrail(j,options)
         local turn=pending and pending.at-previous.at>=interval and deviation(pending,previous,p)>=(self.options.turn or 40)
         if turn and distance(previous,pending)>=(self.options.minimum or 40) then write(pending);previous=points[#points];moved=distance(previous,p) end
         if anchor and p.at==previous.at and moved==0 then
-            if not previous.anchor then previous.anchor=true;current.data=current.data:sub(1,-2)..'1' end
+            if not previous.anchor then previous.anchor=true;current.data=current.data:sub(1,-2)..'1';self.revision=self.revision+1 end
         elseif anchor or (p.at-previous.at>=interval and moved>=(self.options.minimum or 40) and (moved>=(self.options.distance or 160) or p.at-previous.at>=(self.options.seconds or 60))) then write(p) end
         pending=p;lastPoll=p
     end

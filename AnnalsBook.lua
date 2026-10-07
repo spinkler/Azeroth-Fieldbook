@@ -1,6 +1,6 @@
 local _,ns=...
 local A,U=ns.Annals,ns.AtlasUI
-local HELP="Your character writes this history automatically: quest acceptance, removal and confirmed turn-in, plus deaths, flight departures, Hearthstone/teleport casts, cross-continent crossings, battleground transfers, dungeon/raid visits and lightweight links to Fieldbook discoveries. Existing quests are not backfilled. Removed does not always mean abandoned.\n\nJourney Trail is a separate approximate route. Uncheck Record Journey and choose Yes to stop future breadcrumbs; No keeps recording. Re-enabling is immediate; events and their locations remain. No history is erased. Balanced recording checks every two seconds but keeps ordinary points roughly 15–60 seconds apart while moving; stationary players add no periodic points. Events, confirmed stops and segment endpoints are exceptions. Stop arrival/departure times are retained without periodic idle samples. Loading and missing positions leave gaps. Successful Hearthstone, Astral Recall, Classic capital teleports and Moonglade casts record departures. Loading transitions record arrivals, battleground entry/exit and cross-continent travel with separate icons. Ship icons indicate observed continent crossings, not a confirmed vessel. Real logins and normal logouts are recorded with separate icons and filters. Logout is confirmed on the next real login; UI reloads create neither event. Crashes and forced disconnects may leave no logout marker. Login/reload do not invent journeys. Ordinary same-continent loading does not create travel events. Dungeon, raid and scenario visits record entry/exit and hold the arrow at the last observed outdoor entrance while inside, including across reloads. Interior events remain in the timeline but do not move the outdoor arrow or create route lines. Exits and hearths out jump to the observed outdoor arrival. If the entrance was not observed, its position remains unknown. Unrecognized portal uses are not automatically identified. Subzone names do not interrupt flights.\n\nSearch matches partial words without case sensitivity across quest names, event details, dates, places and offered/received rewards. Multiple words can match different fields: sword Westfall finds recorded sword rewards in Westfall. Client item types, equipment slots, descriptions and readable tooltip text are included when available; results refresh when item data loads. Search combines with date/level/event filters and filters map markers without hiding the historical route or arrow. Clear it with the red cross or Now / reset. Enter dates as YYYY-MM-DD, optionally a character level, then Apply. Dates use your computer's local calendar. Select an event and Around event to inspect its surrounding hour, or Quest interval for discoveries during its observed acceptance-to-removal/turn-in period. Temporal overlap never means a quest caused those discoveries.\n\nThe timeline opens newest first at the top each session. The sort button beside the filter toggles newest first / oldest first. Use Latest, page buttons or the mouse wheel. Journey opens by default on the right for the selected dates, with the timeline on the left. Selecting a timeline event pauses and seeks its recorded time and map. Show detail sits in the left pane and glows while its scrollable detail overlay covers the timeline. Turn it off to restore the same timeline page and selection. The Journey map and playback remain available while details are open. Around selected event, Trail age contrast and Map icon size are in the right pane. The map footer shows date and time above the position, state and recorded level. Right-click either filter funnel to clear date, level, search and event filters. Hover the contrast slider for an explanation. Choose zone above the map selects a historical map. The Legend button toggles an overlay with the actual event icons, player arrows and trail colours. Legend and Follow player glow while active. Instance icons show a green entry arrow or an orange exit arrow. Drag the time slider to browse. Confirmed logout-to-login gaps are skipped by playback and scrubbing, and excluded from elapsed / total time. Historical dates remain unchanged; missing logout markers leave unknown gaps intact. Play advances one logged-in second per real second at 1x; choose 8x, 32x, 64x, 128x or 256x to speed up, or enter a Custom speed (0.1-4096x) and press Enter. Use the arrow / pause symbol to start or stop playback. Pause, scrub or leave Journey to stop playback. Playback stops at the range end; Play there restarts from the beginning. Now / reset returns to the current time, clears search/date/level/event filters, restores full-range timing and 1x speed, disables Follow player, and returns to the current map (or the known outdoor entrance during an instance visit). Choose Full range, 3 hours, 1 hour or 15 minutes to change slider resolution and show only that duration of trail behind the selected playback time. The mouse wheel makes precise second-by-second adjustments. Find player pauses at the selected time and centers its historical position, switching to the recorded map if needed. It keeps a closer zoom or zooms in to locate the arrow. Follow player keeps the historical arrow in view during playback, switching recorded zones and continents and jumping directly to observed hearth/teleport arrivals. Turn it off to pan freely while playback continues. Playback estimates movement between connected samples using their timestamps, with smooth arrow updates and a progressively revealed route. Estimates are labelled; no new positions are saved. Routes and markers also project onto continent and world maps where the client supplies map rectangles. Existing saved gaps are preserved. The clock uses recorded timestamps; the arrow moves between connected samples and holds at the last known position through gaps. Old recordings may lack stop timing; new recordings preserve it during simplification. Its heading follows recorded movement, not camera facing. Mount trails use Rare blue for 60% and Epic purple for 100%; these require newly recorded mount observations. Green means flight, red means dead, blue means ghost and white means alive or unknown. Level-ups record the observed new level, with a golden Holy Nova icon and a separate Level ups filter. Earlier levels are not backfilled. Event filter checkboxes combine types without hiding the arrow. Map icon size adjusts markers and the arrow.\n\nLarge map ranges display at most 64 recent chunks, 2,048 lines and the latest 15 located events at the selected time; the oldest five icons progressively fade. Scrub earlier or narrow dates for older geometry. The timeline always retains all matching events.\n\nAccepted quests retain the observed quest text and objectives alongside the potential item choices and guaranteed rewards observed in the quest dialogue, plus readable XP, money, currency and spell offers. If accepted before reward data loads, the new entry waits up to ten seconds for the matching quest log rewards; its original time and location stay fixed. The selected quest is restored after reads. Missing data stays explicitly unknown after the retry window or quest removal, and older entries are not backfilled. Completed quests retain observed quest text and objectives too, using the same recorded acceptance when turn-in text is unavailable. They show the chosen reward when the reward request and turn-in were observed; guaranteed items are separate. Hover reward icons or names for tooltips. Reward names are enlarged and use quality colours; single items omit the count. Timeline icons have drop shadows. Money uses gold, silver and copper units. Actual XP and money come from the turn-in event. Currency and spell offers are not proof of balance changes or learned spells. Reputation rewards are not captured. Older entries and unreadable offers remain explicitly unknown; opening them does not rewrite history. Source inspection and mock tests still require in-game API validation.\n\nAll history is local and character-specific, regardless of account tracking. SavedVariables persist on a successful logout or /reload; a client crash may lose the current session, as with other journals."
+local HELP="Your character writes this history automatically: quest acceptance, removal and confirmed turn-in, plus deaths, flight departures, Hearthstone/teleport casts, cross-continent crossings, battleground transfers, dungeon/raid visits and lightweight links to Fieldbook discoveries. Existing quests are not backfilled. Removed does not always mean abandoned.\n\nJourney Trail is a separate approximate route. Uncheck Record Journey and choose Yes to stop future breadcrumbs; No keeps recording. Re-enabling is immediate; events and their locations remain. No history is erased. While Annals is open, changed recorded trail data updates Journey at most once per second without rebuilding the event list or storage estimate. Idle frames do no trail redraws. Balanced recording checks every two seconds but keeps ordinary points roughly 15–60 seconds apart while moving; stationary players add no periodic points. Events, confirmed stops and segment endpoints are exceptions. Stop arrival/departure times are retained without periodic idle samples. Loading and missing positions leave gaps. Successful Hearthstone, Astral Recall, Classic capital teleports and Moonglade casts record departures. Loading transitions record arrivals, battleground entry/exit and cross-continent travel with separate icons. Ship icons indicate observed continent crossings, not a confirmed vessel. Real logins and normal logouts are recorded with separate icons and filters. Logout is confirmed on the next real login; UI reloads create neither event. Crashes and forced disconnects may leave no logout marker. Login/reload do not invent journeys. Ordinary same-continent loading does not create travel events. Dungeon, raid and scenario visits record entry/exit and hold the arrow at the last observed outdoor entrance while inside, including across reloads. Interior events remain in the timeline but do not move the outdoor arrow or create route lines. Exits and hearths out jump to the observed outdoor arrival. If the entrance was not observed, its position remains unknown. Unrecognized portal uses are not automatically identified. Subzone names do not interrupt flights.\n\nSearch matches partial words without case sensitivity across quest names, event details, dates, places and offered/received rewards. Multiple words can match different fields: sword Westfall finds recorded sword rewards in Westfall. Client item types, equipment slots, descriptions and readable tooltip text are included when available; results refresh when item data loads. Search combines with date/level/event filters and filters map markers without hiding the historical route or arrow. Clear it with the red cross or Now / reset. Enter dates as YYYY-MM-DD, optionally a character level, then Apply. Dates use your computer's local calendar. Select an event and Around event to inspect its surrounding hour, or Quest interval for discoveries during its observed acceptance-to-removal/turn-in period. Temporal overlap never means a quest caused those discoveries.\n\nThe timeline opens newest first at the top each session. The sort button beside the filter toggles newest first / oldest first. Use Latest, page buttons or the mouse wheel. Journey opens on This session by default, with all historical events on the left. The highlighted All history toggle beside Latest keeps the full timeline visible. Turn it off to match the list to the Journey dates or time window. Search, level and event-type filters apply in both modes. Selecting a timeline event pauses and seeks its recorded time and map; selecting an older event outside the Journey dates expands Journey to All time. Show detail sits in the left pane and glows while its scrollable detail overlay covers the timeline. Turn it off to restore the same timeline page and selection. The Journey map and playback remain available while details are open. Around selected event, Trail age contrast and Map icon size are in the right pane. The map footer shows date and time above the position, state and recorded level. Right-click either filter funnel to clear date, level, search and event filters. Hover the contrast slider for an explanation. Choose zone above the map selects a historical map. The Legend button toggles an overlay with the actual event icons, player arrows and trail colours. Legend and Follow player glow while active. Instance icons show a green entry arrow or an orange exit arrow. Drag the time slider to browse. Confirmed logout-to-login gaps are skipped by playback and scrubbing, and excluded from elapsed / total time. Historical dates remain unchanged; missing logout markers leave unknown gaps intact. Play advances one logged-in second per real second at 1x; choose 8x, 32x, 64x, 128x or 256x to speed up, or enter a Custom speed (0.1-4096x) and press Enter. Use the arrow / pause symbol to start or stop playback. Pause, scrub or leave Journey to stop playback. Playback stops at the range end; Play there restarts from the beginning. Now / reset returns to the current time, clears search/date/level/event filters, restores This session, All history and 1x speed, disables Follow player, and returns to the current map (or the known outdoor entrance during an instance visit). Choose This session for Journey history since your last login (preserved across UI reloads). With All history off, the timeline matches that session too. Choose All time, 3 hours, 1 hour or 15 minutes to change slider resolution and show only that duration of trail behind the selected playback time. The mouse wheel makes precise second-by-second adjustments. Find player pauses at the selected time and centers its historical position, switching to the recorded map if needed. It keeps a closer zoom or zooms in to locate the arrow. Follow player keeps the historical arrow in view during playback, switching recorded zones and continents and jumping directly to observed hearth/teleport arrivals. Turn it off to pan freely while playback continues. Playback estimates movement between connected samples using their timestamps, with smooth arrow updates and a progressively revealed route. Estimates are labelled; no new positions are saved. Routes and markers also project onto continent and world maps where the client supplies map rectangles. Existing saved gaps are preserved. The clock uses recorded timestamps; the arrow moves between connected samples and holds at the last known position through gaps. Old recordings may lack stop timing; new recordings preserve it during simplification. Its heading follows recorded movement, not camera facing. Mount trails use Rare blue for 60% and Epic purple for 100%; these require newly recorded mount observations. Green means flight, red means dead, blue means ghost and white means alive or unknown. Level-ups record the observed new level, with a golden Holy Nova icon and a separate Level ups filter. Earlier levels are not backfilled. Event filter checkboxes combine types without hiding the arrow. Map icon size adjusts markers and the arrow.\n\nLarge map ranges display at most 64 recent chunks, 2,048 lines and the latest 15 located events at the selected time; the oldest five icons progressively fade. Scrub earlier or narrow dates for older geometry. The timeline always retains all matching events.\n\nAccepted quests retain the observed quest text and objectives alongside the potential item choices and guaranteed rewards observed in the quest dialogue, plus readable XP, money, currency and spell offers. If accepted before reward data loads, the new entry waits up to ten seconds for the matching quest log rewards; its original time and location stay fixed. The selected quest is restored after reads. Missing data stays explicitly unknown after the retry window or quest removal, and older entries are not backfilled. Completed quests retain observed quest text and objectives too, using the same recorded acceptance when turn-in text is unavailable. They show the chosen reward when the reward request and turn-in were observed; guaranteed items are separate. Hover reward icons or names for tooltips. Reward names are enlarged and use quality colours; single items omit the count. Timeline icons have drop shadows. Money uses gold, silver and copper units. Actual XP and money come from the turn-in event. Currency and spell offers are not proof of balance changes or learned spells. Reputation rewards are not captured. Older entries and unreadable offers remain explicitly unknown; opening them does not rewrite history. Source inspection and mock tests still require in-game API validation.\n\nAll history is local and character-specific, regardless of account tracking. SavedVariables persist on a successful logout or /reload; a client crash may lose the current session, as with other journals."
 function A.ParseDate(text,ending)
     if not A.Text(text,10) then return end
     local y,m,d=text:match('^(%d%d%d%d)%-(%d%d)%-(%d%d)$');y,m,d=tonumber(y),tonumber(m),tonumber(d)
@@ -93,11 +93,23 @@ local function detailArea(parent)
     return area
 end
 function ns.CreateAnnalsBook(j,shell)
-    local c={journal=j,shell=shell,offset=0,newestFirst=true,filter='all',rows={},showDetail=false,query='',searchCache={}}
+    local c={journal=j,shell=shell,offset=0,newestFirst=true,allHistory=true,filter='all',rows={},showDetail=false,query='',searchCache={}}
     local eventKinds={'accepted','removed','completed','discovery','flight','death','levelup','hearth','teleport','crossing','battleground','instance','login','logout'}
     c.filter={}
     for _,kind in ipairs(eventKinds) do
         c.filter[kind]=type(j.db.settings.eventFilters)~='table' or j.db.settings.eventFilters[kind]~=false
+    end
+    function c:TimelineBounds()
+        if self.allHistory then return j:Bounds() end
+        if self.sliderSpan then
+            local at=math.floor(self.at or self.last)
+            return math.max(self.first,at-self.sliderSpan),math.min(self.last,at)
+        end
+        return self.first,self.last
+    end
+    function c:ToggleAllHistory()
+        self.allHistory=not self.allHistory;self.offset=0
+        self:Refresh(true)
     end
     function c:LatestOffset()
         return self.newestFirst and 0 or math.max(0,math.floor((#self.rows-1)/8)*8)
@@ -187,6 +199,10 @@ function ns.CreateAnnalsBook(j,shell)
         -- Small offsets retain second-level precision, especially when zoomed.
         slider:SetMinMaxValues(0,math.max(1,last-first));slider:SetValue(position-first)
         slider.syncing=false
+        if not self.allHistory and self.sliderSpan then
+            local first,last=self:TimelineBounds()
+            if first~=self.timelineFirst or last~=self.timelineLast then self:RefreshTimeline(true) end
+        end
         self:SyncPlayheadRow()
     end
     function c:Seek(at)
@@ -227,7 +243,8 @@ function ns.CreateAnnalsBook(j,shell)
     end
     function c:SetRange(first,last)
         self:PausePlayback();self.sliderStart=nil
-        self.follow=false;self.liveRange=false
+        self.follow=false;self.liveRange=false;self.sessionRange=false
+        if self.main and self.main.timeZoom then self.main.timeZoom:SetText(self.sliderSpan and self.main.timeZoom:GetText() or 'All time') end
         self.first,self.last=first,last;self.at=last;self.offset=0;self.index=nil
         if self.main then
             self.main.from:SetText(date and date('%Y-%m-%d',first) or '')
@@ -235,16 +252,28 @@ function ns.CreateAnnalsBook(j,shell)
         end
         self:Refresh(true)
     end
+    function c:SetTimeWindow(label,span)
+        local wasSession=self.sessionRange
+        self.sliderSpan=type(span)=='number' and span or nil;self.sliderStart=nil
+        if span=='session' then
+            self:SetRange(j.sessionStart or A.Now(),A.Now())
+            self.sessionRange=true;self.liveRange=true;self.follow=true
+        elseif wasSession then
+            self:SetRange(math.min(j:Bounds(),A.Now()),A.Now())
+            self.liveRange=true;self.follow=true
+        end
+        self.main.timeZoom:SetText(label);self:Refresh(true)
+    end
     function c:ResetNow()
         self:PausePlayback();self:SetPlaybackSpeed(1)
         self.followPlayer=false;self.followBoundary=nil;self.main.followPlayer:SetSelected(false)
-        self.level=nil;self.selected=nil;self.sliderSpan=nil;self.sliderStart=nil
+        self.level=nil;self.selected=nil;self.sliderSpan=nil;self.sliderStart=nil;self.sessionRange=true;self.allHistory=true
         self.query='';self.searchCache={};self.searchSync=true;self.main.search:SetText('');self.searchSync=false
-        self.main.level:SetText('');self.main.timeZoom:SetText('Full range');self.main.detail:SetEvent(nil,true)
+        self.main.level:SetText('');self.main.timeZoom:SetText('This session');self.main.detail:SetEvent(nil,true)
         for _,kind in ipairs(eventKinds) do self.filter[kind]=true end
         if not j.readOnly and not ns.InitializationBlocked then j.db.settings.eventFilters=A.Copy(self.filter) end
         self.mapID=A.Location().mapID or self.mapID
-        self.first=math.min(j:Bounds(),A.Now());self.last=A.Now();self.at=self.last
+        self.first=j.sessionStart or A.Now();self.last=A.Now();self.at=self.last
         local held=A.JourneyPosition(A.JourneyIndex(j,self.first,self.last,nil),self.last)
         if held and held.instanceName then self.mapID=held.mapID end
         self.follow=true;self.liveRange=true;self.index=nil;self.offset=self.newestFirst and 0 or math.huge
@@ -293,7 +322,18 @@ function ns.CreateAnnalsBook(j,shell)
         end
         if not preserveJourney then
             self.mapID=e.mapID or self.mapID
-            if self.main then self.index=nil;self:Seek(e.at) end
+            if self.main then
+                if e.at<self.first or e.at>self.last then
+                    -- A visible historical row must seek its actual timestamp.
+                    self.sessionRange=false;self.liveRange=true
+                    local first,last=j:Bounds()
+                    self.first=math.min(first,e.at);self.last=math.max(last,A.Now(),e.at)
+                    if not self.sliderSpan then self.main.timeZoom:SetText('All time') end
+                    self.main.from:SetText(date and date('%Y-%m-%d',self.first) or '')
+                    self.main.to:SetText(date and date('%Y-%m-%d',self.last) or '')
+                end
+                self.index=nil;self:Seek(e.at)
+            end
         end
     end
     function c:Around(quest)
@@ -364,21 +404,44 @@ function ns.CreateAnnalsBook(j,shell)
         self.index=nil;self.positionIndex=nil;self.searchCache={}
         self:Refresh(true)
     end
+    function c:RefreshTrail()
+        self.trailRevision=j.trail and j.trail.revision or 0
+        self.index=nil;self.positionIndex=nil
+        if self.liveRange or self.follow then
+            self.last=A.Now()
+            if self.follow then self.at=self.last end
+            if not self.allHistory then self:RefreshTimeline(false) end
+        end
+        self:SyncSlider();self:Journey()
+    end
     function c:Refresh(requery)
         if not self.main then return end
         if self.liveRange or self.follow then
             local previousLast=self.last
-            self.first=math.min(j:Bounds(),A.Now());self.last=A.Now()
+            self.first=self.sessionRange and (j.sessionStart or A.Now()) or math.min(j:Bounds(),A.Now());self.last=A.Now()
             if self.follow then self.at=self.last end
             if previousLast~=self.last then requery=true end
         end
         if not self.first then local lo,hi=j:Bounds();self.first,self.last=lo,hi;self.at=hi end
         if requery or self.revision~=j.revision then
-            self.rows=A.SearchEvents(j:Range(self.first,self.last,self.filter,self.level),self.query,self.searchCache)
             self.revision=j.revision;self.index=nil;self.positionIndex=nil
+        end
+        self.trailRevision=j.trail and j.trail.revision or 0
+        self:RefreshTimeline(requery)
+        self.main.record:SetChecked(j.db.settings.trail~=false)
+        self:RefreshStorage()
+        self:SyncSlider()
+        self:Journey()
+    end
+    function c:RefreshTimeline(requery)
+        local first,last=self:TimelineBounds()
+        if requery or self.timelineRevision~=j.revision or first~=self.timelineFirst or last~=self.timelineLast then
+            self.rows=A.SearchEvents(j:Range(first,last,self.filter,self.level),self.query,self.searchCache)
+            self.timelineFirst,self.timelineLast=first,last;self.timelineRevision=j.revision
         end
         self.offset=math.max(0,math.min(self.offset,math.max(0,math.floor((#self.rows-1)/8)*8)))
         local m=self.main
+        m.allHistory:SetSelected(self.allHistory)
         local filtered=false
         for _,kind in ipairs(eventKinds) do if not self.filter[kind] then filtered=true;break end end
         m.filter:SetSelected(filtered);m.mapFilter:SetSelected(filtered)
@@ -405,10 +468,6 @@ function ns.CreateAnnalsBook(j,shell)
             end
         end
         self:SyncRowSelection()
-        m.record:SetChecked(j.db.settings.trail~=false)
-        self:RefreshStorage()
-        self:SyncSlider()
-        self:Journey()
     end
     local function build(content)
         c.main=content;local m=content;m.rows={}
@@ -605,6 +664,16 @@ function ns.CreateAnnalsBook(j,shell)
             local ok,message=c:OpenLink(e.link);if not ok then c:Message(message) end
         end)
         m.paging=CreateFrame('Frame',nil,m);m.paging:SetPoint('TOPLEFT',42,-638);m.paging:SetSize(250,58)
+        m.allHistory=U.Button(m.paging,'All history',0,-34,126,function() c:ToggleAllHistory() end)
+        U.StyleSelection(m.allHistory)
+        m.allHistory:SetScript('OnEnter',function(self)
+            if GameTooltip then
+                GameTooltip:SetOwner(self,'ANCHOR_TOP');GameTooltip:SetText('All history')
+                GameTooltip:AddLine('On: show events from all times. Off: match the Journey time window. Search, level and event-type filters apply in both modes.',1,1,1,true)
+                GameTooltip:Show()
+            end
+        end)
+        m.allHistory:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         U.Button(m.paging,'Latest',132,-34,118,function() c.offset=c:LatestOffset();c:Refresh() end)
         m.page=ns.FieldbookUI.EntryCount(m)
         m.map=ns.CreateAnnalsMap(m.journey,j,function(id) c:Select(id,true);c.showDetail=true;c:SyncDetailOverlay() end,function(id) c.mapID=id;c.index=nil;c:Journey() end)
@@ -713,12 +782,12 @@ function ns.CreateAnnalsBook(j,shell)
             m.speeds[rate]=U.Button(m.journey,tostring(rate)..'x',380+(i-1)*47,-671,45,function() c:SetPlaybackSpeed(rate) end)
         end
         m.speeds[1]:SetEnabled(false)
-        m.timeZoom=U.MenuButton(m.journey,'Full range',792,-671,128,function()
+        m.timeZoom=U.MenuButton(m.journey,'This session',792,-671,128,function()
             if not MenuUtil then return end
             MenuUtil.CreateContextMenu(m.timeZoom,function(_,root)
-                for _,choice in ipairs({{'Full range',false},{'3 hours',10800},{'1 hour',3600},{'15 minutes',900}}) do
+                for _,choice in ipairs({{'All time',false},{'This session','session'},{'3 hours',10800},{'1 hour',3600},{'15 minutes',900}}) do
                     local label,span=choice[1],choice[2]
-                    root:CreateButton(label,function() c.sliderSpan=span or nil;c.sliderStart=nil;m.timeZoom:SetText(label);c:SyncSlider();c:Journey() end)
+                    root:CreateButton(label,function() c:SetTimeWindow(label,span) end)
                 end
             end)
         end)
@@ -810,13 +879,18 @@ function ns.CreateAnnalsBook(j,shell)
         end)
         m.capacityHover:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
         -- Journey samples can grow without a new event. Only poll while visible.
-        local storageElapsed,liveElapsed=0,0
+        local storageElapsed,liveElapsed,trailElapsed=0,0,0
         m:SetScript('OnUpdate',function(_,elapsed)
             c:TickPlayback(elapsed)
             liveElapsed=liveElapsed+elapsed
             if liveElapsed>=0.2 then
                 liveElapsed=0
                 if c.revision~=j.revision then c:Refresh(true) end
+            end
+            trailElapsed=trailElapsed+elapsed
+            if trailElapsed>=1 then
+                trailElapsed=0
+                if j.trail and c.trailRevision~=j.trail.revision then c:RefreshTrail() end
             end
             storageElapsed=storageElapsed+elapsed
             if storageElapsed>=30 then storageElapsed=0;c:RefreshStorage() end
@@ -828,7 +902,7 @@ function ns.CreateAnnalsBook(j,shell)
             m.recordConfirm:Hide();m.legend:Hide()
             if GameTooltip then GameTooltip:Hide() end
         end)
-        c:SetRange(j:Bounds());c.follow=true;c.liveRange=true
+        c:SetTimeWindow('This session','session')
         if j.readOnly then c:Message('Unsupported or malformed Annals store: recording disabled; original data preserved.') end
     end
     shell:RegisterSection('annals',{title="Adventurer's Annals",icon='Interface\\Icons\\INV_Misc_PocketWatch_02',

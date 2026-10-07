@@ -1,0 +1,136 @@
+{
+  "canvas": [
+    960,
+    740
+  ],
+  "texture": [
+    1024,
+    1024
+  ],
+  "output": "Artwork/BestiaryCollage.png",
+  "layers": [
+    {
+      "name": "dragon",
+      "file": "BestiaryDragon.png",
+      "rect": [
+        658,
+        162,
+        302,
+        360
+      ],
+      "uv": [
+        0,
+        0.5592592592592592,
+        0,
+        1
+      ],
+      "opacity": 0.33,
+      "mask": {
+        "file": "BestiaryKoboldSilhouetteMask.png",
+        "rect": [
+          -20,
+          40,
+          960,
+          740
+        ]
+      }
+    },
+    {
+      "name": "moonkin",
+      "file": "BestiaryMoonkinSketch.png",
+      "rect": [
+        330,
+        202,
+        430,
+        500
+      ],
+      "opacity": 0.28,
+      "mask": {
+        "file": "BestiaryMoonkinMurlocMask.png",
+        "rect": [
+          330,
+          202,
+          430,
+          500
+        ]
+      }
+    },
+    {
+      "name": "gnoll",
+      "file": "BestiaryGnoll.png",
+      "rect": [
+        6,
+        316,
+        296,
+        418
+      ],
+      "uv": [
+        0.17777777777777778,
+        1,
+        0,
+        0.95
+      ],
+      "opacity": 0.33
+    },
+    {
+      "name": "kobold",
+      "file": "BestiaryKobold.png",
+      "rect": [
+        604,
+        356,
+        334,
+        378
+      ],
+      "uv": [
+        0,
+        0.9277777777777778,
+        0,
+        0.8590909090909091
+      ],
+      "opacity": 0.33
+    },
+    {
+      "name": "murloc",
+      "file": "BestiaryMurlocSketch.png",
+      "rect": [
+        318,
+        424,
+        186,
+        310
+      ],
+      "uv": [
+        0.193359375,
+        0.7578125,
+        0.033203125,
+        0.97265625
+      ],
+      "opacity": 0.23
+    },
+    {
+      "name": "prairie_dog",
+      "file": "BestiaryPrairieDogSketch.png",
+      "rect": [
+        492.335,
+        558,
+        113.33,
+        170
+      ],
+      "uv": [
+        0.78125,
+        0.2734375,
+        0.14453125,
+        0.90625
+      ],
+      "opacity": 0.28
+    }
+  ],
+  "notes": "Rects use top-left canvas coordinates. Reversed horizontal UV mirrors prairie dog. Mask rectangles are in canvas coordinates. Sources and this manifest are excluded from packages. Update mask geometry when moving foreground creatures.",
+  "fades": {
+    "dragon_right": 12,
+    "bottom_murloc": 64,
+    "bottom_prairie_dog": 24,
+    "gnoll_kobold_edges": 28,
+    "gnoll_diagonal_extent": 180,
+    "gnoll_diagonal_steps": 30
+  }
+}

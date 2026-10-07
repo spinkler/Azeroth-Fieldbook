@@ -2,6 +2,39 @@
 
 ## v0.36.1 - Unreleased
 
+- Add a taller loose-paper stack sketch based on inv_misc_paperbundle02a to the Chronicle’s lower-right corner, matching its ink and 23% opacity, with broad bottom and right window-edge fades.
+
+
+- Composite the approved six-creature Bestiary collage into one transparent runtime PNG, replacing individual illustration textures, masks and fade overlays. Preserve all editable PNG sources, masks, exact layout settings and a repeatable compositor outside CurseForge packages; retain dynamic dark-mode desaturation.
+
+- Reduce the Bestiary moonkin and prairie-dog sketch opacity to 28%, and the murloc to 23%.
+
+- Lower the Bestiary kobold and dragon artwork by 40 pixels, keeping parchment-edge clipping, fades and the kobold silhouette mask aligned.
+
+- Add a small prairie-dog pencil sketch between the murloc and kobold below the moonkin, preserving the classic model’s pointed polygon geometry, facing right 5 pixels left of its original placement, with matching ink and fades, and feathering the moonkin beneath it. Keep collage artwork separate while refining composition.
+
+- Keep the Bestiary dragon illustration and its edge fades visible when a creature is selected, preserving its existing opacity and silhouette mask.
+
+- Add a large moonkin behind the murloc for the Bestiary sketch collage, feathering its lines beneath the foreground silhouette. Trim the murloc’s transparent padding so its drawing sits beside the right pane’s left margin.
+
+- Add a preview murloc pencil sketch at the bottom beside the Bestiary right pane’s left margin, matching the brown ink, 33% opacity and dark-mode desaturation of existing illustrations, with a soft parchment fade at the bottom edge.
+
+- Add a large mining-pick pencil sketch to the bottom-right of Gatherer’s Compendium, using the classic trade_mining icon, matching brown ink and dark-mode desaturation, with soft parchment fades along the bottom and right window edges.
+
+- Attribute new Cash Flow fare deductions to Flight transport when a nearby flight-map interaction and confirmed taxi travel identify the payment. Handle map-close/payment ordering with bounded retries; leave historical unidentified entries unchanged.
+
+- Simplify Merchant’s Ledger Cash Flow entries: replace Observed action with a cyan separator dot and omit the unverified-attribution notice.
+
+- Mark the final Atlas cleanup chat summary with [DONE], green when no points were removed and yellow when cleanup removed points.
+
+- Enlarge the Annals player arrow by one third relative to event icons, keeping both proportional to the Map icon size slider.
+
+- Fix false flight-route gaps on small city maps by checking plausible world-space flight movement before rejecting large map-relative steps. Preserve real discontinuities and existing saved gaps. Update the open Annals Journey on changed trail data, coalesced to at most once per second, without a full event-list or storage refresh; idle frames do not redraw the trail.
+
+- Default Annals Journey to This session, preserved across UI reloads, while showing all historical events. Add a highlighted All history toggle beside Latest to optionally match the list to Journey dates or its time window; search, level and event-type filters still apply. Selecting an older event opens its actual recorded time. Rename Full range to All time.
+
+- Fix repeated Bestiary location announcements for saved zones after reload or when recording additional coordinates. Announce only newly added journal zones; update Help and regression coverage.
+
 - Accept Treasure contents from a pending named Opening cast when a single compatible world loot source proves inspection, covering loot arriving before or without cast-success notification. Preserve failed-cast, stale, conflicting-source and loot-context rejection; add regression coverage and pending-cast diagnostic details. The operator confirmed successful live capture on 2026-10-07.
 
 ## v0.36.0 - 2026-10-07

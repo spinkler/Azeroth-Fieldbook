@@ -447,6 +447,45 @@ function ns.CreateGatheringBook(journal,shell)
         content:HookScript("OnSizeChanged",updateJasmineFade)
         updateJasmineFade()
         book.jasmineCornerFade=ui.IllustrationCornerFade(content,shell,6)
+        -- Large mining sketch nestles into the opposite parchment corner.
+        local pick=content:CreateTexture(nil,"BACKGROUND",nil,3)
+        pick:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\GatheringMiningPickSketch.png")
+        pick:SetSize(380,380)
+        pick:SetPoint("BOTTOMRIGHT",content,"BOTTOMRIGHT",-6,6)
+        pick:SetAlpha(0.33)
+        shell:AddBackgroundLayer(pick,1,1,1,true)
+        book.miningPickIllustration=pick
+        local pickFades={}
+        local function rightFade(offset,y,width,height,alpha)
+            local strip=content:CreateTexture(nil,"BACKGROUND",nil,4)
+            strip:SetPoint("BOTTOMRIGHT",content,"BOTTOMRIGHT",-6-offset,y)
+            strip:SetSize(width,height)
+            strip:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
+            strip:SetAlpha(alpha)
+            shell:AddBackgroundLayer(strip,0.504,0.504,0.48888)
+            pickFades[#pickFades+1]={texture=strip,offset=offset,y=y,width=width,height=height}
+        end
+        -- Broad smooth fades hide the window-facing edges without obscuring
+        -- the upper-left blade, using the exact underlying parchment colour.
+        for i=0,63 do
+            local t=i/63
+            local alpha=1-t*t*t*(t*(6*t-15)+10)
+            rightFade(i,6,1,380,alpha)
+            rightFade(0,6+i,380,1,alpha)
+        end
+        local function updatePickFade()
+            local width,height=content:GetWidth()-8,content:GetHeight()-15
+            if width<=0 or height<=0 then return end
+            for _,fade in ipairs(pickFades) do
+                local x=content:GetWidth()-12-fade.offset-fade.width
+                local y=fade.y-6
+                fade.texture:SetTexCoord(x/width,(x+fade.width)/width,
+                    1-(y+fade.height)/height,1-y/height)
+            end
+        end
+        content:HookScript("OnSizeChanged",updatePickFade)
+        updatePickFade()
+        book.miningPickEdgeFades=pickFades
         book.pageTitle=ui.SectionTitle(book,"Gatherer's Compendium")
         book.spine=ns.FieldbookUI.PageDivider(book)
         book.entryCount=ui.EntryCount(book)

@@ -87,7 +87,7 @@ class LocationPrototypeTests(unittest.TestCase):
             assert(count==3,'rejected positions remain eligible for a later retry')
         ''')
 
-    def test_existing_point_and_zone_still_notice_first_qualified_observation(self):
+    def test_existing_point_and_zone_remain_silent(self):
         lua=prototype_client()
         lua.execute('''
             L.SetPrototypeEnabled(false);fire('PLAYER_TARGET_CHANGED')
@@ -97,10 +97,10 @@ class LocationPrototypeTests(unittest.TestCase):
                 point={x=2000,y=3000,seenAt=stamp-100,approximate=false}},'observations')
             journal:SetCreatureAnnouncement(true);messages={};L.SetPrototypeEnabled(true)
             captureTick()
-            assert(#messages==1 and messages[1]:find('[New Location Observed]',1,true))
+            assert(#messages==0,'saved locations stay silent')
             assert(not journal.prototypeLocationStats,'existing point is not refreshed to force feedback')
             for i=1,10 do tick() end
-            assert(#messages==1 and mapCalls==25)
+            assert(#messages==0 and mapCalls==25)
         ''')
 
     def test_click_adds_entry_then_first_qualified_location_announces_once(self):
@@ -118,15 +118,15 @@ class LocationPrototypeTests(unittest.TestCase):
             assert(messages[1]:find('Test zone',1,true) and points()==0)
             stamp=stamp+1;px=.25;captureTick();captureTick()
             assert(#messages==1,'additional points and refreshes in this zone stay silent')
-            fire('ADDON_LOADED','AzerothFieldbook');captureTick();assert(#messages==2)
+            fire('ADDON_LOADED','AzerothFieldbook');captureTick();assert(#messages==1)
             mapID=38
             C_Map.GetMapInfoAtPosition=function() return C_Map.GetMapInfo(38) end
             captureTick()
-            assert(entry().locations['Adjacent zone'] and observations(38) and #messages==3)
-            assert(messages[3]:find('[New Location Observed]',1,true))
+            assert(entry().locations['Adjacent zone'] and observations(38) and #messages==2)
+            assert(messages[2]:find('[New Location Observed]',1,true))
         ''')
 
-    def test_new_point_in_previously_credited_zone_announces_without_refresh_spam(self):
+    def test_new_point_in_saved_zone_stays_silent(self):
         lua=prototype_client()
         lua.execute('''
             L.SetPrototypeEnabled(false);fire('PLAYER_TARGET_CHANGED')
@@ -135,17 +135,17 @@ class LocationPrototypeTests(unittest.TestCase):
             L.Record(entry(),{mapID=37,name='Test zone',
                 point={x=1000,y=1000,seenAt=stamp,approximate=false}},'observations')
             journal:SetCreatureAnnouncement(true);messages={};L.SetPrototypeEnabled(true)
-            captureTick();assert(#messages==1 and messages[1]:find('[New Location Observed]',1,true))
+            captureTick();assert(#messages==0,'saved locations stay silent')
             assert(observations().points[1+2000*10001+3000] and points()==0)
             stamp=stamp+1;captureTick();captureTick();fire('PLAYER_TARGET_CHANGED')
-            assert(#messages==1,'timestamp refreshes and retargeting do not announce')
+            assert(#messages==0,'timestamp refreshes and retargeting do not announce')
             for i=1,10 do px=.2+i*.003;stamp=stamp+1;captureTick() end
-            assert(#messages==1,'movement must not spam notices')
+            assert(#messages==0,'movement must not spam notices')
             local count=0;for _ in pairs(observations().points) do count=count+1 end
             assert(count==12,'all new points still record despite silent notices')
             units.target.guid='Creature-0-1-2-3-43-other';fire('PLAYER_TARGET_CHANGED')
-            assert(#messages==2,'another creature combines its entry and location notice')
-            assert(messages[2]:find('Test zone',1,true))
+            assert(#messages==1,'another creature combines its entry and location notice')
+            assert(messages[1]:find('Test zone',1,true))
         ''')
 
     def test_first_qualified_location_announces_even_with_unknown_level(self):

@@ -426,17 +426,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if newLevel then progress.levels[level]=true end
         if newZone then progress.zones[zone]=true end
         progress.initial=nil
-        -- A qualified location is separate from creating the creature entry,
-        -- including when its level is unreadable or this is the first encounter.
-        -- Keep recording movement, but announce each creature/zone only once
-        -- this session. Previously known zones and points still announce their
-        -- first qualified observation after reload.
-        local notices=locationNotices[entry.id]
-        if (newZone or observation.locationQualified) and str(zone) and not (notices and notices[zone]) then
-            notices=notices or {};locationNotices[entry.id]=notices;notices[zone]=true
-            if self.onDiscoveryRecorded and not observation.entryAnnouncement then
-                self.onDiscoveryRecorded(entry, observation)
-            end
+        -- Only a newly stored journal zone merits a location announcement.
+        if observation.locationZoneAdded and str(zone) and self.onDiscoveryRecorded
+            and not observation.entryAnnouncement then
+            self.onDiscoveryRecorded(entry, observation)
         end
         if newLevel or newZone then self:Touch() end
     end
@@ -876,6 +869,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local zone=sample.zoneName
         entry.locations=entry.locations or {}
         local changed=not entry.locations[zone]
+        observation.locationZoneAdded=changed
         entry.locations[zone]=true
         if entry.lockedBasic then
             entry.lockedBasic.locations=entry.lockedBasic.locations or {}

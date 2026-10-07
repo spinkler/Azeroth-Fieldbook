@@ -170,6 +170,7 @@ local function recoverRewards(original,candidate)
 end
 function ns.CreateAnnalsTracking(j)
     local t={journal=j,capabilities={},loading=false};local db=j.db
+    j.sessionStart=A.Int(db.sessionStart,0,A.Now()) and db.sessionStart or A.Now()
     local reward,offer,abandon=nil,nil,nil
     local function later(delay,fn)
         if C_Timer and type(C_Timer.After)=='function' then C_Timer.After(delay,fn);return true end
@@ -369,6 +370,8 @@ function ns.CreateAnnalsTracking(j)
         if event=='PLAYER_ENTERING_WORLD' then
             if not t.sessionStarted and (id==true or xp==true) then
                 t.sessionStarted=true
+                if (id==true and xp~=true) or not A.Int(db.sessionStart,0,A.Now()) then db.sessionStart=A.Now() end
+                j.sessionStart=db.sessionStart
                 local exit=db.sessionLogout
                 if id==true and xp~=true then
                     if A.ValidEvent(exit) and exit.kind=='logout' then

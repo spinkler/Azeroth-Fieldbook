@@ -342,6 +342,21 @@ dark-mode desaturation; respect each illustration's established exceptions.
 Keep the prior PNG asset as a fallback and visually inspect the new result before
 installation. User-requested changes to placement and opacity take precedence.
 
+## Bestiary collage source workflow
+
+The runtime Bestiary uses one `Artwork/BestiaryCollage.png` texture. Keep the
+individual approved PNGs, masks and geometry manifest in
+`Artwork/Sources/BestiaryCollage`; `.pkgmeta` excludes all `Artwork/Sources`
+from CurseForge packages. Never delete these editable sources when replacing
+the runtime composite. `layout.json` records canvas rectangles, crops, mirroring,
+opacity, mask positions and edge-fade parameters. `previous-layer-layout.lua`
+retains the prior live-layer implementation as an additional editing reference.
+For future edits, update the source PNGs and manifest, realign affected overlap
+masks, then run `python tests/composite_bestiary_art.py` with Pillow available.
+The compositor deterministically bakes masks, individual opacity and parchment
+edge fades into transparent alpha; runtime dark-mode desaturation and parchment
+brightness remain dynamic. Verify the new composition in-game before release.
+
 ## Scope
 
 The operator reserves the 1.0 milestone for successful live Beast Lore testing

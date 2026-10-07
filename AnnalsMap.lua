@@ -617,7 +617,7 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         self.playerCoordinates:SetText('Historical journey • No recorded position • '..(self.recordedLevel and ('Level '..self.recordedLevel) or 'Level unknown'))
         if not p or not self.available then return end
         local size=ns.Atlas.Number(j.db.settings.iconSize,6,40) and j.db.settings.iconSize or 20
-        arrow:SetSize(size*1.5,size*1.5);arrow:ClearAllPoints()
+        arrow:SetSize(size*2,size*2);arrow:ClearAllPoints()
         arrow:SetPoint('CENTER',self.canvas,'TOPLEFT',p.x/10000*self:GetWidth(),-p.y/10000*self:GetHeight())
         local state=p.state or (p.flight and 'flight') or 'unknown'
         arrow:SetVertexColor(A.PlayerColor(state))
