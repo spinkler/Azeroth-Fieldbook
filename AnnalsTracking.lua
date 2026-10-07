@@ -172,6 +172,7 @@ function ns.CreateAnnalsTracking(j)
     local t={journal=j,capabilities={},loading=false};local db=j.db
     j.sessionStart=A.Int(db.sessionStart,0,A.Now()) and db.sessionStart or A.Now()
     local reward,offer,abandon=nil,nil,nil
+    local rewardIndex,rewardClosed
     local function later(delay,fn)
         if C_Timer and type(C_Timer.After)=='function' then C_Timer.After(delay,fn);return true end
     end
@@ -293,6 +294,7 @@ function ns.CreateAnnalsTracking(j)
         end
         j:Quest(p.kind,id,p.title,r,p.location,p.at,p.token,p.sequence,p.kind=='accepted')
         db.pending[id]=nil
+        if p.kind=='completed' and reward and reward.token==p.token then reward=nil;rewardIndex=nil end
     end
     function t:RetryAcceptances()
         if self.readingRewards or A.logRewardReading or self.acceptanceRetry then return end
@@ -303,18 +305,31 @@ function ns.CreateAnnalsTracking(j)
         end
         if not later(0.1,retry) then retry() end
     end
+    function t:RefreshReward()
+        if not reward or rewardClosed or A.Now()-reward.at>600 or A.Read(GetQuestID)~=reward.questID then return end
+        local candidate=A.RewardSnapshot()
+        if not candidate or candidate.questID~=reward.questID then return end
+        local fresh=recoverRewards(reward,candidate)
+        if not fresh then return end
+        fresh.questID,fresh.at,fresh.title,fresh.token=reward.questID,reward.at,reward.title,reward.token
+        fresh.captureSource,fresh.capturedAt=nil,nil
+        -- Preserve the dialogue object so its delayed close callback still owns it.
+        for k,v in pairs(fresh) do reward[k]=v end
+        if rewardIndex~=nil then self:RewardRequested(rewardIndex) end
+    end
     function t:RewardRequested(index)
         if j.readOnly or ns.InitializationBlocked or not reward or A.Now()-reward.at>600 or not A.Int(index,0,64) then return end
         -- Retries within one reward dialogue are one transaction. A new dialogue
         -- or accepted quest cycle can legitimately produce another completion.
         reward.token=reward.token or tostring(j:Sequence())
+        rewardIndex=index
         reward.chosen=reward.choices[index];reward.choiceStatus=reward.chosen and 'observed' or (reward.count==0 and 'none' or 'unknown')
         if reward.count==1 and reward.chosen then
             reward.single=reward.chosen;reward.chosen=nil;reward.choiceStatus='single automatic option'
         end
         -- QUEST_TURNED_IN can fire synchronously before a secure post-hook.
         local p=db.pending[reward.questID]
-        if p and p.kind=='completed' and p.at>=reward.at then p.snapshot=A.Copy(reward);p.token=reward.token end
+        if p and p.kind=='completed' and p.token==reward.token and p.at>=reward.at then p.snapshot=A.Copy(reward) end
     end
     function t:Seed()
         if j.readOnly or ns.InitializationBlocked then return end
@@ -475,14 +490,20 @@ function ns.CreateAnnalsTracking(j)
         if event=='TAXIMAP_CLOSED' then
             if t.taxiOrigin then t.taxiOrigin.closed=A.Now() end;return
         end
-        if event=='QUEST_DETAIL' then offer=A.RewardSnapshot();return end
+        if event=='QUEST_DETAIL' then reward=nil;rewardIndex=nil;offer=A.RewardSnapshot();return end
         if event=='QUEST_ITEM_UPDATE' then
             if offer and A.Read(GetQuestID)==offer.questID then offer=A.RewardSnapshot() end
+            self:RefreshReward()
             return
         end
-        if event=='QUEST_COMPLETE' then offer=nil;reward=A.RewardSnapshot();return end
+        if event=='QUEST_COMPLETE' then
+            offer=nil;reward=A.RewardSnapshot();rewardIndex=nil;rewardClosed=false
+            if reward then reward.token=tostring(j:Sequence()) end
+            return
+        end
         if event=='QUEST_FINISHED' then
             -- Leave the snapshot alive only through the synchronous reward event/hook batch.
+            rewardClosed=true
             local previous,previousOffer=reward,offer
             later(0.5,function() if reward==previous then reward=nil end;if offer==previousOffer then offer=nil end end);return
         end

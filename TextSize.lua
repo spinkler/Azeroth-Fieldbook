@@ -21,6 +21,7 @@ function textSize:Initialize()
 end
 
 function textSize:Set(value)
+    if ns.InitializationBlocked then return end
     self:Initialize()
     if type(AzerothFieldbookAccountDB) ~= "table" then AzerothFieldbookAccountDB = {} end
     AzerothFieldbookAccountDB.textSizeOffset = normalize(value)

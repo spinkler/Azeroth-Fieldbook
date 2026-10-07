@@ -516,7 +516,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         if not p then
             p=CreateFrame("Frame",nil,self.main);p:SetPoint("TOPLEFT",38,-90);p:SetSize(260,615)
             p.title=U.Label(p,title,4,-4,245,"GameFontNormalSmall")
-            if key~="catalogue" then p.back=U.Button(p,"Back to contacts",4,-584,250,function() c:ClosePanel() end) end
+            if key~="catalogue" and key~="cashFlow" then p.back=U.Button(p,"Back to contacts",4,-584,250,function() c:ClosePanel() end) end
             self.panels[key]=p
         end
         if key=="catalogue" then
@@ -643,7 +643,8 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         end
     end
     function c:RefreshCashFlow()
-        local p=self.panels.cashFlow;if not p or self.panel~=p then return end
+        local p=self.panels.cashFlow
+        if not p or self.panel~=p or not self.main or not self.main:IsVisible() then return end
         local function money(value,amountColour)
             local text=value==0 and "0c" or goodsMoney(value)
             local colours={g="ffffd100",s="ffc7c7cf",c="ffb87333"}
@@ -663,7 +664,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             "|cffffd100Recent activity|r"}
         if #(cash.entries or {})==0 then lines[#lines+1]="No gold changes recorded yet." end
         local header=table.concat(lines,"\n")
-        local transactions={}
+        local transactions,keys={},{}
         local matches=0
         local query=(p.search:GetText() or ""):lower()
         for _,entry in ipairs(cash.entries or {}) do
@@ -677,13 +678,15 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             if (not p.direction or (p.direction=="income" and entry.amount>0) or (p.direction=="expense" and entry.amount<0))
                 and searchable:find(query,1,true) then
                 matches=matches+1
-                local firstLine=#lines+1
+                lines={}
+                local firstLine=1
                 lines[#lines+1]="|cffffffff"..stamp.."|r\n"..(entry.amount>0 and "|cff80e680+" or "|cffff8080-")..money(math.abs(entry.amount),entry.amount>0 and "ff80e680" or "ffff8080").."|r  •  "..(entry.amount>0 and "|cff80e680Balance:|r " or "|cffff8080Balance:|r ").."|cffffffff"..money(entry.balance,"ffffffff").."|r"
                 lines[#lines+1]="|cff71d5ff"..(entry.amount>0 and "From: " or "To: ").."|r"..L.Safe(party)
                 if entry.context and entry.source~="loot" and entry.source~="discrepancy" then lines[#lines+1]="|cff71d5ff•|r |cffffffff"..L.Safe(entry.context).."|r" end
                 if entry.source=="discrepancy" then lines[#lines+1]="|cffffd100Login balance discrepancy|r\nPreviously recorded: "..money(entry.previousBalance or 0) end
                 if entry.source=="loot" then lines[#lines+1]=L.Safe(entry.context or "Looted cash").." • "..tostring(entry.lootCount or 1).." collections" end
                 transactions[#transactions+1]=table.concat(lines,"\n",firstLine,#lines)
+                keys[#keys+1]=entry
             end
         end
         if matches==0 and #(cash.entries or {})>0 then
@@ -700,8 +703,9 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         local bytes=size(cash,0)
         local usage=bytes>=1048576 and string.format("%.2f MB",bytes/1048576) or string.format("%.1f KB",bytes/1024)
         p.usage:SetText(string.format("%d rows • ~%s saved\nOngoing history • No row limit",#(cash.entries or {}),usage))
-        p.read:SetText(table.concat(lines,"\n"))
-        p.read:SetTransactions(header,transactions)
+        local filter=query..":"..tostring(p.direction)
+        if p.read.filter~=filter then p.read.first=1;p.read.keys=nil;p.read.filter=filter end
+        p.read:SetTransactions(header,transactions,keys)
     end
     function c:CashFlow()
         if self.panel and self.panel==self.panels.cashFlow then self:ClosePanel();return end
@@ -741,11 +745,33 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             p.read.transactionRows={}
             p.read.header=U.Label(body,"",0,0,228,"GameFontHighlightSmall")
             p.read.header:SetWordWrap(true);p.read.header:SetSpacing(3)
-            function p.read:SetTransactions(header,transactions)
+            local pageSize=25
+            p.page=U.Label(p,"",72,-584,100,"GameFontHighlightSmall")
+            p.page:SetWordWrap(false);p.page:SetJustifyH("CENTER")
+            p.previous=U.Button(p,"Newer",4,-579,64,function() p.read:TurnPage(-1) end)
+            p.next=U.Button(p,"Older",172,-579,64,function() p.read:TurnPage(1) end)
+            function p.read:TurnPage(direction)
+                self.first=math.max(1,math.min(math.max(1,#(self.transactions or {})),(self.first or 1)+direction*pageSize))
+                self.keys=nil
+                self:SetTransactions(self.headerText,self.transactions,self.transactionKeys)
+                self:SetVerticalScroll(0)
+            end
+            function p.read:SetTransactions(header,transactions,keys)
+                local first=self.first or 1
+                local anchor=(first>1 or self:GetVerticalScroll()>0) and self.keys and self.anchor
+                if anchor and keys then for i,key in ipairs(keys) do if key==anchor then first=i;break end end end
+                first=math.max(1,math.min(first,math.max(1,#transactions)))
+                self.first,self.keys,self.transactionKeys=first,keys,keys
+                self.anchor=keys and keys[first]
+                self.headerText,self.transactions=header,transactions
+                local last=math.min(#transactions,first+pageSize-1)
+                p.page:SetText(#transactions==0 and "0 entries" or (first.."-"..last.." / "..#transactions))
+                p.previous:SetEnabled(first>1);p.next:SetEnabled(last<#transactions)
                 self.text:Hide()
                 self.header:SetText(header)
                 local y=self.header:GetStringHeight()+12
-                for i,text in ipairs(transactions) do
+                for index=first,last do
+                    local i,text=index-first+1,transactions[index]
                     local row=self.transactionRows[i]
                     if not row then
                         row=CreateFrame("Frame",nil,body);row:SetWidth(228)
@@ -765,7 +791,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                     row.dividerHost:SetPoint("TOPLEFT",row,"TOPLEFT",0,-height+8)
                     row:Show();y=y+height
                 end
-                for i=#transactions+1,#self.transactionRows do self.transactionRows[i]:Hide() end
+                for i=math.max(0,last-first+1)+1,#self.transactionRows do self.transactionRows[i]:Hide() end
                 body:SetHeight(math.max(506,y+4))
                 self:UpdateScrollChildRect();self:RefreshScrollBar()
             end
@@ -1319,7 +1345,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             "|cffffd100Access notes and details|r\nUse Edit for entrances, floors, personal notes or a manual role annotation. Known Goods and Observed Training open offering lists; click the same button again to return to the directory.\n\n"..
             "|cffffd100Share|r\nSelect a contact and open Share. Choose what to include, then Prepare text for copying. When preparing your own observations, the current search limits included offerings. Notes start excluded. To import, use Preview pasted data, review it, then Accept reported facts. Received facts remain Reported with their original source and observation dates; receiving them is not a personal encounter. Reports use copy and paste and cost no Knowledge.\n\n"..
             "|cffffd100Your journal|r\nContacts, notes and browsing settings follow the global Account-wide tracking option. It starts on in Options; turn it off to use this character's separate journal after /reload. Existing character records import once; later changes in the two scopes stay separate.",
-        onOpen=function() if c.main then c:Refresh();c.main.details:SetVerticalScroll(state.detailScroll or 0) end end})
+        onOpen=function() if c.main then c:Refresh();c:RefreshCashFlow();c.main.details:SetVerticalScroll(state.detailScroll or 0) end end})
     journal.onContactDiscovered=function(entry)
         if eventJournal and eventJournal:GetCreatureAnnouncement() and DEFAULT_CHAT_FRAME then
             local role=entry.roles.trainer and "Trainer" or entry.roles.merchant and "Merchant"

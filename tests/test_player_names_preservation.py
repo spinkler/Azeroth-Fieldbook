@@ -14,7 +14,7 @@ SUPPORT = r'''
     end
     stores={'AzerothFieldbookDB','AzerothFieldbookAccountDB','AzerothFieldbookGatheringDB',
         'AzerothFieldbookAtlasDB','AzerothFieldbookAnglingDB','AzerothFieldbookLedgerDB',
-        'AzerothFieldbookTreasureDB','AzerothFieldbookLoreDB'}
+        'AzerothFieldbookTreasureDB','AzerothFieldbookLoreDB','AzerothFieldbookAnnalsDB'}
     function capture()
         local result={}
         for _,key in ipairs(stores) do result[key]={object=_G[key],text=literal(_G[key])} end

@@ -35,7 +35,19 @@ local function key(sender,id) return sender:lower() .. "/" .. id end
 local function committed(tx) return tx and tx.spent==true end
 local function active(tx) return tx and (tx.stage=="preflight" or tx.stage=="offering" or tx.stage=="committed" or tx.stage=="unknown") end
 local function validVersion(value)
-    return schema.Text(value,32) and value:match("^%d+%.%d+%.%d+[%w%.%-%+]*$")~=nil
+    if not schema.Text(value,32) then return false end
+    if type(value)~="string" or #value>32 then return false end
+    local tail=value:match("^%d+%.%d+%.%d+(.*)$")
+    if tail==nil then return false end
+    if tail=="" then return true end
+    local pre,build=tail:match("^%-([^+]+)%+(.+)$")
+    if not pre then pre=tail:match("^%-(.+)$") end
+    if not pre then build=tail:match("^%+(.+)$") end
+    local function identifiers(s)
+        return s and s:match("^[%w%-%.]+$") and not s:find("..",1,true)
+            and s:sub(1,1)~="." and s:sub(-1)~="."
+    end
+    return (pre~=nil or build~=nil) and (not pre or identifiers(pre)) and (not build or identifiers(build))
 end
 
 -- Environment injection keeps protocol/accounting tests independent of WoW.

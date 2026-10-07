@@ -17,6 +17,7 @@ function scale:Apply()
     if ns.MinimapButton then ns.MinimapButton:UpdatePosition() end
 end
 function scale:Initialize(settings)
+    if ns.InitializationBlocked then return end
     if type(AzerothFieldbookAccountDB) ~= "table" then AzerothFieldbookAccountDB = {} end
     db = AzerothFieldbookAccountDB
     -- The first character after upgrading seeds the shared preference.
@@ -33,7 +34,7 @@ function scale:Register(frame, positionKey)
     if positionKey and ns.WindowPositions then ns.WindowPositions:Register(frame, positionKey) end
 end
 function scale:Set(value)
-    if not db then return end
+    if ns.InitializationBlocked or not db then return end
     if ns.WindowPositions then ns.WindowPositions:SaveVisible() end
     db.uiScale = math.max(0.5, math.min(1.5, tonumber(value) or 1))
     self:Apply()

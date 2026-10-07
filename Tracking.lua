@@ -201,6 +201,7 @@ function ns.ReportTrackingTransition(settings, say)
 end
 
 function ns.InitializeTracking(settings)
+    if ns.InitializationBlocked then return settings end
     trackingResult = {}
     if type(settings.accountWideTracking) ~= "boolean" then settings.accountWideTracking = true end
     if not settings.accountWideTracking then return settings end

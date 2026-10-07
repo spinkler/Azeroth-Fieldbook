@@ -20,7 +20,13 @@ end
 function B.ApplyFullReset()
     if ns.InitializationBlocked then return false end
     if type(AzerothFieldbookBackupDB)~="table" or AzerothFieldbookBackupDB.fullResetPending~=true then return false end
+    -- Offline characters still own their old keys. Reset journals and replay
+    -- markers, but never rewind the account's ownership allocator.
+    local account=AzerothFieldbookAccountDB
+    local high=type(account)=="table" and account.nextCharacter
+    if type(high)~="number" or high<0 or high>2147483647 or high~=math.floor(high) then high=0 end
     for _,name in ipairs(B.roots) do _G[name]=nil end
+    AzerothFieldbookAccountDB={version=1,nextCharacter=high}
     AzerothFieldbookBackupDB=nil
     return true
 end
@@ -533,12 +539,18 @@ function B.ApplyPending()
         local ok,why=B.CanRestore(snapshot);need(ok,why)
         local recovery,failure=B.Capture();need(recovery,"Recovery capture failed: "..(failure or ""))
         prepare(snapshot)
+        -- Old archives preserve Annals, but startup must operate on a detached
+        -- literal copy so a later failure cannot consume original pending work.
+        local annals="AzerothFieldbookAnnalsDB"
+        if snapshot.present[annals]==nil and _G[annals]~=nil then
+            snapshot.stores[annals]=decode(encode(_G[annals]))
+        end
         local previous={};for _,name in ipairs(B.roots) do previous[name]=_G[name] end
         -- All fallible work is complete. No callbacks or migrations in the commit.
         applied={previous=previous,pending=a.pending,archive=a}
         a.recovery=recovery
         for _,name in ipairs(B.roots) do
-            if name~="AzerothFieldbookAnnalsDB" or snapshot.present[name]~=nil then _G[name]=snapshot.stores[name] end
+            _G[name]=snapshot.stores[name]
         end
         a.pending=nil
         return true

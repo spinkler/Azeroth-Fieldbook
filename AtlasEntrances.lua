@@ -132,6 +132,7 @@ function E.Attach(j)
         if e.classification.kind=="none" then e.classification=T.Suggest(o.interior) end
         e.latest={direction=o.direction,at=o.at,exterior=A.Copy(o.exterior),interior=A.Copy(o.interior),
             coordinateSource=o.coordinateSource,metric=metric or (C.ValidWorld(o.world) and "world" or "map-size")}
+        if created then A.EnsureReferences(j.saved) end
         self.revision=self.revision+1
         if created and ns.RecordFieldbookDiscovery then ns.RecordFieldbookDiscovery("atlas",e,self) end
         if created and self.onRecorded then self.onRecorded(A.Copy(e)) end

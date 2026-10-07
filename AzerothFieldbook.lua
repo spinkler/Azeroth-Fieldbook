@@ -452,6 +452,35 @@ local function supportedRoot(value)
     return true
 end
 
+-- Account settings are also written when account journal tracking is off.
+-- Missing version is a supported legacy partial root (for shared UI settings).
+local function supportedAccount(value)
+    if value==nil then return true end
+    local function plain(v) return public(v) and type(v)=="table" and not getmetatable(v) end
+    if not plain(value) or (value.version~=nil and (not public(value.version) or value.version~=1)) then return false end
+    if value.nextCharacter~=nil and (not public(value.nextCharacter) or type(value.nextCharacter)~="number"
+        or value.nextCharacter<0 or value.nextCharacter>2147483647 or value.nextCharacter~=math.floor(value.nextCharacter)) then return false end
+    for _,key in ipairs({"sections","sectionImports","importedCharacters","atlasReferenceMaps","atlasReferenceIssues",
+        "atlasReferenceRepairs","anglingIdentityRepairs","bestiaryBackups"}) do
+        if value[key]~=nil and not plain(value[key]) then return false end
+    end
+    for _,key in ipairs({"sectionImports","atlasReferenceMaps","atlasReferenceIssues"}) do
+        for _,map in pairs(value[key] or {}) do if not plain(map) then return false end end
+    end
+    local function markers(map)
+        for key,flag in pairs(map or {}) do
+            if not positiveID(key) or flag~=true then return false end
+        end
+        return true
+    end
+    for _,key in ipairs({"importedCharacters","atlasReferenceRepairs","anglingIdentityRepairs"}) do
+        if not markers(value[key]) then return false end
+    end
+    for _,map in pairs(value.sectionImports or {}) do if not markers(map) then return false end end
+    for _,section in pairs(value.sections or {}) do if not plain(section) then return false end end
+    return supportedRoot({version=1,bestiary=value.bestiary})
+end
+
 -- Whole-save restoration commits only in a fresh namespace, before any of the
 -- ordinary schema migrations and before observers hold saved-table references.
 local backupStartupChecked=false
@@ -480,7 +509,8 @@ local function initializeImpl()
             end
         end
     end
-    if ns.InitializationBlocked or (AzerothFieldbookDB~=nil and not supportedRoot(AzerothFieldbookDB)) then
+    if ns.InitializationBlocked or (AzerothFieldbookDB~=nil and not supportedRoot(AzerothFieldbookDB))
+        or not supportedAccount(AzerothFieldbookAccountDB) then
         -- Latch until a real /reload creates a new namespace. Independent section
         -- observers and queued captures must not retain access to earlier stores.
         ns.InitializationBlocked=true

@@ -29,6 +29,21 @@ end
 local function version()
     return L.Read(C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata,addonName,'Version')
 end
+-- Same syntax policy as the live Sharing transport; equality remains exact.
+local function validVersion(value)
+    if type(value)~="string" or #value>32 then return false end
+    local tail=value:match("^%d+%.%d+%.%d+(.*)$")
+    if tail==nil then return false end
+    if tail=="" then return true end
+    local pre,build=tail:match("^%-([^+]+)%+(.+)$")
+    if not pre then pre=tail:match("^%-(.+)$") end
+    if not pre then build=tail:match("^%+(.+)$") end
+    local function identifiers(s)
+        return s and s:match("^[%w%-%.]+$") and not s:find("..",1,true)
+            and s:sub(1,1)~="." and s:sub(-1)~="."
+    end
+    return (pre~=nil or build~=nil) and (not pre or identifiers(pre)) and (not build or identifiers(build))
+end
 local player=L.Player
 local function selected(values,index) return values==nil or values[index]==true end
 local encode
@@ -37,7 +52,7 @@ local function normalize(v,stored)
         pages=true,passages=true,locations=true,annotations=true,references=true,originalSource=true})
     need(v.format=='AFB-LORE' and (v.version==R.VERSION or v.version==1),'Unsupported Lore report schema.')
     local installed=str(v.addonVersion,32)
-    need(installed:match('^%d+%.%d+%.%d+$') and (stored or version() and installed==version()),'Lore reports require the same installed addon version.')
+    need(validVersion(installed) and (stored or version() and installed==version()),'Lore reports require the same installed addon version.')
     need(kinds[v.kind],'Invalid entry kind.')
     local out={format=v.format,version=R.VERSION,addonVersion=v.addonVersion,sender=str(v.sender,160),created=int(v.created,0,9999999999),
         sourceKey=str(v.sourceKey,400),kind=v.kind,title=str(v.title,200),sourceTitle=str(v.sourceTitle or '',200,true),subtype=str(v.subtype or '',80,true),

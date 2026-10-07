@@ -1,5 +1,17 @@
 # O1 — Whole-Fieldbook backup and recovery
 
+## Current recovery contract (7 October 2026)
+
+Whole snapshots contain nine roots: eight loaded per-character roots, including
+Annals, plus AccountDB. The separate backup archive is excluded. The historical
+implementation record below describes the earlier seven-journal build.
+Full reset clears journal data and import markers but retains the account's
+character allocator high-water value; offline owners must never share a new key.
+Pre-Annals archives omit the Annals slot. Restoration initializes a detached
+copy of current Annals, so late failure restores every original root and pending
+transaction unchanged. Explicit empty Annals slots still clear that slot.
+
+
 ## Investigation and scope
 
 The starting tree was `main` at `0698876` (0.18.0), including the accepted local

@@ -35,8 +35,54 @@ function ns.InitializeAnnals(shell,sources)
         local id,owner=section,source;local journal=owner.journal or owner
         local function find(link)
             if ns.InitializationBlocked then return end
+            if id=='atlas' and journal.entrances and not tostring(link.identity):match('^atlas:') then
+                local reference=link.identity
+                local entrance=journal.entrances:Get(link.key)
+                local personal=AzerothFieldbookAtlasDB
+                local old=type(personal)=='table' and type(personal.entrances)=='table'
+                    and type(personal.entrances.records)=='table' and personal.entrances.records[link.key]
+                old=ns.AtlasEntrances.Valid(old) and old or nil
+                -- Old Annals links contain only a local key and timestamp. Resolve
+                -- through this character's retained original, never another owner's key.
+                if old and tostring(old.firstSeen)==link.identity then reference=old.reference end
+                if journal.saved==personal and entrance and tostring(entrance.firstSeen)==link.identity then return entrance end
+                local found
+                for key in pairs(journal.entrances.records) do
+                    local candidate=journal.entrances:Get(key)
+                    if candidate and candidate.reference and candidate.reference==reference then
+                        if found then return end -- Ambiguous identity is unavailable.
+                        found=candidate
+                    end
+                end
+                if found then return found end
+                -- Pre-reference secondary imports used char<owner>:<serial>.
+                -- Recover only within that owner's namespace and only when the
+                -- retained original's immutable traversal evidence is unique.
+                local character=type(AzerothFieldbookDB)=='table' and AzerothFieldbookDB.accountTrackingKey
+                local account=AzerothFieldbookAccountDB
+                if old and tostring(old.firstSeen)==link.identity and character and type(account)=='table'
+                    and account.sections and journal.saved==account.sections.atlas then
+                    local prefix='char'..character..':'
+                    for key in pairs(journal.entrances.records) do
+                        local candidate=journal.entrances:Get(key)
+                        local owned=type(key)=='string' and key:sub(1,#prefix)==prefix
+                            or account.atlasFirstImport==character and key==link.key
+                        if owned and candidate and candidate.firstSeen==old.firstSeen
+                            and candidate.exterior.mapID==old.exterior.mapID
+                            and candidate.exterior.x==old.exterior.x and candidate.exterior.y==old.exterior.y
+                            and candidate.interior.zoneMapID==old.interior.zoneMapID
+                            and candidate.interior.bestMapID==old.interior.bestMapID
+                            and candidate.interior.microMapID==old.interior.microMapID
+                            and candidate.interior.subzone==old.interior.subzone then
+                            if found then return end
+                            found=candidate
+                        end
+                    end
+                    if found then return found end
+                end
+                if old or entrance or tostring(link.key):match('^n%d+$') or tostring(link.identity):match('^atlas%-entrance:') then return end
+            end
             local e=journal.Get and journal:Get(link.key) or (journal.entries and journal.entries[tonumber(link.key) or link.key])
-            if not e and id=='atlas' and journal.entrances then e=journal.entrances:Get(link.key) end
             if e and not e.removed and identity(e)==link.identity then return e end
             -- Durable references resolve ID remapping without matching unrelated reused IDs.
             if journal.Reference then e=journal:Reference(link.identity);if e and identity(e)==link.identity then return e end end
@@ -54,6 +100,12 @@ function ns.InitializeAnnals(shell,sources)
             if id=='bestiary' then return shell:ShowSection(id,{creatureID=e.id}) end
             if id=='lore' then return shell:ShowSection(id,{entryID=e.id}) end
             shell:ShowSection(id)
+            if id=='atlas' and type(owner.Select)=='function' then
+                local entrance=journal.entrances and journal.entrances:Get(e.id)
+                local key=entrance and entrance.reference==e.reference and ns.AtlasEntrances.PREFIX..e.id or e.id
+                owner:Select(key)
+                return journal.state.selected==key
+            end
             if type(owner.Select)=='function' then owner:Select(e.id);return true end
             if type(owner.OpenEntry)=='function' then owner:OpenEntry(e.id);return true end
             return false,'Opened the journal. Select '..tostring(e.name or e.title or e.id)..' in its index.'

@@ -39,9 +39,10 @@ function ns.StartBestiaryLoot(journal)
         moneyContext=nil
     end
     local function confirmMoney()
-        if pending and pending.succeeded and moneyContext
+        if pending and pending.succeeded and moneyContext and moneyContext.cast==pending.cast
             and not moneyContext.invalid and clock()-pending.at<=3 then
             moneyContext.confirmed=true
+            moneyContext.windowEvidence=pending.moneyWindow==true
             if pending.windowEvidence then moneyContext.expires=nil else moneyContext.expires=pending.at+3 end
         end
     end
@@ -63,11 +64,17 @@ function ns.StartBestiaryLoot(journal)
         end
     end
     local function snapshot(replay)
-        if pending and clock()-pending.at>3 then pending=nil;buffered=nil;discardMoney();return end
-        if not replay and read(IsFishingLoot)==true then return end
+        if pending and clock()-pending.at>3 then
+            pending=nil;buffered=nil;discardMoney()
+            if replay then return end -- Expired cast evidence is not a current corpse window.
+        end
+        if not replay and read(IsFishingLoot)==true then discardMoney();return end
         local count=replay and 0 or read(GetNumLootItems)
         diagnostics:Log("snapshot: replay/count",replay~=nil,count)
-        if type(count)~="number" then return end
+        if type(count)~="number" then
+            if not replay then discardMoney() end
+            return
+        end
         local corpses=replay or {}
         local matchingSource,moneySlot,conflictingSource=false,false,false
         for slot=1,replay and 0 or count do
@@ -77,8 +84,9 @@ function ns.StartBestiaryLoot(journal)
             local itemID=type(link)=="string" and tonumber(link:match("item:(%d+)"))
             for i=1,#sources,2 do
                 local guid,quantity=sources[i],sources[i+1]
-                if pending and pending.guid then
-                    if guid==pending.guid then matchingSource=true else conflictingSource=true end
+                local expected=pending and pending.guid or moneyContext and moneyContext.guid
+                if expected then
+                    if guid==expected then matchingSource=true else conflictingSource=true end
                 end
                 local id=type(guid)=="string" and tonumber(guid:match("^Creature%-%d+%-%d+%-%d+%-%d+%-(%d+)%-"))
                 local entry=id and journal.entries[id]
@@ -103,7 +111,17 @@ function ns.StartBestiaryLoot(journal)
                 -- Some coin slots have no source GUID. A successful matched cast,
                 -- living unit and money window still identify this interaction.
                 pending.windowEvidence=true
+                pending.moneyWindow=pending.moneyWindow or moneySlot
                 confirmMoney()
+            end
+        end
+        if not replay and not pending and moneyContext then
+            -- Native autoloot can close and reopen the same living coin source.
+            -- Keep only the already-confirmed window, inside its close grace.
+            if not moneyContext.confirmed or not moneyContext.windowEvidence
+                or moneyContext.invalid or not moneyContext.expires or clock()>moneyContext.expires
+                or not matchingSource or conflictingSource or liveState(moneyContext.guid)~=false then
+                discardMoney()
             end
         end
         diagnostics:Log("snapshot: matchingSource/moneySlot/conflict",matchingSource,moneySlot,conflictingSource)
@@ -161,29 +179,42 @@ function ns.StartBestiaryLoot(journal)
             if moneyContext then moneyContext.expires=clock()+1 end
             pending=nil;buffered=nil;return
         end
-        if event=="LOOT_READY" and not pending then discardMoney() end
         if event=="UNIT_SPELLCAST_SENT" then
             if unit~="player" or c~=921 then return end
-            discardMoney()
             pending={at=clock(),cast=b};buffered=nil
-            if type(a)~="string" or type(b)~="string" then return end
+            if type(a)~="string" or type(b)~="string" then discardMoney();return end
             for _,token in ipairs({"target","mouseover","softenemy"}) do
                 local guid=read(UnitGUID,token)
                 if type(guid)=="string" and read(UnitName,token)==a and read(UnitIsDead,token)==false then
-                    if pending.guid and pending.guid~=guid then pending.guid=nil;return end
+                    if pending.guid and pending.guid~=guid then pending.guid=nil;discardMoney();return end
                     pending.guid=guid
                 end
             end
             diagnostics:Log("cast target matched",pending.guid)
-            if pending.guid then
-                moneyContext={name=a,guid=pending.guid,cast=b,expires=clock()+3,confirmed=false}
+            -- A repeat press while the same coin window is closing must not
+            -- replace its proven source before PLAYER_MONEY arrives. Do not
+            -- carry cast-only evidence, a different source, or consumed cash.
+            local carry=moneyContext and moneyContext.confirmed and moneyContext.windowEvidence
+                and not moneyContext.taken and not moneyContext.invalid and moneyContext.guid==pending.guid
+                and (not moneyContext.expires or clock()<=moneyContext.expires)
+            if carry then
+                diagnostics:Log("coin window retained across repeat cast",moneyContext.cast,b)
+            else
+                discardMoney()
+                if pending.guid then
+                    moneyContext={name=a,guid=pending.guid,cast=b,expires=clock()+3,confirmed=false}
+                end
             end
             return
         elseif event:find("^UNIT_SPELLCAST_") then
             if unit=="player" and pending and a==pending.cast and b==921 then
                 pending.succeeded=event=="UNIT_SPELLCAST_SUCCEEDED"
                 pending.failed=not pending.succeeded
-                if pending.failed then discardMoney() else confirmMoney() end
+                if pending.failed then
+                    pending=nil;buffered=nil
+                    if moneyContext and moneyContext.cast==a then discardMoney() end
+                    return
+                else confirmMoney() end
                 if pending.succeeded then
                     local samples=buffered
                     local id=pending.guid and tonumber(pending.guid:match("^Creature%-%d+%-%d+%-%d+%-%d+%-(%d+)%-"))

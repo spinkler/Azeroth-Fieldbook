@@ -1,7 +1,19 @@
 # Account-wide Fieldbook journals
 
-Account-wide tracking defaults on and applies after reload to every implemented
-journal. Bestiary retains its existing migration. AccountSections.lua selects
+## Reset and unsupported-account preservation
+
+Full reset retains only the ownership allocator in AccountDB. Cleared import
+markers permit returning characters to import their retained originals once;
+new arrivals allocate above every previously assigned key. Older whole backups
+continue to preserve the current allocator high-water value.
+Startup accepts fresh nil and supported versionless partial account roots.
+Explicit future versions, scalar roots and malformed nested registries hold the
+session before account imports or shared UI writes. Raw recovery export remains
+available. This compatibility hardening is separate from reset identity repair.
+
+
+Account-wide tracking defaults on and applies after reload to seven journal
+families. Adventurer's Annals remains character-local. Bestiary retains its existing migration. AccountSections.lua selects
 `.sections.gathering`, `.atlas`, `.angling`, `.ledger`, `.treasure` and `.lore` in
 AzerothFieldbookAccountDB.
 Each section imports once per accountTrackingKey, independently of the older

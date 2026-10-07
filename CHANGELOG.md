@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.36.2 - 2026-10-07
+
+- Preserve character ownership allocation across full reset, allowing offline characters to re-import retained journals without sharing another character's delivery state. Isolate preserved Annals during old-format restore so a late startup failure leaves all nine original roots unchanged.
+- Clear failed/interrupted Pick Pocket state without losing the next corpse's READY snapshot; continue ordinary capture after expiry while rejecting expired pocket evidence. Refresh matching active quest-completion reward snapshots when item data becomes readable, preserving selection and turn-in ordering.
+- Preserve confirmed Pick Pocket coin-window attribution across rapid same-target repeat casts and native loot close/reopen events, without borrowing expired, ambiguous, conflicting or corpse evidence. Keep existing historical cash labels unchanged and add a regression replay of the native event sequence.
+- Give automatic Atlas entrances durable Annals references and select their projected entrance key. Resolve supported historical imports within the originating character's namespace; refuse missing or ambiguous sources.
+- Limit Cash Flow widgets to 25 transaction rows per page, retain access to the complete archive, preserve the browsing anchor, and defer hidden rendering until the Ledger reopens. Remove redundant hidden full-history text layout and the overlapping Back to contacts button; the Cash Flow toggle returns to contacts.
+- Support exact-match stable and prerelease Lore reports with the same version syntax policy as sharing. Preserve schema checks, stored-report compatibility and exact installed-version equality.
+- Separately harden startup against unsupported/malformed account roots before imports and shared UI writes, while retaining fresh and supported legacy account shapes and raw recovery export.
+- Correct current architecture guidance to eight journals, seven account-backed families and nine whole-snapshot roots. Add focused regressions and document that Bestiary model-frame growth remains open pending a safe native callback ownership design; native performance is unmeasured.
+
 ## v0.36.1 - 2026-10-07
 
 - Default Annals Journey to This session, preserved across UI reloads, while showing all historical events. Add a highlighted All history toggle to match the timeline to Journey dates or its time window when disabled. Preserve search, level and event-type filters; selecting an older event opens its recorded time. Rename Full range to All time.

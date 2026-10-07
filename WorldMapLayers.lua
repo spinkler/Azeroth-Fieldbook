@@ -65,7 +65,7 @@ end
 tutorial:SetScript("OnUpdate",function(self)
     self:Hide()
     local account=AzerothFieldbookAccountDB
-    if not registered or not next(layers) or type(account)~="table" or account.worldMapFiltersTutorialSeen
+    if ns.InitializationBlocked or not registered or not next(layers) or type(account)~="table" or account.worldMapFiltersTutorialSeen
         or not tutorialMap or not tutorialMap:IsShown() or not HelpTip then return end
     -- Blizzard stores the unnamed tracking dropdown among its overlay frames.
     local anchor

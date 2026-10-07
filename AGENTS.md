@@ -16,16 +16,17 @@ Treasure Journal adds a historical container journal with a retained character s
 adapter and manual-recording boundaries. Lorekeeper's Chronicle adds a personal archive
 of writings, landmarks, people and mysteries in per-character
 `AzerothFieldbookLoreDB`; see `tests/LORE.md` for capture, provenance, report and
-live-verification boundaries. All seven section slots are implemented.
-Account-wide tracking applies to all seven journals. Bestiary uses
+live-verification boundaries. Adventurer's Annals records character-local adventure
+history in `AzerothFieldbookAnnalsDB`. All eight journal sections are implemented.
+Account-wide tracking applies to seven journal families; Annals remains character-local. Bestiary uses
 `AzerothFieldbookAccountDB.bestiary`; `AccountSections.lua` selects shared stores
 under `.sections` for gathering, Atlas, angling, Ledger, Treasure and Lore. Each character's
 existing section journals import once, with collision-safe IDs and preserved
 links. Original per-character SavedVariables remain intact for opt-out. Section
 resets, legacy Bestiary backups and report protocols retain their independent scope.
-Whole-Fieldbook backups capture the account root plus all seven loaded character
-SavedVariables, with identity maps and private fields; see `tests/WHOLE_BACKUPS.md`.
-Their separate account archive survives section resets. Restoration is staged
+Whole-Fieldbook backups capture the account root plus all eight loaded character
+SavedVariables (nine snapshot roots), with identity maps and private fields; see `tests/WHOLE_BACKUPS.md`.
+Their separate account archive is excluded from nested snapshots and survives section resets. Restoration is staged
 until a fresh reload, and must preserve the startup guard and atomic rollback.
 See `tests/ACCOUNT_TRACKING.md`, `tests/ANGLING.md` and `tests/LEDGER.md` for
 migration, provenance and validation boundaries. Display-only expected immunity
@@ -370,7 +371,7 @@ Recommend subsequent patch or minor versions by accumulated scope under Version
 consistency; apply version changes only when authorized.
 
 Azeroth Fieldbook may later add further gathering or collection journals,
-such as skinning, beyond its seven implemented sections.
+such as skinning, beyond its eight implemented sections.
 
 Do not implement speculative future sections unless explicitly requested.
 

@@ -73,6 +73,16 @@ function A.EnsureReferences(saved)
             elseif saved.loreAliases[legacy]~=e.reference then saved.loreAliases[legacy]=false end
         end
     end end
+    -- Entrance references share the journal's durable allocator. Copies retain
+    -- their identity across account imports; later allocations use the scope origin.
+    if ns.AtlasEntrances and ns.AtlasEntrances.SupportsStore(saved) then
+        for _,e in pairs(saved.entrances and saved.entrances.records or {}) do
+            if ns.AtlasEntrances.Valid(e) and not e.reference then
+                saved.referenceSerial=(saved.referenceSerial or 0)+1
+                e.reference="atlas-entrance:"..(saved.referenceOrigin or saved.origin)..":"..saved.referenceSerial
+            end
+        end
+    end
 end
 function A.Position(p)
     return type(p)=="table" and A.Integer(p.mapID,1,2147483647)
