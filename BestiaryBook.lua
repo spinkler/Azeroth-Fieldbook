@@ -309,34 +309,120 @@ local ink = { 0.75, 0.8, 0.8 }
             return true
         end
     end
-    local function requestModel()
-        if not book.modelPending then return end
-        local model,id=book.model,book.modelEntryID
-        book.modelAttempts=book.modelAttempts+1
-        book.modelRetryElapsed=0
-        -- A creature ID can choose a different racial/visual variant. A live
-        -- unit preserves the individual appearance, including its equipment.
-        -- Revalidate tokens on every retry: target/mouseover can change midway.
-        if book.modelAttempts%4~=0 and type(model.SetUnit)=="function" then
-            local first=book.modelPreferredUnit or "target"
-            for _,unit in ipairs({first,first=="target" and "mouseover" or "target"}) do
-                if journal:MatchesModelUnit(unit,id) then
-                    local ok,loaded=pcall(model.SetUnit,model,unit)
-                    -- Cached loads can finish inside SetUnit, including clients
-                    -- that return nil. Never overwrite that completed scene.
-                    if model~=book.model or not book.modelPending then return end
-                    if ok and not (issecretvalue and issecretvalue(loaded)) and loaded~=false then return end
+    local function modelProbe(method,...)
+        local probe=ns.BestiaryModelProbe
+        if probe and probe.enabled and type(probe[method])=="function" then
+            pcall(probe[method],probe,...)
+        end
+    end
+    local function modelValue(model,method)
+        if type(model[method])~="function" then return nil,false end
+        local ok,value=pcall(model[method],model)
+        if not ok or (issecretvalue and issecretvalue(value)) then return nil,false end
+        return value,true
+    end
+    local function modelEligible(id)
+        local entry=id and journal.entries[id]
+        return not ns.InitializationBlocked and book.modelEntryID==id and book.modelPersonal
+            and entry and entry.personalEncountered==true
+    end
+    local function modelGUID(unit)
+        if type(UnitGUID)~="function" then return end
+        local ok,guid=pcall(UnitGUID,unit)
+        if ok and not (issecretvalue and issecretvalue(guid)) and type(guid)=="string" then return guid end
+    end
+    local function modelSource(method,value)
+        return {id=book.modelEntryID,generation=book.modelGeneration,method=method,value=value,
+            guid=method=="SetUnit" and modelGUID(value) or nil}
+    end
+    local function sourceCurrent(source)
+        return source and source.generation==book.modelGeneration and modelEligible(source.id)
+            and (source.method~="SetUnit" or (source.guid and journal:MatchesModelUnit(source.value,source.id)
+                and modelGUID(source.value)==source.guid))
+    end
+    local function clearModel()
+        -- ClearModel itself can synchronously notify an outgoing scene.
+        local previous=book.modelCall
+        book.modelCall={phase="clear"}
+        local ok=pcall(book.model.ClearModel,book.model)
+        book.modelCall=previous
+        return ok
+    end
+    local function callModel(source,verify)
+        if not sourceCurrent(source) then return false end
+        local model=book.model
+        local call={phase="clear",source=source}
+        book.modelCall=call
+        local cleared=true
+        if verify then
+            model:SetAlpha(0)
+            local ok=pcall(model.ClearModel,model)
+            local file,readable=modelValue(model,"GetModelFileID")
+            cleared=ok and readable and (file==nil or file==0)
+        end
+        call.phase="setter"
+        local ok,result=pcall(model[source.method],model,source.value)
+        book.modelCall=nil
+        local accepted=ok and not (issecretvalue and issecretvalue(result)) and result~=false
+        local current=sourceCurrent(source)
+        if verify and cleared and accepted and current and call.loaded then
+            local display,displayOK=modelValue(model,"GetDisplayInfo")
+            local file,fileOK=modelValue(model,"GetModelFileID")
+            -- A delayed callback has no identity. Only the fresh setter's
+            -- synchronous completion may reveal the scene, after it returns.
+            -- Live SetUnit can legitimately expose display 0 (Forever 70245).
+            if fileOK and type(file)=="number" and file>0 and file==call.file
+                and displayOK and type(display)=="number" and display==call.display
+                and (display>0 or (source.method=="SetUnit" and display==0)) then
+                book.modelPending=false;book.modelWakeBudget=true
+                model:SetRotation(model.afbRotation or 0)
+                if source.method=="SetUnit" then
+                    if type(SetPortraitTexture)=="function" then setPortrait(SetPortraitTexture,source.value) end
+                elseif type(SetPortraitTextureFromCreatureDisplayID)=="function" then
+                    setPortrait(SetPortraitTextureFromCreatureDisplayID,display)
                 end
+                model:SetAlpha(1);book.modelCaption:SetText("")
             end
         end
-        -- SetCreature can return normally before the client has the appearance.
-        -- Only OnModelLoaded completes the request; retries never clear it.
-        pcall(model.SetCreature,model,id)
+        return accepted and current,call.loaded==true
     end
+    local function verifyModel(source)
+        if not modelEligible(book.modelEntryID) then return end
+        if not sourceCurrent(source) then source=modelSource("SetCreature",book.modelEntryID) end
+        book.modelWanted=source
+        book.modelWakeBudget=false
+        callModel(source,true)
+    end
+    local function requestModel()
+        if not book.modelPending or not modelEligible(book.modelEntryID) then return end
+        book.modelAttempts=book.modelAttempts+1
+        book.modelRetryElapsed=0;book.modelWakeBudget=true
+        local generation=book.modelGeneration
+        local function request(source)
+            book.modelWanted=source
+            -- Prime/retry without clearing so an outstanding slow load survives.
+            local accepted,synchronous=callModel(source,false)
+            modelProbe("Request",book,source.method,source.value)
+            if accepted and synchronous and sourceCurrent(source) then verifyModel(source) end
+            return accepted
+        end
+        if book.modelAttempts%4~=0 and type(book.model.SetUnit)=="function" then
+            local first=book.modelPreferredUnit or "target"
+            for _,unit in ipairs({first,first=="target" and "mouseover" or "target"}) do
+                if journal:MatchesModelUnit(unit,book.modelEntryID) and request(modelSource("SetUnit",unit)) then return end
+                if generation~=book.modelGeneration then return end
+            end
+        end
+        request(modelSource("SetCreature",book.modelEntryID))
+    end
+
     local function safeModel(id)
         local entry=id and journal.entries[id]
         local personal=entry and entry.personalEncountered==true or false
+        book.modelGeneration=(book.modelGeneration or 0)+1
+        book.modelWanted=nil;book.modelWakeBudget=false
         book.modelEntryID,book.modelPersonal=id,personal
+        modelProbe("Select",book,id,personal)
         book.modelPending=false
         book.portraitFrame:SetShown(entry~=nil)
         book.portrait:SetTexture(nil)
@@ -353,25 +439,9 @@ local ink = { 0.75, 0.8, 0.8 }
         -- rendered appearance until the replacement reports it has loaded.
         book.model:SetAlpha(0)
         book.model:Hide()
-        book.model:ClearModel()
-        if personal then
-            -- OnModelLoaded has no request identity. Keep each native frame
-            -- assigned to one creature for its lifetime, so an outgoing load
-            -- can never be mistaken for a different entry's completion.
-            local model=book.modelFrames[id]
-            if not model then
-                model=not book.model.afbEntryID and book.model or book.createModel()
-                model.afbEntryID=id
-                book.modelFrames[id]=model
-            end
-            if model~=book.model then
-                book.model=model
-                book.modelIsBeast=nil
-                model:SetAlpha(0);model:Hide();model:ClearModel()
-            end
-            model:SetRotation(0)
-            model.afbRotation=0
-        end
+        clearModel()
+        book.model.afbEntryID=id -- Diagnostic selection label; never callback ownership.
+        book.model:SetRotation(0);book.model.afbRotation=0
         -- Unload the outgoing scene before changing either the lore header,
         -- surrounding border or native viewport. Load only after layout ends.
         local basic=entry and basicInfo(id)
@@ -1475,7 +1545,6 @@ local ink = { 0.75, 0.8, 0.8 }
         book.model:SetPoint("TOPLEFT", 346, -135); book.model:SetSize(223, 164)
         book.model:SetPortraitZoom(0); book.model:SetCamDistanceScale(1.25)
         book.model:EnableMouse(true)
-        book.modelFrames={}
         book.modelUnknown=book.modelBorder:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
         book.modelUnknown:SetPoint("CENTER",book.modelBorder,"CENTER",0,6)
         book.modelUnknown:SetFont(STANDARD_TEXT_FONT,72,"OUTLINE")
@@ -1543,37 +1612,27 @@ local ink = { 0.75, 0.8, 0.8 }
         book.model:SetScript("OnHide", function() rotating=false; lastCursorX=nil end)
         book.modelCaption = label(book.modelBorder, "", 8, -76, 211, "GameFontHighlightSmall")
         book.modelCaption:SetJustifyH("CENTER")
-        book.model:SetScript("OnModelLoaded", function(self)
-            local entry=journal.entries[book.modelEntryID]
-            if self~=book.model or self.afbEntryID~=book.modelEntryID
-                or not book.modelPersonal or not entry or entry.personalEncountered~=true then
-                self:SetAlpha(0);self:ClearModel()
+        book.model:SetScript("OnModelLoaded", function(self,...)
+            modelProbe("Reference",book,self,...)
+            if self~=book.model then return end
+            local call=book.modelCall
+            if call then
+                if call.phase=="setter" and sourceCurrent(call.source) then
+                    call.loaded=true
+                    call.display=modelValue(self,"GetDisplayInfo")
+                    call.file=modelValue(self,"GetModelFileID")
+                end
                 return
             end
-            if not book.modelPending then return end
-            local ok,displayID=pcall(self.GetDisplayInfo,self)
-            if not ok or (issecretvalue and issecretvalue(displayID))
-                or type(displayID)~="number" or displayID<=0 then return end
-            if type(SetPortraitTextureFromCreatureDisplayID)=="function" then
-                setPortrait(SetPortraitTextureFromCreatureDisplayID,displayID)
-            end
-            book.modelPending=false
-            self:SetAlpha(1)
-            book.modelCaption:SetText("")
+            -- Never accept an unidentified asynchronous completion, even after
+            -- a newer scene has already been shown on this same native frame.
+            self:SetAlpha(0)
+            if not modelEligible(book.modelEntryID) then clearModel();return end
+            book.modelPending=true
+            -- One immediate revalidation per request. If it also completes
+            -- asynchronously, normal throttled retries handle recovery.
+            if book.modelWakeBudget then verifyModel(book.modelWanted) end
         end)
-        local modelScripts={}
-        for _,event in ipairs({"OnMouseDown","OnMouseUp","OnUpdate","OnHide","OnModelLoaded"}) do
-            modelScripts[event]=book.model:GetScript(event)
-        end
-        book.createModel=function()
-            local model=CreateFrame("PlayerModel",nil,detail)
-            model:SetAlpha(0);model:Hide()
-            model:SetPoint("TOPLEFT",346,-135);model:SetSize(223,164)
-            model:SetPortraitZoom(0);model:SetCamDistanceScale(1.25)
-            model:EnableMouse(true)
-            for event,handler in pairs(modelScripts) do model:SetScript(event,handler) end
-            return model
-        end
         book.confirm = CreateFrame("Button", nil, book)
         book.confirm:SetSize(24, 24)
         book.confirm:SetPoint("TOPLEFT",book.modelBorder,"TOPLEFT",6,-6)

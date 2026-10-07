@@ -919,6 +919,14 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
         ns.KillDiagnostics:Report(function(line) lines[#lines + 1] = line end)
         if ns.ShowDebugReport then ns.ShowDebugReport(table.concat(lines, "\n")) end
         say("Kill diagnostic snapshot opened. Decision lines separate kill awards from discovery knowledge.")
+    elseif command == "debug bestiary model on" or command == "debug bestiary model off" or command == "debug bestiary model verify" then
+        local probe=ns.BestiaryModelProbe
+        if not probe then say("Bestiary model probe unavailable.");return end
+        probe:SetEnabled(command~="debug bestiary model off",command=="debug bestiary model verify")
+        say(probe.enabled and "Bestiary model probe on. Select encountered creatures, then /fieldbook debug bestiary model to copy the report."
+            or "Bestiary model probe off.")
+    elseif command == "debug bestiary model" then
+        if ns.BestiaryModelProbe and ns.ShowDebugReport then ns.ShowDebugReport(ns.BestiaryModelProbe:Report()) end
     elseif command == "debug model" then
         if not gatheringBook or not gatheringBook.ReportModel then say("Open the Gatherer's Compendium first.");return end
         local lines={}

@@ -12,7 +12,7 @@ are evidence, not post-fix regression tests. No native measurements are implied.
 | A4 | Matching open completion transactions recover readable reward data without downgrading observed evidence; transaction tokens, chosen index and event/post-hook ordering remain authoritative. `test_annals_reward_refresh.py` and existing Annals cases. Closed, changed, expired and finalized snapshots cannot borrow current APIs. |
 | A5 | Entrance references use Atlas's durable origin/serial allocator; imports copy them. Annals selects `entrance:<id>` and verifies selected state. Old timestamp links resolve via this character's retained original and, for earlier imports, an unambiguous owner-prefixed entrance with matching immutable traversal evidence. No timestamp-only account search. `test_annals_entrance_navigation.py`, `test_annals_entrance_import.py`. |
 | A6 | Cash Flow retains its archive and renders at most 25 rows. Newer/Older buttons reach all records; filtering and totals remain over the archive. Hidden updates skip rendering; reopen catches up. `test_cash_flow_paging.py` tests 100/1,000/5,001 records and stable anchors. Native memory/FPS remain unmeasured. |
-| A7 — OPEN | Per-creature PlayerModel frames still grow with distinct IDs. The existing callback exposes the frame and current display state, not the originating request/creature. Recycling frames plus a Lua generation counter cannot establish native load ownership. Display IDs also describe appearance, not unique creature identity. A fixed cap would disable model browsing for later creatures. No such behavior change or speculative reuse is included. Existing stale/delayed/synchronous/nil-return ownership tests remain required. |
+| A7 — FIXED (2026-10-08 follow-up) | Initially left open in 0.36.2 to preserve native callback ownership. Target-client traces established fresh synchronous revalidation after clearing. One shared PlayerModel now stays bounded across 180 distinct entries and three delete/repopulate/reset cycles; unidentified delayed callbacks cannot directly reveal scenes or portraits. Existing lifecycle tests plus `test_bestiary_model_reuse.py`, owner-operated native smoke and 103-file regression validation pass. See [the A7 repair record](BESTIARY_MODEL_REUSE.md) for the native contract, environment-only test rerun and limits. |
 | A8 | Lore and Sharing accept the same numeric triple plus optional dot-separated prerelease/build identifiers; transfer version equality stays exact. `test_lore_prerelease.py`: Build/Encode/Decode/Prepare/Accept, stable/beta/numbered-beta/alpha, malformed/mismatched metadata, reload/deduplication. |
 | H1 | Separate startup account preflight permits nil/versionless supported partial roots, refuses future/scalar/malformed registries and preserves recovery export. Retained tracking/UI writers honor the session hold. `test_account_preflight.py`. |
 | D1 | Current AGENTS and account/backup guidance now distinguish eight journals, seven account-backed families and nine roots. Dated historical records are retained. |
@@ -68,9 +68,14 @@ and late-reward paths, multi-character reset/restore, account migration and
 prerelease transfer remain automated-only. Any further native reset/old-backup
 recovery exercises must use disposable multi-character data, never the only
 journals.
-A7 requires target-client evidence of safe model ownership before implementation;
-then rapid model/portrait switching must be verified natively.
+A7 follow-up acceptance passed on 2026-10-08: clean reload, offline model and
+portrait, rapid keybind switching through almost all saved creatures, matching
+living target, rotation, target changes with the entry open, and page reopening.
+The canonical full run passed 102 of 103 test files. The sole release-notes failure
+was an unavailable temporary directory; all five tests in that unchanged file
+passed with a writable workspace TEMP/TMP. All 103 files pass across those runs.
 
-This repair-only batch recommends 0.36.2 Release after native acceptance; 0.36.1
-remains recorded until the owner authorizes versioning. No commit, push, tag or
+The earlier repair batch was committed as 0.36.2. The completed A7 follow-up
+recommends **0.36.3 Release**, a tested repair-only patch. The installed version
+remains 0.36.2 until the owner authorizes versioning. No commit, push, tag or
 publication is authorized by this document.

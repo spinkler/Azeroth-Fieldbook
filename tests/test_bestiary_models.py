@@ -10,7 +10,16 @@ def new_ui_client(files):
         function CreateFrame(kind,...)
             local frame=create(kind,...)
             if kind=='PlayerModel' then
-                function frame:GetDisplayInfo() return 1234 end
+                function frame:GetDisplayInfo() return self.display end
+                function frame:GetModelFileID() return self.file end
+                function frame:ClearModel() self.scene=nil;self.file=nil end
+                function frame:LoadScene(id,display)
+                    self.scene=id;self.file=id+10000;self.display=display or id*100
+                end
+                function frame:SetCreature(id)
+                    self:LoadScene(id)
+                    if self.complete then self.scripts.OnModelLoaded(self) end
+                end
                 if modelSetup then modelSetup(frame) end
             end
             return frame
@@ -45,9 +54,9 @@ class BestiaryModelTests(unittest.TestCase):
                 self.atlas=name
                 self:SetSize(100,90)
             end
-            function section.model:GetDisplayInfo() return 1234 end
+            section.model.complete=true
             section.model.scripts.OnModelLoaded(section.model)
-            assert(section.portrait.appearance==1234)
+            assert(section.portrait.appearance==4200)
             j.entries[42].personalEncountered=false
             j.entries[42].rank='Rare Elite'
             c:Refresh()
@@ -152,12 +161,12 @@ class BestiaryModelTests(unittest.TestCase):
             function model:ClearModel()
                 assert(self.alpha==0, 'previous appearance must be concealed before clearing')
                 clears=clears+1
-                self.scene=nil
+                self.scene=nil;self.file=nil
             end
             function model:SetCreature(id)
                 assert(self:IsShown(), 'load requested while hidden')
                 requests[#requests+1]=id
-                self.scene=id
+                self:LoadScene(id)
                 if #requests==1 then error('transient load failure') end
                 if complete then self.scripts.OnModelLoaded(self) end
             end
@@ -169,10 +178,10 @@ class BestiaryModelTests(unittest.TestCase):
             model.scripts.OnUpdate(model,0.25);assert(#requests==2)
             complete=true
             model.scripts.OnUpdate(model,0.5)
-            assert(#requests==3 and not section.modelPending)
+            assert(#requests==4 and not section.modelPending)
             assert(model.alpha==1)
             assert(section.modelCaption:GetText()=='')
-            model.scripts.OnUpdate(model,5);assert(#requests==3 and clears==1)
+            model.scripts.OnUpdate(model,5);assert(#requests==4 and clears==2)
 
             complete=false;requests={}
             controller:OpenAtUnit('target')
@@ -182,12 +191,9 @@ class BestiaryModelTests(unittest.TestCase):
             assert(model.alpha==0)
             -- A new selection replaces the pending request immediately.
             local outgoing=model
-            function modelSetup(frame)
-                frame.ClearModel=outgoing.ClearModel;frame.SetCreature=outgoing.SetCreature
-            end
             npcID=43;controller:OpenAtUnit('target')
             model=section.model
-            assert(model~=outgoing and not outgoing:IsShown())
+            assert(model==outgoing, "all selections must reuse one native frame")
             assert(model.alpha==0)
             model.scripts.OnUpdate(model,0.5)
             assert(requests[#requests]==43)
@@ -214,11 +220,6 @@ class BestiaryModelTests(unittest.TestCase):
             function model:ClearAllPoints()
                 assert(not self:IsShown(), 're-anchored a visible model')
             end
-            local previous=model
-            function modelSetup(frame)
-                frame.ClearModel=previous.ClearModel;frame.SetCreature=previous.SetCreature
-                frame.SetHeight=previous.SetHeight;frame.ClearAllPoints=previous.ClearAllPoints
-            end
             complete=true
             function UnitCreatureType() return 'Beast' end
             npcID=44;controller:OpenAtUnit('target')
@@ -244,35 +245,41 @@ class BestiaryModelTests(unittest.TestCase):
             j=ns.CreateBestiaryJournal({},function() return npcID end)
             c=ns.CreateBestiaryBook(j);c:OpenAtUnit('target')
             local section=AzerothFieldbookBestiarySection
-            local outgoing=section.model
-            function outgoing:ClearModel() self.scene=nil end
+            local model=section.model
             assert(section.portrait:GetTexture()==42 and section.portrait:IsShown())
             silent=true;npcID=43;c:OpenAtUnit('target')
-            local current=section.model
-            function current:ClearModel() self.scene=nil end
-            assert(current~=outgoing and not outgoing:IsShown() and outgoing.alpha==0)
+            assert(section.model==model and model.alpha==0)
             assert(section.portrait:GetTexture()==nil and not section.portrait:IsShown())
             assert(section.portraitUnknown:IsShown())
-            outgoing.scene=42;outgoing.scripts.OnModelLoaded(outgoing)
-            outgoing.scripts.OnUpdate(outgoing,10)
-            assert(section.modelPending and current.alpha==0 and outgoing.alpha==0)
-            assert(outgoing.scene==nil,'late outgoing scenes must be unloaded again')
+            -- Native completion for the OLD request reaches the SAME frame.
+            model:LoadScene(42);model.scripts.OnModelLoaded(model)
+            assert(section.modelPending and model.alpha==0)
             assert(section.portrait:GetTexture()==nil)
-            function current:GetDisplayInfo() return nil end
-            current.scripts.OnModelLoaded(current)
-            assert(section.modelPending and current.alpha==0,'empty callback must not end loading')
-            function current:GetDisplayInfo() return 4300 end
-            current.scripts.OnModelLoaded(current)
-            assert(not section.modelPending and current.alpha==1)
+            model.complete=true
+            model.scripts.OnUpdate(model,.5)
+            assert(not section.modelPending and model.alpha==1 and model.scene==43)
             assert(section.portrait:GetTexture()==4300 and section.portrait:IsShown())
-            npcID=42;c:OpenAtUnit('target')
-            assert(section.model==outgoing,'revisiting a creature reuses its own frame')
-            assert(not current:IsShown() and current.alpha==0)
-            current.scripts.OnModelLoaded(current)
+            -- Older completion after a new scene is already visible: revalidate
+            -- before revealing, and never copy the old portrait.
+            local setAlpha=model.SetAlpha
+            function model:SetAlpha(value)
+                if value==1 then assert(self.scene==43,'stale scene revealed') end
+                setAlpha(self,value)
+            end
+            local portraitSetter=SetPortraitTextureFromCreatureDisplayID
+            function SetPortraitTextureFromCreatureDisplayID(texture,id)
+                assert(id==4300,'stale portrait revealed');portraitSetter(texture,id)
+            end
+            model:LoadScene(42);model.scripts.OnModelLoaded(model)
+            assert(not section.modelPending and model.alpha==1 and model.scene==43)
+            model.SetAlpha=setAlpha;SetPortraitTextureFromCreatureDisplayID=portraitSetter
+            model.complete=false;npcID=42;c:OpenAtUnit('target')
+            assert(section.model==model and model.alpha==0)
+            model:LoadScene(43);model.scripts.OnModelLoaded(model)
             assert(section.modelPending and section.portrait:GetTexture()==nil)
             j.entries[42].personalEncountered=false;c:Refresh()
-            outgoing.scripts.OnModelLoaded(outgoing)
-            assert(not section.modelPending and not outgoing:IsShown())
+            model:LoadScene(42);model.scripts.OnModelLoaded(model)
+            assert(not section.modelPending and not model:IsShown() and model.scene==nil)
             assert(section.portrait:GetTexture()==nil and section.portraitUnknown:IsShown())
         ''')
 
@@ -287,7 +294,8 @@ class BestiaryModelTests(unittest.TestCase):
             local model=section.model;local requests=0
             function model:SetCreature(id)
                 assert(id==42);requests=requests+1
-                if requests==5 then self.scripts.OnModelLoaded(self) end
+                self:LoadScene(id)
+                if requests>=5 then self.scripts.OnModelLoaded(self) end
             end
             c:OpenAtUnit('target')
             for i=1,3 do model.scripts.OnUpdate(model,.5) end
@@ -295,8 +303,8 @@ class BestiaryModelTests(unittest.TestCase):
             c:Refresh();assert(requests==4,'routine refresh must not restart an in-flight load')
             model.scripts.OnUpdate(model,4.5);assert(requests==4)
             model.scripts.OnUpdate(model,.5)
-            assert(requests==5 and not section.modelPending and model.alpha==1)
-            model.scripts.OnUpdate(model,60);assert(requests==5)
+            assert(requests==6 and not section.modelPending and model.alpha==1)
+            model.scripts.OnUpdate(model,60);assert(requests==6)
         ''')
 
     def test_nil_return_live_load_is_not_overwritten(self):
@@ -309,7 +317,7 @@ class BestiaryModelTests(unittest.TestCase):
             local section=AzerothFieldbookBestiarySection
             local model=section.model;local fallback=0
             function model:SetCreature(id) fallback=fallback+1 end
-            function model:SetUnit(unit) self.scripts.OnModelLoaded(self) end
+            function model:SetUnit(unit) self:LoadScene(42,0);self.scripts.OnModelLoaded(self) end
             c:OpenAtUnit('target')
             assert(fallback==0 and not section.modelPending and model.alpha==1)
             function model:SetUnit(unit) end
@@ -336,7 +344,7 @@ class BestiaryModelTests(unittest.TestCase):
             function model:SetUnit(unit)
                 units[#units+1]=unit
                 if fail then return false end
-                if complete then self.scripts.OnModelLoaded(self) end
+                if complete then self:LoadScene(42,0);self.scripts.OnModelLoaded(self) end
                 return true
             end
             function model:SetCreature(id) fallback=fallback+1 end
