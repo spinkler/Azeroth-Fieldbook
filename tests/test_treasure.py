@@ -183,6 +183,48 @@ class TreasureCaptureTests(unittest.TestCase):
             assert(v.items[1].recovered==nil and v.capture=='partial')
         """)
 
+    def test_solid_chest_loot_before_or_without_cast_success(self):
+        for finish in ('late', 'missing', 'autoloot'):
+            with self.subTest(finish=finish):
+                self.setUp();self.world_fixture()
+                self.lua.globals().finish=finish
+                self.lua.execute("""
+                    worldData.id=nil;worldData.lines[1].leftText='Solid Chest'
+                    fire('UNIT_SPELLCAST_SENT','player','Solid Chest','Cast-solid',3365)
+                    now=now+5;worldData=nil
+                    local guid='GameObject-0-4615-0-2158-2850-000045AA0A'
+                    loot={lootrow(929,2,guid),lootrow(1205,1,guid),lootrow(2770,4,guid)}
+                    fire('LOOT_READY')
+                    if finish=='autoloot' then loot={};fire('LOOT_CLOSED')
+                    else fire('LOOT_OPENED',false,false) end
+                    if finish=='late' then
+                        fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-solid',3365)
+                        fire('LOOT_SLOT_CHANGED')
+                    end
+                    assert(T.Count(j.encounters)==1,t.status)
+                    local _,v=next(j.encounters);local e=j:Get(v.kindID)
+                    assert(e.name=='Solid Chest' and e.objectID==2850)
+                    assert(#v.items==3 and v.capture=='partial' and v.items[1].recovered==nil)
+                """)
+
+    def test_pending_opening_requires_fresh_compatible_world_loot(self):
+        for case in ('failed', 'expired', 'other_spell', 'conflict', 'mixed', 'fishing', 'item_origin'):
+            with self.subTest(case=case):
+                self.setUp();self.world_fixture()
+                self.lua.globals().case=case
+                self.lua.execute("""
+                    worldData.id=case=='conflict' and 100 or nil
+                    worldData.lines[1].leftText='Solid Chest'
+                    fire('UNIT_SPELLCAST_SENT','player','Solid Chest','Cast-solid',case=='other_spell' and 133 or 3365)
+                    worldData=nil;now=now+(case=='expired' and 31 or 5)
+                    if case=='failed' then fire('UNIT_SPELLCAST_FAILED','player','Cast-solid',3365) end
+                    loot={lootrow(929,2,'GameObject-0-1-2-3-99-ABC')}
+                    if case=='mixed' then loot[2]=lootrow(1205,1,'Creature-0-1-2-3-99-ABC') end
+                    fishing=case=='fishing'
+                    fire('LOOT_READY');fire('LOOT_OPENED',false,case=='item_origin');fire('LOOT_CLOSED')
+                    assert(T.Count(j.encounters)==0)
+                """)
+
     def test_food_crate_autoloot_closed_without_opened_preserves_ready(self):
         self.world_fixture()
         self.lua.execute("""

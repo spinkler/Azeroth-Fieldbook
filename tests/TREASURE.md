@@ -79,6 +79,20 @@ states. Acquisition history does not assert that the item is still owned.
 
 ## Pending live observation — 2026-10-04
 
+Solid Chest follow-up on 2026-10-07: the expanded diagnostic identifies source
+`GameObject-0-4615-0-2158-2850-000045AA0A`, observed Solid Chest, no tooltip
+object ID, and Opening spell 3365 targeting Solid Chest with no clicked context.
+This establishes a named opening was observed but does not establish the success
+event order. The reader previously ignored pending casts. It now accepts a fresh
+pending Opening (3365) when all loot slots validate one compatible GameObject
+source; it need not wait for SUCCEEDED. Failed/interrupted or expired casts,
+conflicting identities, mixed sources, fishing and item-origin windows remain
+excluded. Regression tests cover delayed/absent success and close-only autoloot.
+Diagnostics now also indicate whether a cast or completed interaction remains.
+The operator confirmed successful live capture after this correction on
+2026-10-07. This validates the reported case; the exact native event order was
+not traced.
+
 Follow-up on 2026-10-07: a Battered Chest in Teldrassil was missed. The
 screenshot shows the world-loot identity rejection, but truncates at `Source:
 GameObject-...`; the observed identity and opening details are not visible.
@@ -180,7 +194,9 @@ chest, crate, coffer, strongbox, footlocker, lockbox, cache, barrel or sack.
 Unrecognized/localized names remain manual. If the tooltip lacks an object ID,
 a world right-click on that tooltip or a matching completed player opening cast
 provides a three-second correlation window. The object ID then comes from the
-single GameObject loot source. Hover alone never enables this fallback. Cast
+single GameObject loot source. A pending Opening (3365), retained for at most
+30 seconds, can also correlate when compatible world loot arrives before or
+without the success notification. Hover alone never enables this fallback. Cast
 failure/interruption, unrelated casts, other clicks, window close and world entry
 clear the relevant interaction. A missing isFromItem flag is accepted only for
 world-object samples and exact observed bag-item samples. The page status

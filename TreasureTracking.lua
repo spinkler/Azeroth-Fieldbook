@@ -60,10 +60,15 @@ function ns.CreateTreasureTracking(journal)
         -- The opening interaction owns this attribution window. A later hover
         -- must neither replace it nor bypass a conflicting clicked identity.
         local seen=fresh(self.interaction,3) and self.interaction or nil
+        -- Loot can arrive before SUCCEEDED (or without that notification).
+        -- A pending Opening plus the validated single world-loot source is
+        -- evidence of inspection; a hover or unrelated cast is not.
+        local opening=fresh(self.cast,30) and self.cast.spellID==3365 and self.cast or nil
+        if not seen then seen=opening end
         if not seen and fresh(self.world,15) and self.world.objectID then seen=self.world end
         if not seen then return end
         if seen.objectID and seen.objectID~=id or seen.guid and seen.guid~=guid then return end
-        if not seen.objectID and not fresh(self.interaction,3) then return end
+        if not seen.objectID and not fresh(self.interaction,3) and seen~=opening then return end
         local kindID
         for _,e in pairs(journal.kinds) do
             if e.form=="world" and e.objectID==id then kindID=e.id;break end
@@ -139,6 +144,7 @@ function ns.CreateTreasureTracking(journal)
                         .."; observed container: "..(seen and seen.name or "none")
                         .."; tooltip object ID: "..tostring(seen and seen.objectID or "none")
                         .."; opening: "..(self.lastOpening or "none").."."
+                        .." Cast pending: "..tostring(self.cast~=nil).."; interaction active: "..tostring(self.interaction~=nil).."."
                 end
                 -- Retain the rejected readable identity so native client
                 -- differences can be diagnosed after the loot window closes.

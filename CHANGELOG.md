@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.36.1 - Unreleased
+
+- Accept Treasure contents from a pending named Opening cast when a single compatible world loot source proves inspection, covering loot arriving before or without cast-success notification. Preserve failed-cast, stale, conflicting-source and loot-context rejection; add regression coverage and pending-cast diagnostic details. The operator confirmed successful live capture on 2026-10-07.
+
 ## v0.36.0 - 2026-10-07
 
 - Add a highlighted Pickpocket Loot toggle beneath the Bestiary viewer, reusing the loot panel and quality filters. Show it when successful picks or pocket items have been recorded, including an empty-items view with the pick count. Thanks to Psyentific for suggesting pickpocket loot tracking!
