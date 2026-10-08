@@ -227,10 +227,14 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             layoutComposer()
         end
         local list=engine:GetIncoming()
-        local exists=false
-        for _,item in ipairs(list) do if incoming==item then exists=true end end
+        local exists,pending=false,nil
+        for _,item in ipairs(list) do
+            if incoming==item then exists=true end
+            if not pending and item.state=="pending" then pending=item end
+        end
+        if pending and (not incoming or incoming.state~="pending") then exists=false end
         if not exists then
-            incoming=list[1]
+            incoming=pending or list[1]
             if incoming then
                 buildReceiver(); receiver.notice=nil; receiver.area:SetVerticalScroll(0); receiver:Show()
             elseif receiver then receiver:Hide() end

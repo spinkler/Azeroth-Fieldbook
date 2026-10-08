@@ -396,18 +396,28 @@ function ns.CreateAnnalsTracking(j)
                     local entry,index=j:Append('login','Logged in',nil,A.Location(),A.Now())
                     -- Zone and map APIs can still be empty on the initial
                     -- entering-world event. Enrich only this new session entry.
-                    if entry and (not entry.zone or entry.zone=='' or not entry.mapID) then
+                    if entry and (not entry.zone or entry.zone=='' or not entry.mapID or not entry.x or not entry.y) then
                         local pending={entry=entry,index=index};t.loginLocation=pending
                         for _,delay in ipairs({1,2,3,5,10}) do later(delay,function()
                             if t.loginLocation~=pending or t.loading or j.readOnly or ns.InitializationBlocked then return end
                             if db.events[index]~=entry then t.loginLocation=nil;return end
                             local location=A.Location();local changed=false
+                            -- A retry on another map cannot describe the login location.
+                            if entry.mapID and location.mapID~=entry.mapID then
+                                if delay==10 then t.loginLocation=nil end
+                                return
+                            end
+                            if (entry.zone and entry.zone~='' and location.zone~=entry.zone)
+                                or (entry.subzone and entry.subzone~='' and location.subzone~=entry.subzone) then
+                                if delay==10 then t.loginLocation=nil end
+                                return
+                            end
                             for _,key in ipairs({'zone','subzone','mapID','x','y','level'}) do
                                 if (entry[key]==nil or entry[key]=='') and location[key]~=nil and location[key]~='' then
                                     entry[key]=location[key];changed=true
                                 end
                             end
-                            if entry.zone and entry.zone~='' and entry.mapID or delay==10 then t.loginLocation=nil end
+                            if entry.zone and entry.zone~='' and entry.mapID and entry.x and entry.y or delay==10 then t.loginLocation=nil end
                             if changed then
                                 j.revision=j.revision+1
                                 if j.onChange then j.onChange(index) end

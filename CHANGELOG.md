@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.36.4 - 2026-10-08
+
+- Separate Angling contributor navigation references from bounded historical report aliases. Repair provable contributor aliases in existing saves without truncating historical identities, preserve forwarding and deduplication, and correct the missing-map login regression fixture.
+- Preserve merged Ledger notes and manual roles when reopening a clean editor. Retain dirty drafts and reject saves against a changed baseline; offer an explicit reload of saved notes.
+- Preserve large Lore entries and unknown local metadata during report acceptance, duplicate receipt updates and annotation edits. Keep report and archive capacity checks atomic.
+- Give Gathering and Lore durable discovery identities. Preserve Gathering and Angling import aliases, resolve remapped Lore/Treasure discoveries from Annals, and allow proven references to return to retained personal records. Leave ambiguous or missing legacy ownership unavailable.
+- Show pending incoming reports ahead of accepted transfers awaiting a commit, while retaining consent and the original transfer accounting. Show all archived notes through chained Angling spot merges.
+- Keep delayed Annals login locations within the original map/zone context. Preserve ability tooltip preferences during note edits, reveal Ledger mouseover selections using actual row geometry, and bind damage-note removal to its displayed creature and observation.
+- Add production Lua/UI regressions for all eleven October audit findings, including large-entry persistence, import order and identity collisions, stale drafts, paged deletion, and delayed three-peer sharing.
+- Record owner acceptance of the audit repairs and focused Angling/login follow-up after the complete 117-file suite passed, including exact whole-Fieldbook backup preservation checks.
+
 ## v0.36.3 - 2026-10-08
 
 - Reuse one Bestiary PlayerModel across encountered creatures, revisits, deletions and resets. Conceal unidentified delayed completions and revalidate the current source through a cleared, synchronously completed setter before revealing a scene or updating its portrait. Preserve slow-load retries, live-unit identity checks, offline fallback and rotation; accept verified live-unit loads whose display ID is zero without using zero as a portrait display ID.

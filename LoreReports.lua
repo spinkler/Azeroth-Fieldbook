@@ -285,7 +285,7 @@ function R.Accept(journal,ticket,selectedID,dryRun)
     end
     local result
     if e then
-        local replacement=L.Copy(e);replacement.reports=reports
+        local replacement=L.EntryCandidate(e);replacement.reports=reports
         result,err=journal:ReplaceEntry(e.id,replacement,dryRun)
     else result,err=journal:Create(r.kind,{title=r.title,sourceTitle=r.sourceTitle,subtype=r.subtype,origin='reported',reports=reports},nil,dryRun) end
     if not result then return nil,err end

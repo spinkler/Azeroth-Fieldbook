@@ -74,6 +74,53 @@ function A.AddLegacyKey(origin,key)
     for _,old in ipairs(origin.legacyKeys) do if old==key then return end end
     origin.legacyKeys[#origin.legacyKeys+1]=key
 end
+-- Local navigation joins contributors; report aliases assert one historical
+-- exporter identity. These are different relationships, with different limits.
+function A.RetainReferences(target,source)
+    target.referenceAliases=target.referenceAliases or {}
+    if source.origin then
+        target.referenceAliases[source.origin.key]=true
+        for _,key in ipairs(source.origin.legacyKeys or {}) do target.referenceAliases[key]=true end
+    end
+    for key in pairs(source.referenceAliases or {}) do target.referenceAliases[key]=true end
+end
+function A.PrepareContributorReferences(db)
+    if ns.InitializationBlocked or (db.schema or 0)>A.SCHEMA then return end
+    -- The N4 build mixed contributor keys into legacyKeys. Retained personal
+    -- catches prove which independent exporter namespaces contributed to each
+    -- record. Do not guess from names, dates, record IDs or an alias count.
+    local contributors={}
+    for _,fact in pairs(db.aggregates or {}) do
+        local origin=fact.origin
+        local namespace=origin and not fact.originUnknown and type(origin.key)=='string' and origin.key:match('^(.*):catch:%d+$')
+        if namespace and fact.contributor==A.Key(origin.source,namespace) then
+            local function add(id)
+                if id then
+                    contributors[id]=contributors[id] or {}
+                    contributors[id][namespace]=true
+                end
+            end
+            add(fact.waterID);add(fact.poolID);add(fact.spotID)
+            for id in pairs(fact.items or {}) do add(id) end
+        end
+    end
+    for field,kind in pairs({waters='water',spots='spot',pools='pool',items='item'}) do
+        for id,e in pairs(db[field] or {}) do
+            local origin=e.origin
+            local own=origin and type(origin.key)=='string' and origin.key:match('^(.*):'..kind..':%d+$')
+            if own and not e.originUnknown and contributors[id] then
+                local kept={};local moved=false
+                for _,alias in ipairs(origin.legacyKeys or {}) do
+                    local namespace=type(alias)=='string' and alias:match('^(.*):'..kind..':%d+$')
+                    if namespace and namespace~=own and contributors[id][namespace] then
+                        e.referenceAliases=e.referenceAliases or {};e.referenceAliases[alias]=true;moved=true
+                    else kept[#kept+1]=alias end
+                end
+                if moved then origin.legacyKeys=kept end
+            end
+        end
+    end
+end
 local function newOrigin(db,id,method,source,namespace)
     local key=(namespace or db.captureOrigin or db.origin)..":"..id
     return {source=source,key=key,method=method,legacyKeys={key}}
@@ -96,6 +143,28 @@ function A.PrepareOrigins(db)
     end
 end
 
+function A.PrepareLoreReferences(db)
+    if db.loreReferencesPrepared then return end
+    for _,field in ipairs({'waters','spots','pools','items'}) do
+        for id,e in pairs(db[field] or {}) do
+            if not e.loreAliases then
+                e.loreAliases={}
+                local stamp=e.created or e.firstSeen or e.firstEncounter or e.first
+                if type(stamp)=='number' then e.loreAliases[tostring(id)..'@'..db.origin..':'..stamp]=true end
+            end
+        end
+    end
+    db.loreReferencesPrepared=true
+end
+local function fishingReference(e,key)
+    if (e.loreAliases or {})[key] then return true end
+    if (e.referenceAliases or {})[key] then return true end
+    local origin=type(e.origin)=='table' and e.origin
+    if origin then
+        if origin.key==key then return true end
+        for _,alias in ipairs(origin.legacyKeys or {}) do if alias==key then return true end end
+    end
+end
 function ns.CreateAnglingJournal(saved)
     local readOnly=ns.InitializationBlocked or (type(saved.schema)=="number" and saved.schema>A.SCHEMA)
     local db=readOnly and {} or saved
@@ -107,7 +176,7 @@ function ns.CreateAnglingJournal(saved)
     end
     db.schema=A.SCHEMA;db.serial=A.Integer(db.serial,0,999999999) and db.serial or 0
     if not A.Text(db.origin,100) then db.origin=tostring(A.Now()).."-"..math.random(1,999999999) end
-    A.PrepareOrigins(db)
+    A.PrepareOrigins(db);A.PrepareLoreReferences(db);A.PrepareContributorReferences(db)
     local function reindexAggregates()
         local keys={}
         -- Keep the destination's current aggregate when a merge creates matching
@@ -166,6 +235,27 @@ function ns.CreateAnglingJournal(saved)
     function j:Writable() return not self.readOnly end
     function j:Get(id)
         return db.waters[id] or db.spots[id] or db.pools[id] or db.items[id]
+    end
+    function j:Reference(key)
+        local function find(store,match)
+            local found
+            for _,field in ipairs({'waters','spots','pools','items'}) do
+                for _,e in pairs(store[field] or {}) do if not e.removed and match(e) then
+                    if found then return nil,true end;found=e
+                end end
+            end
+            return found
+        end
+        local found,ambiguous=find(db,function(e)
+            local stamp=e.created or e.firstSeen or e.firstEncounter or e.first
+            return fishingReference(e,key) or type(stamp)=='number' and key==e.id..'@'..db.origin..':'..stamp
+        end)
+        if found or ambiguous then return found end
+        local account=AzerothFieldbookAccountDB
+        local shared=account and account.sections and account.sections.angling
+        if not shared or shared==db then return end
+        local target=find(shared,function(e) return fishingReference(e,key) end)
+        if target then return find(db,function(e) return e.origin and fishingReference(target,e.origin.key) end) end
     end
     function j:Origin(id)
         local e=db.aggregates[id] or self:Get(id)

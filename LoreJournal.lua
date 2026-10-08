@@ -39,6 +39,11 @@ function L.Copy(value)
     end
     return copy(value,0)
 end
+-- Detached top-level candidates keep every collection and unknown metadata.
+-- Validation builds replacement owned collections before any live mutation.
+function L.EntryCandidate(value)
+    local out={};for key,v in pairs(value) do out[key]=v end;return out
+end
 function L.Player()
     local fn=UnitNameUnmodified or UnitName
     if type(fn)~='function' then return 'Unknown player' end
@@ -292,12 +297,27 @@ function L.SupportsStore(saved)
     for _,key in ipairs({'entries','state'}) do if saved[key]~=nil and not plainTable(saved[key]) then return false end end
     return true
 end
+function L.RecordReference(db,e)
+    return 'lore:'..(e.exportKey or tostring(db.exportOrigin or db.archiveID)..':'..e.id..':'..e.created)
+end
+function L.EnsureReferences(db)
+    if not L.SupportsStore(db) then return end
+    if not L.Text(db.archiveID,160) then db.archiveID=tostring(L.Now())..'-'..math.random(1,999999999)..'-'..math.random(1,999999999) end
+    for id,e in pairs(db.entries or {}) do
+        if type(e)=='table' and e.id==id and L.Text(id,64) and L.Integer(e.created,0,9999999999) then
+            if not e.reference then
+                e.reference=L.RecordReference(db,e);e.legacyAnnalsIdentity=tostring(e.created)
+            end
+        end
+    end
+end
 function ns.CreateLoreJournal(saved)
     local readOnly=ns.InitializationBlocked or not L.SupportsStore(saved)
     local db=readOnly and {} or saved
     db.schema=L.SCHEMA;db.entries=db.entries or {};db.state=db.state or {}
     db.serial=L.Integer(db.serial,0,999999999) and db.serial or 0
     if not L.Text(db.archiveID,160) then db.archiveID=tostring(L.Now())..'-'..tostring(math.random(1,999999999))..'-'..tostring(math.random(1,999999999)) end
+    L.EnsureReferences(db)
     local j={db=db,saved=saved,entries={},state=db.state,readOnly=readOnly,invalid=0,revision=0,cache={},sessions={}}
     for id,e in pairs(db.entries) do
         local valid=L.ValidateEntry(e,id)
@@ -354,6 +374,7 @@ function ns.CreateLoreJournal(saved)
         if bytesOf(e)>L.MAX_WORK_BYTES or self:ArchiveBytes()+bytesOf(e)>L.MAX_ARCHIVE_BYTES then return nil,'Archive capacity exceeded; nothing was removed.' end
         if dryRun then return e end
         e.id=self:Next();e.created=L.Now();e.updated=e.created;e.locations={};e.links={};e.passages={};e.pages={}
+        e.reference=L.RecordReference(db,e)
         if db.exportOrigin then e.exportSource=L.Player() end
         db.entries[e.id]=e;self.entries[e.id]=e;self:Changed(e)
         if not deferRecorded then self:Recorded(e) end
@@ -366,7 +387,7 @@ function ns.CreateLoreJournal(saved)
         if replacement.kind~=old.kind then return nil,'An entry cannot change kind.' end
         if bytesOf(replacement)>L.MAX_WORK_BYTES or self:ArchiveBytes()-bytesOf(old)+bytesOf(replacement)>L.MAX_ARCHIVE_BYTES then return nil,'Archive is full (32 MiB); nothing was changed.' end
         -- Preserve unrecognized local metadata while validating every owned collection.
-        local merged=L.Copy(candidate);for key,v in pairs(replacement) do merged[key]=v end
+        local merged=L.EntryCandidate(candidate);for key,v in pairs(replacement) do merged[key]=v end
         if dryRun then return merged end
         db.entries[id]=merged;self.entries[id]=merged;self:Changed(merged);return merged
     end
@@ -374,7 +395,7 @@ function ns.CreateLoreJournal(saved)
         if self.readOnly then return nil,'Archive is read-only.' end
         local e=self:Get(id);if not e then return nil,'Entry no longer exists.' end
         if not plainTable(value) then return nil,'Invalid entry fields.' end
-        local merged=L.Copy(e)
+        local merged=L.EntryCandidate(e)
         for key in pairs(fieldLimits) do if value[key]~=nil then merged[key]=value[key] end end
         for _,key in ipairs({'tags','revisit','status','npcID'}) do if value[key]~=nil then merged[key]=value[key] end end
         local normalized,err=fields(merged,e.kind);if not normalized then return nil,err end

@@ -40,10 +40,11 @@ SUPPORT = r'''
         local e=j.bestiary:Ensure(42,false,'Forest Lurker',{level=9})
         assert(j.bestiary:SetCreatureNotes(42,tag..' private Bestiary notes'))
         assert(j.bestiary:AddManual(42,'Poison','private observation',123,{Poison=true}))
-        local gathering=j.gathering.entries
-        gathering['herb:peacebloom']={id='herb:peacebloom',kind='herb',name='Peacebloom',note=tag..' private gather notes',
-            interactions=3,completed=2,firstSeen=1,lastSeen=2,zones={Elwynn=true},loot={
-                [2447]={name='Peacebloom',minQuantity=1,maxQuantity=2,firstSeen=1,lastSeen=2}},locations={}}
+        -- Use the production discovery path so this current-format backup has
+        -- its durable identity before the exact-content restore comparison.
+        local gathering=j.gathering.entries[assert(j.gathering:Discover('herb','Peacebloom',1,'Elwynn'))]
+        gathering.note=tag..' private gather notes';gathering.interactions=3;gathering.completed=2;gathering.lastSeen=2
+        gathering.loot={[2447]={name='Peacebloom',minQuantity=1,maxQuantity=2,firstSeen=1,lastSeen=2}}
         local p=assert(j.atlas:Save({name=tag..' landmark',category='landmark',mapID=1,zone='Coast',x=1250,y=2500,notes='Private route note'}))
         p=j.atlas.records[p]
         assert(j.atlas:Save({name=tag..' route',category='route',related={p.id,'deleted'},stops={{recordID=p.id,name=p.name}},references={{section='bestiary',key='42',name='Forest Lurker'}}}))

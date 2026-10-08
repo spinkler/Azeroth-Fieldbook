@@ -121,9 +121,8 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         if not e then return false end
         shell:ShowSection("merchants");self:ClosePanel();self:Reset();self:Select(e.id)
         local top=0
-        for _,found in ipairs(self.rows) do
-            if found.contact.id==e.id then break end
-            top=top+(journal:Sublabel(found.contact)=="" and 53 or 65)
+        for i,found in ipairs(self.rows) do
+            if found.contact.id==e.id then top=self.contactTops[i] or 0;break end
         end
         state.contactScroll=top;self:Refresh();return true
     end
@@ -558,6 +557,17 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         p.back:SetText("Back")
         if not p.edit then
             p.edit,p.scroll=U.TextArea(p,9,-32,217,322,4000);p.inputs={p.edit}
+            function p:Matches(note,roles)
+                if note~=self.baselineNote then return false end
+                for role in pairs(roles) do if not self.baselineRoles[role] then return false end end
+                for role in pairs(self.baselineRoles) do if not roles[role] then return false end end
+                return true
+            end
+            function p:Load(e)
+                self.contact=e.id;self.baselineEntry=e;self.baselineNote=e.note;self.baselineRoles={};self.roles={}
+                for role in pairs(e.manualRoles) do self.baselineRoles[role]=true;self.roles[role]=true end
+                self.edit:SetText(e.note);self.speciality:SetText("");self:RefreshRoles()
+            end
             U.Label(p,"Manual service / speciality",4,-375,240,"GameFontNormalSmall")
             function p:RefreshRoles()
                 local names={}
@@ -576,12 +586,19 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             end)
             p.speciality=U.Edit(p,10,-438,230,160);p.inputs[#p.inputs+1]=p.speciality
             U.Label(p,"Optional speciality; explicitly your annotation.",4,-466,245,"GameFontDisableSmall")
-            U.Button(p,"Save",4,-514,250,function()
+            U.Button(p,"Save",4,-514,122,function()
+                local current=journal:Get(p.contact)
+                if current~=p.baselineEntry or not current or not p:Matches(current.note,current.manualRoles) then
+                    c:Message("Saved notes changed. Your draft is retained; copy it before reloading saved notes.");return
+                end
                 local ok,err=journal:Annotate(p.contact,p.edit:GetText(),p.roles,p.speciality:GetText())
-                c:Message(ok and "Personal notes saved." or err);if ok then c:ClosePanel() end
+                c:Message(ok and "Personal notes saved." or err);if ok then p:Load(current);c:ClosePanel() end
+            end)
+            U.Button(p,"Reload saved notes",132,-514,122,function()
+                local current=journal:Get(p.contact);if current then p:Load(current) end
             end)
         end
-        if p.contact~=e.id then p.contact=e.id;p.edit:SetText(e.note);p.speciality:SetText("");p.roles={};for role in pairs(e.manualRoles) do p.roles[role]=true end;p:RefreshRoles() end
+        if p.contact~=e.id or p:Matches(p.edit:GetText(),p.roles) and p.speciality:GetText()=="" then p:Load(e) end
     end
     function c:Manual()
         local p=self:Panel("manual","Record a contact manually")

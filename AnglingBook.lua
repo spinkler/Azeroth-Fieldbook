@@ -151,9 +151,19 @@ function ns.CreateAnglingBook(journal,tracking,shell)
             end
         end
         if e.note~="" then lines[#lines+1]="Your notes: "..e.note end
-        for _,id in ipairs(e.mergedFrom or {}) do local old=journal.db.merged[id];if old then
-            lines[#lines+1]="Merged spot: "..old.name.." • "..A.PositionLabel(old)..(old.note~="" and "\nPreserved note: "..old.note or "")
-        end end
+        local visited={[e.id]=true};local pending={}
+        for _,id in ipairs(e.mergedFrom or {}) do pending[#pending+1]=id end
+        local index=1
+        while index<=#pending do
+            local id=pending[index];index=index+1
+            if not visited[id] then
+                visited[id]=true;local old=journal.db.merged[id]
+                if old then
+                    lines[#lines+1]="Merged spot: "..old.name.." • "..A.PositionLabel(old)..(old.note~="" and "\nPreserved note: "..old.note or "")
+                    for _,ancestor in ipairs(old.mergedFrom or {}) do pending[#pending+1]=ancestor end
+                end
+            end
+        end
         if summary.events==0 then
             lines[#lines+1]=e.kind=="pool" and "No catches recorded from this pool type." or "No personal catches recorded here."
         else

@@ -480,6 +480,7 @@ local ink = { 0.75, 0.8, 0.8 }
         return count>0 and ("Effects ("..count..")") or "Choose effects"
     end
     local function choose(id)
+        if id~=selected and book.notesForm then book.notesForm:Hide() end
         if book.titleHover then book.titleHover:StopNameScroll() end
         if book.deleteForm then book.deleteForm:Hide() end
         if book.beastLore then
@@ -2371,8 +2372,10 @@ local ink = { 0.75, 0.8, 0.8 }
             row:SetPoint("TOPLEFT",27,-91-(i-1)*31); row:SetSize(440,29)
             row.text=label(row,"",2,-6,320)
             row.remove=button(row,"Remove",340,-1,92,function()
-                if selected and book.notesLevel and row.noteIndex then
-                    journal:RemoveDamageNote(selected,book.notesLevel,row.noteIndex)
+                if notesForm:IsShown() and row.owner==selected and row.entry==journal.entries[selected]
+                    and row.level==book.notesLevel and row.noteIndex
+                    and journal:DamageNotes(row.owner,row.level)[row.noteIndex]==row.observation then
+                    journal:RemoveDamageNote(row.owner,row.level,row.noteIndex)
                     refresh(); refreshDamageNotes()
                 end
             end)
@@ -2387,6 +2390,7 @@ local ink = { 0.75, 0.8, 0.8 }
             for i,row in ipairs(notesForm.rows) do
                 local index=noteOffset+i; local note=notes[index]
                 row.noteIndex=note and index or nil
+                row.owner=selected;row.entry=journal.entries[selected];row.level=book.notesLevel;row.observation=note
                 if note then
                     local entry=selected and journal.entries[selected]
                     row.remove:SetEnabled(entry ~= nil and not entry.confirmed)
@@ -2399,7 +2403,10 @@ local ink = { 0.75, 0.8, 0.8 }
             notesForm.next:SetEnabled(noteOffset+6<#notes)
             if #notes==0 then notesForm:Hide() end
         end
-        notesForm:SetScript("OnHide",function(self) self:StopMovingOrSizing() end)
+        notesForm:SetScript("OnHide",function(self)
+            self:StopMovingOrSizing()
+            for _,row in ipairs(self.rows) do row.owner=nil;row.entry=nil;row.observation=nil;row.noteIndex=nil end
+        end)
         notesForm:Hide(); book.notesForm=notesForm
 
         local rankFrame=book.filterSubmenus.Ranks

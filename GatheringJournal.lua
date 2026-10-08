@@ -23,6 +23,22 @@ local function validPoint(p)
 end
 local sortFields={name=true,kind=true,interactions=true,completed=true,firstSeen=true,lastSeen=true}
 
+-- Identity is independent of the earliest observation, which account imports can lower.
+function ns.GatheringEnsureReferences(saved)
+    if (saved.schema or 0)>1 then return end
+    saved.referenceOrigin=saved.referenceOrigin or tostring(time and time() or 0)..'-'..math.random(1,999999999)
+    saved.referenceSerial=saved.referenceSerial or 0
+    for id,e in pairs(saved.entries or {}) do if type(e)=='table' and not e.reference then
+        saved.referenceSerial=saved.referenceSerial+1
+        e.reference='gathering:'..saved.referenceOrigin..':'..saved.referenceSerial
+        -- Only records already present at migration can own timestamp-era links.
+        e.legacyReferences=e.legacyReferences or {}
+        if type(e.firstSeen)=='number' then e.legacyReferences[tostring(id)..'@:'..e.firstSeen]=true end
+    end end
+end
+local function gatheringReference(e,key)
+    return e.reference==key or (e.referenceAliases or {})[key] or (e.legacyReferences or {})[key]
+end
 function ns.CreateGatheringJournal(saved,getBrightness)
     local readOnly=type(saved.schema)=="number" and saved.schema>1
     -- Never normalize a schema this version cannot interpret. The empty view
@@ -30,7 +46,27 @@ function ns.CreateGatheringJournal(saved,getBrightness)
     if readOnly then saved={} end
     saved.schema=1
     saved.entries=type(saved.entries)=="table" and saved.entries or {}
-    local journal={entries=saved.entries,revision=0,readOnly=readOnly}
+    ns.GatheringEnsureReferences(saved)
+    local journal={entries=saved.entries,saved=saved,revision=0,readOnly=readOnly}
+    function journal:Reference(key)
+        local found
+        for _,e in pairs(self.entries) do if gatheringReference(e,key) then
+            if found then return end;found=e
+        end end
+        if found then return found end
+        -- Account-created links may return to a retained contributing personal record.
+        local account=AzerothFieldbookAccountDB
+        local shared=account and account.sections and account.sections.gathering
+        if not shared or shared==saved then return end
+        local target
+        for _,e in pairs(shared.entries or {}) do if gatheringReference(e,key) then
+            if target then return end;target=e
+        end end
+        if target then for _,e in pairs(self.entries) do if gatheringReference(target,e.reference) then
+            if found then return end;found=e
+        end end end
+        return found
+    end
     local dimensions={}
     local function mapSize(id)
         if dimensions[id] then return dimensions[id][1],dimensions[id][2] end
@@ -133,6 +169,8 @@ function ns.CreateGatheringJournal(saved,getBrightness)
         if not entry then
             entry={id=id,name=name,kind=kind,interactions=0,completed=0,firstSeen=stamp,
                 lastSeen=0,zones={},locations={},note=""}
+            saved.referenceSerial=saved.referenceSerial+1
+            entry.reference='gathering:'..saved.referenceOrigin..':'..saved.referenceSerial
             self.entries[id]=entry
             self:Changed()
         end

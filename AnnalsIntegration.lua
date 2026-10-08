@@ -82,6 +82,35 @@ function ns.InitializeAnnals(shell,sources)
                 end
                 if old or entrance or tostring(link.key):match('^n%d+$') or tostring(link.identity):match('^atlas%-entrance:') then return end
             end
+            if id=='gathering' and journal.Reference then
+                return journal:Reference(link.identity) or journal:Reference(tostring(link.key)..'@:'..link.identity)
+            end
+            if id=='gathering' or id=='lore' or id=='treasure' then
+                local reference=link.identity
+                if id=='lore' and not reference:match('^lore:') then
+                    local personal=AzerothFieldbookLoreDB
+                    local account=AzerothFieldbookAccountDB
+                    local shared=account and account.sections and account.sections.lore==journal.db
+                    if not shared then personal=journal.db end
+                    local original=type(personal)=='table' and type(personal.entries)=='table' and personal.entries[link.key]
+                    if not original or original.legacyAnnalsIdentity~=reference then return end
+                    reference=original.reference or ns.Lore.RecordReference(personal,original)
+                end
+                local found
+                for _,record in pairs(journal.entries or journal.kinds or {}) do
+                    local matches=record.reference==reference
+                    if id=='gathering' then
+                        matches=matches or (record.referenceAliases or {})[reference]
+                            or (record.legacyReferences or {})[tostring(link.key)..'@:'..reference]
+                    end
+                    if matches and not record.removed then
+                        if found then return end
+                        found=record
+                    end
+                end
+                return found
+            end
+            if id=='angling' and journal.Reference then return journal:Reference(link.identity) end
             local e=journal.Get and journal:Get(link.key) or (journal.entries and journal.entries[tonumber(link.key) or link.key])
             if e and not e.removed and identity(e)==link.identity then return e end
             -- Durable references resolve ID remapping without matching unrelated reused IDs.

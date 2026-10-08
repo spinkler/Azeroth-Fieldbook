@@ -31,11 +31,17 @@ function ns.RegisterLoreReferences(controller,shell,sources)
         end
         local function ref(key,e)
             local scope=id=='angling' and journal.db and journal.db.origin or ''
-            local identity=(id=='atlas' or id=='merchants' or id=='treasure') and e.reference
+            local identity=(id=='atlas' or id=='merchants' or id=='treasure' or id=='gathering') and e.reference
+                or id=='angling' and type(e.origin)=='table' and e.origin.key
             return {key=identity or tostring(key)..'@'..scope..':'..stamp(e),name=tostring(e.name or e.title or (journal.GetCreatureName and journal:GetCreatureName(key)) or key)}
         end
         local function find(key,link)
             if ns.InitializationBlocked or type(key)~='string' then return end
+            if (id=='gathering' or id=='angling') and journal.Reference then
+                local e=journal:Reference(key)
+                if e then return e.id,e end
+                return
+            end
             if id=='atlas' and ns.ResolveAtlasLoreReference and journal.saved then
                 return ns.ResolveAtlasLoreReference(journal,key,link and link.atlasOwner)
             end
@@ -51,7 +57,21 @@ function ns.RegisterLoreReferences(controller,shell,sources)
                 end
                 return
             end
-            for recordID,e in pairs(records()) do if ref(recordID,e).key==key then return recordID,e end end
+            local foundID,found
+            for recordID,e in pairs(records()) do
+                local matches=ref(recordID,e).key==key
+                if id=='gathering' then
+                    matches=e.reference==key or (e.referenceAliases or {})[key] or (e.legacyReferences or {})[key]
+                elseif id=='angling' then
+                    matches=matches or (e.loreAliases or {})[key]
+                    for _,alias in ipairs(type(e.origin)=='table' and e.origin.legacyKeys or {}) do if alias==key then matches=true end end
+                end
+                if matches then
+                    if found then return end -- Duplicate ownership is unavailable.
+                    foundID,found=recordID,e
+                end
+            end
+            return foundID,found
         end
         controller.references:Register(id,{title=titles[id] or id,list=function()
             local rows={};for key,e in pairs(records()) do rows[#rows+1]=ref(key,e) end;return rows

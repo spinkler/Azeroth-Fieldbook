@@ -1516,6 +1516,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local playerLossOfControl = previous and previous.spellID == spellID and previous.playerLossOfControl or nil
         entry.abilities[name] = { state = "confirmed", origin = "Your note", note = cleaned, effects = savedEffects, spellID = spellID,
             playerLossOfControl = playerLossOfControl }
+        if previous and previous.spellID==spellID and previous.showInTooltip==false then entry.abilities[name].showInTooltip=false end
         if self.ResolveRumours then self:ResolveRumours(id,{kind="ability",value=name,spellID=spellID}) end
         self:Touch()
         if self.AcknowledgeDetectedAbility then self:AcknowledgeDetectedAbility(id,spellID) end

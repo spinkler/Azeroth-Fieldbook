@@ -36,6 +36,11 @@ local function mergeGathering(target,source)
     for id,e in pairs(source.entries or {}) do
         local prior=target.entries[id]
         if prior then
+            prior.referenceAliases=prior.referenceAliases or {}
+            if e.reference then prior.referenceAliases[e.reference]=true end
+            for alias in pairs(e.referenceAliases or {}) do prior.referenceAliases[alias]=true end
+            prior.legacyReferences=prior.legacyReferences or {}
+            for alias in pairs(e.legacyReferences or {}) do prior.legacyReferences[alias]=true end
             for _,k in ipairs({"interactions","completed"}) do prior[k]=(prior[k] or 0)+(e[k] or 0) end
             for itemID,item in pairs(e.loot or {}) do
                 local old=prior.loot and prior.loot[itemID]
@@ -183,7 +188,20 @@ local function mergeAngling(target,source,key)
                 local prior=target[field][out.id]
                 if field=="reported" and (out.last or 0)>=(prior.last or 0) and (out.events or 0)>=(prior.events or 0) then
                     target[field][out.id]=out
-                else mergeRecord(prior,out) end
+                else
+                    ns.Angling.RetainReferences(prior,out)
+                    if prior.origin and out.origin then
+                        if prior.origin.key==out.origin.key and prior.origin.source==out.origin.source then
+                            for _,alias in ipairs(out.origin.legacyKeys or {}) do ns.Angling.AddLegacyKey(prior.origin,alias) end
+                        end
+                        -- The generic missing-field merge also fills array slots.
+                        -- It must not copy contributor aliases back onto the wire.
+                        out.origin=nil
+                    end
+                    prior.loreAliases=prior.loreAliases or {}
+                    for alias in pairs(out.loreAliases or {}) do prior.loreAliases[alias]=true end
+                    mergeRecord(prior,out)
+                end
             else target[field][out.id]=out end
         end
     end
@@ -484,8 +502,18 @@ function ns.SelectSectionStorage(section,personal)
         if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("AFB: "..section.." uses a newer data schema; account migration deferred.") end
         ns.ActiveSectionStores[section]=personal;return personal
     end
+    if section=="gathering" and ns.GatheringEnsureReferences then
+        ns.GatheringEnsureReferences(personal)
+        if existing then ns.GatheringEnsureReferences(existing) end
+    elseif section=="lore" then ns.Lore.EnsureReferences(personal)
+    end
     if section=="atlas" then ns.Atlas.EnsureReferences(personal)
-    elseif section=="angling" then ns.Angling.PrepareOrigins(personal) end
+    elseif section=="angling" then
+        ns.Angling.PrepareOrigins(personal);ns.Angling.PrepareLoreReferences(personal)
+        if existing then
+            ns.Angling.PrepareLoreReferences(existing);ns.Angling.PrepareContributorReferences(existing)
+        end
+    end
     local ids
     if not imports[key] then
         local staged=copy(existing or {})
@@ -501,18 +529,41 @@ function ns.SelectSectionStorage(section,personal)
     local selected=account.sections[section]
     -- A one-time import forks the store. New allocations in the account and in
     -- the retained opt-out copy must never mint the same original identity.
-    local allocation=({atlas="referenceOrigin",angling="captureOrigin",ledger="contactOrigin",lore="exportOrigin"})[section]
+    local allocation=({atlas="referenceOrigin",gathering="accountReferenceOrigin",angling="captureOrigin",ledger="contactOrigin",lore="exportOrigin"})[section]
     if allocation and not selected[allocation] then
         selected[allocation]="account-"..tostring(ns.Atlas.Now()).."-"..math.random(1,999999999)
     end
     -- Account encounter IDs cannot collide with later allocations on the retained
     -- local copy, even when both append to the same original Treasure kind.
     if section=="treasure" then selected.idPrefix="account:" end
+    if section=="gathering" then selected.referenceOrigin=selected.accountReferenceOrigin end
     if section=="atlas" then
         ns.Atlas.EnsureReferences(selected);atlasMappings(account,personal,selected,key,ids)
     elseif section=="angling" then
         ns.Angling.PrepareOrigins(selected);fishingAliases(account,personal,selected,key)
     elseif section=="ledger" then ns.Ledger.ReconcileReports(selected) end
+    if section=="angling" then
+        for _,field in ipairs({"waters","spots","pools","items"}) do
+            local owners={}
+            local function index(alias,record)
+                if alias then owners[alias]=owners[alias]==nil and record or owners[alias]==record and record or false end
+            end
+            for _,record in pairs(selected[field] or {}) do
+                if record.origin then
+                    index(record.origin.key,record)
+                    for _,alias in ipairs(record.origin.legacyKeys or {}) do index(alias,record) end
+                end
+                for alias in pairs(record.referenceAliases or {}) do index(alias,record) end
+            end
+            for _,original in pairs(personal[field] or {}) do
+                local record=original.origin and owners[original.origin.key]
+                if record then
+                    record.loreAliases=record.loreAliases or {}
+                    for alias in pairs(original.loreAliases or {}) do record.loreAliases[alias]=true end
+                end
+            end
+        end
+    end
     ns.ActiveSectionStores[section]=selected
     return selected
 end
