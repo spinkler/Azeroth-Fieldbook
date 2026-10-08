@@ -480,7 +480,10 @@ end
 function ns.SelectSectionStorage(section,personal)
     if ns.InitializationBlocked then return nil end
     if ns.ActiveSectionStores[section] then return ns.ActiveSectionStores[section] end
-    if not settings or settings.accountWideTracking==false then
+    local enabled=settings and settings.accountWideTracking~=false
+    local choices=settings and settings.accountTrackingSections
+    if choices and type(choices[section])=="boolean" then enabled=choices[section] end
+    if not enabled then
         ns.ActiveSectionStores[section]=personal;return personal
     end
     local account=AzerothFieldbookAccountDB

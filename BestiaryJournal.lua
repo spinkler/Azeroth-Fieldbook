@@ -1,5 +1,21 @@
 local _, ns = ...
 
+ns.TrackingSections = {{"bestiary","Bestiary"},{"gathering","Gatherer's Compendium"},
+    {"atlas","Traveller's Atlas"},{"angling","Angler's Almanac"},{"ledger","Merchant's Ledger"},
+    {"treasure","Treasure Journal"},{"lore","Lorekeeper's Chronicle"}}
+function ns.GetSectionAccountTracking(db,section)
+    local choices=db.accountTrackingSections
+    if type(choices)=="table" and type(choices[section])=="boolean" then return choices[section] end
+    return db.accountWideTracking~=false
+end
+function ns.ValidTrackingSections(value)
+    if value==nil then return true end
+    if type(value)~="table" or getmetatable(value) then return false end
+    local known={};for _,section in ipairs(ns.TrackingSections) do known[section[1]]=true end
+    for key,enabled in pairs(value) do if not known[key] or type(enabled)~="boolean" then return false end end
+    return true
+end
+
 -- The saved Fieldbook choice owns startup intent; the CVar is client-wide.
 -- Apply only at initialization, explicit option changes and settings resets.
 function ns.ApplySpellIDTooltipPreference(db)
@@ -59,7 +75,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     trackingDB.bestiary.deletedEntries=type(trackingDB.bestiary.deletedEntries)=="table" and trackingDB.bestiary.deletedEntries or {}
     local journal = { entries = trackingDB.bestiary.entries, revision = 0 }
     for _,entry in pairs(journal.entries) do ns.MigrateDisposition(entry) end
-    local activeAccountWideTracking = db.accountWideTracking ~= false
+    local activeAccountWideTracking = ns.GetSectionAccountTracking(db,"bestiary")
+    local activeTrackingSections={}
+    for _,section in ipairs(ns.TrackingSections) do activeTrackingSections[section[1]]=ns.GetSectionAccountTracking(db,section[1]) end
     local seenGUIDs = {}
     local seenOrder, nextSeen, sightingLimit = {}, 1, 2048
     local function clearSightings()
@@ -80,7 +98,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     local instanceLimit, observationSeconds, pendingSeconds, recentLimit = 64, 120, 10, 512
     local onEntryAdded, onPointsAwarded, onPointsRecorded, onEventLogChanged
     local onAutomaticRecorded
-    local behaviourDiagnostics={events=0,matched=0,recorded=0,last="No monster emote received.",lastFlee="No readable flee emote received."}
+    local behaviourDiagnostics={events=0,matched=0,recorded=0,last="No monster emote received.",lastMatched="No readable behaviour emote received."}
     local restoreObservations
     local ledger
     local rankLabels = { elite = "Elite", rare = "Rare", rareelite = "Rare Elite", worldboss = "World Boss" }
@@ -596,14 +614,22 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if self.sharing then self.sharing:ApplyIncomingOfferSetting() end
         self:Touch()
     end
-    function journal:GetAccountWideTracking()
-        return db.accountWideTracking ~= false
+    function journal:GetAccountWideTracking(section)
+        return ns.GetSectionAccountTracking(db,section or "bestiary")
     end
-    function journal:SetAccountWideTracking(enabled)
-        db.accountWideTracking = enabled == true
+    function journal:SetAccountWideTracking(enabled,section)
+        if section then
+            db.accountTrackingSections=db.accountTrackingSections or {}
+            db.accountTrackingSections[section]=enabled==true
+        else
+            -- Retain the legacy bulk setter for existing callers.
+            db.accountWideTracking=enabled==true;db.accountTrackingSections=nil
+        end
     end
-    function journal:IsTrackingChangePending()
-        return self:GetAccountWideTracking() ~= activeAccountWideTracking
+    function journal:IsTrackingChangePending(section)
+        if section then return self:GetAccountWideTracking(section)~=activeTrackingSections[section] end
+        for key,enabled in pairs(activeTrackingSections) do if self:GetAccountWideTracking(key)~=enabled then return true end end
+        return false
     end
     function journal:IsAccountWideTrackingActive()
         return activeAccountWideTracking
@@ -1133,7 +1159,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local matched=false
         local function skip(reason)
             behaviourDiagnostics.last=reason
-            if matched then behaviourDiagnostics.lastFlee=reason end
+            if matched then behaviourDiagnostics.lastMatched=reason end
             return false,reason
         end
         -- Readability checks must precede comparison, trimming or formatting.
@@ -1144,11 +1170,17 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         message=message:match("^%s*(.-)%s*$")
         -- Exact English server text supplied by the client, before or after
         -- chat-frame %s substitution. Other languages need verified phrases.
-        if message~="%s attempts to run away in fear!" and message~=sender.." attempts to run away in fear!" then
-            return skip("Not the supported flee emote.")
+        local behaviour
+        if message=="%s attempts to run away in fear!" or message==sender.." attempts to run away in fear!" then
+            behaviour="Flees at low health"
+        elseif message=="%s lets out a high pitched screech, calling for help!"
+            or message==sender.." lets out a high pitched screech, calling for help!" then
+            behaviour="Calls allies"
+        else
+            return skip("Not a supported behaviour emote.")
         end
         matched=true;behaviourDiagnostics.matched=behaviourDiagnostics.matched+1
-        if not public(guid) then return skip("Flee GUID is restricted.") end
+        if not public(guid) then return skip("Emote GUID is restricted.") end
         local id,identity=creatureID(guid),"event GUID"
         if guid==nil or guid=="" then
             -- Some monster-emote payloads omit the GUID. Bind the server's
@@ -1158,33 +1190,33 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             for _,unit in ipairs({"target","mouseover"}) do
                 local candidate=identify(unit)
                 if candidate and read(UnitName,unit)==sender and creatureID(read(UnitGUID,unit))==candidate then
-                    if id and id~=candidate then return skip("Flee sender matches multiple watched creature IDs.") end
+                    if id and id~=candidate then return skip("Emote sender matches multiple watched creature IDs.") end
                     id=candidate
                 end
             end
-            if not id then return skip("Flee GUID missing; no matching readable watched creature.") end
+            if not id then return skip("Emote GUID missing; no matching readable watched creature.") end
             for otherID,other in pairs(self.entries) do
                 if otherID~=id and other.personalEncountered and creatureName(other.name)==sender then
-                    return skip("Flee sender has ambiguous personal creature IDs.")
+                    return skip("Emote sender has ambiguous personal creature IDs.")
                 end
             end
-        elseif not id then return skip("Flee GUID is not a valid creature GUID.") end
+        elseif not id then return skip("Emote GUID is not a valid creature GUID.") end
         local entry=self.entries[id]
-        if not entry or not entry.personalEncountered then return skip("Flee speaker has no personal entry.") end
-        if sender~=creatureName(entry.name) then return skip("Flee sender does not match the creature entry.") end
-        if not self:RecordAutomaticBehaviour(id,"Flees at low health","monsterEmote",identity) then
-            return skip("Flee behaviour is already recorded.")
+        if not entry or not entry.personalEncountered then return skip("Emote speaker has no personal entry.") end
+        if sender~=creatureName(entry.name) then return skip("Emote sender does not match the creature entry.") end
+        if not self:RecordAutomaticBehaviour(id,behaviour,"monsterEmote",identity) then
+            return skip("Emote behaviour is already recorded.")
         end
         behaviourDiagnostics.recorded=behaviourDiagnostics.recorded+1
-        behaviourDiagnostics.last="Recorded flee behaviour using "..identity.."."
-        behaviourDiagnostics.lastFlee=behaviourDiagnostics.last
+        behaviourDiagnostics.last="Recorded "..behaviour.." using "..identity.."."
+        behaviourDiagnostics.lastMatched=behaviourDiagnostics.last
         return true,behaviourDiagnostics.last
     end
     function journal:ReportBehaviours(say)
         say("Automatic behaviours: "..behaviourDiagnostics.events.." monster emotes; "..behaviourDiagnostics.matched
-            .." readable flee messages; "..behaviourDiagnostics.recorded.." behaviours added this session.")
+            .." readable behaviour messages; "..behaviourDiagnostics.recorded.." behaviours added this session.")
         say("Last monster emote: "..behaviourDiagnostics.last)
-        say("Last readable flee: "..behaviourDiagnostics.lastFlee)
+        say("Last readable behaviour: "..behaviourDiagnostics.lastMatched)
     end
     function journal:IsSkull(id)
         local entry=self.entries[id]
@@ -1690,13 +1722,16 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local personalBestiary, trackingKey, eventLog = db.bestiary, db.accountTrackingKey, self:GetEventLog()
         local savedBackups = db.bestiaryBackups
         local trackingActive = db.accountTrackingActive
+        local trackingSections,sectionActive=db.accountTrackingSections,db.accountTrackingSectionsActive
+        local trackingDefault=db.accountWideTracking
         local autoArchiveLore,loreOnlyOpenedPages=db.autoArchiveLore,db.loreOnlyOpenedPages
         for key in pairs(db) do db[key] = nil end
         db.autoArchiveLore,db.loreOnlyOpenedPages=autoArchiveLore,loreOnlyOpenedPages
         db.eventLog=eventLog
         db.bestiaryBackups=savedBackups
         db.version, db.announce, db.creatureAnnouncements = 1, false, true
-        db.accountTrackingKey, db.accountWideTracking = trackingKey, activeAccountWideTracking
+        db.accountTrackingKey, db.accountWideTracking = trackingKey, trackingDefault
+        db.accountTrackingSections,db.accountTrackingSectionsActive=trackingSections,sectionActive
         db.accountTrackingActive = trackingActive
         if trackingDB ~= db then db.bestiary = personalBestiary end
         self:SetSpellIDTooltips(true)

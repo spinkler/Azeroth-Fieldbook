@@ -14,6 +14,26 @@ LORE_MODULES = ['LoreJournal.lua', 'LoreSettings.lua', 'LoreTracking.lua', 'Lore
 
 
 class FieldbookTabsTests(unittest.TestCase):
+    def test_options_categories_and_independent_scope_controls(self):
+        self.lua.execute('''
+            shell:ShowSection('bestiary');shell:TogglePage('options')
+            local options=shell.sections.bestiary.pages.options
+            assert(options.activeTab=='General' and options.darkMode:IsShown())
+            assert(not options.autoLockEnabled:IsShown() and not options.trackingSections.atlas:IsShown())
+            options.tabs.Data.scripts.OnClick()
+            assert(options.activeTab=='Data' and not options.darkMode:IsShown())
+            assert(options.backupButton:IsShown() and options.trackingSections.atlas:IsShown())
+            local atlas=options.trackingSections.atlas
+            atlas:SetChecked(false);atlas.scripts.OnClick(atlas)
+            assert(not journal:GetAccountWideTracking('atlas') and journal:GetAccountWideTracking('bestiary'))
+            assert(atlas.status:GetText()=='Pending reload')
+            options.tabs.Journals.scripts.OnClick()
+            assert(options.autoLockEnabled:IsShown() and options.autoArchiveLore:IsShown())
+            assert(not atlas:IsShown() and not options.backupButton:IsShown())
+            options.tabs.Data.scripts.OnClick()
+            assert(not atlas:GetChecked() and atlas.status:GetText()=='Pending reload')
+        ''')
+
     def test_search_placeholders_follow_query_and_clear_button(self):
         self.lua.execute('''
             local sections={atlas=atlas,angling=angling,merchants=ledger,treasure=treasure,lore=lore}

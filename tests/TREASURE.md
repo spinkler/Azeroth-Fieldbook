@@ -79,6 +79,32 @@ states. Acquisition history does not assert that the item is still owned.
 
 ## Pending live observation — 2026-10-04
 
+Follow-up on 2026-10-08: a Battered Chest in Darkshore recorded Haunch of
+Meat ×2, Minor Mana Potion ×3 and Small Dagger ×1, but omitted the
+Red-speckled Mushroom ×3 visible in the loot chat. The screenshot establishes
+the missing row, but not the native event sequence or which slot fields were
+unreadable. The repeated "Receipt unconfirmed" label reflected the observer's
+lack of automatic recovery tracking, rather than a failed inventory transaction.
+
+The contents reader and report preview now show observed quantities without
+that repeated receipt label; explicitly recorded recovery details remain visible.
+Capture retains readable item names for explicitly typed item slots when links
+are not yet available. Unique, unambiguous names can gain a later item ID without
+duplicating the observation, including report enrichment and older report replay.
+Ambiguous names never replace an existing ID. All item quantities still require
+agreement with the single-source quantity.
+
+READY updates retain earlier items. Slot changes/clears, item-data events, a
+bounded 0.2-second retry and the final close-time read revisit the attributed
+window, including when no item was initially readable. Explicit None slots with
+no remaining sources are skipped; occupied/unreadable or mixed-source slots
+still reject a snapshot. OPENED rejection, close, world entry and expiry clear
+retry state. Polling does not extend its lifetime or redraw unchanged contents.
+Regression fixtures exercise these gaps, but the screenshot's exact cause and
+the fix's native behavior remain unverified. Existing historical omissions are
+not backfilled. Reload, then compare the next naturally encountered chest with
+its loot; no search for another chest or scheduled reminder is required.
+
 Solid Chest follow-up on 2026-10-07: the expanded diagnostic identifies source
 `GameObject-0-4615-0-2158-2850-000045AA0A`, observed Solid Chest, no tooltip
 object ID, and Opening spell 3365 targeting Solid Chest with no clicked context.
@@ -204,7 +230,7 @@ reports attribution failures even when the page was closed during looting.
 Fishing, creature sources, mixed sources,
 and item-origin windows are rejected. Autoloot retains the bounded READY snapshot.
 World records use `context=world`, approximate player coordinates and partial
-contents with receipt unconfirmed. The optional local `objectID` kind field
+contents without asserting recovery. The optional local `objectID` kind field
 survives reload and groups subsequent spawns; manual name-only kinds stay separate.
 The existing report format does not transmit this local identity field.
 
@@ -219,8 +245,9 @@ The bounded lifecycle is:
 - At most 384 bag-item GUIDs. Identity remains usable while recorded bag snapshots
   still contain that item; a later snapshot that no longer finds it starts a
   60-second grace period, covering consumption before autoloot notifications.
-- One `LOOT_READY` candidate, valid for three seconds; one active inspection,
-  valid for 60 seconds after its last attributable update.
+- One `LOOT_READY` candidate, valid for three seconds; one opened window waiting
+  for readable contents or active inspection, valid for 60 seconds after its last
+  attributable event update. Polling cannot extend that lifetime.
 - A READY snapshot preserves contents removed by autoloot before OPENED. An
   unreadable or differently attributed **nonempty** window cannot inherit it.
 - At most 128 recent correlated item interactions, expiring after 120 seconds.
@@ -240,8 +267,9 @@ Automatic contents are always **partial** because native event order and
 autoloot can hide rows. No receipt signal is treated as strong enough to confirm
 personal recovery in this iteration. World sightings/identity, access conditions,
 portable acquisition locations, unsupported sources and recovery quantities use
-manual recording. Missing readable APIs fail closed. Delayed item metadata only
-enriches already recorded IDs; it does not create encounters or move selection.
+manual recording. Missing readable APIs fail closed. Delayed item metadata can
+retry the current attributed window and enrich already recorded IDs. Outside
+that window it cannot create encounters or move selection.
 
 ### Client API evidence
 
@@ -256,6 +284,8 @@ Blizzard UI source on the `forever` branch, accessed 2026-09-28:
   defines `C_Item.GetItemGUID` and item metadata reads.
 - [Loot event documentation](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated/LootDocumentation.lua)
   defines READY, OPENED's item-origin boolean, slot changes and closure.
+- [Loot slot constants](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated/LootConstantsDocumentation.lua),
+  checked 2026-10-08, define None=0, Item=1, Money=2 and Currency=3.
 - [Native LootFrame](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua)
   uses loot-slot link/info reads and fishing context. The repository's existing
   `BestiaryLoot.lua` supplies precedent for guarded `GetLootSourceInfo` GUID/quantity

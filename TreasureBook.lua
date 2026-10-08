@@ -80,7 +80,7 @@ function ns.CreateTreasureBook(journal,tracking,shell)
             for _,v in ipairs(history) do if v.access~="" then
                 add("Access ("..(v.reported and "reported / " or "")..v.accessMethod.."): "..v.access.."\n"..T.Date(v.origin.at).." • "..T.LocationText(v.location),nil,v.id)
             end end
-            add("Automatic capture records readable openable bag items and strictly matched portable inspections. It never confirms receipt. World identity, acquisition context, access requirements and recovery claims can be recorded manually.",nil,nil,"guidance","Recording finds")
+            add("Automatic capture records observed contents from matched world and portable containers. Use Record a find for acquisition context, access requirements and personally recovered quantities.",nil,nil,"guidance","Recording finds")
         elseif detail=="notes" then
             add("General notes (private):\n"..(e.note~="" and e.note or "No notes yet. Use Edit."),nil,nil,"notes")
             add("Look for again: "..(e.bookmark and "Bookmarked" or "Not bookmarked").."\n"..(e.bookmarkNote~="" and e.bookmarkNote or "No reason recorded."),nil,nil,"notes")
@@ -93,8 +93,8 @@ function ns.CreateTreasureBook(journal,tracking,shell)
                     "\n"..T.LocationText(v.location).."\n"..T.captures[v.capture],nil,v.id)
                 rows[#rows].divider=any;any=true
                 for _,item in ipairs(v.items) do
-                    local receipt=item.recovered and (v.reported and "Source reports recovering " or "Personally recovered (manual): ")..item.recovered or "Receipt unconfirmed"
-                    add(journal:ItemName(item).." × "..item.quantity.." observed\n"..receipt,item,v.id)
+                    local receipt=item.recovered and "\n"..(v.reported and "Source reports recovering " or "Personally recovered (manual): ")..item.recovered or ""
+                    add(journal:ItemName(item).." × "..item.quantity.." observed"..receipt,item,v.id)
                 end
                 if #v.items==0 then add(v.capture=="full" and "No items listed in this full manual capture." or "No item rows captured; contents are unknown.",nil,v.id) end
             end end

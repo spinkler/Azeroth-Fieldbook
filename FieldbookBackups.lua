@@ -338,6 +338,7 @@ function B.CanRestore(snapshot)
         need(plain(main) and main.version==1,"This copy has an unsupported main save; export it for file recovery.")
         need(main.accountTrackingKey==nil or integer(main.accountTrackingKey,1,2147483647),"Invalid character import identity.")
         need(main.accountWideTracking==nil or type(main.accountWideTracking)=="boolean","Invalid tracking scope.")
+        need(ns.ValidTrackingSections(main.accountTrackingSections) and ns.ValidTrackingSections(main.accountTrackingSectionsActive),"Invalid journal tracking scopes.")
         need(main.accountTrackingActive==nil or type(main.accountTrackingActive)=="boolean","Invalid applied tracking scope.")
         tables(main,{"eventLog","spellIDWindowBlacklist","sourceClasses"});bestiary(main)
         if main.eventLog then tables(main.eventLog,{"entries"}) end

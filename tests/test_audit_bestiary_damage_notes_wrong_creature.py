@@ -2,10 +2,10 @@
 from ui_test_harness import new_ui_client
 
 lua = new_ui_client(['Scrollbars.lua', 'SharingReport.lua', 'BestiaryJournal.lua',
-                     'ActionButtons.lua', 'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
+                     'ActionButtons.lua', 'WindowPositions.lua', 'UIScale.lua', 'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
 lua.execute(r'''
 StaticPopupDialogs={};YES='Yes';NO='No'
-db={}
+db={windowPositions={AzerothFieldbookBestiaryDamageNotes={left=1400,top=700}}}
 journal=ns.CreateBestiaryJournal(db,function() return npcID end)
 controller=ns.CreateBestiaryBook(journal)
 npcID=42;controller:OpenAtUnit('target')
@@ -27,6 +27,27 @@ book.damageRows[1].scripts.OnClick(book.damageRows[1])
 local panel=book.notesForm
 local text=panel.rows[1].text:GetText()
 assert(panel:IsShown() and text:find('10%-20'))
+assert(panel.parent==book.damageForm.parent and panel:GetWidth()==book.damageForm:GetWidth())
+assert(panel.point[3]==book.damageForm.point[3] and panel.point[4]==book.damageForm.point[4]
+    and panel.point[5]==book.damageForm.point[5])
+book.damageRows[1].scripts.OnClick(book.damageRows[1]);assert(not panel:IsShown())
+book.damageRows[1].scripts.OnClick(book.damageRows[1]);assert(panel:IsShown())
+book.damageButton.scripts.OnClick(book.damageButton)
+book.damageForm.scripts.OnShow(book.damageForm)
+assert(not panel:IsShown() and book.damageForm:IsShown(),'Other ability overlays replace damage notes')
+book.damageRows[1].scripts.OnClick(book.damageRows[1])
+panel.scripts.OnShow(panel)
+assert(panel:IsShown() and not book.damageForm:IsShown())
+assert(not book.abilityPanel:IsShown())
+book.lootButton.scripts.OnClick(book.lootButton)
+-- This harness does not dispatch visibility events automatically.
+panel.scripts.OnHide(panel)
+assert(not panel:IsShown() and book.abilityPanel:IsShown() and book.lootMode)
+book.lootButton.scripts.OnClick(book.lootButton)
+book.damageRows[1].scripts.OnClick(book.damageRows[1]);panel.scripts.OnShow(panel)
+assert(panel:IsShown())
+
+
 assert(#journal:DamageNotes(42,9)==1 and #journal:DamageNotes(43,9)==1)
 selectRow(43)
 assert(not panel:IsShown())

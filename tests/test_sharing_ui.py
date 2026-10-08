@@ -501,7 +501,7 @@ for _,page in ipairs({main.help,main.options}) do
     assert(not page.border:IsMouseClickEnabled() and not page.border:IsMouseMotionEnabled() and not page.border.scripts.OnMouseDown,
         'border overlay never blocks window controls')
     assert(page.closeButton:GetFrameLevel()>page.border:GetFrameLevel(),'close button remains above the border')
-    eq(scroll.points[1][3],-42,'content and fade begin below the compact title bar')
+    eq(scroll.points[1][3],page==main.options and -80 or -42,'content and fade begin below the title and options tabs')
     assert(page.border:GetFrameLevel()>page.titleBar:GetFrameLevel()
         and page.closeButton:GetFrameLevel()>page.border:GetFrameLevel(),'border overlaps title bar while close button stays above it')
     eq(page.titleBar.points[1][3],-3,'title bar raised another pixel')
@@ -559,15 +559,15 @@ end
 ns.ShowDebugReport('Position test')
 assert(main.deleteForm.parent==main,'Delete warning inherits the journal page scale and visibility')
 local windows={window,main.help,main.options,
-    AzerothFieldbookBestiaryDamageNotes,
     notes,composer,receiver,AzerothFieldbookDebugReport}
 for _,frame in ipairs({window,main.help,main.options,
-    main.notesForm,main.effectPicker,notes,composer,receiver,AzerothFieldbookDebugReport}) do
+    main.effectPicker,notes,composer,receiver,AzerothFieldbookDebugReport}) do
     assert(frame.parent==UIParent and frame.strata=='MEDIUM' and frame.toplevel,
         'independent window state: '..tostring(frame.name)..'; strata='..tostring(frame.strata)..'; toplevel='..tostring(frame.toplevel))
     frame.scripts.OnMouseDown(frame); eq(focusedWindow,frame)
 end
 assert(main.damageForm.parent==main.detail,'damage observations are an in-page view')
+assert(main.notesForm.parent==main.detail and not main.notesForm.scripts.OnDragStop,'collated damage notes stay in the book')
 composer.recipient.scripts.OnMouseDown(composer.recipient)
 eq(focusedWindow,composer,'clicking a text field raises its own window')
 npcID=42;book:OpenAtUnit('target');book:OpenNotes()
@@ -695,8 +695,10 @@ StaticPopupDialogs={}
 local popup
 function StaticPopup_Show(key,text,_,data) popup={key=key,text=text,data=data} end
 local options=main.options
-eq(options.backupButton.point[2],208);eq(options.restoreButton.point[2],378)
-eq(options.backupButton.point[3],-722,'backup shares the reset footer baseline')
+options.tabs.Data.scripts.OnClick()
+assert(options.backupButton:IsShown() and options.restoreButton:IsShown())
+eq(options.backupButton.point[4],208);eq(options.restoreButton.point[4],378)
+eq(options.backupButton.point[5],options.restoreButton.point[5],'backup and restore share the Data footer baseline')
 j:Ensure(43,false,'Saved creature',{level=9});j:SetCreatureNotes(43,'A private note')
 options.backupButton.scripts.OnClick()
 local backups=main.backupWindow.frame

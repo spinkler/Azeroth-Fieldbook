@@ -608,6 +608,40 @@ class AtlasUITests(unittest.TestCase):
             map.scripts.OnHide(map);assert(not glow:IsShown())
         ''')
 
+    def test_highlight_zone_tooltip_tracks_region_and_clears(self):
+        self.lua.execute("""
+            local map=m.map;local w,h=map:GetWidth(),map:GetHeight()
+            map.left,map.top=0,h;cursorX,cursorY=w*.25,h*.25
+            map.IsMouseOver=function() return true end
+            GameTooltip:Hide()
+            C_Map.GetMapHighlightInfoAtPosition=function() return 12345,nil,.8,.9,.2,.3,.1,.4 end
+            local target={mapID=102,name='Synthetic hills'}
+            C_Map.GetMapInfoAtPosition=function(id,x,y)
+                assert(math.abs(x-.25)<.00001 and math.abs(y-.75)<.00001)
+                return target
+            end
+            map:UpdateRegionHighlight()
+            assert(GameTooltip:IsShown() and GameTooltip:GetText()=='Synthetic hills')
+            assert(GameTooltip:IsOwned(map.regionTooltipOwner))
+            map.subzoneHover=true;map.subzoneModel=map.subzoneModel or {}
+            GameTooltip:SetOwner(map,'ANCHOR_LEFT');GameTooltip:SetText('Sub-zone observations');GameTooltip:Show()
+            map:UpdateRegionHighlight();map:SubzoneHover()
+            assert(GameTooltip:GetText()=='Synthetic hills' and GameTooltip:IsOwned(map.regionTooltipOwner))
+            target={mapID=103,name='Another zone'};map:UpdateRegionHighlight()
+            assert(GameTooltip:GetText()=='Another zone')
+            target=nil;map:UpdateRegionHighlight();assert(not GameTooltip:IsShown())
+            target={mapID=102,name='Synthetic hills'};map:UpdateRegionHighlight()
+            map.scripts.OnLeave(map);assert(not GameTooltip:IsShown())
+            map:UpdateRegionHighlight();map.placing=true;map:UpdateRegionHighlight()
+            assert(not GameTooltip:IsShown())
+            map.placing=false
+            local pin=CreateFrame('Frame');GameTooltip:SetOwner(pin,'ANCHOR_LEFT')
+            GameTooltip:SetText('Discovery');GameTooltip:Show();map:UpdateRegionHighlight()
+            assert(GameTooltip:IsOwned(pin) and GameTooltip:GetText()=='Discovery')
+            GameTooltip:Hide();map:UpdateRegionHighlight();map:SuspendPlayer()
+            assert(not GameTooltip:IsShown())
+        """)
+
     def test_world_map_click_navigation_and_toggle(self):
         self.lua.execute('''
             local map=m.map;local w,h=map:GetWidth(),map:GetHeight()
@@ -692,6 +726,36 @@ class AtlasUITests(unittest.TestCase):
             assert(m.details:GetVerticalScroll()==0)
             c:Expand();m.notesOverlay.scripts.OnUpdate(m.notesOverlay,0.18)
             assert(m.details:GetHeight()==80 and m.details:GetVerticalScroll()==0)
+        """)
+
+    def test_selected_zone_range_excludes_critters_and_unobserved_levels(self):
+        self.lua.execute("""
+            local best={entries={
+                [1]={personalEncountered=true,category='Beast',levelMin=10,levelMax=14,locations={['Synthetic coast']=true}},
+                [2]={personalEncountered=true,category='Humanoid',levelMin=20,levelMax=20,locations={['Synthetic coast']=true}},
+                [3]={personalEncountered=true,category='Critter',levelMin=1,levelMax=1,locations={['Synthetic coast']=true}},
+                [4]={personalEncountered=false,category='Beast',levelMin=80,levelMax=80,locations={['Synthetic coast']=true}},
+                [5]={personalEncountered=true,category='Beast',levelMin=-1,levelMax=-1,locations={['Synthetic coast']=true}},
+                [6]={personalEncountered=true,category='Beast',levelMin=30,levelMax=32,locations={['Synthetic hills']=true}},
+            }}
+            local adapter=ns.CreateAtlasReferences(best,nil,shell)
+            local before=snapshot(best)
+            assert(select(1,adapter:ObservedLevelRange(101))==10 and select(2,adapter:ObservedLevelRange(101))==20)
+            assert(select(1,adapter:ObservedLevelRange(102))==30 and select(2,adapter:ObservedLevelRange(102))==32)
+            assert(adapter:ObservedLevelRange(100)==nil)
+            assert(adapter:ObservedLevelRange(999)==nil)
+            assert(snapshot(best)==before,'Atlas ranges never mutate Bestiary records')
+            m.map.observedLevelRange=function(id) return adapter:ObservedLevelRange(id) end
+            c:SetZone(101,'Synthetic coast')
+            assert(m.map.levelText:GetText()==' |cffffd100Observed level range:|r 10–20')
+            c:SetZone(102,'Synthetic hills')
+            assert(m.map.levelText:GetText()==' |cffffd100Observed level range:|r 30–32')
+            best.entries[6]=nil;c:Refresh()
+            assert(m.map.levelText:GetText()==' |cffffd100Observed level range:|r Unknown')
+            best.entries[1].levelMax=24;c:SetZone(101,'Synthetic coast')
+            assert(m.map.levelText:GetText()==' |cffffd100Observed level range:|r 10–24')
+            best.entries[1]=nil;best.entries[2].levelMin=20;c:Refresh()
+            assert(m.map.levelText:GetText()==' |cffffd100Observed level range:|r 20')
         """)
 
     def test_weather_history_selected_zone(self):

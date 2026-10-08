@@ -18,7 +18,8 @@ of writings, landmarks, people and mysteries in per-character
 `AzerothFieldbookLoreDB`; see `tests/LORE.md` for capture, provenance, report and
 live-verification boundaries. Adventurer's Annals records character-local adventure
 history in `AzerothFieldbookAnnalsDB`. All eight journal sections are implemented.
-Account-wide tracking applies to seven journal families; Annals remains character-local. Bestiary uses
+Account-wide tracking has independent per-journal toggles in Options > Data for seven journal families;
+unset toggles inherit the legacy global preference. Annals remains character-local. Bestiary uses
 `AzerothFieldbookAccountDB.bestiary`; `AccountSections.lua` selects shared stores
 under `.sections` for gathering, Atlas, angling, Ledger, Treasure and Lore. Each character's
 existing section journals import once, with collision-safe IDs and preserved

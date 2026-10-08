@@ -436,15 +436,15 @@ options.behaviourTooltips.scripts.OnClick(options.behaviourTooltips)
 check(not journal:GetBehaviourTooltips(),'behaviour tooltip checkbox disables display')
 check(not ns.CreateBestiaryJournal(db,identify):GetBehaviourTooltips(),'saved behaviour tooltip opt-out survives reload')
 check(journal:GetAccountWideTracking() and not journal:IsTrackingChangePending(),'account-wide tracking defaults on')
-options.accountWideTracking.GetChecked=function() return false end
-options.accountWideTracking.scripts.OnClick(options.accountWideTracking)
-check(db.accountWideTracking==false and journal:IsTrackingChangePending(),'tracking checkbox saves a pending character scope')
-check(options.trackingReload.text=='Applies after /reload','tracking changes explain when they apply')
+options.trackingSections.bestiary.GetChecked=function() return false end
+options.trackingSections.bestiary.scripts.OnClick(options.trackingSections.bestiary)
+check(db.accountTrackingSections.bestiary==false and journal:IsTrackingChangePending(),'tracking checkbox saves a pending character scope')
+check(options.trackingReload.text=='Changes apply after /reload.','tracking changes explain when they apply')
 options.scripts.OnShow(options)
 check(not journal:GetAccountWideTracking(),'opening options preserves an explicit off preference')
-options.accountWideTracking.GetChecked=function() return true end
-options.accountWideTracking.scripts.OnClick(options.accountWideTracking)
-check(not journal:IsTrackingChangePending() and options.trackingReload.text=='','returning to active tracking cancels the pending change')
+options.trackingSections.bestiary.GetChecked=function() return true end
+options.trackingSections.bestiary.scripts.OnClick(options.trackingSections.bestiary)
+check(not journal:IsTrackingChangePending() and options.trackingReload.text=='Changes apply after reloading the UI.','returning to active tracking cancels the pending change')
 check(options.uiScale.scripts.OnKeyUp==nil and options.uiScale.scripts.OnKeyDown==nil,'options scale slider does not capture keyboard input')
 local oldScale=journal:GetUIScale()
 options.uiScale.scripts.OnValueChanged(options.uiScale,0.75)

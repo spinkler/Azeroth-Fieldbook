@@ -93,7 +93,7 @@ function R.Preview(v)
     for _,row in ipairs(r.encounters) do
         lines[#lines+1]="\n"..T.Date(row.origin.at).." • "..row.origin.source.." / "..row.origin.method
         lines[#lines+1]=T.Outcome(row);lines[#lines+1]=T.LocationText(row.location);lines[#lines+1]=T.captures[row.capture]
-        for _,item in ipairs(row.items) do lines[#lines+1]=(item.name or "Item #"..item.itemID).." × "..item.quantity..(item.recovered and " • source reports recovering "..item.recovered or " • receipt unconfirmed") end
+        for _,item in ipairs(row.items) do lines[#lines+1]=(item.name or "Item #"..item.itemID).." × "..item.quantity.." observed"..(item.recovered and " • source reports recovering "..item.recovered or "") end
         if row.access~="" then lines[#lines+1]="Access ("..row.accessMethod.."): "..row.access end
         if row.note~="" then lines[#lines+1]="Included note: "..row.note end
     end
@@ -134,9 +134,22 @@ local function enrich(old,incoming)
     for key,value in pairs(incoming.facts) do if value then out.facts[key]=true end end
     local byKey={};local function itemKey(item) return item.itemID and "item:"..item.itemID or "name:"..item.name end
     for _,item in ipairs(out.items) do byKey[itemKey(item)]=item end
+    local oldNames,newNames={},{}
+    for _,item in ipairs(out.items) do if item.name then oldNames[item.name]=oldNames[item.name]==nil and item or false end end
+    for _,item in ipairs(incoming.items) do if item.name then newNames[item.name]=(newNames[item.name] or 0)+1 end end
     local incomingKeys={}
     for _,item in ipairs(incoming.items) do
         local key=itemKey(item);incomingKeys[key]=true;local previous=byKey[key]
+        -- A delayed link can enrich one unambiguous name-only observation.
+        -- Keep its identity when an older name-only report arrives afterward.
+        local named=item.name and oldNames[item.name]
+        if not previous and named and newNames[item.name]==1 and (not item.itemID or not named.itemID) then
+            previous=named
+            if item.itemID then
+                byKey[itemKey(previous)]=nil;previous.itemID=item.itemID;byKey[key]=previous
+            end
+            incomingKeys[itemKey(previous)]=true
+        end
         if previous then
             if previous.quantity~=item.quantity or (previous.recovered and item.recovered and previous.recovered~=item.recovered) then return nil end
             if item.recovered then previous.recovered=item.recovered end

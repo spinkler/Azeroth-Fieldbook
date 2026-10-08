@@ -259,7 +259,12 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
     -- Reuse the native map highlight shape, cropped and positioned in map coordinates.
     map.regionHighlight=canvas:CreateTexture(nil,"ARTWORK",nil,1)
     map.regionHighlight:SetBlendMode("ADD");map.regionHighlight:Hide()
+    map.regionTooltipOwner=CreateFrame("Frame",nil,map)
+    function map:HideRegionTooltip()
+        if GameTooltip and GameTooltip:IsOwned(self.regionTooltipOwner) then GameTooltip:Hide() end
+    end
     function map:UpdateRegionHighlight()
+        self:HideRegionTooltip();self.regionHoverName=nil
         local texture=self.regionHighlight;texture:Hide()
         if not self.available or not displayedMapID or self.placing or drag or
             A.Read(self.IsVisible,self)==false or A.Read(self.IsMouseOver,self)~=true or
@@ -280,9 +285,27 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
         texture:ClearAllPoints()
         texture:SetPoint("TOPLEFT",canvas,"TOPLEFT",left*self:GetWidth(),-top*self:GetHeight())
         texture:SetSize(w*self:GetWidth(),h*self:GetHeight());texture:Show()
+        local target=A.Read(C_Map and C_Map.GetMapInfoAtPosition,displayedMapID,
+            (x+self.panX)/(self:GetWidth()*self.zoom),(y+self.panY)/(self:GetHeight()*self.zoom))
+        local sample=self.subzoneHover and self.NearestSubzoneSample and self:NearestSubzoneSample()
+        if not sample and GameTooltip and (not GameTooltip:IsShown() or GameTooltip:IsOwned(self)) and type(target)=="table"
+            and A.Integer(target.mapID,1,2147483647) and target.mapID~=displayedMapID
+            and A.Text(target.name,160) then
+            self.regionHoverName=target.name
+            GameTooltip:SetOwner(self.regionTooltipOwner,"ANCHOR_CURSOR")
+            GameTooltip:SetText(A.Safe(target.name));GameTooltip:Show()
+        end
+
     end
     function map:UpdateWeather()
         if self.weatherText then self.weatherText:SetText("|cffffd100Observed Weather:|r "..journal:WeatherText(displayedMapID)) end
+        if self.levelText then
+            local low,high
+            if self.observedLevelRange then low,high=self.observedLevelRange(displayedMapID) end
+            local levels=low and (low==high and string.format("%d",low) or string.format("%d–%d",low,high)) or "Unknown"
+            self.levelText:SetText(" |cffffd100Observed level range:|r "..levels)
+        end
+
     end
     local player=CreateFrame("Frame",nil,canvas)
     player:SetAllPoints();player:SetFrameLevel(map:GetFrameLevel()+5);player:EnableMouse(false)
@@ -311,6 +334,7 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
         arrow:SetRotation(facing);arrow:Show()
     end
     function map:SuspendPlayer()
+        self:HideRegionTooltip()
         self:SetScript("OnUpdate",nil);self.playerArrow:Hide();self.regionHighlight:Hide();playerElapsed=0
     end
     function map:ResumePlayer()
@@ -534,7 +558,7 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
         if A.Number(x,0,1) and A.Number(y,0,1) then onPlace(math.floor(x*10000+0.5),math.floor(y*10000+0.5)) end
     end)
     map:HookScript("OnEnter",function(self) self:UpdateRegionHighlight() end)
-    map:HookScript("OnLeave",function(self) self.regionHighlight:Hide() end)
+    map:HookScript("OnLeave",function(self) self.regionHighlight:Hide();self.regionHoverName=nil;self:HideRegionTooltip() end)
     map:SetScript("OnShow",function(self) self:ResumePlayer() end)
     map:SetScript("OnHide",function(self)
         self.subzoneHover=false;self:CancelPan();leave();self:SuspendPlayer()

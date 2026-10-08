@@ -94,6 +94,45 @@ class SubzoneTests(unittest.TestCase):
             assert(#m.map.subzoneModel.areas.Lake.components==2 and not m.map.subzoneModel:At(4500,6000))
         ''')
 
+    def test_ctrl_alt_right_click_deletes_sample_and_preserves_neighbors(self):
+        self.lua.execute("""
+            C_Map.GetMapWorldSize=function() return 1000,1000 end
+            local point={kind='interior',mapID=101,name='Lake',x=2362,y=5554,manual=true}
+            local neighbor={kind='interior',mapID=101,name='Lake',x=4000,y=7000}
+            s.store[101]={point,neighbor};s.index={};s:Changed(101)
+            j.state.showSubzonePoints=true;c:Refresh();settle()
+            m.map.left=100;m.map.top=700
+            cursorX=(100+.2362*m.map:GetWidth())*m.map:GetEffectiveScale()
+            cursorY=(700-.5554*m.map:GetHeight())*m.map:GetEffectiveScale()
+            C_Map.GetMapHighlightInfoAtPosition=function() return 12345,nil,.8,.9,.2,.3,.1,.4 end
+            C_Map.GetMapInfoAtPosition=function() return {mapID=102,name='Highlighted zone'} end
+            m.map.IsMouseOver=function() return true end
+            m.map.scripts.OnEnter(m.map)
+            m.map:UpdatePlayer()
+            assert(m.map.regionHighlight:IsShown())
+            assert(GameTooltip:IsOwned(m.map),'Point tooltip takes priority over highlighted zone')
+            local lines='';for _,v in ipairs(GameTooltip.lines) do lines=lines..v.text end
+            assert(lines:find('Ctrl+Alt+Right Click to delete',1,true))
+            cursorX=(100+.8*m.map:GetWidth())*m.map:GetEffectiveScale()
+            m.map:UpdatePlayer()
+            assert(GameTooltip:IsOwned(m.map.regionTooltipOwner) and GameTooltip:GetText()=='Highlighted zone')
+            cursorX=(100+.2362*m.map:GetWidth())*m.map:GetEffectiveScale()
+            m.map:UpdatePlayer()
+            assert(GameTooltip:IsOwned(m.map),'Moving back to the point restores its tooltip')
+            IsAltKeyDown=function() return true end
+            IsControlKeyDown=function() return true end
+            local copy=s:Samples(101)[1]
+            j.readOnly=true;assert(not s:DeleteSample(101,copy));j.readOnly=false
+            s.cleaning=true;assert(not s:DeleteSample(101,copy));s.cleaning=nil
+            assert(#s.store[101]==2)
+            m.map.scripts.OnMouseUp(m.map,'RightButton');settle()
+            assert(#s.store[101]==1 and s.store[101][1]==neighbor)
+            assert(#m.map.subzoneModel.rows==1)
+            assert(not s:DeleteSample(101,copy),'stale selection cannot delete another point')
+            local reload=ns.CreateAtlasJournal(j.saved)
+            assert(#reload.subzones:Samples(101)==1)
+        """)
+
     def test_alt_right_click_exclusion_is_reversible_and_survives_reload(self):
         self.lua.execute('''
             C_Map.GetMapWorldSize=function() return 1000,1000 end

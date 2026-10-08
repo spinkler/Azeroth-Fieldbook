@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.36.4 (Release)
+# Azeroth Fieldbook 0.37.0 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -662,10 +662,12 @@ ambiguous or unavailable map may need another observation in that zone. Close
 with Escape or the window's X; closing
 the Bestiary also closes its Locations window.
 
-**Account-wide tracking** is enabled by default in Options and applies to the seven shared
-journals: Bestiary, Herbs & Minerals, Traveller’s Atlas, Angler’s Almanac,
-Merchant’s Ledger, Treasure Journal and Lorekeeper's Chronicle. Turning it off uses
-this character’s separate journals. Annals always remains character-specific.
+**Account-wide tracking** has an individual checkbox for each journal under **Options > Data**:
+Bestiary, Gatherer's Compendium, Traveller’s Atlas, Angler’s Almanac,
+Merchant’s Ledger, Treasure Journal and Lorekeeper's Chronicle. Uncheck a journal to use
+this character’s separate data. Existing choices inherit the previous global setting;
+new characters default to account-wide. Annals always remains character-specific.
+Options uses three tabs: General, Journals, and Data, with scope controls and backups together.
 Changes apply after `/reload`. Shell appearance and Bestiary display options
 remain character preferences; each other section keeps its browsing state with
 its active journal.

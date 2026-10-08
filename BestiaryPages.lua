@@ -60,7 +60,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     journal:SetEventLogChangedCallback(function() if eventLog:IsShown() then refreshEventLog() end end)
     eventLog:Hide()
     local help,helpBody=createBookPage("AzerothFieldbookHelp","AZEROTH FIELDBOOK - HELP",24)
-    local helpInstructions=label(helpBody,"|cffffd1001. Encounter|r\nBuild a creature journal by targeting or mousing over attackable NPCs. Readable names, creature types and levels are recorded automatically. Clicking a creature adds its entry even when Location is suppressed. Automatic locations require a positive range check within 40 yards and agreement with your zone at all 25 map samples within 42 yards. A newly recorded zone announces New Location Observed once per creature. Observations in saved zones stay silent, including after reload. Location capture checks at most once per second per creature and needs about 10 yards of movement after an accepted capture. Kills count toward credit and rewards without recording locations. A skull means the level is unknown. While flying, including flight paths, target a creature or use the mouseover-open keybinding to record it; passive hovering does not count.\n\n|cffffd100Dungeons and raids|r\nIn instances such as Hall of Thanes, the game may hide creature identity, so selecting or hovering over a creature may not add it. A later readable target or mouseover observation can create the entry. Retained damage-meter records can add abilities to an existing entry, but cannot create or restore one. Use /fieldbook scan outside combat to retry ability imports; details the game still hides cannot be recorded.\n\n|cffffd1002. Record|r\nCasts with readable spell IDs are automatically confirmed with a cyan [A]; readable buffs are recorded outside combat. Player debuffs and Loss of Control IDs appear only with a verified NPC source. A matching player aura with a verified NPC source can add its ability with [A]. Player-controlled and unidentified casters are ignored. Cast, buff and debuff rows also have portraits for manual assignment. Hover to check the captured creature; buffs identify the recipient. Portraits keep their captured creature when targets change. Unlock its entry before assigning; restricted IDs require manual entry. Change this under Options > Ability recording. Observed fleeing can also record Flees at low health. Other ability observations may remain pending for your review. Add missing abilities and damage observations manually; use your own measurements for damage ranges.\n\n|cffffd1003. Review|r\nSelect a creature to review abilities, defenses, behaviour and Notes. Confirm accurate abilities, reject doubtful ones or remove unwanted records. Optional Show expected immunities in Options starts off: [Type] labels are expectations, not observed or shareable immunity marks.\n\nOpen Locations and switch between Tracking: Kills and Tracking: Observations. Violet preserves historical kill positions; cyan shows where you stood during qualified nearby observations. New observations add the zone and observer position, including while locked. Hover zone names to see retained historical subzones. Approximate historical markers are not exact creature positions.\n\n|cffffd1004. Lock Entry|r\nUse Lock this entry to protect manual edits and the saved basic information; Unlock this entry resumes editing. Locking does not stop kill credit or fresh automatic abilities and behaviours. Some basic facts, such as disposition and previously unknown levels, can still update. Notes remain editable.\n\nEnable all AFB tooltips in Options starts on and controls creature facts and spell IDs. Spell observation and ID feedback in chat starts off, separately from discovery announcements.\n\nConfirmed abilities can appear in creature tooltips. Use each ability's checkbox to choose which ones appear, even while locked. Hold Ctrl over a creature for available spell descriptions.\n\n|cffffd1005. Browse|r\nNarrow the index with creature-type filters, search and sorting. Index shows or hides the A-Z filters. The Next Bestiary entry and Previous Bestiary entry keybindings follow the filtered list while the Bestiary is open and no text field has focus.\n\nAccount-wide tracking in Options starts on and covers all seven journals. Turn it off to use this character's separate journals; changes apply after /reload. Existing character journals import once into the account journals. Later changes in the two scopes stay separate.\n\n|cffffd1006. Share|r\nOutside combat, use Share to offer one creature's information to a named player using the same addon version. Select the traits to include and review the cost before Send. Received traits appear as unverified Rumours with the sender's name. Open Rumours, then use the green tick to verify a claim or x to reject it. Unlock the entry before verifying. Beast Lore is shared separately as a free, read-only client observation with sender attribution.\n\nThe book shows knowledge earned; Share shows what remains available after spending and reservations. If delivery is uncertain, knowledge stays spent. Reopen Share and use Retry for the same report without another charge, up to three times within 24 hours.",35,0,535)
+    local helpInstructions=label(helpBody,"|cffffd1001. Encounter|r\nBuild a creature journal by targeting or mousing over attackable NPCs. Readable names, creature types and levels are recorded automatically. Clicking a creature adds its entry even when Location is suppressed. Automatic locations require a positive range check within 40 yards and agreement with your zone at all 25 map samples within 42 yards. A newly recorded zone announces New Location Observed once per creature. Observations in saved zones stay silent, including after reload. Location capture checks at most once per second per creature and needs about 10 yards of movement after an accepted capture. Kills count toward credit and rewards without recording locations. A skull means the level is unknown. While flying, including flight paths, target a creature or use the mouseover-open keybinding to record it; passive hovering does not count.\n\n|cffffd100Dungeons and raids|r\nIn instances such as Hall of Thanes, the game may hide creature identity, so selecting or hovering over a creature may not add it. A later readable target or mouseover observation can create the entry. Retained damage-meter records can add abilities to an existing entry, but cannot create or restore one. Use /fieldbook scan outside combat to retry ability imports; details the game still hides cannot be recorded.\n\n|cffffd1002. Record|r\nCasts with readable spell IDs are automatically confirmed with a cyan [A]; readable buffs are recorded outside combat. Player debuffs and Loss of Control IDs appear only with a verified NPC source. A matching player aura with a verified NPC source can add its ability with [A]. Player-controlled and unidentified casters are ignored. Cast, buff and debuff rows also have portraits for manual assignment. Hover to check the captured creature; buffs identify the recipient. Portraits keep their captured creature when targets change. Unlock its entry before assigning; restricted IDs require manual entry. Change this under Options > Ability recording. Observed fleeing can also record Flees at low health; a screech calling for help records Calls allies. Other ability observations may remain pending for your review. Add missing abilities and damage observations manually; use your own measurements for damage ranges.\n\n|cffffd1003. Review|r\nSelect a creature to review abilities, defenses, behaviour and Notes. Confirm accurate abilities, reject doubtful ones or remove unwanted records. Optional Show expected immunities in Options starts off: [Type] labels are expectations, not observed or shareable immunity marks.\n\nOpen Locations and switch between Tracking: Kills and Tracking: Observations. Violet preserves historical kill positions; cyan shows where you stood during qualified nearby observations. New observations add the zone and observer position, including while locked. Hover zone names to see retained historical subzones. Approximate historical markers are not exact creature positions.\n\n|cffffd1004. Lock Entry|r\nUse Lock this entry to protect manual edits and the saved basic information; Unlock this entry resumes editing. Locking does not stop kill credit or fresh automatic abilities and behaviours. Some basic facts, such as disposition and previously unknown levels, can still update. Notes remain editable.\n\nEnable all AFB tooltips in Options starts on and controls creature facts and spell IDs. Spell observation and ID feedback in chat starts off, separately from discovery announcements.\n\nConfirmed abilities can appear in creature tooltips. Use each ability's checkbox to choose which ones appear, even while locked. Hold Ctrl over a creature for available spell descriptions.\n\n|cffffd1005. Browse|r\nNarrow the index with creature-type filters, search and sorting. Index shows or hides the A-Z filters. The Next Bestiary entry and Previous Bestiary entry keybindings follow the filtered list while the Bestiary is open and no text field has focus.\n\nOptions > Data has an individual account-wide toggle for each of the seven supported journals. Uncheck a journal to use this character's separate data; changes apply after /reload. Annals always stays character-specific. Existing character journals import once into the account journals. Later changes in the two scopes stay separate.\n\n|cffffd1006. Share|r\nOutside combat, use Share to offer one creature's information to a named player using the same addon version. Select the traits to include and review the cost before Send. Received traits appear as unverified Rumours with the sender's name. Open Rumours, then use the green tick to verify a claim or x to reject it. Unlock the entry before verifying. Beast Lore is shared separately as a free, read-only client observation with sender attribution.\n\nThe book shows knowledge earned; Share shows what remains available after spending and reservations. If delivery is uncertain, knowledge stays spent. Reopen Share and use Retry for the same report without another charge, up to three times within 24 hours.",35,0,535)
     local pointsBlock=CreateFrame("Frame",nil,helpBody,"BackdropTemplate")
     pointsBlock:SetPoint("TOPLEFT",helpInstructions,"BOTTOMLEFT",0,-18)
     pointsBlock:SetWidth(535)
@@ -117,7 +117,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         if font and type(size)=="number" then heading:SetFont(font,size-2,flags) end
         optionSections[#optionSections+1]={heading=heading,originalY=y,items={}}
     end
-    optionHeading("Tracking",0)
+    optionHeading("Bestiary entry locking",0)
     optionHeading("Chat notifications",122)
     label(optionsBody,"Events are saved in the Event log even when chat messages are off.",35,-248,510,"GameFontHighlightSmall")
     optionHeading("Appearance",266)
@@ -154,52 +154,41 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         if ns.LoreSettings then ns.LoreSettings.Set("loreOnlyOpenedPages",self:GetChecked()==true) end
     end)
     label(optionsBody,"Both start on. Only displayed pages are archived by default. Disable the second option to archive the whole accessible book where supported; the original reader may turn pages. Keep the interaction open until archiving finishes. Automatically retrieved pages are labelled separately. Disabling capture or enabling the restriction stops automatic work and keeps stored text. Manual capture and transcription remain available.",35,-1740,510,"GameFontHighlightSmall")
-    options.accountWideTracking=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
-    options.accountWideTracking:SetPoint("TOPLEFT",30,-26); options.accountWideTracking:SetSize(24,24)
-    label(optionsBody,"Account-wide tracking",58,-32,235,"GameFontHighlightSmall")
-    options.scope=CreateFrame("Frame",nil,optionsBody)
-    options.scope:SetPoint("TOPLEFT",300,-29);options.scope:SetSize(235,18)
-    options.scope:EnableMouse(true)
-    options.scopeLabel=label(options.scope,"",0,-3,235,"GameFontHighlightSmall")
-    options.scopeLabel:SetTextColor(0.55,0.57,0.57);options.scopeLabel:SetWordWrap(false)
+    optionHeading("Account-wide journals",2600)
+    label(optionsBody,"Choose which journals this character shares with your account. Checked means account-wide; unchecked means character-specific.",35,-2630,510,"GameFontHighlightSmall")
+    options.trackingSections={}
+    for index,section in ipairs(ns.TrackingSections) do
+        local key,title=section[1],section[2]
+        local row=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
+        row:SetPoint("TOPLEFT",30,-2684-(index-1)*34);row:SetSize(24,24)
+        label(optionsBody,title,58,-2690-(index-1)*34,280,"GameFontHighlightSmall")
+        row.status=label(optionsBody,"",350,-2690-(index-1)*34,185,"GameFontHighlightSmall")
+        options.trackingSections[key]=row
+        row:SetScript("OnClick",function(self)
+            journal:SetAccountWideTracking(self:GetChecked()==true,key)
+            options:RefreshStorageScope()
+        end)
+    end
+    options.trackingReload=label(optionsBody,"",35,-2930,510,"GameFontHighlightSmall")
+    label(optionsBody,"Adventurer's Annals always stays character-specific. Each character journal imports once when enabled. Account and character journals then remain separate: disabling does not copy account data back, and re-enabling does not import later character-only changes.",35,-2960,510,"GameFontHighlightSmall")
     function options:RefreshStorageScope()
-        local title,explanation=shell:GetStorageScope()
-        self.scopeLabel:SetText(title or (journal:IsAccountWideTrackingActive() and "Account-wide" or "Character-specific"))
-        self.scopeExplanation=explanation
-    end
-    options.scope:SetScript("OnEnter",function(self)
-        if GameTooltip then
-            GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(options.scopeLabel:GetText())
-            if options.scopeExplanation then GameTooltip:AddLine(options.scopeExplanation,1,1,1,true) end
-            GameTooltip:Show()
+        for _,section in ipairs(ns.TrackingSections) do
+            local key=section[1];local row=self.trackingSections[key]
+            row:SetChecked(journal:GetAccountWideTracking(key))
+            local title
+            if key=="bestiary" then title=journal:IsAccountWideTrackingActive() and "Account-wide" or "Character-specific"
+            elseif ns.GetActiveStorageScope then title=ns.GetActiveStorageScope(key) end
+            row.status:SetText(journal:IsTrackingChangePending(key) and "Pending reload" or title or (journal:GetAccountWideTracking(key) and "Account-wide" or "Character-specific"))
         end
-    end)
-    options.scope:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
-    options.trackingReload=label(optionsBody,"",58,-48,470,"GameFontHighlightSmall")
-    options.trackingReload:SetWordWrap(false)
-    local function refreshTrackingOption()
-        options.accountWideTracking:SetChecked(journal:GetAccountWideTracking())
-        options.trackingReload:SetText(journal:IsTrackingChangePending() and "Applies after /reload" or "")
-        options:RefreshStorageScope()
+        self.trackingReload:SetText(journal:IsTrackingChangePending() and "Changes apply after /reload." or "Changes apply after reloading the UI.")
     end
-    options.accountWideTracking:SetScript("OnClick",function(self)
-        journal:SetAccountWideTracking(self:GetChecked() == true)
-        refreshTrackingOption()
-    end)
-    options.accountWideTracking:SetScript("OnEnter",function(self)
-        if not GameTooltip then return end
-        GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
-        GameTooltip:SetText("Account-wide tracking")
-        GameTooltip:AddLine("Share knowledge across every Fieldbook section: Bestiary, Gatherer's Compendium, Traveller’s Atlas, Angler’s Almanac, Merchant’s Ledger, Treasure Journal and Lorekeeper's Chronicle. Turn off to use this character's separate journals. Changes apply after /reload.",1,1,1,true)
-        GameTooltip:Show()
-    end)
-    options.accountWideTracking:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+    local function refreshTrackingOption() options:RefreshStorageScope() end
     options.autoLockEnabled=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
-    options.autoLockEnabled:SetPoint("TOPLEFT",30,-58);options.autoLockEnabled:SetSize(24,24)
-    label(optionsBody,"Auto-lock after",58,-64,100,"GameFontHighlightSmall")
-    options.autoLockKills=edit(optionsBody,166,-60,45,5)
+    options.autoLockEnabled:SetPoint("TOPLEFT",30,-26);options.autoLockEnabled:SetSize(24,24)
+    label(optionsBody,"Auto-lock after",58,-32,100,"GameFontHighlightSmall")
+    options.autoLockKills=edit(optionsBody,166,-28,45,5)
     options.autoLockKills:SetNumeric(true)
-    label(optionsBody,"kills without changes",226,-64,300,"GameFontHighlightSmall")
+    label(optionsBody,"kills without changes",226,-32,300,"GameFontHighlightSmall")
     options.autoLockEnabled:SetScript("OnClick",function(self)
         journal:SetAutoLockEnabled(self:GetChecked()==true)
         options.autoLockKills:SetEnabled(journal:GetAutoLockEnabled())
@@ -209,8 +198,8 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         self:SetText(tostring(journal:GetAutoLockKills()))
     end)
     options.lockNewCritters=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
-    options.lockNewCritters:SetPoint("TOPLEFT",30,-90);options.lockNewCritters:SetSize(24,24)
-    label(optionsBody,"Lock newly encountered critters",58,-96,470,"GameFontHighlightSmall")
+    options.lockNewCritters:SetPoint("TOPLEFT",30,-58);options.lockNewCritters:SetSize(24,24)
+    label(optionsBody,"Lock newly encountered critters",58,-64,470,"GameFontHighlightSmall")
     options.lockNewCritters:SetScript("OnClick",function(self)
         journal:SetLockNewCritters(self:GetChecked()==true)
     end)
@@ -475,14 +464,15 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
             timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
         }
     end
-    button(options,"Reset Bestiary",30,-722,160,function()
+    optionHeading("Bestiary backup and reset",3100)
+    button(optionsBody,"Reset Bestiary",30,-3134,160,function()
         if StaticPopup_Show then StaticPopup_Show("AZEROTHFIELDBOOK_BESTIARY_RESET_CONFIRM") end
     end)
     if ns.CreateBackupWindow and journal.CreateBackup then
         local backupWindow=ns.CreateBackupWindow(journal,{page=createBookPage,label=label,button=button},callbacks.onRestored)
         book.backupWindow=backupWindow
-        options.backupButton=button(options,"Backup Bestiary",208,-722,160,function() backupWindow:Open(true) end)
-        options.restoreButton=button(options,"Restore Bestiary",378,-722,160,function() backupWindow:Open(false) end)
+        options.backupButton=button(optionsBody,"Backup Bestiary",208,-3134,160,function() backupWindow:Open(true) end)
+        options.restoreButton=button(optionsBody,"Restore Bestiary",378,-3134,160,function() backupWindow:Open(false) end)
     end
     if ns.OpenFieldbookBackups then
         optionHeading("Whole-Fieldbook backup and recovery",1900)
@@ -544,24 +534,54 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
             ui.EntryDivider(section.divider,0,510)
         end
     end
+    local categories={
+        ["Bestiary entry locking"]="Journals",["Ability recording"]="Journals",["Expected immunities"]="Journals",
+        ["Lorekeeper's Chronicle"]="Journals",["Atlas and Almanac maps"]="Journals",
+        ["Traveller's Atlas"]="Journals",["Adventurer's Annals"]="Journals",
+        ["Account-wide journals"]="Data",["Whole-Fieldbook backup and recovery"]="Data",["Reset entire Fieldbook"]="Data",
+        ["Bestiary backup and reset"]="Data",
+    }
+    for _,section in ipairs(optionSections) do section.tab=categories[section.heading:GetText()] or "General" end
+    -- Put scope choices before recovery actions on the Data tab.
+    table.sort(optionSections,function(a,b)
+        if a==b then return false end
+        if a.originalY==2600 then return true end
+        if b.originalY==2600 then return false end
+        return a.originalY<b.originalY
+    end)
+    options.activeTab="General";options.tabs={}
     local function layoutOptions()
-        local top=0
-        for i,section in ipairs(optionSections) do
-            if i>1 then
-                section.divider:ClearAllPoints();section.divider:SetPoint("TOPLEFT",30,-top-18)
+        local top,count=0,0
+        for _,section in ipairs(optionSections) do
+            local visible=section.tab==options.activeTab
+            if section.divider then section.divider:SetShown(visible and count>0) end
+            if visible and count>0 then
+                if section.divider then section.divider:ClearAllPoints();section.divider:SetPoint("TOPLEFT",30,-top-18) end
                 top=top+37
             end
             local bottom=0
             for _,item in ipairs(section.items) do
-                local control=item.control
-                control:ClearAllPoints();control:SetPoint(item.point,optionsBody,item.point,item.x,-top-item.offset)
-                local height=control:GetHeight() or 0
-                if control.GetStringHeight then height=math.max(height,control:GetStringHeight() or 0) end
-                bottom=math.max(bottom,item.offset+height)
+                local control=item.control;control:SetShown(visible)
+                if visible then
+                    control:ClearAllPoints();control:SetPoint(item.point,optionsBody,item.point,item.x,-top-item.offset)
+                    local height=control:GetHeight() or 0
+                    if control.GetStringHeight then height=math.max(height,control:GetStringHeight() or 0) end
+                    bottom=math.max(bottom,item.offset+height)
+                end
             end
-            top=top+bottom
+            if visible then top=top+bottom;count=count+1 end
         end
         optionsBody:SetHeight(top+18)
+        for name,tab in pairs(options.tabs) do tab:SetEnabled(name~=options.activeTab) end
+        options.scroll:UpdateScrollChildRect()
+    end
+    options.contentTop=80
+    options.scroll:ClearAllPoints()
+    options.scroll:SetPoint("TOPLEFT",0,-80);options.scroll:SetPoint("BOTTOMRIGHT",-32,65)
+    for index,name in ipairs({"General","Journals","Data"}) do
+        options.tabs[name]=originalButton(options,name,30+(index-1)*174,-40,164,function()
+            options.activeTab=name;options.scroll:SetVerticalScroll(0);layoutOptions()
+        end)
     end
     layoutOptions()
     options:SetScript("OnShow",function(self)

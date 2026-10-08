@@ -7,6 +7,14 @@ from lupa.lua51 import LuaRuntime
 
 source = Path(__file__).resolve().parents[1].joinpath('AzerothFieldbook.lua').read_text()
 lua = LuaRuntime(unpack_returned_tuples=True)
+validation = lua.table()
+lua.execute(Path(__file__).resolve().parents[1].joinpath('BestiaryJournal.lua').read_text(), 'AzerothFieldbook', validation)
+def execute_source(namespace=None):
+    if namespace is None:
+        namespace = lua.table()
+    namespace.ValidTrackingSections = validation.ValidTrackingSections
+    lua.execute(source, 'AzerothFieldbook', namespace)
+
 lua.execute(r'''
 clock = 0
 tooltipIDs=false;tooltipWrites=0
@@ -65,7 +73,7 @@ end
 function cast(unit, id, event) fire(event or 'UNIT_SPELLCAST_START', unit, 'cast', id) end
 function check(value, message) assert(value, message) end
 ''')
-lua.execute(source, 'AzerothFieldbook')
+execute_source()
 lua.execute(r'''
 -- Preloaded original data must never affect the new database.
 ClassicBestiary = {map = {[42] = {999}}, tip = {}, st = {}}
@@ -167,7 +175,7 @@ saved = AzerothFieldbookDB
 saved.showSpellIDs=false;saved.spellIDTooltipInitialized=false
 ''')
 # Reload through the current SavedVariables database.
-lua.execute(source, 'AzerothFieldbook')
+execute_source()
 lua.execute(r'''
 frames[2].handler(frames[2], 'ADDON_LOADED', 'AzerothFieldbook')
 check(AzerothFieldbookDB == saved and count() == 8, 'current database reloads without data loss')
@@ -191,7 +199,7 @@ check(count() == 0, 'reset clears')
 check(tooltipIDs and tooltipWrites==3, 'standalone settings wipe restores tooltip default')
 AzerothFieldbookDB = nil
 ''')
-lua.execute(source, 'AzerothFieldbook')
+execute_source()
 lua.execute("frames[3].handler(frames[3], 'ADDON_LOADED', 'AzerothFieldbook'); check(count() == 0, 'new character empty')")
 lua.execute(r'''
 alias = 'nameplate7'
@@ -300,7 +308,7 @@ check(count() == 4, 'diagnostic failures cannot add abilities')
 # Exercise real TOC order and encounter -> SavedVariables -> tooltip integration.
 namespace = lua.table()
 lua.execute(Path(__file__).resolve().parents[1].joinpath('BestiaryEncounterReader.lua').read_text(), 'AzerothFieldbook', namespace)
-lua.execute(source, 'AzerothFieldbook', namespace)
+execute_source(namespace)
 lua.execute(r'''
 AzerothFieldbookDB = nil
 frames[4].handler(frames[4], 'ADDON_LOADED', 'AzerothFieldbook')
@@ -342,7 +350,7 @@ assert 'COMBAT_LOG_EVENT_UNFILTERED' not in source
 assert 'Disabled: Forever marks combat aura payloads as secret' in source
 book_namespace = lua.table()
 lua.execute(Path(__file__).resolve().parents[1].joinpath('BestiaryJournal.lua').read_text(), 'AzerothFieldbook', book_namespace)
-lua.execute(source, 'AzerothFieldbook', book_namespace)
+execute_source(book_namespace)
 lua.execute(r'''
 AzerothFieldbookDB = nil
 function UnitName() return 'Test humanoid' end

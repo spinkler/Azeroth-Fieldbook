@@ -214,6 +214,24 @@ function S.Attach(j)
         end
         return false
     end
+    function s:DeleteSample(id,sample)
+        if j.readOnly or ns.InitializationBlocked or self.cleaning then return false end
+        local index=self:Index(id)
+        if not index.ready then return false end
+        for row,p in ipairs(store[id] or {}) do
+            if (valid(p) or interior(p)) and p.mapID==id and p.kind==sample.kind
+                and p.x==sample.x and p.y==sample.y and p.name==sample.name
+                and p.from==sample.from and p.to==sample.to and p.fromX==sample.fromX and p.fromY==sample.fromY then
+                table.remove(store[id],row)
+                self:Reset()
+                if index.coverage then S.Cancel(index.coverage.job) end
+                self.index[id]=nil;self:Changed(id)
+                if self.onChange then self.onChange(id) end
+                return true
+            end
+        end
+        return false
+    end
     local function spatial(index,row,add,allSamples,radius)
         if not index.width then return index.keys[key(row)] end
         local isInterior=row.kind=="interior"
@@ -1726,7 +1744,13 @@ function S.InstallMap(map,journal,cursorPoint)
         if journal.readOnly or self.placing or self.subzoneWorldLayers then return false end
         local sample=self:NearestSubzoneSample()
         if not sample then return false end
-        if journal.subzones:ToggleExcluded(self.subzoneMapID,sample) then
+        local changed
+        if A.Read(IsControlKeyDown)==true then
+            changed=journal.subzones:DeleteSample(self.subzoneMapID,sample)
+        else
+            changed=journal.subzones:ToggleExcluded(self.subzoneMapID,sample)
+        end
+        if changed then
             hoverModel=nil
             if GameTooltip then GameTooltip:Hide() end
             self:RenderSubzones()
@@ -1734,6 +1758,7 @@ function S.InstallMap(map,journal,cursorPoint)
         return true
     end
     function map:SubzoneHover()
+        if self.regionHoverName and not self:NearestSubzoneSample() then return end
         if not self.subzoneHover or not self.subzoneModel or self.placing or not GameTooltip then return end
         local x,y=cursorPoint();if not x then return end
         x,y=(x+self.panX)/(width*self.zoom)*10000,(y+self.panY)/(height*self.zoom)*10000
@@ -1753,6 +1778,7 @@ function S.InstallMap(map,journal,cursorPoint)
             if nearest.excluded then GameTooltip:AddLine('Excluded from mapping; original observation retained.',0.7,0.7,0.7,true) end
             if not journal.readOnly and not self.subzoneWorldLayers then
                 GameTooltip:AddLine(nearest.excluded and 'Alt-right-click to restore this observation.' or 'Alt-right-click to exclude this observation from mapping.',1,0.82,0.14,true)
+                GameTooltip:AddLine('Ctrl+Alt+Right Click to delete this observation.',1,0.82,0.14,true)
             end
         end
         GameTooltip:AddLine(#model.rows.." observation samples / "..#model.names.." observed areas",0.75,0.8,0.8)

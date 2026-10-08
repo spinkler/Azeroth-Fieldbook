@@ -24,6 +24,30 @@ LOG_REWARDS = '''
 
 
 class AnnalsTests(unittest.TestCase):
+    def test_map_hover_updates_without_live_player_driver(self):
+        l=full_client();l.execute(ENV)
+        l.execute("""
+            local c=ns.AnnalsController;local j=c.journal
+            j.trail:Sample({mapID=101,x=4000,y=5000,at=100,state='alive'},true)
+            j.trail:SetEnabled(false)
+            c.shell:ShowSection('annals');c:SetRange(100,110);c:Seek(100)
+            local map=c.main.map;local w,h=map:GetWidth(),map:GetHeight()
+            map.left,map.top=0,h;cursorX,cursorY=w*.25,h*.25
+            map.IsMouseOver=function() return true end
+            C_Map.GetMapHighlightInfoAtPosition=function() return 12345,nil,.8,.9,.2,.3,.1,.4 end
+            C_Map.GetMapInfoAtPosition=function() return {mapID=102,name='Synthetic hills'} end
+            GameTooltip:Hide()
+            local historical=map.historicalPlayer
+            assert(map.scripts.OnUpdate)
+            map.scripts.OnUpdate(map,.1)
+            assert(map.regionHighlight:IsShown() and GameTooltip:GetText()=='Synthetic hills')
+            assert(map.historicalPlayer==historical)
+            C_Map.GetMapHighlightInfoAtPosition=function() return nil end
+            map.scripts.OnUpdate(map,.1)
+            assert(not map.regionHighlight:IsShown() and not GameTooltip:IsShown())
+            map.scripts.OnHide(map);assert(not map.scripts.OnUpdate)
+        """)
+
     def test_level_up_capture_and_filter(self):
         l=client();l.execute("""
             UnitLevel=function() return 22 end

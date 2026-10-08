@@ -1,5 +1,25 @@
 # Account-wide Fieldbook journals
 
+## Individual journal scopes
+
+Options > Data provides seven independent account-wide checkboxes. Sparse boolean
+`accountTrackingSections` overrides inherit `accountWideTracking` when absent, so
+existing opt-outs and default-on saves retain their behavior. These preferences
+belong to each character. Annals has no account option. Choices apply on reload;
+the active-store badges remain truthful when a migration is deferred.
+
+Account identity allocation runs when any journal is shared, even with Bestiary
+disabled. Disabled journals neither import nor select account data. Imports remain
+one-time; switching back never copies shared data into retained character journals.
+Bestiary reset preserves all scope preferences and the applied section snapshot
+`accountTrackingSectionsActive`. Startup and whole-backup validation reject malformed
+scope maps before migration. Whole backups retain both maps with character settings.
+
+`test_individual_tracking.py` checks all seven journals individually against both
+legacy defaults, quiet reloads, deferred changes, reset preservation and one-time
+imports. The options category test covers tab visibility and independent toggles.
+Native text wrapping, tab appearance and scroll fades still require an in-game check.
+
 ## Reset and unsupported-account preservation
 
 Full reset retains only the ownership allocator in AccountDB. Cleared import

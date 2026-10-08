@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.37.0 - 2026-10-08
+
+- Add independent account-wide tracking toggles for all seven supported journals, preserving each character's previous setting and one-time imports. Keep Annals character-specific and apply scope changes after reload. Organize Options into General, Journals and Data tabs, with per-journal scope status and grouped backup/reset controls. Preserve choices through Bestiary resets and whole-Fieldbook backups, correct scroll-fade positioning for the reorganized options, and add focused storage and UI regression coverage.
+
+- Default Bestiary creature models to a 25-degree right-facing angle while preserving manual rotation during model revalidation.
+
+- Animate personally encountered Bestiary models from their selected Melee, Ranged and Caster behaviours. Use supported attacks and casting motions, with one-shot hand effects matching selected offensive schools where available. Vary the first pause and subsequent idle gaps, avoid consecutive repeated choices when alternatives exist, and stop/reset on rotation, hidden pages, profile changes and model replacement. Add focused animation and model-lifecycle regression coverage; native effect appearance remains an in-game verification step.
+
+- Open collated Bestiary damage observations over Recorded Abilities using the shared overlay controls. Click the same damage row or turn off Show Damage to close. Remove floating-window position/scaling registration and its close button so the panel stays inside the book.
+
+- Keep highlighted zone-name tooltips visible with Atlas sub-zone overlays enabled, while giving nearby point tooltips and their removal instructions highest priority. Restore Annals map hover highlights and zone tooltips while preserving its historical player marker.
+
+- Delete Atlas survey and crossing points with Ctrl+Alt+Right Click; retain Alt-right-click exclusion/restoration and update point tooltips and help.
+
+- Show the highlighted zone name in a cursor tooltip while hovering Atlas map regions, without replacing discovery tooltips.
+
+- Show the whole-number observed level range beside Atlas Observed Weather, using label colours and spacing without a bullet divider. Use the lowest and highest personally observed non-critter Bestiary levels for the selected zone.
+
+- Automatically record Bestiary Calls allies from the observed screech calling for help, using the flee detector's creature validation, automatic provenance and event logging.
+
+- Remove the repeated "Receipt unconfirmed" wording from Treasure contents and report previews. Preserve explicit recovery details when recorded.
+- Retain readable item names while loot links load, retry contents during the loot window, and preserve observations across repeated readiness events and cleared slots. Keep source validation, bounded retry state and partial-capture labels; avoid duplicate rows when an unambiguous delayed link resolves locally or in a report.
+- Add regression coverage for delayed chest contents, fast autoloot, empty slot holes, retry expiry, source rejection, report enrichment and the revised contents display.
+
+- Update existing scope, observation, tooltip and window-layout regression fixtures for the reorganized Options and embedded damage overlay.
+
 ## v0.36.4 - 2026-10-08
 
 - Separate Angling contributor navigation references from bounded historical report aliases. Repair provable contributor aliases in existing saves without truncating historical identities, preserve forwarding and deduplication, and correct the missing-map login regression fixture.

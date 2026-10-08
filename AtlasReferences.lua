@@ -7,6 +7,25 @@ function ns.CreateAtlasReferences(bestiary,getGathering,shell)
     local adapters={}
     local result={adapters=adapters}
     function result:Register(id,adapter) adapters[id]=adapter end
+    function result:ObservedLevelRange(mapID)
+        local info=A.Read(C_Map and C_Map.GetMapInfo,mapID)
+        local zone=type(info)=="table" and info.name
+        if not A.Text(zone,160) or not bestiary then return end
+        local minimum,maximum
+        -- Include the full saved range of personally encountered creatures.
+        for _,entry in pairs(bestiary.entries or {}) do
+            if entry.personalEncountered and entry.category~="Critter"
+                and (entry.locations or {})[zone] then
+                local low,high=entry.levelMin,entry.levelMax
+                if A.Integer(low,1,1000) and A.Integer(high,low,1000) then
+                    minimum=minimum and math.min(minimum,low) or low
+                    maximum=maximum and math.max(maximum,high) or high
+                end
+            end
+        end
+        return minimum,maximum
+    end
+
     result:Register("bestiary",{title="Bestiary",list=function()
         local rows={}
         if not bestiary then return rows end

@@ -433,6 +433,7 @@ local function supportedRoot(value)
     if not plain(value) or not public(value.version) or value.version~=1 then return false end
     if value.accountTrackingKey~=nil and not positiveID(value.accountTrackingKey) then return false end
     if value.accountWideTracking~=nil and type(value.accountWideTracking)~="boolean" then return false end
+    if not ns.ValidTrackingSections(value.accountTrackingSections) or not ns.ValidTrackingSections(value.accountTrackingSectionsActive) then return false end
     for _,key in ipairs({"bestiary","eventLog","bestiaryBackups","spellIDWindowBlacklist"}) do
         if value[key]~=nil and not plain(value[key]) then return false end
     end

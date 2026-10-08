@@ -1,5 +1,6 @@
 BINDING_NAME_AZEROTHFIELDBOOK_ATLAS_POINT = "Record Atlas survey point"
 local addonName, ns = ...
+local defaultModelRotation = math.rad(25)
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 -- Keep the copper circle at the calibrated elite position for every rank.
 local portraitHeaderX=314-(24+(-15*48/58-10-24)*1.20)
@@ -341,6 +342,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 and modelGUID(source.value)==source.guid))
     end
     local function clearModel()
+        if book.modelAnimations then book.modelAnimations:Reset() end
         -- ClearModel itself can synchronously notify an outgoing scene.
         local previous=book.modelCall
         book.modelCall={phase="clear"}
@@ -355,6 +357,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.modelCall=call
         local cleared=true
         if verify then
+            if book.modelAnimations then book.modelAnimations:Reset() end
             model:SetAlpha(0)
             local ok=pcall(model.ClearModel,model)
             local file,readable=modelValue(model,"GetModelFileID")
@@ -375,7 +378,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 and displayOK and type(display)=="number" and display==call.display
                 and (display>0 or (source.method=="SetUnit" and display==0)) then
                 book.modelPending=false;book.modelWakeBudget=true
-                model:SetRotation(model.afbRotation or 0)
+                model:SetRotation(model.afbRotation or defaultModelRotation)
                 if source.method=="SetUnit" then
                     if type(SetPortraitTexture)=="function" then setPortrait(SetPortraitTexture,source.value) end
                 elseif type(SetPortraitTextureFromCreatureDisplayID)=="function" then
@@ -441,7 +444,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.model:Hide()
         clearModel()
         book.model.afbEntryID=id -- Diagnostic selection label; never callback ownership.
-        book.model:SetRotation(0);book.model.afbRotation=0
+        book.model:SetRotation(defaultModelRotation);book.model.afbRotation=defaultModelRotation
         -- Unload the outgoing scene before changing either the lore header,
         -- surrounding border or native viewport. Load only after layout ends.
         local basic=entry and basicInfo(id)
@@ -949,7 +952,11 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.text=label(row,"",3,0,290,"GameFontHighlightSmall")
                 row.highlight=row:CreateTexture(nil,"HIGHLIGHT"); row.highlight:SetAllPoints(); row.highlight:SetColorTexture(0.55,0.35,0.12,0.16)
                 row:SetScript("OnClick",function(self)
-                    book.notesLevel=self.level; noteOffset=0; refreshDamageNotes(); book.notesForm:Show()
+                    if book.notesForm:IsShown() and book.notesLevel==self.level then
+                        book.notesForm:Hide()
+                    else
+                        book.notesLevel=self.level; noteOffset=0; refreshDamageNotes(); book.notesForm:Show()
+                    end
                 end)
                 book.damageRows[i]=row
             end
@@ -1543,6 +1550,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.modelBorder:SetBackdropColor(0.045,0.032,0.018,0.88)
         book.modelBorder:SetBackdropBorderColor(0.37,0.25,0.11,0.90)
         book.model = CreateFrame("PlayerModel", nil, detail)
+        book.modelAnimations = ns.CreateBestiaryAnimations and ns.CreateBestiaryAnimations(book.model)
         book.model:SetPoint("TOPLEFT", 346, -135); book.model:SetSize(223, 164)
         book.model:SetPortraitZoom(0); book.model:SetCamDistanceScale(1.25)
         book.model:EnableMouse(true)
@@ -1582,7 +1590,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end)
         book.tameableBadge:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
         book.tameableBadge:Hide()
-        local rotation, rotating, lastCursorX = 0, false, nil
+        local rotation, rotating, lastCursorX = defaultModelRotation, false, nil
         local function cursorX()
             local x=GetCursorPosition and GetCursorPosition()
             local scale=UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1
@@ -1590,7 +1598,7 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         book.model:SetScript("OnMouseDown", function(self)
             if self~=book.model or book.modelPending then return end
-            rotation=self.afbRotation or 0
+            rotation=self.afbRotation or defaultModelRotation
             rotating=true; lastCursorX=cursorX()
         end)
         book.model:SetScript("OnMouseUp", function() rotating=false; lastCursorX=nil end)
@@ -1609,8 +1617,15 @@ local ink = { 0.75, 0.8, 0.8 }
                 end
                 lastCursorX=x
             end
+            if book.modelAnimations then
+                book.modelAnimations:Update(elapsed,journal.entries[book.modelEntryID],
+                    not book.modelPending and modelEligible(book.modelEntryID) and self:IsVisible(),rotating)
+            end
         end)
-        book.model:SetScript("OnHide", function() rotating=false; lastCursorX=nil end)
+        book.model:SetScript("OnHide", function()
+            rotating=false; lastCursorX=nil
+            if book.modelAnimations then book.modelAnimations:Reset() end
+        end)
         book.modelCaption = label(book.modelBorder, "", 8, -76, 211, "GameFontHighlightSmall")
         book.modelCaption:SetJustifyH("CENTER")
         book.model:SetScript("OnModelLoaded", function(self,...)
@@ -1627,6 +1642,7 @@ local ink = { 0.75, 0.8, 0.8 }
             end
             -- Never accept an unidentified asynchronous completion, even after
             -- a newer scene has already been shown on this same native frame.
+            if book.modelAnimations then book.modelAnimations:Reset() end
             self:SetAlpha(0)
             if not modelEligible(book.modelEntryID) then clearModel();return end
             book.modelPending=true
@@ -2063,6 +2079,7 @@ local ink = { 0.75, 0.8, 0.8 }
             if rumoursWindow and rumoursWindow:IsShown() then rumoursWindow:Hide();book.lootMode=true end
             book.pickpocketMode=false
             book.lootMode=not book.lootMode
+            if book.lootMode and book.notesForm then book.notesForm:Hide() end
             book.lootButton:SetSelected(not book.lootMode)
             book.damageScroll:SetVerticalScroll(0)
             refresh()
@@ -2148,7 +2165,8 @@ local ink = { 0.75, 0.8, 0.8 }
             picker:EnableMouse(true)
             observationPickers[#observationPickers+1]=picker
             picker:SetScript("OnShow",showObservationPicker)
-            label(picker,title,0,0,593,"GameFontNormalLarge"):SetTextColor(1,0.82,0.14)
+            picker.title=label(picker,title,0,0,593,"GameFontNormalLarge")
+            picker.title:SetTextColor(1,0.82,0.14)
             label(picker,description,0,-33,593,"GameFontHighlightSmall")
             picker:SetScript("OnHide",hideObservationPicker)
             return picker
@@ -2291,7 +2309,9 @@ local ink = { 0.75, 0.8, 0.8 }
                         local entry=selected and journal.entries[selected]
                         local automatic=entry and entry.behaviourSources and entry.behaviourSources[self.behaviourName]
                         GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(self.behaviourName)
-                        GameTooltip:AddLine(automatic and "[A] Automatically recorded from this creature's flee emote."
+                        GameTooltip:AddLine(automatic and (self.behaviourName=="Flees at low health"
+                            and "[A] Automatically recorded from this creature's flee emote."
+                            or "[A] Automatically recorded from this creature's call for help emote.")
                             or "A personal behaviour record.",automatic and 0.5 or 1,automatic and 0.82 or 1,1,true)
                         GameTooltip:AddLine("Uncheck to remove the mark for now. Fresh automatic evidence will restore it. Previously observed behaviours keep their [A] provenance when rechecked.",0.7,0.7,0.7,true)
                         GameTooltip:Show()
@@ -2351,21 +2371,8 @@ local ink = { 0.75, 0.8, 0.8 }
             selectedLevel=entry and entry.levelMin or nil
             if UIDropDownMenu_SetText then UIDropDownMenu_SetText(level,selectedLevel and tostring(selectedLevel) or "No observed level") end
         end)
-        local notesForm=CreateFrame("Frame","AzerothFieldbookBestiaryDamageNotes",UIParent,"BackdropTemplate")
-        notesForm:SetSize(500,330); notesForm:SetPoint("CENTER",book,"CENTER"); notesForm:SetFrameStrata("FULLSCREEN_DIALOG")
-        notesForm:SetClampedToScreen(true)
-        notesForm:SetMovable(true); notesForm:EnableMouse(true); notesForm:RegisterForDrag("LeftButton")
-        notesForm:SetScript("OnDragStart",function(self) self:StartMoving() end)
-        notesForm:SetScript("OnDragStop",function(self) self:StopMovingOrSizing() end)
-        notesForm:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",edgeSize=24})
-        local notesPaper=notesForm:CreateTexture(nil,"BACKGROUND",nil,1)
-        notesPaper:SetPoint("TOPLEFT",notesForm,"TOPLEFT",6,-6); notesPaper:SetPoint("BOTTOMRIGHT",notesForm,"BOTTOMRIGHT",-6,6)
-        notesPaper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
-        notesPaper:SetTexCoord(0,1,0,1)
-        addBackgroundLayer(notesPaper, 0.504,0.504,0.48888)
-        notesForm.title=label(notesForm,"Damage observations",24,-25,400,"GameFontNormalLarge")
-        label(notesForm,"Each row is one observation. Removing it recalculates the displayed range.",24,-57,440,"GameFontHighlightSmall")
-        button(notesForm,"X",451,-19,25,function() notesForm:Hide() end)
+        local notesForm=createObservationPicker("AzerothFieldbookBestiaryDamageNotes","Damage observations",
+            "Each row is one observation. Removing it recalculates the displayed range.")
         notesForm.rows={}
         for i=1,6 do
             local row=CreateFrame("Frame",nil,notesForm)
@@ -2403,8 +2410,7 @@ local ink = { 0.75, 0.8, 0.8 }
             notesForm.next:SetEnabled(noteOffset+6<#notes)
             if #notes==0 then notesForm:Hide() end
         end
-        notesForm:SetScript("OnHide",function(self)
-            self:StopMovingOrSizing()
+        notesForm:HookScript("OnHide",function(self)
             for _,row in ipairs(self.rows) do row.owner=nil;row.entry=nil;row.observation=nil;row.noteIndex=nil end
         end)
         notesForm:Hide(); book.notesForm=notesForm
@@ -2519,9 +2525,9 @@ local ink = { 0.75, 0.8, 0.8 }
         local bookScale=shell:GetBaseScale()
         -- Independent roots can move in front of or behind the book. Preserve
         -- the scale formerly inherited by its child dialogs and their anchors.
-        for _, window in ipairs({effectPicker,notesForm}) do window:SetScale(bookScale) end
+        for _, window in ipairs({effectPicker}) do window:SetScale(bookScale) end
         if ns.UIScale then
-            for _, window in ipairs({effectPicker,notesForm}) do
+            for _, window in ipairs({effectPicker}) do
                 window.afbPreferBookEdge=true
                 ns.UIScale:Register(window)
             end
@@ -2530,9 +2536,6 @@ local ink = { 0.75, 0.8, 0.8 }
             window.afbAnchorRule="right"
         end
         if ns.WindowPositions then
-            for _, window in ipairs({notesForm}) do
-                ns.WindowPositions:Register(window,window:GetName())
-            end
             ns.WindowPositions:Register(effectPicker,"AbilityEffects")
         end
         if ns.SpellIDWindow and ns.SpellIDWindow.AnchorToBook then ns.SpellIDWindow:AnchorToBook(shell:GetFrame()) end

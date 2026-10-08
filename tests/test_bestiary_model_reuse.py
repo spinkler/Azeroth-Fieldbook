@@ -204,12 +204,12 @@ class BestiaryModelReuseTests(unittest.TestCase):
             function GetCursorPosition() return x,0 end
             model.scripts.OnMouseDown(model);x=120;model.scripts.OnUpdate(model,.01)
             model.scripts.OnMouseUp(model)
-            local rotation=model.rotation;assert(rotation and rotation~=0)
+            local rotation=model.rotation;assert(rotation and rotation~=math.rad(25))
             model:LoadScene(41,4100);model.file=125512;model.scripts.OnModelLoaded(model)
             assert(model.scene==42 and model.alpha==1 and model.rotation==rotation)
             assert(section.portrait:GetTexture()==4203,'variants must follow verified setter')
             npcID=43;c:OpenAtUnit('target')
-            assert(model.scene==43 and model.alpha==1 and model.rotation==0)
+            assert(model.scene==43 and model.alpha==1 and model.rotation==math.rad(25))
             assert(section.portrait:GetTexture()==4305)
         ''')
 

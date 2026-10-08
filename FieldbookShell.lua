@@ -771,7 +771,7 @@ function ns.CreateFieldbookShell(settings)
             for _,edge in ipairs({page.topFade,page.bottomFade}) do
                 edge:SetWidth(page:GetWidth()-38)
                 for i,strip in ipairs(edge.strips) do
-                    local y=edge==page.topFade and (contentTop-1+(i-1)*stripHeight) or (page:GetHeight()-bottomInset-i*stripHeight)
+                    local y=edge==page.topFade and (page.contentTop-1+(i-1)*stripHeight) or (page:GetHeight()-bottomInset-i*stripHeight)
                     strip:SetWidth(page:GetWidth()-38)
                     strip:SetTexCoord(0,(page:GetWidth()-38)/width,(y-6)/height,(y+stripHeight-6)/height)
                 end

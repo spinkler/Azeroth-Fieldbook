@@ -167,6 +167,162 @@ class TreasureCaptureTests(unittest.TestCase):
             end
         """)
 
+    def test_battered_chest_retains_unlinked_mushrooms_and_resolves_without_duplicates(self):
+        self.world_fixture()
+        self.lua.execute("""
+            worldData.lines[1].leftText='Battered Chest'
+            Enum.LootSlotType={None=0,Item=1,Money=2,Currency=3}
+            function GetLootSlotType(slot) return loot[slot].slotType or 1 end
+            local guid='GameObject-0-1-2-3-99-ABC'
+            loot={lootrow(3770,2,guid),lootrow(2455,3,guid),lootrow(2138,1,guid),
+                {name='Red-speckled Mushroom',quantity=3,sources={guid,3}}}
+            fire('LOOT_READY');fire('LOOT_OPENED',true,false)
+            local v=assert(j.encounters[t.active.id]);assert(#v.items==4)
+            local found
+            for _,row in ipairs(v.items) do if row.name=='Red-speckled Mushroom' then found=row end end
+            assert(found and found.quantity==3 and not found.itemID and not found.recovered)
+            loot[4].itemID=4605
+            fire('ITEM_DATA_LOAD_RESULT',4605,true)
+            assert(#v.items==4 and found.itemID==4605 and found.quantity==3)
+            for _=1,5 do fire('LOOT_SLOT_CHANGED',4) end
+            assert(#v.items==4 and found.quantity==3 and not found.recovered)
+            assert(not t.status:lower():find('receipt',1,true))
+            local restored=ns.CreateTreasureJournal(saved)
+            assert(#restored.encounters[v.id].items==4)
+        """)
+
+    def test_late_mushrooms_after_cleared_slots_are_recorded(self):
+        for update in ('LOOT_SLOT_CHANGED', 'LOOT_SLOT_CLEARED', 'GET_ITEM_INFO_RECEIVED', 'poll', 'LOOT_CLOSED'):
+            with self.subTest(update=update):
+                self.setUp();self.world_fixture();self.lua.globals().update=update
+                self.lua.execute("""
+                    Enum.LootSlotType={None=0,Item=1,Money=2,Currency=3}
+                    function GetLootSlotType(slot) return loot[slot].slotType or 1 end
+                    local guid='GameObject-0-1-2-3-99-ABC'
+                    loot={lootrow(3770,2,guid),lootrow(2455,3,guid),lootrow(2138,1,guid),
+                        {quantity=3,sources={guid,3}}}
+                    fire('LOOT_READY');fire('LOOT_OPENED',true,false)
+                    local v=assert(j.encounters[t.active.id]);assert(#v.items==3)
+                    loot[1]={slotType=0,sources={}};loot[2]={slotType=0,sources={}}
+                    loot[4]=lootrow(4605,3,guid);worldData=nil
+                    if update=='poll' then t.frame.scripts.OnUpdate(t.frame,0.2)
+                    else fire(update,4,true) end
+                    assert(#v.items==4,'late mushrooms missing after '..update)
+                    local quantities={};for _,row in ipairs(v.items) do quantities[row.itemID]=row.quantity end
+                    assert(quantities[3770]==2 and quantities[2455]==3 and quantities[2138]==1 and quantities[4605]==3)
+                """)
+
+    def test_unreadable_initial_items_retry_before_and_after_opened(self):
+        for stage in ('ready', 'opened'):
+            with self.subTest(stage=stage):
+                self.setUp();self.world_fixture();self.lua.globals().stage=stage
+                self.lua.execute("""
+                    local guid='GameObject-0-1-2-3-99-ABC'
+                    loot={{quantity=3,sources={guid,3}}};fire('LOOT_READY')
+                    if stage=='opened' then fire('LOOT_OPENED',false,false) end
+                    assert(T.Count(j.encounters)==0)
+                    worldData=nil;loot={lootrow(4605,3,guid)};fire('LOOT_SLOT_CHANGED',1)
+                    if stage=='ready' then
+                        assert(T.Count(j.encounters)==0);loot={};fire('LOOT_CLOSED')
+                    end
+                    assert(T.Count(j.encounters)==1)
+                    local _,v=next(j.encounters);assert(v.items[1].itemID==4605 and v.items[1].quantity==3)
+                """)
+
+    def test_repeated_ready_and_empty_slot_holes_preserve_early_items(self):
+        self.world_fixture()
+        self.lua.execute("""
+            Enum.LootSlotType={None=0,Item=1}
+            function GetLootSlotType(slot) return loot[slot].slotType or 1 end
+            local guid='GameObject-0-1-2-3-99-ABC'
+            loot={lootrow(3770,2,guid),lootrow(2455,3,guid)};fire('LOOT_READY')
+            loot={{slotType=0,sources={}},lootrow(2455,3,guid),lootrow(4605,3,guid)}
+            fire('LOOT_READY');assert(T.Count(j.encounters)==0)
+            loot={{slotType=0,sources={}},{slotType=0,sources={}},{slotType=0,sources={}}}
+            fire('LOOT_OPENED',true,false)
+            local v=assert(j.encounters[t.active.id]);assert(#v.items==3)
+            fire('LOOT_CLOSED');assert(T.Count(j.encounters)==1)
+        """)
+
+    def test_retry_context_expires_and_cannot_cross_rejected_or_closed_windows(self):
+        for stop in ('close', 'world', 'timeout', 'fishing', 'origin', 'mixed', 'unknown'):
+            with self.subTest(stop=stop):
+                self.setUp();self.world_fixture();self.lua.globals().stop=stop
+                self.lua.execute("""
+                    local guid='GameObject-0-1-2-3-99-ABC'
+                    loot={{quantity=3,sources={guid,3}}};fire('LOOT_READY')
+                    if stop=='mixed' then loot[2]=lootrow(42,1,'Creature-other') end
+                    if stop=='unknown' then loot[1].sources={} end
+                    fishing=stop=='fishing';fire('LOOT_OPENED',false,stop=='origin')
+                    if stop=='close' then fire('LOOT_CLOSED') end
+                    if stop=='world' then fire('PLAYER_ENTERING_WORLD') end
+                    if stop=='timeout' then now=now+61 end
+                    fishing=false;worldData=nil;loot={lootrow(4605,3,guid)}
+                    fire('LOOT_SLOT_CHANGED',1);fire('ITEM_DATA_LOAD_RESULT',4605,true)
+                    t.frame.scripts.OnUpdate(t.frame,0.2);fire('LOOT_CLOSED')
+                    assert(T.Count(j.encounters)==0,'unexpected capture after '..stop)
+                """)
+
+    def test_poll_does_not_extend_active_timeout_or_redraw_unchanged_contents(self):
+        self.world_fixture()
+        self.lua.execute("""
+            openworld();local revision=j.revision;local at=t.active.at
+            for _=1,20 do now=now+1;t.frame.scripts.OnUpdate(t.frame,0.2) end
+            assert(j.revision==revision and t.active.at==at)
+            now=at+61;t.frame.scripts.OnUpdate(t.frame,0.2);assert(not t.active)
+        """)
+
+    def test_name_fallback_requires_item_slot_and_matching_quantity(self):
+        self.world_fixture()
+        self.lua.execute("""
+            Enum.LootSlotType={None=0,Item=1,Money=2,Currency=3}
+            function GetLootSlotType(slot) return loot[slot].slotType end
+            local guid='GameObject-0-1-2-3-99-ABC'
+            loot={lootrow(3770,2,guid),
+                {slotType=2,name='92 Copper',quantity=1,sources={guid,1}},
+                {slotType=3,name='Currency',quantity=2,sources={guid,2}},
+                {slotType=1,name='Mushroom',quantity=3,sources={guid,2}}}
+            fire('LOOT_READY');fire('LOOT_OPENED',false,false)
+            local v=assert(j.encounters[t.active.id]);assert(#v.items==1 and v.items[1].itemID==3770)
+        """)
+
+    def test_name_fallback_survives_autoloot_and_report_link_enrichment(self):
+        self.world_fixture()
+        self.lua.execute("""
+            Enum.LootSlotType={Item=1};function GetLootSlotType() return 1 end
+            local guid='GameObject-0-1-2-3-99-ABC'
+            loot={{name='Red-speckled Mushroom',quantity=3,sources={guid,3}}}
+            fire('LOOT_READY');loot={};fire('LOOT_OPENED',true,false)
+            local v=assert(j.encounters[t.active.id]);local other=ns.CreateTreasureJournal({})
+            assert(#v.items==1 and v.items[1].name=='Red-speckled Mushroom' and v.items[1].quantity==3)
+            local original=assert(R.Build(j,v.kindID));local imported=assert(import(other,original))
+            loot={{itemID=4605,name='Red-speckled Mushroom',quantity=3,sources={guid,3}}}
+            fire('LOOT_SLOT_CHANGED',1)
+            assert(import(other,assert(R.Build(j,v.kindID))))
+            assert(import(other,original),'older report still accepted after the link resolves')
+            local row=other:History(imported.id)[1]
+            assert(#row.items==1 and row.items[1].itemID==4605 and row.items[1].quantity==3)
+            local preview=assert(R.Preview(assert(R.Forward(other,row.id))))
+            assert(preview:find('Red-speckled Mushroom × 3 observed',1,true))
+            assert(not preview:find('receipt unconfirmed',1,true))
+        """)
+
+    def test_ambiguous_item_names_do_not_replace_known_ids(self):
+        self.world_fixture()
+        self.lua.execute("""
+            Enum.LootSlotType={Item=1};function GetLootSlotType() return 1 end
+            local guid='GameObject-0-1-2-3-99-ABC'
+            loot={{itemID=111,name='Shared name',quantity=2,sources={guid,2}},
+                {name='Shared name',quantity=1,sources={guid,1}}}
+            fire('LOOT_READY');fire('LOOT_OPENED',false,false)
+            for _=1,3 do fire('LOOT_SLOT_CHANGED',1) end
+            local v=assert(j.encounters[t.active.id]);assert(#v.items==2)
+            assert(T.Encounter(v,'world'),'ambiguous names must not create duplicate item IDs')
+            loot[2].itemID=222;fire('LOOT_SLOT_CHANGED',2)
+            local seen={};for _,row in ipairs(v.items) do if row.itemID then seen[row.itemID]=row.quantity end end
+            assert(seen[111]==2 and seen[222]==1 and T.Encounter(v,'world'))
+        """)
+
     def test_food_crate_without_tooltip_id_after_completed_opening(self):
         self.world_fixture()
         self.lua.execute("""
@@ -709,6 +865,16 @@ class TreasureReportTests(unittest.TestCase):
 class TreasureUITests(unittest.TestCase):
     def setUp(self):
         self.lua = new_treasure(True)
+
+    def test_contents_omit_unconfirmed_receipt_and_keep_explicit_recovery(self):
+        self.lua.execute('''
+            local e=record();inspect(e.id,{{name='Mushroom',quantity=3},{name='Meat',quantity=2,recovered=1}})
+            c:Select(e.id);local text=''
+            for _,row in ipairs(c:DetailRows('contents')) do text=text..row.text end
+            assert(text:find('Mushroom × 3 observed',1,true))
+            assert(text:find('Personally recovered (manual): 1',1,true))
+            assert(not text:find('Receipt unconfirmed',1,true))
+        ''')
 
     def test_formatted_detail_views_preserve_encounters_and_notes(self):
         self.lua.execute('''

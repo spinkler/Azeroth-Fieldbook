@@ -28,11 +28,11 @@ class StorageScopeTests(unittest.TestCase):
                         shell:ShowSection(id)
                         local frame=AzerothFieldbookOptions
                         assert(rawget(shell:GetFrame(),'scopeLabel')==nil,'scope appears only in Options')
-                        assert(frame.scopeLabel:GetText()==expected,id..': '..frame.scopeLabel:GetText())
-                        assert(not scopeFrame or scopeFrame==frame.scope,'one shared indicator')
-                        scopeFrame=frame.scope
+                        assert(frame.trackingSections[id=='merchants' and 'ledger' or id].status:GetText()==expected,id..': '..frame.trackingSections[id=='merchants' and 'ledger' or id].status:GetText())
+                        assert(not scopeFrame or scopeFrame==frame,'one shared indicator')
+                        scopeFrame=frame
                         local before=capture()
-                        frame.scope.scripts.OnEnter(frame.scope)
+                        frame:RefreshStorageScope()
                         local store=expected=='Account-wide' and AzerothFieldbookAccountDB.bestiary or AzerothFieldbookDB.bestiary
                         assert(ns.GetActiveStorageScope(id,store)==expected)
                         unchanged(before,'scope inspection')
@@ -49,12 +49,12 @@ class StorageScopeTests(unittest.TestCase):
             assert(options:IsShown())
             shell:ShowSection('gathering')
             assert(options:IsShown(),'Bestiary-to-Gathering closed shared Options')
-            assert(options:IsShown() and options.scopeLabel:GetText()=='Account-wide')
+            assert(options:IsShown() and options.trackingSections.gathering.status:GetText()=='Account-wide')
             shell:ShowSection('gathering')
             assert(options:IsShown(),'reselecting same section closed Options')
             shell:ShowSection('atlas')
             assert(options:IsShown(),'Gathering-to-Atlas closed shared Options')
-            assert(options:IsShown() and options.scopeLabel:GetText()=='Account-wide')
+            assert(options:IsShown() and options.trackingSections.gathering.status:GetText()=='Account-wide')
             shell:ShowSection('lore')
             assert(options:IsShown(),'Atlas-to-Lore closed shared Options')
         """)
@@ -64,7 +64,7 @@ class StorageScopeTests(unittest.TestCase):
         lua.execute("""
             AzerothFieldbookDB.accountWideTracking=false
             for _,id in ipairs(shell.order) do
-                shell:ShowSection(id);assert(AzerothFieldbookOptions.scopeLabel:GetText()==(id=='annals' and 'Character-specific' or 'Account-wide'))
+                shell:ShowSection(id);if id~='annals' then assert(AzerothFieldbookOptions.trackingSections[id=='merchants' and 'ledger' or id].status:GetText()=='Pending reload') end
             end
         """)
         # Fresh Lua namespace, copying SavedVariables exactly as a UI reload.
@@ -86,7 +86,7 @@ class StorageScopeTests(unittest.TestCase):
             mainEvent(main,'ADDON_LOADED','AzerothFieldbook')
             local _,book=debug.getupvalue(AzerothFieldbookNextEntry,1);local shell=book:GetShell()
             for _,id in ipairs(shell.order) do
-                shell:ShowSection(id);assert(AzerothFieldbookOptions.scopeLabel:GetText()=='Character-specific')
+                shell:ShowSection(id);if id~='annals' then assert(AzerothFieldbookOptions.trackingSections[id=='merchants' and 'ledger' or id].status:GetText()=='Character-specific') end
             end
         """)
 
@@ -97,8 +97,8 @@ class StorageScopeTests(unittest.TestCase):
             mainEvent(main,'ADDON_LOADED','AzerothFieldbook')
             local _,book=debug.getupvalue(AzerothFieldbookNextEntry,1);local shell=book:GetShell()
             shell:EnsureSection('bestiary')
-            shell:ShowSection('lore');assert(AzerothFieldbookOptions.scopeLabel:GetText()=='Character-specific')
-            shell:ShowSection('angling');assert(AzerothFieldbookOptions.scopeLabel:GetText()=='Account-wide')
+            shell:ShowSection('lore');assert(AzerothFieldbookOptions.trackingSections.lore.status:GetText()=='Character-specific')
+            shell:ShowSection('angling');assert(AzerothFieldbookOptions.trackingSections.angling.status:GetText()=='Account-wide')
             ns.InitializationBlocked=true;assert(ns.GetActiveStorageScope('lore')=='Storage unavailable')
         """)
 

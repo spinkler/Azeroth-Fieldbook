@@ -176,7 +176,17 @@ end
 
 function ns.ReportTrackingTransition(settings, say)
     local enabled = settings.accountWideTracking ~= false
-    local changed = type(settings.accountTrackingActive) == "boolean" and settings.accountTrackingActive ~= enabled
+    local changed = false
+    local selected,shared,personal={},{},{}
+    for _,section in ipairs(ns.TrackingSections) do
+        local key=section[1];local on=ns.GetSectionAccountTracking(settings,key)
+        selected[key]=on
+        local prior=settings.accountTrackingSectionsActive and settings.accountTrackingSectionsActive[key]
+        if prior==nil then prior=settings.accountTrackingActive end
+        if type(prior)=="boolean" and prior~=on then changed=true end
+        local list=on and shared or personal;list[#list+1]=section[2]
+    end
+    enabled=#shared>0
     local imported, deferred = {}, {}
     for _,section in ipairs({{"bestiary","Bestiary"},{"gathering","Gatherer's Compendium"},{"atlas","Traveller’s Atlas"},
         {"angling","Angler’s Almanac"},{"ledger","Merchant’s Ledger"},{"treasure","Treasure Journal"},{"lore","Lorekeeper's Chronicle"}}) do
@@ -184,7 +194,12 @@ function ns.ReportTrackingTransition(settings, say)
         if result == "imported" then imported[#imported+1] = section[2]
         elseif result == "deferred" then deferred[#deferred+1] = section[2] end
     end
-    if enabled and (#imported > 0 or changed) then
+    if #shared>0 and #personal>0 and (#imported>0 or changed) then
+        local message="Account-wide tracking updated. Shared: "..table.concat(shared,", ")..". Character-specific: "..table.concat(personal,", ")..". "
+        if #imported>0 then message=message.."One-time import completed for: "..table.concat(imported,", ")..". " end
+        if #deferred>0 then message=message.."Migration deferred for: "..table.concat(deferred,", ").."; retained character journals remain active. " end
+        say(message.."Original character journals retained separately; account data was not copied back. Previously imported sections do not re-import later character-only changes. The two scopes are not continuously synchronized.")
+    elseif enabled and (#imported > 0 or changed) then
         local message = "Account-wide tracking enabled. "
         if #imported > 0 then
             message = message .. "One-time import completed for: " .. table.concat(imported, ", ") .. ". Original character journals retained separately. "
@@ -197,6 +212,7 @@ function ns.ReportTrackingTransition(settings, say)
         say("Account-wide tracking disabled. Using this character's separate journals; account data was not copied back. Account journals remain available when re-enabled.")
     end
     settings.accountTrackingActive = enabled
+    settings.accountTrackingSectionsActive=selected
     trackingResult = nil
 end
 
@@ -204,7 +220,9 @@ function ns.InitializeTracking(settings)
     if ns.InitializationBlocked then return settings end
     trackingResult = {}
     if type(settings.accountWideTracking) ~= "boolean" then settings.accountWideTracking = true end
-    if not settings.accountWideTracking then return settings end
+    local any=false
+    for _,section in ipairs(ns.TrackingSections) do if ns.GetSectionAccountTracking(settings,section[1]) then any=true end end
+    if not any then return settings end
     if type(AzerothFieldbookAccountDB) ~= "table" then AzerothFieldbookAccountDB = {} end
     local account = AzerothFieldbookAccountDB
     account.version = 1
@@ -216,6 +234,7 @@ function ns.InitializeTracking(settings)
     end
     local key = settings.accountTrackingKey
     account.nextCharacter = math.max(account.nextCharacter, key)
+    if not ns.GetSectionAccountTracking(settings,"bestiary") then return settings end
     if not account.importedCharacters[key] then
         -- Normalize copies with the journal's existing migrations. No live
         -- observations, announcements or messaging occur during this import.

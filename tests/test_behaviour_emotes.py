@@ -22,6 +22,48 @@ def emote_client():
 
 
 class BehaviourEmoteTests(unittest.TestCase):
+    def test_call_for_help_uses_flee_identity_and_recording_rules(self):
+        for prefix in ('%s', 'Test creature'):
+            for guid in ('creatureGUID', 'nil'):
+                with self.subTest(prefix=prefix, guid=guid):
+                    lua = emote_client()
+                    lua.globals().emote = prefix + ' lets out a high pitched screech, calling for help!'
+                    lua.execute("""
+                        local e=journal.entries[42];e.confirmed=true;messages={}
+                        local balance=points()
+                    """ + f"flee(emote,'Test creature',{guid})" + """
+                        local e=journal.entries[42]
+                        assert(e.behaviours['Calls allies'] and e.behaviourSources['Calls allies']=='monsterEmote')
+                        assert(not e.behaviours['Flees at low health'])
+                        assert(#messages==1 and messages[1]:find('Calls allies',1,true))
+                        local events=journal:GetEventLog().entries
+                        assert(events[#events].details.source=='monsterEmote')
+                        local revision=journal.revision
+                        flee(emote,'Test creature',creatureGUID)
+                        assert(journal.revision==revision and #messages==1)
+                        fire('ADDON_LOADED','AzerothFieldbook')
+                        assert(journal.entries[42].behaviourSources['Calls allies']=='monsterEmote')
+                    """)
+
+    def test_call_for_help_rejects_unverified_speakers_and_other_chat(self):
+        lua = emote_client()
+        lua.execute("""
+            local message='%s lets out a high pitched screech, calling for help!'
+            flee(message,'Test creature',creatureGUID,'CHAT_MSG_SAY')
+            flee(message,'Test creature',secret)
+            flee(message,'Other creature',creatureGUID)
+            flee(message..' says a player','Test creature',creatureGUID)
+            flee('Other creature lets out a high pitched screech, calling for help!','Test creature',creatureGUID)
+            units.mouseover=spawn('other',false);units.mouseover.guid='Creature-0-1-2-3-43-other'
+            flee(message,'Test creature',nil)
+            units.target=nil;units.mouseover=nil
+            flee(message,'Test creature',nil)
+            journal.entries[42].personalEncountered=false
+            flee(message,'Test creature',creatureGUID)
+            assert(not journal.entries[42].behaviours['Calls allies'])
+            assert(not journal.entries[43])
+        """)
+
     def test_exact_server_text_and_guid_identify_an_existing_personal_creature(self):
         for message in ('%s attempts to run away in fear!', 'Test creature attempts to run away in fear!'):
             with self.subTest(message=message):
@@ -138,22 +180,22 @@ class BehaviourEmoteTests(unittest.TestCase):
             ns.ShowDebugReport=function(text) debugReport=text end
             flee(secret,'Test creature',creatureGUID)
             SlashCmdList.AZEROTHFIELDBOOK('debug')
-            assert(debugReport:find('1 monster emotes; 0 readable flee messages; 0 behaviours added',1,true))
+            assert(debugReport:find('1 monster emotes; 0 readable behaviour messages; 0 behaviours added',1,true))
             assert(debugReport:find('Emote text is restricted.',1,true))
             flee('%s attempts to run away in fear!','Test creature',secret)
             SlashCmdList.AZEROTHFIELDBOOK('debug')
-            assert(debugReport:find('Flee GUID is restricted.',1,true))
+            assert(debugReport:find('Emote GUID is restricted.',1,true))
             journal.entries[42].personalEncountered=false
             flee('%s attempts to run away in fear!','Test creature',nil)
             SlashCmdList.AZEROTHFIELDBOOK('debug')
-            assert(debugReport:find('Flee speaker has no personal entry.',1,true))
+            assert(debugReport:find('Emote speaker has no personal entry.',1,true))
             journal.entries[42].personalEncountered=true
             journal:SetBehaviour(42,'Flees at low health',false)
             flee('%s attempts to run away in fear!','Test creature',nil)
             flee('%s laughs.','Test creature',creatureGUID)
             SlashCmdList.AZEROTHFIELDBOOK('debug')
-            assert(debugReport:find('Last readable flee: Recorded flee behaviour using watched creature.',1,true))
-            assert(debugReport:find('Last monster emote: Not the supported flee emote.',1,true))
+            assert(debugReport:find('Last readable behaviour: Recorded Flees at low health using watched creature.',1,true))
+            assert(debugReport:find('Last monster emote: Not a supported behaviour emote.',1,true))
         ''')
 
     def test_manual_toggles_retain_history_and_fresh_evidence_reapplies_after_reload(self):

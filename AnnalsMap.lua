@@ -606,9 +606,15 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         local previous=self.zoom;zoomBy(self,delta)
         if self.zoom~=previous and self.journeyIndex then self:ShowJourney(self.journeyIndex,self.journeyAt) end
     end
-    -- Keep the live-player driver disabled; the arrow uses only historical data.
+    -- Update hover highlights without reading or replacing the historical arrow.
     function map:ResumePlayer()
-        self:SuspendPlayer();self:ShowHistoricalPlayer()
+        self:SuspendPlayer();self:ShowHistoricalPlayer();self:UpdateRegionHighlight()
+        if ns.Atlas.Read(self.IsVisible,self)==false then return end
+        local elapsed=0
+        self:SetScript('OnUpdate',function(self,dt)
+            elapsed=elapsed+dt
+            if elapsed>=0.1 then elapsed=0;self:UpdateRegionHighlight() end
+        end)
     end
     function map:ShowHistoricalPlayer()
         local p=self.historicalPlayer;local arrow=self.playerArrow;arrow:Hide()
@@ -660,7 +666,7 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         adapter.rawLines,adapter.markers,cursor,limited,invalid,self.playerMotion=A.JourneyFrame(index,at)
         table.sort(adapter.rawLines,function(a,b) return a.to.at<b.to.at end)
         self.historicalPlayer=cursor
-        self:Render(index.mapID,'journey');self:SuspendPlayer();self:ShowHistoricalPlayer()
+        self:Render(index.mapID,'journey');self:ResumePlayer()
         local cutoff=math.max(index.first,math.min(index.last,at))
         for i,segment in ipairs(adapter.lines) do
             local line=self.lines and self.lines[i]

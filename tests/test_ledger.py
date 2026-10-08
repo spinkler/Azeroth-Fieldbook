@@ -763,7 +763,7 @@ class LedgerTests(unittest.TestCase):
             c:Refresh();assert(headingSize==17)
             local view=area.headingViews[2];assert(view.contentWidth==501)
             local tooltipLink
-            GameTooltip={SetOwner=function() end,SetHyperlink=function(_,link) tooltipLink=link end,
+            GameTooltip={IsOwned=function() return false end,SetOwner=function() end,SetHyperlink=function(_,link) tooltipLink=link end,
                 AddLine=function() end,Show=function() end,Hide=function() tooltipLink=nil end}
             view.iconHover.scripts.OnEnter(view.iconHover)
             assert(tooltipLink==label:GetText():match('|H(item:%d+)'))
