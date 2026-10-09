@@ -376,41 +376,69 @@ local function atlasMappings(account,personal,shared,key,ids)
     account.atlasReferenceIssues=account.atlasReferenceIssues or {}
     local issues=account.atlasReferenceIssues[key] or {};account.atlasReferenceIssues[key]=issues
     local first=account.atlasFirstImport
+    local records=shared.records or {}
+    local references,stamps,localCounts={},{},{}
+    -- A false index value retains ambiguity instead of choosing a record by
+    -- iteration order. These indexes live only for this one-time repair.
+    local function index(t,value,record)
+        if value~=nil then
+            if t[value]==nil then t[value]=record else t[value]=false end
+        end
+    end
+    local qualified={}
+    if not ids or not first then
+        for dest,record in pairs(records) do
+            local owner=tonumber(tostring(dest):match("^char(%d+):"))
+            if owner then qualified[owner]=true end
+            if not ids then
+                index(references,record.reference,record)
+                if owner==key and record.referenceLegacy and type(record.created)=="number" then
+                    index(stamps,record.created,record)
+                end
+            end
+        end
+    end
     if not first then
         -- Old imports retained the owner in every remapped ID, but omitted the
         -- first owner's key. Recover it only if the other owners are evidenced.
-        local qualified={}
-        for _,field in ipairs({"records","expeditions"}) do for id in pairs(shared[field] or {}) do
+        for id in pairs(shared.expeditions or {}) do
             local owner=tostring(id):match("^char(%d+):");if owner then qualified[tonumber(owner)]=true end
-        end end
+        end
         local candidates={}
         for owner in pairs(account.sectionImports.atlas or {}) do if not qualified[owner] then candidates[#candidates+1]=owner end end
         if #candidates==1 then first=candidates[1];account.atlasFirstImport=first end
     end
+    if not ids then
+        for _,e in pairs(personal.records or {}) do
+            if type(e.created)=="number" then localCounts[e.created]=(localCounts[e.created] or 0)+1 end
+        end
+    end
     for id,e in pairs(personal.records or {}) do
         if map[e.reference]==nil then
-            local candidates,exact={},{}
-            for dest,record in pairs(shared.records or {}) do
-                local owner=tostring(dest):match("^char(%d+):")
-                local owned=owner and tonumber(owner)==key or not owner and first==key and dest==id
-                if ids then
-                    if dest==(ids[id] or id) then exact[#exact+1]=record end
-                elseif record.reference==e.reference then exact[#exact+1]=record
-                elseif e.referenceLegacy and record.referenceLegacy and owned and type(e.created)=="number" and record.created==e.created then
-                    candidates[#candidates+1]=record
+            local found
+            if ids then
+                -- A saved import ID is authoritative, including a destination
+                -- that no longer exists. Never fall back to a timestamp match.
+                found=records[ids[id] or id]
+            else
+                found=references[e.reference]
+                if found==nil and e.referenceLegacy and type(e.created)=="number" then
+                    found=stamps[e.created]
+                    -- The first owner kept original IDs. Only that exact ID
+                    -- may join the qualified-owner candidates for this stamp.
+                    local original=first==key and not tostring(id):match("^char(%d+):") and records[id]
+                    if original and original.referenceLegacy and original.created==e.created then
+                        if found==nil then found=original else found=false end
+                    end
                 end
             end
-            if #exact>0 then candidates=exact end
             -- Two local entries created in the same second cannot be inverted
             -- from an old charN:serial namespace using the timestamp alone.
-            local localCount=0
-            for _,other in pairs(personal.records or {}) do if other.created==e.created then localCount=localCount+1 end end
-            local found=#candidates==1 and candidates[1]
-            if found and (ids or found.reference==e.reference or first==key or localCount==1) then
+            if found and (ids or found.reference==e.reference or first==key or localCounts[e.created]==1) then
                 map[e.reference]=found.reference
             else
                 map[e.reference]=false
-                issues[e.reference]=#candidates==0 and "No saved Atlas destination mapping survives in this scope."
+                issues[e.reference]=found==nil and "No saved Atlas destination mapping survives in this scope."
                     or "Multiple Atlas records share the surviving migration stamp; the original ID mapping was not saved."
                 if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("AFB: "..e.name..": "..issues[e.reference].." Reference retained.") end
             end

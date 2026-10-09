@@ -549,6 +549,81 @@ class AtlasUITests(unittest.TestCase):
         ''')
 
 
+    def test_single_click_switches_maps_without_resetting_zoom(self):
+        self.lua.execute('''
+            local near=j:Save(fixture('Near'))
+            local far=j:Save(fixture('Far','camp',102,7500,2500))
+            c:Select(near);m.map:ZoomBy(4)
+            local zoom=m.map.zoom
+            for _,id in ipairs({far,near,far}) do
+                local row
+                for _,candidate in ipairs(m.rows) do if candidate.id==id then row=candidate;break end end
+                assert(row and row.scripts.OnDoubleClick==nil)
+                click(row)
+                assert(j.state.selected==id and m.map.displayedMapID==j:Get(id).mapID)
+                assert(m.map.zoom==zoom and m.map.canvas:GetScale()==zoom)
+                local entry=j:Get(id);local w,h=m.map:GetWidth(),m.map:GetHeight()
+                assert(math.abs(entry.x/10000*w*zoom-m.map.panX-w/2)<.00001)
+                assert(math.abs(entry.y/10000*h*zoom-m.map.panY-h/2)<.00001)
+                assert(m.map.pins[1].selectionGlow:IsShown())
+            end
+            shell:ShowSection('test');shell:ShowSection('atlas')
+            assert(m.map.zoom==zoom)
+            C_Map.GetMapArtLayers=nil;c:SetZone(101,'Unavailable')
+            assert(not m.map.available and m.map.zoom==zoom)
+        ''')
+
+    def test_selection_centres_same_map_routes_and_clamps_without_refresh_snapback(self):
+        self.lua.execute('''
+            local id=j:Save(fixture('Edge','cave',101,0,10000))
+            m.map:ZoomBy(100);c:Select(id)
+            local map=m.map;local w,h=map:GetWidth(),map:GetHeight()
+            assert(map.zoom==4 and map.panX==0 and map.panY==h*3)
+            local route=fixture('Route','route')
+            route.stops={{name='A',mapID=101,x=4000,y=3000},{name='B',mapID=101,x=8000,y=6000}}
+            c:Select(j:Save(route))
+            assert(math.abs(w*.6*4-map.panX-w/2)<.00001)
+            assert(math.abs(h*.45*4-map.panY-h/2)<.00001)
+            map.panX,map.panY=20,30;c:Refresh()
+            assert(map.panX==20 and map.panY==30,'Ordinary refresh must not undo manual panning')
+            local unknown=fixture('Unknown');unknown.x=nil;unknown.y=nil
+            c:Select(j:Save(unknown))
+            assert(map.panX==20 and map.panY==30,'Missing coordinates must not invent a centre')
+            C_Map.GetMapArtLayers=nil;map:Invalidate();c:Select(id)
+            assert(not map.available and map.zoom==4)
+        ''')
+
+    def test_selected_pin_glow_tracks_overlap_routes_and_reused_frames(self):
+        self.lua.execute('''
+            local a=j:Save(fixture('A'));local b=j:Save(fixture('B'))
+            local other=j:Save(fixture('Other','camp',101,8000,2000));c:Select(a)
+            local function assertGlow()
+                local count=0
+                for _,pin in ipairs(m.map.pins) do
+                    local selected=false
+                    if pin:IsShown() then
+                        for _,marker in ipairs(pin.group) do
+                            if marker.id==j.state.selected then selected=true end
+                        end
+                    end
+                    assert(pin.selectionGlow:IsShown()==selected,'Only selected marker groups glow')
+                    if selected then count=count+1 end
+                end
+                return count
+            end
+            assert(assertGlow()==1 and #m.map.pins[1].group==2)
+            click(m.map.pins[1]);assert(j.state.selected==b and assertGlow()==1)
+            c:Select(other);assert(assertGlow()==1)
+            j:SetLayer('camp',false);c:Refresh();assert(assertGlow()==0)
+            local route=fixture('Route','route');route.stops={{recordID=a},{name='Second',mapID=101,x=6000,y=4000}}
+            local id=j:Save(route);c:Select(id);assert(assertGlow()==2)
+            local objectsBefore=#objects
+            for i=1,5 do c:Select(a);c:Select(id) end
+            assert(#objects==objectsBefore,'Glows are reused with their marker frames')
+            c:SetZone(102,'Synthetic hills');assert(assertGlow()==0)
+            c:SetZone(101,'Synthetic coast');assert(assertGlow()==2)
+        ''')
+
     def test_cursor_zoom_bounds_placement_and_section_independence(self):
         self.lua.execute('''
             local map=m.map;local w,h=map:GetWidth(),map:GetHeight()
@@ -569,8 +644,8 @@ class AtlasUITests(unittest.TestCase):
             map:ZoomBy(-100);assert(map.zoom==1 and map.panX==0 and map.panY==0)
             local id=j:Save(fixture());c:Select(id)
             map.pins[1].scripts.OnMouseWheel(map.pins[1],1);assert(map.zoom==1.25)
-            c:SetZone(102,'Other');assert(map.zoom==1 and map.panX==0 and map.panY==0)
-            map.available=false;map:ZoomBy(1);assert(map.zoom==1)
+            c:SetZone(102,'Other');assert(map.zoom==1.25 and map.panX==0 and map.panY==0)
+            map.available=false;map:ZoomBy(1);assert(map.zoom==1.25)
         ''')
 
     def test_native_region_highlight_tracks_cursor_zoom_and_lifetime(self):
@@ -653,7 +728,7 @@ class AtlasUITests(unittest.TestCase):
             end
             map.scripts.OnMouseUp(map,'RightButton');assert(j.state.mapID==100)
             map:ZoomBy(1);map.scripts.OnMouseUp(map,'LeftButton')
-            assert(j.state.mapID==101 and map.zoom==1)
+            assert(j.state.mapID==101 and map.zoom==1.25)
             ns.IsMapClickNavigationEnabled=function() return false end
             map.scripts.OnMouseUp(map,'RightButton');assert(j.state.mapID==101)
             ns.IsMapClickNavigationEnabled=function() return true end

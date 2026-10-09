@@ -1,6 +1,7 @@
 """Lifecycle tests; mocks do not emulate WoW's secret-value/rendering engine."""
 from pathlib import Path
 import sys
+import xml.etree.ElementTree as ET
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / '.codex-test-deps'))
 from lupa.lua51 import LuaRuntime
 
@@ -87,11 +88,17 @@ function advance(seconds)
 end
 ''')
 lua.execute((Path(__file__).resolve().parents[1] / 'SpellIDWindow.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
+bindings = {node.attrib['name']: node for node in ET.parse(Path(__file__).resolve().parents[1] / 'Bindings.xml').getroot()}
+for action in ('AZEROTHFIELDBOOK_PIN_CAST', 'AZEROTHFIELDBOOK_UNPIN_CAST'):
+    assert bindings[action].attrib['category'] == 'BINDING_HEADER_AZEROTHFIELDBOOK'
+    lua.execute(bindings[action].text)  # Safe before initialization.
+lua.execute('function pinBinding() ' + bindings['AZEROTHFIELDBOOK_PIN_CAST'].text + ' end')
+lua.execute('function unpinBinding() ' + bindings['AZEROTHFIELDBOOK_UNPIN_CAST'].text + ' end')
 lua.execute(r'''
 db={}
 ns.SpellIDWindow:Initialize(db)
 local panel=AzerothFieldbookSpellIDWindow
-local cast,instant,debuff,buff=frames[3],frames[4],frames[5],frames[6]
+local cast,instant,debuff,buff=frames[3],frames[4],frames[7],frames[8]
 local function id(row) return row.strings[2].text end
 assert(panel.shown and panel.movable and panel.texture.alpha==0.35)
 assert(db.displaySpellIDWindow and not db.spellIDWindowLocked and not db.spellIDWindowIndefinite)
@@ -137,9 +144,10 @@ channel=false
 fire('UNIT_SPELLCAST_SUCCEEDED','focus',secret,99,80)
 assert(not instant.shown)
 fire('UNIT_SPELLCAST_SUCCEEDED','alias',secret,99,80)
+instant=cast
 assert(instant.shown and id(instant)==99)
 fire('UNIT_SPELLCAST_SUCCEEDED','target',secret,secret,81)
-assert(rawequal(id(cast),secret) and id(instant)==99)
+assert(rawequal(id(cast),secret) and not frames[4].shown, 'all unpinned casts share one live slot')
 -- Secret cast time never becomes a comparison or a claim of a confirmed instant.
 db.spellIDWindowIndefinite=true; ns.SpellIDWindow:ApplySettings()
 advance(121); assert(cast.shown and instant.shown)
@@ -293,7 +301,7 @@ assert(panel.point[1]=='BOTTOMRIGHT' and panel.point[2]==AzerothFieldbookBestiar
 lua.execute(r'''
 local panel=AzerothFieldbookSpellIDWindow
 db.spellIDWindowLocked=false; ns.SpellIDWindow:ApplySettings()
-assert(panel.hint.text=='Right-click: hide / Ctrl+Right-click: blacklist')
+assert(panel.hint.text=='Cast: click to pin / Right-click: remove')
 assert(panel.hint.color[1]==0.6)
 shiftDown=false; panel.scripts.OnMouseUp(panel,'LeftButton'); assert(panel.shown)
 shiftDown=true; panel.scripts.OnMouseUp(panel,'RightButton'); assert(panel.shown)
@@ -305,7 +313,7 @@ print('Spell ID window lifecycle checks passed (live rendering still requires Wo
 lua.execute(r'''
 local window=ns.SpellIDWindow
 local panel=AzerothFieldbookSpellIDWindow
-local cast,instant,debuff,buff=frames[3],frames[4],frames[5],frames[6]
+local cast,instant,debuff,buff=frames[3],frames[4],frames[7],frames[8]
 local function id(row) return row.strings[2].text end
 function IsControlKeyDown() return ctrlDown==true end
 function UnitName(unit)
@@ -376,7 +384,7 @@ lua.execute(r'''
 ns.SpellIDWindow:Initialize({})
 auras.player={};C_UnitAuras.GetAuraSlots=nil
 C_UnitAuras.GetAuraDataByIndex=function() error('scan unavailable') end
-local debuff=frames[5]
+local debuff=frames[7]
 local disarm={sourceUnit='target',auraInstanceID=67130,spellId=6713,name='Disarm',isHarmful=true}
 fire('UNIT_AURA','player',{addedAuras={disarm}})
 assert(debuff.shown and debuff.strings[2].text==6713)
@@ -400,7 +408,7 @@ lua.execute(r'''
 -- Accessible event containers may contain restricted fields. issecrettable
 -- describes their contents, not whether the whole container can be read.
 ns.SpellIDWindow:Initialize({})
-local debuff=frames[5]
+local debuff=frames[7]
 C_UnitAuras.GetAuraSlots=function() error('slot query blocked') end
 C_UnitAuras.GetAuraDataByIndex=function() error('indexed query blocked') end
 local aura={sourceUnit='target',auraInstanceID=secret,spellId=secret,name=secret,isHarmful=true}
@@ -435,7 +443,7 @@ fire('UNIT_AURA','player',update)
 lua.execute(r'''
 -- LOC has its own row, without a redundant [A]. Ordinary debuffs cannot erase it.
 local settings={};ns.SpellIDWindow:Initialize(settings)
-local loc=frames[7]
+local loc=frames[9]
 assert(ns.SpellIDWindow:ObserveLossOfControl(12345,'Disarming Smash','Disarm','Creature A','loc:1'))
 assert(loc.shown and loc.strings[2].text==12345 and loc.strings[3].text=='Disarm')
 assert(loc.strings[4].text=='Disarming Smash' and loc.strings[5].text=='Loss of Control on you')
@@ -459,7 +467,7 @@ lua.execute(r'''
 -- The portrait is a frozen rendering of the captured target, with a deliberate
 -- assignment callback. It remains usable when dragging the window is locked.
 local settings={spellIDWindowLocked=true};ns.SpellIDWindow:Initialize(settings)
-local loc,portrait=frames[7],frames[12]
+local loc,portrait=frames[9],frames[16]
 targetGUID='Creature-0-1-2-3-43-target'
 function UnitGUID() return targetGUID end
 local renders,assignments=0,0
@@ -539,8 +547,8 @@ ns.SpellIDWindow:SetAssignmentCapture(function(unit,spellID,kind)
         assignments[#assignments+1]={id=capturedID,spellID=spellID,kind=kind};return true
     end}
 end)
-local cast,instant,debuff,buff=frames[3],frames[4],frames[5],frames[6]
-local castPortrait,instantPortrait,debuffPortrait,buffPortrait=frames[8],frames[9],frames[10],frames[11]
+local cast,instant,debuff,buff=frames[3],frames[4],frames[7],frames[8]
+local castPortrait,instantPortrait,debuffPortrait,buffPortrait=frames[10],frames[11],frames[14],frames[15]
 casting,castID=true,456
 fire('UNIT_SPELLCAST_START','target')
 assert(castPortrait.shown and cast.strings[6].text=='Cast by:' and cast.strings[7].text=='Creature B')
@@ -564,36 +572,41 @@ assert(opened[1]==43 and opened[2]==43 and opened[3]==42 and #assignments==0)
 castPortrait.scripts.OnClick(castPortrait,'LeftButton')
 buffPortrait.scripts.OnClick(buffPortrait,'LeftButton')
 debuffPortrait.scripts.OnClick(debuffPortrait,'LeftButton')
-assert(assignments[1].id==43 and assignments[1].spellID==456 and assignments[1].kind=='cast')
-assert(assignments[2].id==43 and assignments[2].spellID==12544 and assignments[2].kind=='buff')
-assert(assignments[3].id==42 and assignments[3].spellID==6713 and assignments[3].kind=='debuff')
-castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(#assignments==3)
+assert(assignments[1].id==43 and assignments[1].spellID==12544 and assignments[1].kind=='buff')
+assert(assignments[2].id==42 and assignments[2].spellID==6713 and assignments[2].kind=='debuff')
+assert(cast.strings[5].text:find('[Pinned]',1,true) and #assignments==2)
+castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(#assignments==2)
 fire('UNIT_SPELLCAST_SUCCEEDED','target',secret,99,81)
 assert(instantPortrait.shown and instant.strings[7].text=='Creature A')
 instantPortrait.scripts.OnClick(instantPortrait,'LeftButton')
-assert(assignments[4].id==42 and assignments[4].spellID==99)
+assert(#assignments==2 and instant.strings[5].text:find('[Pinned]',1,true))
 ctrlDown=true;instantPortrait.scripts.OnClick(instantPortrait,'LeftButton');ctrlDown=false
-assert(opened[4]==42 and #assignments==4)
+assert(opened[4]==42 and #assignments==2)
 channel,castID=true,567;fire('UNIT_SPELLCAST_CHANNEL_START','target');channel=false
+cast,castPortrait=frames[5],frames[12]
 castPortrait.scripts.OnEnter(castPortrait);assert(GameTooltip.lines[2]:find('channeling',1,true))
-castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(assignments[5].spellID==567)
+castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(#assignments==2 and cast.strings[5].text:find('[Pinned]',1,true))
 auras.player={{auraInstanceID=73,spellId=777,name='Unattributed'}}
 fire('UNIT_AURA','player',{})
 debuffPortrait.scripts.OnEnter(debuffPortrait)
 assert(debuff.strings[2].text~=777,'unattributed player effects are ignored')
 -- Secret IDs render but never enter a tooltip concatenation or assignment.
 casting,castID=true,secret;fire('UNIT_SPELLCAST_START','target');casting=false
+cast,castPortrait=frames[6],frames[13]
 assert(castPortrait.shown and rawequal(cast.strings[2].text,secret))
 castPortrait.scripts.OnEnter(castPortrait)
-assert(GameTooltip.lines[3]:find('restricted',1,true))
-assert(GameTooltip.lines[#GameTooltip.lines]:find('Ctrl+Click',1,true))
+assert(table.concat(GameTooltip.lines,' '):find('restricted',1,true))
+assert(table.concat(GameTooltip.lines,' '):find('Ctrl+Click',1,true))
 ctrlDown=true;castPortrait.scripts.OnClick(castPortrait,'LeftButton');ctrlDown=false
-assert(opened[5]==42 and #assignments==5,'restricted IDs still allow navigation')
-castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(#assignments==5 and cast.strings[6].text=='Cast by:')
+assert(opened[5]==42 and #assignments==2,'restricted IDs still allow navigation')
+ctrlDown=true;cast.scripts.OnMouseUp(cast,'LeftButton');ctrlDown=false
+assert(opened[6]==42 and not cast.strings[5].text:find('[Pinned]',1,true), 'Ctrl+Click on the row also opens its captured creature')
+castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(#assignments==2 and cast.strings[6].text=='Cast by:')
 -- Retargeting during aura/cast reads cannot associate the old spell with a new NPC.
 local normalCast=UnitCastingInfo
+frames[3].scripts.OnMouseUp(frames[3],'RightButton')
 UnitCastingInfo=function() targets.target={id=44,name='Creature C',guid='Creature-0-1-2-3-44-C'};return 'Cast',nil,nil,nil,nil,nil,nil,nil,456,82 end
-fire('UNIT_SPELLCAST_START','target');assert(not castPortrait.shown)
+fire('UNIT_SPELLCAST_START','target');assert(not frames[10].shown)
 UnitCastingInfo=normalCast
 local normalAura=C_UnitAuras.GetAuraDataByIndex
 C_UnitAuras.GetAuraDataByIndex=function(unit,index)
@@ -605,7 +618,7 @@ C_UnitAuras.GetAuraDataByIndex=normalAura
 instantPortrait.scripts.OnClick(instantPortrait,'RightButton');assert(not instantPortrait.shown)
 ns.SpellIDWindow:AddBlacklist(6713);assert(not debuffPortrait.shown)
 settings.displaySpellIDWindow=false;ns.SpellIDWindow:ApplySettings()
-for i=8,12 do assert(not frames[i].shown) end
+for i=10,16 do assert(not frames[i].shown) end
 ''')
 print('PASS: cast/channel/instant/buff/debuff portraits, secret IDs and capture races')
 
@@ -619,13 +632,126 @@ for _,guid in ipairs({'Player-1-2','Pet-0-1-2-3-42-1','Vehicle-0-1-2-3-42-1',sec
     auras.player={{auraInstanceID=991,spellId=991,name='Excluded',sourceUnit='target'}}
     fire('UNIT_AURA','player',{})
     fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,991,991)
-    assert(not frames[3].shown and not frames[5].shown,'non-creature sources excluded')
+    assert(not frames[3].shown and not frames[7].shown,'non-creature sources excluded')
 end
 UnitGUID=normalGUID
 controlled=secret
 UnitPlayerControlled=function() return secret end
 window:Initialize({displaySpellIDWindow=true})
 fire('UNIT_AURA','player',{})
-assert(not frames[5].shown,'unknown ownership excluded')
+assert(not frames[7].shown,'unknown ownership excluded')
 ''')
 print('PASS: player, pet, vehicle, secret identity and unknown ownership exclusions')
+
+lua.execute(r'''
+-- Only pinning advances capture; repeated secret spells stay in one live row.
+local window=ns.SpellIDWindow
+casting,channel=false,false;auras={player={},target={}}
+exists,enemy,controlled,targetPlayer=true,true,false,false
+function UnitPlayerControlled() return false end
+function UnitGUID() return 'Creature-0-1-2-3-42-history' end
+function UnitName() return 'History caster' end
+C_UnitAuras={GetAuraDataByIndex=function() end}
+window:SetAssignmentCapture(nil)
+local function id(row) return row.strings[2].text end
+local function count()
+    local n=0;for i=3,6 do if frames[i].shown then n=n+1 end end;return n
+end
+now=0
+local settings={spellIDWindowLocked=true}
+window:Initialize(settings)
+assert(not AzerothFieldbookPinLatestCast() and not AzerothFieldbookUnpinLastCast())
+assert(BINDING_NAME_AZEROTHFIELDBOOK_PIN_CAST=='Pin latest enemy cast')
+assert(BINDING_NAME_AZEROTHFIELDBOOK_UNPIN_CAST=='Unpin last pinned enemy cast')
+local bar=100
+function UnitCastingInfo()
+    if casting then return secret,nil,nil,nil,nil,nil,nil,nil,castID,bar end
+end
+casting,castID=true,secret
+fire('UNIT_SPELLCAST_START','target')
+advance(20);fire('PLAYER_TARGET_CHANGED');fire('UNIT_SPELLCAST_START','target')
+casting=false;fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,100)
+assert(count()==1 and rawequal(id(frames[3]),secret), 'same cast consumes only one slot')
+for token=101,110 do fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,token) end
+assert(count()==1 and rawequal(id(frames[3]),secret))
+frames[3].scripts.OnEnter()
+assert(table.concat(GameTooltip.lines,' '):find('Live slot',1,true))
+assert(table.concat(GameTooltip.lines,' '):find('Left-click: pin',1,true))
+ns.InitializationBlocked=true
+frames[3].scripts.OnMouseUp(frames[3],'LeftButton');pinBinding()
+assert(not frames[3].strings[5].text:find('[Pinned]',1,true))
+ns.InitializationBlocked=nil
+frames[3].scripts.OnMouseUp(frames[3],'LeftButton')
+assert(count()==1 and not frames[4].shown and frames[3].strings[5].text:find('[Pinned]',1,true))
+assert(table.concat(GameTooltip.lines,' '):find('Right-click: unpin and remove',1,true))
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,110)
+assert(count()==1, 'pinning cannot capture the same cast twice')
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,99,111)
+assert(count()==2 and id(frames[4])==99)
+frames[11].scripts.OnClick(frames[11],'LeftButton') -- Portrait uses the same pin action.
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,112)
+assert(count()==3 and rawequal(id(frames[5]),secret))
+ctrlDown=true;frames[5].scripts.OnMouseUp(frames[5],'LeftButton');ctrlDown=false
+assert(not frames[5].strings[5].text:find('[Pinned]',1,true), 'Ctrl+Click never pins, even without a creature')
+pinBinding()
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,123,113)
+pinBinding();assert(count()==4 and not AzerothFieldbookPinLatestCast())
+frames[6].scripts.OnEnter()
+assert(table.concat(GameTooltip.lines,' '):find('All four slots are pinned',1,true))
+assert(table.concat(GameTooltip.lines,' '):find('Key Bindings > Azeroth Fieldbook',1,true))
+for token=114,160 do fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,456,token) end
+assert(count()==4 and id(frames[4])==99 and id(frames[6])==123, 'full pinned history cannot be replaced')
+advance(500);assert(count()==4, 'pins survive the normal timeout')
+ns.InitializationBlocked=true;unpinBinding();assert(count()==4);ns.InitializationBlocked=nil
+unpinBinding();assert(count()==3 and not frames[6].shown)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,123,113)
+assert(count()==3, 'keybind removal keeps the same cast dismissed')
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,456,161)
+unpinBinding()
+assert(count()==3 and not frames[5].shown and id(frames[6])==456, 'unpin removes last pinned, not the live row')
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,789,162)
+assert(count()==3 and not frames[5].shown and id(frames[6])==789, 'cleared holes do not create another live slot')
+pinBinding();fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,900,163)
+assert(count()==4 and id(frames[5])==900 and frames[5].strings[5].text=='4. Enemy cast')
+pinBinding();unpinBinding();assert(not frames[5].shown, 'last pinned follows capture order after slot reuse')
+window:AddBlacklist(99)
+assert(count()==2 and not frames[4].shown, 'explicit blacklist removal can clear a pin')
+settings.displaySpellIDWindow=false;window:ApplySettings()
+pinBinding();unpinBinding();assert(count()==0)
+
+-- The live slot still expires from detection, including after public upgrades.
+now=0;settings={};window:Initialize(settings)
+casting,castID,bar=true,secret,200
+fire('UNIT_SPELLCAST_START','target')
+advance(60);castID=123
+fire('UNIT_SPELLCAST_START','target')
+assert(count()==1 and id(frames[3])==123)
+casting=false;advance(60);assert(count()==0)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,201)
+settings.spellIDWindowIndefinite=true;window:ApplySettings();advance(500)
+assert(count()==1)
+settings.spellIDWindowIndefinite=false;window:ApplySettings();advance(1)
+assert(count()==0)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,456,202)
+frames[3].scripts.OnMouseDown();frames[3].scripts.OnDragStart();frames[3].scripts.OnDragStop()
+frames[3].scripts.OnMouseUp(frames[3],'LeftButton')
+assert(not frames[3].strings[5].text:find('[Pinned]',1,true), 'dragging does not pin')
+frames[3].scripts.OnMouseDown();frames[3].scripts.OnMouseUp(frames[3],'LeftButton')
+assert(frames[3].strings[5].text:find('[Pinned]',1,true))
+frames[3].scripts.OnMouseUp(frames[3],'RightButton');assert(count()==0)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,456,202);assert(count()==0)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,456,203);assert(count()==1)
+window:SetAssignmentCapture(function()
+    return {id=42,guid=UnitGUID('target'),name='History caster',assign=function() error('pinning cannot assign spells') end}
+end)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,999,204)
+pinBinding()
+window:SetRecordedAbilityCheck(function() return true end)
+advance(121);assert(count()==1, 'recording an ability cannot silently remove a pinned cast')
+window:SetRecordedAbilityCheck(nil);window:SetAssignmentCapture(nil)
+window:Initialize(settings);assert(count()==0, 'initialization clears session-only pins')
+for key in pairs(settings) do
+    assert(not key:find('cast',1,true) and not key:find('observed',1,true), 'observations remain session-only')
+end
+''')
+print('PASS: one live cast, four pins, mouse/keybind controls, capacity, dismissal, timeout and reset')

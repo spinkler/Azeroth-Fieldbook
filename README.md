@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.37.0 (Release)
+# Azeroth Fieldbook 0.38.0 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -9,7 +9,13 @@ Adventurer's Annals adds an eighth journal for
 this character's quest history and Journey Trail. It is independent of account
 tracking. Login and normal logout events have separate icons, filters and legend
 entries; logout is confirmed on the next real login, and UI reloads create neither
-event. Completed quests show recorded quest text and objectives. See
+event. Combat entry and exit are captured in Journey Trail without timeline rows
+or extra map pins. Combat turns the historical arrow and trail orange, with an
+explicit state in the map footer; older history retains its original colours.
+The arrow turns grey after ten seconds standing still out of combat, and yellow
+during Herbalism or Mining casts. Movement, combat or gathering ends idle.
+The compact legend separates Journey colours from Events icons.
+Completed quests show recorded quest text and objectives. See
 [usage, API evidence and in-game acceptance](tests/ANNALS.md) and
 the [measured long-term storage report](tests/ANNALS_STORAGE.md). Annals remains subject to native API and visual acceptance.
 
@@ -866,15 +872,16 @@ collapse them. A grey **(Ctrl for details)** hint appears when a displayed abili
 has readable details. Unresolved abilities remain name-only, and unavailable or
 restricted descriptions are omitted.
 
-The **last detected enemy ability** hint beneath the optional spell ID field
-shows the latest cast's name, ID and local date/time for that creature. It remains
-when changing targets or pages until another cast replaces it or you record the
-ability. Hover attempts to show its spell tooltip where the client permits it.
-Readable IDs already recorded are hidden. For restricted IDs, saving a linked
-ability clears the current hint, but a later cast can show it again because the
-addon cannot compare restricted IDs against saved spells. Hints last for the
-current session only and disappear on reload/logout. They work with the Spell ID
-window hidden and automatic recording off.
+The **Last detected spells** footer beneath the optional spell ID field keeps
+four numbered cast IDs for each creature, oldest first. A fifth cast replaces
+the oldest; changing targets or pages preserves the history. Hover a slot for
+its spell tooltip and local detection time where the client permits it.
+Right-click a slot to clear it. Readable IDs already recorded are hidden.
+Saving a linked ability clears a lone restricted hint; multiple restricted hints
+stay available for individual dismissal because the addon cannot match them
+against the typed ID. A later restricted cast can appear again. Hints last for
+the current session only and disappear on reload/logout. They work with the
+Spell ID window hidden and automatic recording off, and have no timeout.
 
 The **Spell ID window** shows only populated sections and grows upward from its
 bottom edge. Caster names appear when available; unknown casters leave no extra
@@ -1160,11 +1167,25 @@ The target cast bar can display **Last Spell ID**. It remains for up to one
 minute, clearing when the target changes, another cast starts, or you right-click
 it. **Display Cast IDs** is enabled by default in the book's ? menu.
 
-A separate movable **Last observed spell IDs** window shows the latest enemy
-cast, identifiable instant cast, debuff on you, player Loss of Control and buff on a non-player-controlled
-NPC target. It starts enabled and unlocked with 35% background opacity. Entries
-expire after two minutes unless **Display Spell IDs in the ID window indefinitely**
-is enabled. Aura effect types are shown when available.
+A separate movable **Last observed spell IDs** window has up to four enemy-cast
+slots, including channels and identifiable instant casts. It initially shows one
+live slot, which updates with each new cast. **Left-click** that row or its
+portrait to pin it; the next cast uses another slot. Pinned rows show **[Pinned]**
+and remain until removed. **Right-click** unpins and removes a row. If all four
+are pinned, new casts are ignored until you clear a slot. **Ctrl+Click** a cast
+row or portrait opens its captured creature's Bestiary page without pinning it.
+Under **Key Bindings > Azeroth Fieldbook**, assign **Pin latest enemy cast** to
+pin the live slot and **Unpin last pinned enemy cast** to remove the most recent
+pin while leaving the live slot intact. Neither action has a default key.
+Separate rows retain the latest
+debuff on you, player Loss of Control and buff on a non-player-controlled NPC
+target. The window starts enabled and unlocked with 35% background opacity.
+Unpinned entries expire two minutes after detection unless **Display Spell IDs
+in the ID window indefinitely** is enabled. Pins are session-only; hiding the
+ID window through its setting or reloading clears them.
+Aura effect types are shown when available. Public cast tokens prevent duplicate
+notifications for one cast from being captured again after pinning. Restricted
+spell IDs cannot be compared, so pin the different spells you want to retain.
 The tracker also consumes readable aura additions from `UNIT_AURA`, so a debuff
 can appear even when a fresh scan misses it. Restricted polarity or inaccessible
 event data still require the normal filtered scan. Cast observations only cover
@@ -1184,8 +1205,10 @@ Small clickable portraits identify eligible creatures captured with each row:
   shows your captured target with an explicit unverified-caster explanation.
 - Unattributed **Loss of Control on you** shows your captured target as before.
 
-Hover to review the captured creature, then click to manually confirm the spell
-for it in the Bestiary. A successful click shows **Saved:** and a green rim.
+Hover to review the captured creature and available controls. Cast portraits use
+the pin action described above; enter their displayed IDs in the Bestiary to
+record them. Clicking a buff, debuff or Loss of Control portrait manually confirms
+the readable spell for its creature. A successful assignment shows **Saved:** and a green rim.
 **Ctrl+Click** a portrait to open that captured creature's Bestiary entry without
 assigning the spell. This also works on saved rows and restricted spell IDs.
 Each portrait stays with its own observation when targets change. This works in

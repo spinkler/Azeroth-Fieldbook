@@ -8,6 +8,8 @@ local travelSpells={
     [3565]='teleport',[3566]='teleport',[3567]='teleport', -- Classic capital teleports
     [18960]='teleport', -- Teleport: Moonglade
 }
+local gatheringEvents={UNIT_SPELLCAST_START=true,UNIT_SPELLCAST_STOP=true,UNIT_SPELLCAST_SUCCEEDED=true,
+    UNIT_SPELLCAST_FAILED=true,UNIT_SPELLCAST_FAILED_QUIET=true,UNIT_SPELLCAST_INTERRUPTED=true}
 local function travelContext()
     local location=A.Location()
     local instance=A.Read(function() local _,kind=IsInInstance();return kind end)
@@ -38,7 +40,7 @@ local function item(kind,index,questID)
         if questID then v=A.Read(C_QuestLog and C_QuestLog.GetQuestRewardCurrencyInfo,questID,index,kind=='choice')
         else v=A.Read(C_QuestOffer and C_QuestOffer.GetQuestRewardCurrencyInfo,kind,index) end
         if type(v)=='table' and A.Int(v.currencyID,1,2147483647) and A.Int(v.totalRewardAmount,0,2147483647) then
-            return {currencyID=v.currencyID,quantity=v.totalRewardAmount,name=A.Text(v.name,240) and v.name or nil,
+            return {currencyID=v.currencyID,quantity=v.totalRewardAmount,name=A.RewardName(v.name),
                 icon=A.Int(v.texture,1,2147483647) and v.texture or nil,quality=A.Int(v.quality,0,8) and v.quality or nil,offered=true}
         end
         return
@@ -57,7 +59,7 @@ local function item(kind,index,questID)
     end
     if not A.Int(id,1,2147483647) or not A.Int(count,1,1000000) then return end
     local data=A.Text(link,2048) and link:match('|H(item:[%d:%-]+)|h') or nil
-    return {itemID=id,quantity=count,name=A.Text(name,240) and name or nil,icon=A.Int(icon,1,2147483647) and icon or nil,
+    return {itemID=id,quantity=count,name=A.RewardName(name),icon=A.Int(icon,1,2147483647) and icon or nil,
         quality=A.Int(quality,0,8) and quality or nil,link=data and tonumber(data:match('^item:(%d+)'))==id and data or nil}
 end
 function A.RewardSnapshot(questID)
@@ -94,7 +96,7 @@ function A.RewardSnapshot(questID)
         for i,v in ipairs(currencies) do
             if i>64 then s.currencyStatus='incomplete';break end
             if type(v)=='table' and A.Int(v.currencyID,1,2147483647) and A.Int(v.totalRewardAmount,0,2147483647) then
-                s.currencyOffers[#s.currencyOffers+1]={currencyID=v.currencyID,quantity=v.totalRewardAmount,name=A.Text(v.name,240) and v.name or nil,
+                s.currencyOffers[#s.currencyOffers+1]={currencyID=v.currencyID,quantity=v.totalRewardAmount,name=A.RewardName(v.name),
                     icon=A.Int(v.texture,1,2147483647) and v.texture or nil,quality=A.Int(v.quality,0,8) and v.quality or nil}
             else s.currencyStatus='incomplete' end
         end
@@ -107,7 +109,7 @@ function A.RewardSnapshot(questID)
             if A.Int(spellID,1,2147483647) then
                 local info=A.Read(C_QuestInfoSystem.GetQuestRewardSpellInfo,id,spellID)
                 s.spellOffers[#s.spellOffers+1]={spellID=spellID,quantity=1,
-                    name=type(info)=='table' and A.Text(info.name,240) and info.name or nil,
+                    name=type(info)=='table' and A.RewardName(info.name) or nil,
                     icon=type(info)=='table' and A.Int(info.texture,1,2147483647) and info.texture or nil}
             else s.status='incomplete' end
         end
@@ -348,8 +350,37 @@ function ns.CreateAnnalsTracking(j)
             end
         end
     end
+    function t:GatheringEvent(event,unit,guid,spellID)
+        if self.loading or not A.Text(unit,40) or unit~='player' or not A.Text(guid,160)
+            or not A.Int(spellID,1,2147483647) or not ns.GatheringCastKind then return end
+        local gathering=ns.GatheringCastKind(spellID)
+        local cast=self.gatheringCast
+        if event=='UNIT_SPELLCAST_START' then
+            if not gathering and not cast then return end
+            self.gatheringCast=gathering and {guid=guid,spellID=spellID,at=A.Now()} or nil
+        else
+            if cast then
+                if guid~=cast.guid or spellID~=cast.spellID then return end
+            elseif not gathering then return end
+            self.gatheringCast=nil;gathering=nil
+        end
+        self.gatheringObservedAt=gathering and A.Now() or nil
+        local p=A.Location();p.at=A.Now();p.activity=gathering and 'gathering' or false
+        j.trail:Sample(p)
+    end
     function t:Event(event,id,xp,money)
         if j.readOnly or ns.InitializationBlocked then return end
+        if gatheringEvents[event] then
+            self:GatheringEvent(event,id,xp,money)
+            if event=='UNIT_SPELLCAST_STOP' or event=='UNIT_SPELLCAST_FAILED_QUIET' then return end
+        end
+        if event=='PLAYER_REGEN_DISABLED' or event=='PLAYER_REGEN_ENABLED' then
+            if not t.loading then
+                local p=A.Location();p.at=A.Now();p.combat=event=='PLAYER_REGEN_DISABLED'
+                j.trail:Sample(p)
+            end
+            return
+        end
         -- Classic sends (questLogIndex, questID); other clients send only
         -- questID. Never use a reusable log slot as a historical identity.
         if event=='QUEST_ACCEPTED' and xp~=nil then id=xp end
@@ -383,6 +414,7 @@ function ns.CreateAnnalsTracking(j)
             return
         end
         if event=='PLAYER_ENTERING_WORLD' then
+            t.gatheringCast=nil;t.gatheringObservedAt=nil
             if not t.sessionStarted and (id==true or xp==true) then
                 t.sessionStarted=true
                 if (id==true and xp~=true) or not A.Int(db.sessionStart,0,A.Now()) then db.sessionStart=A.Now() end
@@ -439,6 +471,7 @@ function ns.CreateAnnalsTracking(j)
             return
         end
         if event=='PLAYER_LEAVING_WORLD' or event=='PLAYER_LOGOUT' then
+            t.gatheringCast=nil;t.gatheringObservedAt=nil
             t.loginLocation=nil
             local logoutLocation=event=='PLAYER_LOGOUT' and t.beforeWorld and t.beforeWorld.from.location
             if event=='PLAYER_LEAVING_WORLD' and not t.loading then
@@ -465,6 +498,7 @@ function ns.CreateAnnalsTracking(j)
         -- discontinuities are handled by the sampler, not by label-change events.
         if event=='ZONE_CHANGED_NEW_AREA' or event=='ZONE_CHANGED_INDOORS' or event=='ZONE_CHANGED' then return end
         if event=='PLAYER_DEAD' then
+            t.gatheringCast=nil;t.gatheringObservedAt=nil
             if not t.dead then
                 t.dead=true
                 local location=A.Location();location.state='dead'
@@ -577,6 +611,11 @@ function ns.CreateAnnalsTracking(j)
         t.travelPosition=A.Location();t.travelPosition.at=now
         if db.settings.trail==false then return end
         local p=A.Location();p.at=now;p.flight=knownTaxi and taxi or nil
+        if p.activity=='gathering' then
+            t.gatheringObservedAt=now
+        elseif p.activity==false or (t.gatheringObservedAt and now-t.gatheringObservedAt>=30) then
+            t.gatheringCast=nil;t.gatheringObservedAt=nil;p.activity=false
+        end
         if knownTaxi and not taxi then p.flight=false end
         if knownTaxi and not taxi then t.ground=A.Copy(p) end
         p.context=table.concat({tostring(A.Read(IsInInstance) or false),tostring(A.Read(UnitIsDeadOrGhost,'player') or false)},':')
@@ -591,7 +630,8 @@ function ns.CreateAnnalsTracking(j)
             'QUEST_LOG_UPDATE','QUEST_DATA_LOAD_RESULT','GET_ITEM_INFO_RECEIVED',
             'PLAYER_ENTERING_WORLD','PLAYER_LEAVING_WORLD','PLAYER_LOGOUT','ZONE_CHANGED_NEW_AREA','ZONE_CHANGED_INDOORS',
             'ZONE_CHANGED','PLAYER_DEAD','PLAYER_ALIVE','PLAYER_UNGHOST','PLAYER_LEVEL_UP','TAXIMAP_OPENED','TAXIMAP_CLOSED',
-            'UNIT_SPELLCAST_START','UNIT_SPELLCAST_SUCCEEDED','UNIT_SPELLCAST_FAILED','UNIT_SPELLCAST_INTERRUPTED'}) do
+            'PLAYER_REGEN_DISABLED','PLAYER_REGEN_ENABLED',
+            'UNIT_SPELLCAST_START','UNIT_SPELLCAST_STOP','UNIT_SPELLCAST_SUCCEEDED','UNIT_SPELLCAST_FAILED','UNIT_SPELLCAST_FAILED_QUIET','UNIT_SPELLCAST_INTERRUPTED'}) do
             self.capabilities[event]=pcall(self.frame.RegisterEvent,self.frame,event)
         end
         self.frame:SetScript('OnEvent',function(_,...) t:Event(...) end)

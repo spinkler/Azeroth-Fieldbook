@@ -106,6 +106,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             elseif top+ROW_HEIGHT>scroll+LIST_HEIGHT then state.indexScroll=top+ROW_HEIGHT-LIST_HEIGHT end
         end
         self.main.details:SetVerticalScroll(0);self:Refresh()
+        self.main.map:CenterOnEntry(id)
     end
     function c:Picker(config)
         local p=self.pages.picker
@@ -406,7 +407,11 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             row:SetScript("OnClick",function(self) if self.id then c:Select(self.id) end end)
             row:SetScript("OnEnter",function(self)
                 local e=entries:Get(self.id)
-                if e and GameTooltip then GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(A.AutomaticLabel(e.name,e.entrance));GameTooltip:AddLine(A.Safe(e.zone).." • "..categoryInfo(e.category).label,1,1,1);GameTooltip:Show() end
+                if e and GameTooltip then
+                    GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(A.AutomaticLabel(e.name,e.entrance))
+                    GameTooltip:AddLine(A.Safe(e.zone).." • "..categoryInfo(e.category).label,1,1,1)
+                    GameTooltip:Show()
+                end
             end)
             row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
             m.rows[i]=row
@@ -604,6 +609,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
                 callback(x,y,state.mapID,state.zone)
             end
         end,function(id,name) c:SetZone(id,name) end)
+        m.map.preserveZoomOnMapChange=true
         m.brightness=m.map.brightness
         m.map:SetPoint("TOP",m,"TOPLEFT",632,-205)
         m.layerMenu:SetParent(m.map);m.layerMenu:ClearAllPoints()
@@ -718,7 +724,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
     end
     shell:RegisterSection("atlas",{title="Traveller’s Atlas",icon="Interface\\Icons\\INV_Misc_Map03",
         help="|cffffd1001. Record a discovery|r\nKeep a journal of places you want to find again. Click Add Discovery, enter a name and category, then Save. Use my current position captures your location; Choose on displayed map lets you place a point yourself. Coordinates may be left blank. For a cave, record its entrance.\n\n"..
-            "|cffffd1002. Browse maps|r\nChoose a map or select Current Zone at the top of the zone menu. Search the current map or all recorded zones, then select an index entry or map pin. Repeated clicks cycle overlapping pins. Map Layers shows or hides discovery categories; Reveal layer shows a selected entry's hidden category.\n\n"..
+            "|cffffd1002. Browse maps|r\nChoose a map or select Current Zone at the top of the zone menu. Search the current map or all recorded zones, then select an index entry or map pin. Your zoom level is retained when changing maps. Selected map icons glow gold. Repeated clicks cycle overlapping pins. Map Layers shows or hides discovery categories; Reveal layer shows a selected entry's hidden category.\n\n"..
             "|cffffd1003. Edit and explore|r\nEdit changes names, notes, access details and explored status. Map position lets you place the selected discovery. Explored is your own assertion: saving a location does not mark it explored. Recorded and Reported identify the source of the information.\n\n"..
             "|cffffd1004. Routes and passages|r\nChoose the Route / Passage category, then Save & route stops. Add recorded places or named waypoints; use Up, Down and Remove to arrange them. Stops can span zones. Map lines connect recorded stops, not guaranteed safe paths.\n\n"..
             "|cffffd1005. Expeditions and connections|r\nUse Expeditions for longer journals and Linked notes to attach them to a discovery. Connections links known Atlas discoveries or records in other supported Fieldbook sections. Removing a link leaves the source record intact.\n\n"..

@@ -29,7 +29,9 @@ function A.Decode(s)
             state=s.flight==true and 'flight' or (type(s.context)=='string' and s.context:match(':true$') and 'dead / ghost')
                 or (type(s.context)=='string' and s.context:match(':false$') and 'alive') or nil
         end
-        out[#out+1]={x=x,y=y,at=t,anchor=flag=='1',mapID=s.mapID,level=A.Int(s.level,1,1000) and s.level or nil,flight=s.flight==true,mount=(s.mount==60 or s.mount==100) and s.mount or nil,state=state}
+        local combat;if type(s.combat)=='boolean' then combat=s.combat end
+        local activity=(s.activity=='idle' or s.activity=='gathering') and s.activity or nil
+        out[#out+1]={x=x,y=y,at=t,anchor=flag=='1',mapID=s.mapID,level=A.Int(s.level,1,1000) and s.level or nil,flight=s.flight==true,mount=(s.mount==60 or s.mount==100) and s.mount or nil,state=state,combat=combat,activity=activity}
     end
     if s.finish~=nil and (not A.Int(s.finish,s.at,9999999999) or s.finish~=t) then return nil,'Trail time header mismatch.' end
     return out
@@ -77,7 +79,7 @@ function ns.CreateAnnalsTrail(j,options)
         local previous=points[#points]
         if p.at==previous.at and distance(p,previous)==0 then
             if not previous.anchor then previous.anchor=true;current.data=current.data:sub(1,-2)..'1';t.revision=t.revision+1 end
-        elseif p.at>previous.at then
+        elseif p.at>=previous.at then
             local copy=A.Copy(p);copy.anchor=true;write(copy)
         end
     end
@@ -117,8 +119,10 @@ function ns.CreateAnnalsTrail(j,options)
         if p and A.JourneyInstance(p.instanceType) then self:Break('inside instance');return end
         if not p or not A.Int(p.mapID,1,2147483647) or not A.Int(p.x,0,10000) or not A.Int(p.y,0,10000) then self:Break('position unavailable');return end
         p=A.Copy(p);p.at=p.at or A.Now();p.anchor=anchor==true
+        if type(p.combat)~='boolean' then p.combat=nil end
+        if p.activity~='gathering' and p.activity~=false then p.activity=nil end
         if not A.Int(p.at,0,9999999999) then return end
-        local joinFrom
+        local joinFrom,startPoint,idleStart
         if current then
             if p.flight==nil then p.flight=current.flight==true end
             if p.mount==nil then p.mount=current.mount end
@@ -135,19 +139,54 @@ function ns.CreateAnnalsTrail(j,options)
                 end
                 self:Break('map transition')
             elseif discontinuous(p) then self:Break('discontinuous movement')
+            elseif p.combat~=nil and p.combat~=current.combat and (not p.state or not current.state or p.state==current.state) then
+                -- Close the old colour at the observed boundary, even at rest.
+                -- The new segment starts at that same place/time: no colour
+                -- leaks backwards into travel before combat (or its exit).
+                if #points<A.MAX_POINTS then writeAnchor(p) end
+                joinFrom=#j.db.segments;self:Break('combat state');p.anchor=true
             elseif p.flight~=nil and p.flight~=(current.flight==true) then
                 joinFrom=#j.db.segments;self:Break('flight state')
             elseif p.mount~=current.mount then
                 joinFrom=#j.db.segments;self:Break('mount state')
-            elseif p.state and current.state and p.state~=current.state then self:Break('player state')
+            elseif p.state and current.state and p.state~=current.state then self:Break('player state') end
+        end
+        if current then
+            -- Missing cast data may retain a known gathering cast until its
+            -- end event; false explicitly clears it. Never infer old inactivity.
+            if p.activity==nil and current.activity=='gathering' then p.activity='gathering' end
+            local resting=lastPoll and distance(lastPoll,p)==0 and (idlePoint or lastPoll)
+            if current.activity=='gathering' and p.activity~='gathering' then resting=nil end
+            if p.combat==nil then p.combat=current.combat end
+            local combat=p.combat
+            if p.activity~='gathering' then
+                p.activity=nil
+                if combat==false and not p.flight and (not p.state or p.state=='alive') and resting and p.at-resting.at>=10 then
+                    p.activity='idle';idleStart=resting
+                end
+            end
+            if p.activity~=current.activity then
+                local boundary=p
+                if p.activity=='idle' then
+                    boundary=A.Copy(p);boundary.at=math.max(current.finish,resting.at+10)
+                elseif current.activity=='idle' and p.activity~='gathering' and lastPoll and distance(lastPoll,p)>0 then
+                    -- Movement starts after the last confirmed stationary poll.
+                    boundary=A.Copy(lastPoll)
+                end
+                if #points<A.MAX_POINTS then writeAnchor(boundary) end
+                startPoint=A.Copy(boundary);startPoint.anchor=true;startPoint.activity=p.activity
+                joinFrom=#j.db.segments;self:Break('activity state');p.anchor=true
             elseif (anchor or distance(points[#points],p)>=(self.options.minimum or 40) or (idlePoint and distance(lastPoll,p)>0)) and
                 (p.at-current.at>1800 or #points>=A.MAX_POINTS-1) then
                 joinFrom=#j.db.segments;self:Break('chunk')
             end
         end
         if not current then
-            current={v=1,mapID=p.mapID,at=p.at,finish=p.at,level=p.level,reason=self.reason,context=p.context,joinFrom=joinFrom,flight=p.flight==true or nil,mount=p.mount,state=p.state,data=''}
-            j.db.segments[#j.db.segments+1]=current;points={};write(p);lastPoll=p;idlePoint=p;return
+            local start=startPoint or p
+            current={v=1,mapID=p.mapID,at=start.at,finish=start.at,level=p.level,reason=self.reason,context=p.context,joinFrom=joinFrom,flight=p.flight==true or nil,mount=p.mount,state=p.state,combat=p.combat,activity=p.activity or nil,data=''}
+            j.db.segments[#j.db.segments+1]=current;points={};write(start)
+            if start.at~=p.at or distance(start,p)>0 then write(p) end
+            lastPoll=p;idlePoint=idleStart or p;return
         end
         -- Retain arrival/departure times once a stop is confirmed. No periodic
         -- idle writes; these two anchors prevent playback drifting through rests.

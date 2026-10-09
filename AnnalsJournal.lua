@@ -3,6 +3,7 @@ local A={SCHEMA=1,MAX_POINTS=256};ns.Annals=A
 function A.Public(v) return not (issecretvalue and issecretvalue(v)) end
 function A.Int(v,lo,hi) return A.Public(v) and type(v)=='number' and v==math.floor(v) and v>=lo and v<=hi end
 function A.Text(v,n) return A.Public(v) and type(v)=='string' and #v<=n and not v:find('%c') end
+function A.RewardName(v) return A.Text(v,240) and v:find('%S') and v or nil end
 function A.QuestText(v)
     return A.Public(v) and type(v)=='string' and #v>0 and #v<=16384
         and not v:gsub('[\r\n\t]',''):find('%c')
@@ -17,6 +18,14 @@ function A.Copy(v)
     local out={};for k,x in pairs(v) do out[k]=A.Copy(x) end;return out
 end
 function A.JourneyInstance(kind) return kind=='party' or kind=='raid' or kind=='scenario' end
+function A.GatheringActivity()
+    if type(UnitCastingInfo)~='function' then return end
+    local ok,name,_,_,_,_,_,_,_,spellID=pcall(UnitCastingInfo,'player')
+    if not ok or not A.Public(name) then return end
+    if name==nil then return false end
+    if not A.Int(spellID,1,2147483647) or not ns.GatheringCastKind then return end
+    return ns.GatheringCastKind(spellID) and 'gathering' or false
+end
 function A.Location()
     local p={zone=A.Read(GetRealZoneText),subzone=A.Read(GetSubZoneText),level=A.Read(UnitLevel,'player')}
     local instance=A.Read(function() local _,kind=IsInInstance();return kind end)
@@ -26,6 +35,10 @@ function A.Location()
     elseif dead==true or dead==1 then p.state='dead'
     elseif taxi==true or taxi==1 then p.state='flight'
     elseif dead==false or dead==0 then p.state='alive' end
+    local combat=A.Read(UnitAffectingCombat,'player')
+    if combat==true or combat==1 then p.combat=true
+    elseif combat==false or combat==0 then p.combat=false end
+    p.activity=A.GatheringActivity()
     local mounted=A.Read(IsMounted)
     if mounted==true or mounted==1 then
         local speed=A.Read(function() local _,run=GetUnitSpeed('player');return run end)

@@ -1,5 +1,94 @@
 # Adventurer's Annals
 
+Reward names that are empty or whitespace-only are treated as unavailable.
+Existing saved entries remain intact: the detail view can resolve their item
+names from the client cache, refresh when item data loads, or show an explicit
+`Item #ID` fallback while unavailable. Recorded nonblank names retain priority.
+Icons, quantities, quality colours and tooltip links remain independent of name
+availability. New reward snapshots omit blank names so a later readable snapshot
+can supply them. `tests/test_annals_reward_names.py` covers the blank-name detail
+rows, delayed cache refresh, immutable history, fallbacks and capture recovery.
+
+## Idle and gathering arrow
+
+The arrow turns grey after ten seconds of observed stationary time out of combat.
+Movement, combat or gathering resumes its active colour. After combat or a gather
+ends, a fresh ten-second stationary interval is required. Idle requires a known
+out-of-combat state and does not replace death, ghost or flight colours. It uses
+the existing two-second observations; the saved boundary is the ten-second mark
+even when a poll arrives later. Leaving idle through movement preserves the last
+stationary observation as the departure, so interpolated movement is active.
+
+Observed Herbalism and Mining casts turn the arrow yellow. Annals reuses the
+Gatherer's spell classifier, including localized profession-rank names. Player
+cast start/end events capture short casts, while guarded `UnitCastingInfo` reads
+provide a baseline after reload. Matching completion, stop, failure and interrupt
+events clear gathering; unrelated units and stale cast GUIDs cannot end a newer
+cast. If an end event is missing and the cast query is unavailable, the observed
+cast expires after thirty seconds. Hovering a node or crafting does not establish
+gathering. Combat orange takes priority over gathering yellow.
+
+The optional segment `activity` header stores `idle` or `gathering`, without
+changing the version-1 point codec. State boundaries retain their timestamps for
+playback without timeline entries or periodic idle writes. Unknown/older activity
+is not backfilled. Loading and missing-position gaps reset the idle baseline.
+These two colours affect only the arrow; trail colours are unchanged. The footer
+names the activity and the Journey legend shows both arrow swatches in its
+existing compact layout. Held instance entrances do not show interior activity.
+
+`tests/test_annals_activity.py` covers the exact threshold, sparse polls, small
+movements, stationary combat, gathering completion/failure/interruption, localized
+spell ranks, stale casts, reload capture, expiry, gaps, recording-off and unknown
+data, plus mock arrow/footer/legend rendering and unchanged trail colours.
+Native acceptance: wait at least ten seconds out of combat, move, gather a herb
+or mineral, cancel a gather, and fight while stationary. Scrub the same intervals
+in Journey and inspect the new legend rows at the supported text/UI scales.
+
+## Combat trail and compact legend
+
+Journey records the player's observed combat entry and exit without adding
+timeline rows, event filters or map pins. The arrow and trail turn orange during
+recorded combat; the footer says **in combat** or **out of combat**. Death, ghost
+and flight colours take priority, while combat overrides mounted trail colours.
+This records the player's state, not enemy locations, damage, kills or a battle
+heatmap. Combat transitions follow **Record Journey**; existing events still
+retain their observed location and state. An instance entrance held on
+the outdoor map does not imply the character's combat state inside.
+
+`PLAYER_REGEN_DISABLED` and `PLAYER_REGEN_ENABLED` sample transitions immediately.
+Guarded `UnitAffectingCombat('player')` reads provide the baseline on ordinary
+location captures, including after login/reload. These APIs/events are present
+in the locally inspected Forever 69977 generated `UnitDocumentation.lua`
+(function at line 614, events at lines 3869/3875); the
+[Blizzard source mirror](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_ActionBar/Shared/ActionBar.lua)
+also uses these events with the player combat query. Native Forever acceptance
+remains required.
+
+The optional boolean `combat` lives on the existing version-1 trail segment
+header. The nine-byte point codec and archive schema are unchanged. A connected
+combat transition anchors the old segment's endpoint and starts the new state
+at the same observed time and place, retaining the timing of stationary fights
+without periodic idle writes. Gaps, missing positions, loading and large jumps
+keep their existing discontinuities. Projection, interpolation and smoothing
+preserve combat boundaries. Absent metadata remains unknown: older trails are
+neither rewritten nor labelled out of combat. Restricted queries cannot create a
+combat observation. Like the other trail states, a previously observed state may
+remain on a continuous segment until another observation changes it.
+
+The legend opens on **Journey**, with separate arrow and trail columns; **Events**
+shows all existing event icons in two columns, including instance entry/exit.
+The selected tab glows, and the existing Legend button closes the overlay.
+Trail swatches still reflect the age-contrast setting.
+
+Validation: `tests/test_annals_combat.py` covers transitions while moving and
+stationary, same-second ordering, duplicate events, projection, persisted reloads,
+recording-off/read-only/loading/instance guards, unknown and restricted reads,
+colour priority/fading, smoothing, rendered mock colours/footer and legend tabs.
+The existing `tests/test_annals.py` remains the broader Annals regression check.
+Native acceptance: record a fight while moving and standing still, scrub across
+both boundaries, verify the main list is unchanged, reload during combat, and
+inspect both legend tabs and orange contrast at the supported UI/text scales.
+
 Observed PLAYER_LEVEL_UP events record Reached level X using the event's new
 level, time and location. Level ups have a golden Holy Nova icon, a separate
 timeline/map filter and a Journey legend entry. They record with Journey

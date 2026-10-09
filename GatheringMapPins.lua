@@ -15,6 +15,9 @@ end
 function ns.CreateGatheringMapPins(journal)
     local controller={worldPins={},miniPins={}}
     local cache,revision={},nil
+    -- Track cleanup independently of the revision cache: another active view
+    -- may invalidate that cache while this view still has pins to release.
+    local active={}
     local function recentFirst(a,b)
         if a.point.seenAt~=b.point.seenAt then return a.point.seenAt>b.point.seenAt end
         if a.entry.id~=b.entry.id then return a.entry.id<b.entry.id end
@@ -50,7 +53,8 @@ function ns.CreateGatheringMapPins(journal)
         for i=first or 1,#pool do pool[i]:Hide();pool[i].node=nil end
     end
     local function release(view,pool)
-        cache[view]=nil;hide(pool)
+        if not active[view] then return end
+        active[view]=nil;cache[view]=nil;hide(pool)
     end
     local function pin(pool,index,parent,node,x,y,anchor,scale,level)
         local p=pool[index]
@@ -96,6 +100,7 @@ function ns.CreateGatheringMapPins(journal)
         local level=manager and read(manager.GetValidFrameLevel,manager,"PIN_FRAME_LEVEL_AREA_POI")
         if not finite(level,0,65535) then level=nil end
         local visible=nodes(id,"world")
+        active.world=true
         local count=math.min(WORLD_PIN_LIMIT,#visible)
         for i=1,count do
             local node=visible[i]
@@ -123,6 +128,7 @@ function ns.CreateGatheringMapPins(journal)
         local cos,sin=math.cos(facing),math.sin(facing)
         local nearby={}
         local inset=1-8/math.max(8,math.min(width,height))
+        active.minimap=true
         for _,node in ipairs(nodes(map.mapID,"minimap")) do
             local east=(node.point.x/10000-position.x)*map.width
             local north=(position.y-node.point.y/10000)*map.height

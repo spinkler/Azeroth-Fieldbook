@@ -3,12 +3,17 @@ local _, ns = ...
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local window = {}
 ns.SpellIDWindow = window
+BINDING_NAME_AZEROTHFIELDBOOK_PIN_CAST = "Pin latest enemy cast"
+BINDING_NAME_AZEROTHFIELDBOOK_UNPIN_CAST = "Unpin last pinned enemy cast"
 local recordedAbility
 local db, panel, background
 local captureAssignment
 local openCreature
 local customPosition = false
 local rows, seen = {}, { player = {}, target = {} }
+local castRows, effectRows = {}, {}
+local castSerial = 0
+local castTokens, castTokenOrder = {}, {}
 local castBars = {}
 local castBarOrder = {}
 local displayAlpha = 1
@@ -31,7 +36,18 @@ end
 local function layout()
     if not panel then return end
     local count,height=0,0
-    for _, row in ipairs(rows) do
+    local ordered = {}
+    for _, row in ipairs(castRows) do
+        if row.observed then ordered[#ordered+1]=row end
+    end
+    table.sort(ordered,function(a,b) return a.serial<b.serial end)
+    for index,row in ipairs(ordered) do
+        row.title:SetText(index .. ". " .. row.castTitle .. (row.pinned and " |cff80ccff[Pinned]|r" or ""))
+    end
+    for index=3,5 do
+        if effectRows[index] then ordered[#ordered+1]=effectRows[index] end
+    end
+    for _, row in ipairs(ordered) do
         if row.observed then
             row.body:ClearAllPoints()
             row.body:SetPoint("TOPLEFT",panel,"TOPLEFT",0,-48-height)
@@ -88,6 +104,9 @@ local function enemyTarget()
 end
 local function clear(row)
     row.observed = nil
+    row.pinned=nil
+    if row.hovered and GameTooltip then GameTooltip:Hide() end
+    row.hovered=nil
     row.rawID=nil;row.token=nil
     row.candidate=nil;row.assignmentSaved=nil
     if row.portraitButton then
@@ -129,6 +148,10 @@ function window:RemoveBlacklist(id)
         if row.dismissedID==id then row.dismissedID=nil;row.dismissedToken=nil end
     end
     seen={player={},target={}}
+    for index=#castTokenOrder,1,-1 do
+        local token=castTokenOrder[index]
+        if castTokens[token]==id then castTokens[token]=nil;table.remove(castTokenOrder,index) end
+    end
     if blacklistWindow then blacklistWindow:Refresh() end
 end
 function window:OpenBlacklist(message)
@@ -140,7 +163,43 @@ local function text(parent, x, y, width, template)
     value:SetPoint("TOPLEFT", x, y); value:SetSize(width, 14); value:SetJustifyH("LEFT")
     return value
 end
+local function castTooltip(row, owner)
+    if not GameTooltip or not row.observed then return end
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:SetText(row.candidate and row.candidate.name or row.castTitle)
+    if row.candidate and row.candidate.description then
+        GameTooltip:AddLine(row.candidate.description, 0.7, 0.7, 0.7, true)
+    end
+    if row.pinned then
+        GameTooltip:AddLine("Pinned. This cast stays until you remove it.", 0.5, 0.82, 1, true)
+        GameTooltip:AddLine("Right-click: unpin and remove this slot.", 1, 1, 1, true)
+        local pinned=0
+        for _,slot in ipairs(castRows) do if slot.pinned then pinned=pinned+1 end end
+        if pinned==4 then
+            GameTooltip:AddLine("All four slots are pinned. Clear one to capture another cast.", 1, 0.82, 0.4, true)
+        end
+    else
+        GameTooltip:AddLine("Live slot: new casts replace this observation until pinned.", 1, 0.82, 0.4, true)
+        GameTooltip:AddLine("Left-click: pin this cast and capture the next in another slot.", 1, 1, 1, true)
+        GameTooltip:AddLine("Right-click: remove this slot.", 1, 1, 1, true)
+        if not db.spellIDWindowIndefinite then
+            GameTooltip:AddLine("Unpinned observations expire after two minutes.", 0.7, 0.7, 0.7, true)
+        end
+    end
+    if row.candidate then
+        GameTooltip:AddLine("Ctrl+Click: open this creature in the Bestiary.", 0.7, 0.7, 0.7, true)
+    end
+    if validID(row.rawID) then
+        GameTooltip:AddLine("Enter Spell ID " .. row.rawID .. " in the Bestiary to record the ability.", 0.7, 0.7, 0.7, true)
+    else
+        GameTooltip:AddLine("This spell ID is restricted. Enter the displayed ID manually in the Bestiary.", 1, 0.82, 0.4, true)
+    end
+    GameTooltip:AddLine("Ctrl+Right-click: blacklist this ID, or enter it manually if restricted.", 0.7, 0.7, 0.7, true)
+    GameTooltip:AddLine("Pin/unpin keybinds: Key Bindings > Azeroth Fieldbook.", 0.7, 0.7, 0.7, true)
+    GameTooltip:Show()
+end
 local function portraitTooltip(row)
+    if row.isCast then castTooltip(row,row.portraitButton);return end
     if not GameTooltip or not row.candidate then return end
     GameTooltip:SetOwner(row.portraitButton, "ANCHOR_RIGHT")
     GameTooltip:SetText(row.candidate.name)
@@ -157,6 +216,14 @@ local function portraitTooltip(row)
     end
     GameTooltip:AddLine("Ctrl+Click: open this creature in the Bestiary.", 0.7, 0.7, 0.7, true)
     GameTooltip:Show()
+end
+local function pin(row)
+    if not row.observed or row.pinned then return false end
+    row.pinned=true
+    layout()
+    if row.portraitHovered then portraitTooltip(row)
+    elseif row.hovered then castTooltip(row,row.body) end
+    return true
 end
 local function createPortrait(row)
     local button = CreateFrame("Button", nil, row.body)
@@ -189,8 +256,9 @@ local function createPortrait(row)
     row.portraitLevel:SetJustifyH("CENTER")
     button:SetScript("OnEnter", function() row.portraitHovered=true;portraitTooltip(row) end)
     button:SetScript("OnLeave", function() row.portraitHovered=nil;if GameTooltip then GameTooltip:Hide() end end)
+    button:SetScript("OnMouseDown", function() row.dragged=nil end)
     button:SetScript("OnClick", function(_, mouseButton)
-        if mouseButton == "RightButton" or IsShiftKeyDown() then
+        if row.isCast or mouseButton == "RightButton" or IsShiftKeyDown() then
             row.body:GetScript("OnMouseUp")(row.body, mouseButton)
         elseif mouseButton == "LeftButton" and row.observed and row.candidate and not ns.InitializationBlocked then
             if IsControlKeyDown and IsControlKeyDown() then
@@ -267,23 +335,34 @@ local function setup()
         db.spellIDWindowPosition = { point = point, relativePoint = relativePoint, x = x, y = y }
         customPosition = true
     end)
-    for index, title in ipairs({ "Enemy cast", "Enemy instant cast", "Debuff on you", "Buff on target", "Loss of Control on you" }) do
-        local row = {}
+    local titles = { "Enemy cast", "Enemy instant cast", "Debuff on you", "Buff on target", "Loss of Control on you" }
+    for index, kind in ipairs({ 1, 1, 1, 1, 3, 4, 5 }) do
+        local row = {isCast=kind==1}
         rows[index] = row
+        if kind==1 then castRows[#castRows+1]=row else effectRows[kind]=row end
         row.body = CreateFrame("Frame", nil, panel)
         row.body:SetSize(330,68)
         text(row.body, 10, -16, 52):SetText("Spell ID:")
         row.id = text(row.body, 65, -16, 92)
         row.effect = text(row.body, 164, -16, 156)
         row.name = text(row.body, 10, -32, 310)
-        row.title=text(row.body,10,0,310,"GameFontNormalSmall");row.title:SetText(title)
+        row.title=text(row.body,10,0,310,"GameFontNormalSmall");row.title:SetText(titles[kind])
         row.casterLabel=text(row.body,10,-48,52);row.casterLabel:SetText("Cast by:")
         row.caster=text(row.body,65,-48,255)
         row.caster:SetTextColor(0.7,0.7,0.7)
         row.body:EnableMouse(true);row.body:RegisterForDrag("LeftButton")
-        row.body:SetScript("OnDragStart",function() if not db.spellIDWindowLocked then panel:StartMoving() end end)
+        row.body:SetScript("OnMouseDown",function() row.dragged=nil end)
+        row.body:SetScript("OnDragStart",function()
+            if not db.spellIDWindowLocked then row.dragged=true;panel:StartMoving() end
+        end)
         row.body:SetScript("OnDragStop",function() panel:GetScript("OnDragStop")(panel) end)
+        if row.isCast then
+            row.body:SetScript("OnEnter",function() row.hovered=true;castTooltip(row,row.body) end)
+            row.body:SetScript("OnLeave",function() row.hovered=nil;if GameTooltip then GameTooltip:Hide() end end)
+        end
         row.body:SetScript("OnMouseUp",function(_,button)
+            if row.dragged then row.dragged=nil;return end
+            if ns.InitializationBlocked then return end
             if button=="RightButton" then
                 local token=row.token
                 local dismissedID=validID(row.rawID) and row.rawID or nil
@@ -296,6 +375,12 @@ local function setup()
                 clear(row);updateFade(0)
             elseif button=="LeftButton" and IsShiftKeyDown() then
                 db.displaySpellIDWindow=false;window:ApplySettings()
+            elseif button=="LeftButton" and row.isCast and row.observed then
+                if IsControlKeyDown and IsControlKeyDown() then
+                    if row.candidate and openCreature then openCreature(row.candidate) end
+                else
+                    pin(row)
+                end
             end
         end)
         clear(row)
@@ -309,11 +394,11 @@ local function setup()
             elapsed = 0
             if not db.spellIDWindowIndefinite then
                 for _, row in ipairs(rows) do
-                    if row.observed and GetTime() - row.observed >= 120 then clear(row) end
+                    if row.observed and not row.pinned and GetTime() - row.observed >= 120 then clear(row) end
                 end
             end
             for _, row in ipairs(rows) do
-                if row.observed and validID(row.rawID) and row.candidate and recordedAbility
+                if row.observed and not row.pinned and validID(row.rawID) and row.candidate and recordedAbility
                     and recordedAbility(row.candidate, row.rawID) then clear(row) end
             end
         end
@@ -330,6 +415,27 @@ end
 function window:SetCreatureOpener(callback)
     openCreature = callback
 end
+function window:PinLatestCast()
+    if not db or db.displaySpellIDWindow==false or ns.InitializationBlocked then return false end
+    for _,row in ipairs(castRows) do
+        if row.observed and not row.pinned then return pin(row) end
+    end
+    return false
+end
+function window:UnpinLastCast()
+    if not db or db.displaySpellIDWindow==false or ns.InitializationBlocked then return false end
+    local latest
+    for _,row in ipairs(castRows) do
+        if row.observed and row.pinned and (not latest or row.serial>latest.serial) then latest=row end
+    end
+    if not latest then return false end
+    latest.dismissedToken=latest.token
+    latest.dismissedID=validID(latest.rawID) and latest.rawID or nil
+    clear(latest);updateFade(0)
+    return true
+end
+function AzerothFieldbookPinLatestCast() return window:PinLatestCast() end
+function AzerothFieldbookUnpinLastCast() return window:UnpinLastCast() end
 local function candidateFor(unit, spellID, kind, expectedGUID, description, label)
     if not captureAssignment or not public(unit) or type(unit) ~= "string" or unit == "" then return end
     if not public(expectedGUID) then return end
@@ -341,11 +447,40 @@ local function candidateFor(unit, spellID, kind, expectedGUID, description, labe
 end
 local function present(index, id, name, effect, caster, token, candidate)
     if public(id) and (type(id) ~= "number" or id <= 0) then return end
-    if window:IsBlacklisted(id) then return false,"suppressed" end
-    if validID(id) and candidate and recordedAbility and recordedAbility(candidate, id) then
+    local isCast = index==1 or index==2
+    local matching
+    if isCast and token then
+        for _, slot in ipairs(castRows) do
+            if slot.observed and slot.token==token then matching=slot;break end
+        end
+    end
+    local duplicate = matching or isCast and token and castTokens[token]
+    if matching and matching.pinned then return false,"suppressed" end
+    if window:IsBlacklisted(id) or validID(id) and candidate and recordedAbility and recordedAbility(candidate, id) then
+        if matching then clear(matching);updateFade(0) end
         return false,"suppressed"
     end
-    local row = rows[index]
+    -- Late public evidence can replace an opaque ID for the same public cast
+    -- token, without adding a slot or extending the original expiry.
+    if duplicate and not (matching and validID(id) and not validID(matching.rawID)) then return false,"suppressed" end
+    local row = effectRows[index]
+    if isCast then
+        row=matching
+        if not row then
+            -- Keep exactly one live slot. Only pinning advances capture; a
+            -- cleared hole does not create a second live slot beside it.
+            for _, slot in ipairs(castRows) do
+                if slot.observed and not slot.pinned then row=slot;break end
+            end
+            if not row then
+                for _, slot in ipairs(castRows) do
+                    if not slot.observed then row=slot;break end
+                end
+            end
+        end
+        if not row then return false,"suppressed" end -- All four slots are pinned.
+    end
+    local observed=matching and matching.observed
     if token and row.dismissedToken==token then return false,"suppressed" end
     row.dismissedToken=nil;row.dismissedID=nil
     clear(row)
@@ -362,11 +497,27 @@ local function present(index, id, name, effect, caster, token, candidate)
     end
     row.rawID=id;row.token=token
     showCandidate(row, candidate)
-    row.observed = GetTime()
+    if isCast then
+        if not matching then castSerial=castSerial+1;row.serial=castSerial end
+        row.castTitle=index==2 and "Enemy instant cast" or "Enemy cast"
+        if token then
+            castTokens[token]=validID(id) and id or true
+            if not duplicate then
+                castTokenOrder[#castTokenOrder+1]=token
+                if #castTokenOrder>32 then castTokens[table.remove(castTokenOrder,1)]=nil end
+            end
+        end
+    end
+    row.observed = observed or GetTime()
     row.body:Show()
     layout()
     updateFade(0)
     return true
+end
+local function castToken(guid, bar)
+    if public(guid) and type(guid)=="string" and validID(bar) then
+        return "cast:" .. guid .. ":" .. bar
+    end
 end
 -- LOC owns its event/deduplication path. Keep a separate row so an unrelated
 -- harmful aura or the window's event order cannot overwrite the LOC evidence.
@@ -542,7 +693,7 @@ local function observeCast()
             if #castBarOrder > 32 then castBars[table.remove(castBarOrder, 1)] = nil end
         end
         local candidate=candidateFor("target", id, "cast", guid, "This creature was observed casting the spell.", "Cast by:")
-        present(1, id, name,nil,read(UnitName,"target"),validID(bar) and ("cast:"..bar) or nil,candidate)
+        present(1, id, name,nil,read(UnitName,"target"),castToken(guid,bar),candidate)
         return true
     end
     local channelOK, channelName, _, _, _, _, _, _, channelID, _, _, channelBar = pcall(UnitChannelInfo, "target")
@@ -552,7 +703,7 @@ local function observeCast()
             if #castBarOrder > 32 then castBars[table.remove(castBarOrder, 1)] = nil end
         end
         local candidate=candidateFor("target", channelID, "cast", guid, "This creature was observed channeling the spell.", "Cast by:")
-        present(1, channelID, channelName,nil,read(UnitName,"target"),validID(channelBar) and ("cast:"..channelBar) or nil,candidate)
+        present(1, channelID, channelName,nil,read(UnitName,"target"),castToken(guid,channelBar),candidate)
         return true
     end
 end
@@ -583,7 +734,7 @@ events:SetScript("OnEvent", function(_, event, unit, second, id, bar)
             local name = C_Spell and read(C_Spell.GetSpellName, id)
             -- Unclassified successes remain casts; SENT alone never proves an instant succeeded.
             local candidate=candidateFor("target", id, "cast", guid, "This creature was observed casting the spell.", "Cast by:")
-            present(instant and 2 or 1, id, name, instant and nil or "Succeeded",read(UnitName,"target"),validID(bar) and ("cast:"..bar) or nil,candidate)
+            present(instant and 2 or 1, id, name, instant and nil or "Succeeded",read(UnitName,"target"),castToken(guid,bar),candidate)
         else observeCast() end
     end
 end)
@@ -595,12 +746,13 @@ function window:ApplySettings()
     panel:SetMovable(not db.spellIDWindowLocked)
     panel.afbPinned=db.spellIDWindowLocked
     panel:EnableMouse(not db.spellIDWindowLocked)
-    panel.hint:SetText("Right-click: hide / Ctrl+Right-click: blacklist")
+    panel.hint:SetText("Cast: click to pin / Right-click: remove")
     background:SetColorTexture(0, 0, 0, db.spellIDWindowAlpha)
     events:UnregisterAllEvents()
     if db.displaySpellIDWindow == false then
         panel:Hide()
         for _, row in ipairs(rows) do clear(row) end
+        castTokens,castTokenOrder={},{};castSerial=0
         seen = { player = {}, target = {} }; castBars = {}; castBarOrder = {}
         return
     end
@@ -632,6 +784,7 @@ function window:Initialize(settings)
     db.spellIDWindowAlpha = math.max(0, math.min(1, tonumber(db.spellIDWindowAlpha) or 0.35))
     setup()
     for _, row in ipairs(rows) do clear(row);row.dismissedToken=nil;row.dismissedID=nil end
+    castTokens,castTokenOrder={},{};castSerial=0
     seen = { player = {}, target = {} }; castBars = {}; castBarOrder = {}
     panel:ClearAllPoints()
     local position = db.spellIDWindowPosition

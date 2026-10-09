@@ -267,7 +267,7 @@ class FieldbookTabsTests(unittest.TestCase):
             fire('ADDON_LOADED','AzerothFieldbook')
         ''')
         nodes=list(ET.parse(ROOT/'Bindings.xml').getroot())
-        self.assertEqual(len(nodes),7)
+        self.assertEqual(len(nodes),9)
         for node in nodes:
             self.assertEqual(node.attrib.get('category'),'BINDING_HEADER_AZEROTHFIELDBOOK')
             self.assertNotIn('header',node.attrib,'legacy headers create synthetic binding rows')

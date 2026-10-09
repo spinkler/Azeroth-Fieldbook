@@ -33,6 +33,126 @@ class GatheringMapPinsTests(unittest.TestCase):
                 {mapID=37,name='Elwynn',point={x=2100,y=3000,seenAt=10}},'Elwynn',10)
             journal:Discover('mineral','Copper Vein',10,'Elwynn',{mapID=37,name='Elwynn'})
             pins=gathering.mapPins
+            function pinTick(dt)
+                -- WoW only dispatches OnUpdate to effectively visible frames.
+                if pins.frame:IsVisible() and pins.frame.scripts.OnUpdate then
+                    pins.frame.scripts.OnUpdate(pins.frame,dt or 0.1)
+                end
+            end
+        ''')
+
+    def test_inactive_pools_release_once_and_reactivate_at_existing_limits(self):
+        self.lua.execute('''
+            shell:ShowSection('gathering');shell:GetFrame():Hide()
+            -- Fill the retained pools without testing journal capture limits here.
+            local points=journal.entries['herb:silverleaf'].locations[37].points
+            for i=1,600 do points[i]={x=2100+i%5,y=3000,seenAt=i} end
+            journal.revision=journal.revision+1
+            journal:SetShowNodesOn('worldMap',true);journal:SetShowNodesOn('minimap',true)
+            pinTick();assert(#pins.worldPins==512 and #pins.miniPins==128)
+            local hideCalls={world=0,mini=0}
+            for view,pool in pairs({world=pins.worldPins,mini=pins.miniPins}) do
+                for _,p in ipairs(pool) do
+                    local hide=p.Hide
+                    p.Hide=function(self) hideCalls[view]=hideCalls[view]+1;hide(self) end
+                end
+            end
+            local weak=setmetatable({pins.worldPins[1].node,pins.miniPins[1].node},{__mode='v'})
+            pins.worldPins[1].scripts.OnEnter(pins.worldPins[1])
+            WorldMapFrame:Hide();journal:SetShowNodesOn('minimap',false)
+            shell:GetFrame():Hide();assert(not shell:GetFrame():IsVisible())
+            pinTick()
+            assert(hideCalls.world==512 and hideCalls.mini==128)
+            assert(not GameTooltip:IsShown())
+            for _,pool in ipairs({pins.worldPins,pins.miniPins}) do
+                for _,p in ipairs(pool) do assert(not p:IsShown() and p.node==nil) end
+            end
+            collectgarbage('collect');assert(not weak[1] and not weak[2],'inactive caches retained nodes')
+            for _=1,100 do pinTick() end
+            print(string.format('Inactive pins over 100 ticks: world=%d minimap=%d extra Hide calls',
+                hideCalls.world-512,hideCalls.mini-128))
+            assert(hideCalls.world==512 and hideCalls.mini==128,'unchanged inactive pools were traversed again')
+            -- Changes while inactive must appear on the first active tick.
+            for k in pairs(points) do points[k]=nil end
+            points[1]={x=2200,y=3000,seenAt=700};journal.revision=journal.revision+1
+            WorldMapFrame:Show();journal:SetShowNodesOn('minimap',true);pinTick()
+            assert(pins.worldPins[1]:IsVisible() and pins.worldPins[1].point[4]==220)
+            assert(pins.miniPins[1]:IsVisible() and math.abs(pins.miniPins[1].point[4]-80)<0.001)
+            assert(#pins.worldPins==512 and #pins.miniPins==128,'native pools must be reused')
+            assert(not pins.worldPins[2]:IsShown() and not pins.miniPins[2]:IsShown())
+            journal:SetShowNodesOn('worldMap',false);Minimap:Hide();pinTick()
+            local world,mini=hideCalls.world,hideCalls.mini
+            for _=1,10 do pinTick() end
+            assert(hideCalls.world==world and hideCalls.mini==mini)
+            journal:SetShowNodesOn('worldMap',true);Minimap:Show();pinTick()
+            assert(pins.worldPins[1]:IsVisible() and pins.miniPins[1]:IsVisible())
+        ''')
+
+    def test_controller_keeps_active_minimap_moving_with_fieldbook_closed(self):
+        self.lua.execute('''
+            shell:ShowSection('gathering');shell:GetFrame():Hide()
+            journal:SetShowNodesOn('minimap',true);WorldMapFrame:Hide();shell:GetFrame():Hide()
+            assert(not shell:GetFrame():IsVisible() and pins.frame:IsVisible())
+            positionReads=0;pinTick(0.05);assert(positionReads==0)
+            pinTick(0.05);assert(positionReads==1)
+            local p=pins.miniPins[1];assert(p:IsVisible() and math.abs(p.point[4]-40)<0.001)
+            rotating='1';facing=math.pi/2;pinTick()
+            assert(math.abs(p.point[4])<0.001 and math.abs(p.point[5]+40)<0.001)
+            radius=50;pinTick();assert(math.abs(p.point[5]+80)<0.001)
+            px=0.21;pinTick();assert(p.point[4]==0 and p.point[5]==0)
+            assert(positionReads==4,'enabled minimap must read position on each controller tick')
+            -- Invalid API state releases once, then recovers without a UI event.
+            local hides=0;local hide=p.Hide
+            p.Hide=function(self) hides=hides+1;hide(self) end
+            px=secret;pinTick();assert(not p:IsShown() and p.node==nil and hides==1)
+            for _=1,10 do pinTick() end
+            assert(hides==1)
+            px=0.2;radius=100;pinTick();assert(p:IsVisible())
+            mapID=38;pinTick();assert(not p:IsShown())
+            mapID=37;pinTick();assert(p:IsVisible())
+            journal:RecordInteraction('herb','Peacebloom',
+                {mapID=37,name='Elwynn',point={x=2200,y=3000,seenAt=20}},'Elwynn',20)
+            pinTick();assert(pins.miniPins[2]:IsVisible(),'active revision changes refresh the node cache')
+        ''')
+
+    def test_world_invalid_geometry_releases_once_then_recovers(self):
+        self.lua.execute('''
+            journal:SetShowNodesOn('worldMap',true);pinTick()
+            local p=pins.worldPins[1];local hides=0;local hide=p.Hide
+            p.Hide=function(self) hides=hides+1;hide(self) end
+            canvas:SetWidth(0);pinTick();assert(hides==1 and not p:IsShown() and p.node==nil)
+            for _=1,10 do pinTick() end
+            assert(hides==1)
+            canvas:SetSize(500,300);pinTick();assert(p:IsVisible() and p.point[4]==105)
+            shownMap=secret;pinTick();assert(hides==2)
+            pinTick();assert(hides==2)
+            shownMap=37;pinTick();assert(p:IsVisible())
+        ''')
+
+    def test_shared_cache_revision_does_not_mask_other_display_cleanup(self):
+        self.lua.execute('''
+            journal:SetShowNodesOn('worldMap',true);journal:SetShowNodesOn('minimap',true)
+            local original=pairs;local scans=0
+            pairs=function(t)
+                if t==journal.entries then scans=scans+1 end
+                return original(t)
+            end
+            pinTick();assert(scans==1,'both maps share one node list')
+            for _=1,10 do pinTick() end
+            assert(scans==1,'active displays reuse unchanged node data')
+            local p=pins.miniPins[1];local hides=0;local hide=p.Hide
+            p.Hide=function(self) hides=hides+1;hide(self) end
+            journal.revision=journal.revision+1;journal:SetShowNodesOn('minimap',false)
+            pinTick()
+            assert(scans==2 and hides==1 and p.node==nil and not p:IsShown())
+            assert(pins.worldPins[1]:IsVisible(),'world map remains active')
+            for _=1,10 do pinTick() end
+            assert(scans==2 and hides==1)
+            journal:SetShowNodesOn('minimap',true);pinTick()
+            -- Changing the setting touches the journal; world and minimap
+            -- still share the single list rebuilt for that revision.
+            assert(scans==3 and p:IsVisible(),'reactivation shares the rebuilt world map list')
+            pairs=original
         ''')
 
     def test_world_dots_draw_above_explored_terrain_and_fog(self):

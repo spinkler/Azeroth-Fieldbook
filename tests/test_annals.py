@@ -484,7 +484,7 @@ class AnnalsTests(unittest.TestCase):
             assert(-my+m.map:GetHeight()<-m.contrast.point[3],'map overlaps display settings')
             m.legendButton.scripts.OnClick();assert(m.legend:IsShown() and m.legendButton.afbSelected)
             for kind,icon in pairs(m.legend.icons) do assert(icon.texture==ns.Annals.icons[(kind=='enter' or kind=='exit') and 'instance' or kind]) end
-            assert(#m.legend.arrows==4 and #m.legend.trails==6)
+            assert(#m.legend.arrows==7 and #m.legend.trails==7)
             m.legend:RefreshTrails()
             local dead=m.legend.trails[6]
             assert(dead.state=='dead' and dead.texture.colorTexture[1]==0.9 and dead.texture.colorTexture[2]==0.15)

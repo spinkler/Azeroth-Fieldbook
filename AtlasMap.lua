@@ -190,6 +190,31 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
     end
     map:EnableMouseWheel(true)
     map:SetScript("OnMouseWheel",function(self,delta) self:ZoomBy(delta) end)
+    function map:CenterOnEntry(id)
+        if not self.available then return false end
+        local entry=journal:Get(id);if not entry then return false end
+        local points={entry}
+        if entry.category=="route" and not entry.entrance and #entry.stops>0 then
+            points=journal:RouteMap(entry,self.displayedMapID)
+        end
+        local minX,maxX,minY,maxY
+        for _,p in ipairs(points) do
+            if p.mapID==self.displayedMapID and A.Position(p) then
+                minX=math.min(minX or p.x,p.x);maxX=math.max(maxX or p.x,p.x)
+                minY=math.min(minY or p.y,p.y);maxY=math.max(maxY or p.y,p.y)
+            end
+        end
+        if not minX then return false end
+        self:CancelPan()
+        -- Keep the current zoom and centre as closely as the map edges allow.
+        local w,h=self:GetWidth(),self:GetHeight()
+        self.panX=math.max(0,math.min(w*(self.zoom-1),(minX+maxX)/20000*w*self.zoom-w/2))
+        self.panY=math.max(0,math.min(h*(self.zoom-1),(minY+maxY)/20000*h*self.zoom-h/2))
+        positionCanvas()
+        if self.UpdateRegionHighlight then self:UpdateRegionHighlight() end
+        if GameTooltip then GameTooltip:Hide() end
+        return true
+    end
     -- Both journals use the shell's native frame art, scaled down to a thin
     -- click-through trim outside the existing artwork bounds.
     local border=CreateFrame("Frame",nil,map,"BackdropTemplate")
@@ -402,10 +427,13 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
     end
     function map:Render(mapID,selected)
         leave();hide(pins);hide(lines)
-        if displayedMapID~=mapID then self:CancelPan();self.zoom,self.panX,self.panY=1,0,0 end
+        if displayedMapID~=mapID then
+            self:CancelPan();self.panX,self.panY=0,0
+            if not self.preserveZoomOnMapChange then self.zoom=1 end
+        end
         -- Pooled native frames outlive their contents. Release every previous
         -- group, including unused slots after switching to a less populated map.
-        for _,pin in ipairs(pins) do pin.group,pin.selected=nil,nil end
+        for _,pin in ipairs(pins) do pin.group,pin.selected=nil,nil;pin.selectionGlow:Hide() end
         if cachedMap~=mapID or not self.available then drawArt(mapID);cachedMap=mapID end
         self:ApplyBrightness()
         positionCanvas()
@@ -464,6 +492,10 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
                 p:EnableMouseWheel(true);p:SetScript("OnMouseWheel",function(_,delta) map:ZoomBy(delta) end)
                 if not journal.borderlessPins then p:SetBackdrop({edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=8}) end
                 p.icon=p:CreateTexture(nil,"ARTWORK");p.icon:SetPoint("TOPLEFT",3,-3);p.icon:SetPoint("BOTTOMRIGHT",-3,3)
+                p.selectionGlow=p:CreateTexture(nil,"OVERLAY")
+                p.selectionGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+                p.selectionGlow:SetBlendMode("ADD");p.selectionGlow:SetVertexColor(1,0.82,0.14,0.9)
+                p.selectionGlow:SetPoint("CENTER",p.icon,"CENTER");p.selectionGlow:Hide()
                 -- Counts belong to the icon, not the journal's reading text.
                 -- Scale a small fixed font with the pin and inherited map zoom.
                 p.text=p:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
@@ -511,6 +543,8 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
             p:SetSize(size,size)
             local inset=journal.borderlessPins and 0 or size*0.15
             p.icon:ClearAllPoints();p.icon:SetPoint("TOPLEFT",inset,-inset);p.icon:SetPoint("BOTTOMRIGHT",-inset,inset)
+            p.selectionGlow:SetSize((size-inset*2)*1.8,(size-inset*2)*1.8)
+            p.selectionGlow:SetShown(g.selected==true)
             p.text:SetScale(size/20)
             if not journal.borderlessPins then p:SetBackdropBorderColor(g.selected and 1 or 0.15,g.selected and 0.82 or 0.15,g.selected and 0.14 or 0.15,1) end
             p:Show()

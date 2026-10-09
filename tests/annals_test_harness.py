@@ -1,7 +1,7 @@
 from ui_test_harness import new_ui_client
 from atlas_test_harness import ENV
 
-MODULES = ['AtlasJournal.lua', 'AtlasEnvironment.lua', 'AnnalsJournal.lua',
+MODULES = ['AtlasJournal.lua', 'AtlasEnvironment.lua', 'GatheringTracking.lua', 'AnnalsJournal.lua',
            'AnnalsTrail.lua', 'AnnalsTracking.lua', 'AnnalsMap.lua']
 
 

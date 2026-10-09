@@ -515,11 +515,12 @@ local ink = { 0.75, 0.8, 0.8 }
     end
     refresh = function()
         if not book then return end
-        local available = {}
+        local available, observedLocations = {}, {}
         for id in pairs(journal.entries) do
             local e=basicInfo(id)
             local displayCategory = journal:GetCategoryFilter(e.category)
             available[displayCategory] = true
+            for location in pairs(e.locations or {}) do observedLocations[location] = true end
         end
         if category and not available[category] then category = nil end
         for name, typeButton in pairs(book.typeButtons) do
@@ -529,11 +530,6 @@ local ink = { 0.75, 0.8, 0.8 }
             typeButton:SetSelected(selectedType)
         end
         book.indexButton:SetSelected(indexOpen)
-        local observedLocations = {}
-        for id in pairs(journal.entries) do
-            local entry=basicInfo(id)
-            for location in pairs(entry.locations or {}) do observedLocations[location] = true end
-        end
         for location in pairs(locationFilters) do
             if not observedLocations[location] then locationFilters[location] = nil end
         end

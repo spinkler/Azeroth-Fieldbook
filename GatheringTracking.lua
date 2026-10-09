@@ -17,6 +17,7 @@ local function gatheringKind(id)
     if name==spellName(2366) then return "herb" end
     if name==spellName(2575) then return "mineral" end
 end
+ns.GatheringCastKind=gatheringKind
 local function castKey(v)
     return public(v) and type(v)=="string" and #v>0 and #v<=128 and not v:find("[%c|]")
 end

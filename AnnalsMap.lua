@@ -46,20 +46,20 @@ function A.MoneyText(amount,coloured)
     return table.concat(parts,' ')
 end
 function A.RewardPresentation(v,recordedOnly)
-    local name,icon,quality=v.name,v.icon,v.quality
+    local name,icon,quality=A.RewardName(v.name),v.icon,v.quality
     local link=v.itemID and (v.link or ('item:'..v.itemID)) or v.currencyID and ('currency:'..v.currencyID) or v.spellID and ('spell:'..v.spellID)
     if v.itemID and not recordedOnly then
         local fn=C_Item and C_Item.GetItemInfo or GetItemInfo
         if type(fn)=='function' then
             local ok,n,_,q,_,_,_,_,_,_,texture=pcall(fn,v.link or v.itemID)
             if ok then
-                name=name or (A.Text(n,240) and n or nil);quality=quality or (A.Int(q,0,8) and q or nil)
+                name=name or A.RewardName(n);quality=quality or (A.Int(q,0,8) and q or nil)
                 icon=icon or (A.Int(texture,1,2147483647) and texture or nil)
             end
         end
     elseif v.spellID and not recordedOnly then
         local info=A.Read(C_Spell and C_Spell.GetSpellInfo,v.spellID)
-        if type(info)=='table' then name=name or (A.Text(info.name,240) and info.name or nil);icon=icon or (A.Int(info.iconID,1,2147483647) and info.iconID or nil) end
+        if type(info)=='table' then name=name or A.RewardName(info.name);icon=icon or (A.Int(info.iconID,1,2147483647) and info.iconID or nil) end
     end
     local colours={[0]='9d9d9d',[1]='ffffff',[2]='1eff00',[3]='0070dd',[4]='a335ee',[5]='ff8000',[6]='e6cc80',[7]='00ccff',[8]='00ccff'}
     return name or ((v.itemID and 'Item #' or v.currencyID and 'Currency #' or 'Spell #')..tostring(v.itemID or v.currencyID or v.spellID)),
@@ -268,7 +268,7 @@ end
 local function project(p,index)
     local r=index.transforms[p.mapID]
     if not r or not A.Int(p.x,0,10000) or not A.Int(p.y,0,10000) then return end
-    return {x=math.floor(r.x*10000+p.x*r.w+0.5),y=math.floor(r.y*10000+p.y*r.h+0.5),at=p.at,level=p.level,mapID=index.mapID or p.mapID,flight=p.flight,mount=p.mount,state=p.state}
+    return {x=math.floor(r.x*10000+p.x*r.w+0.5),y=math.floor(r.y*10000+p.y*r.h+0.5),at=p.at,level=p.level,mapID=index.mapID or p.mapID,flight=p.flight,mount=p.mount,state=p.state,combat=p.combat,activity=p.activity}
 end
 -- Date/map index is rebuilt only when a range is selected or explicitly refreshed.
 -- Scrubbing decodes at most 64 nearby chunks and reuses a bounded 64-chunk cache.
@@ -315,7 +315,7 @@ local function instancePosition(index,at)
     local e=rows[n] and rows[n].event
     if not e or e.instanceAction~='enter' then return nil,false end
     local p=project(e,index)
-    if p then p.instanceName=e.instanceName or 'Unknown instance';p.at=at;p.sampleAt=e.at end
+    if p then p.instanceName=e.instanceName or 'Unknown instance';p.at=at;p.sampleAt=e.at;p.combat=nil;p.activity=nil end
     return p,true,rows[n+1] and rows[n+1].event.at or index.last
 end
 local function eventPosition(index,at,cursor)
@@ -338,7 +338,7 @@ function A.InterpolatePosition(from,to,at)
     local f=(at-from.at)/(to.at-from.at)
     local moving=from.x~=to.x or from.y~=to.y
     return {x=from.x+(to.x-from.x)*f,y=from.y+(to.y-from.y)*f,at=at,mapID=from.mapID,
-        level=from.level,flight=from.flight,mount=from.mount,state=from.state,sampleAt=from.at,interpolated=at>from.at,
+        level=from.level,flight=from.flight,mount=from.mount,state=from.state,combat=from.combat,activity=from.activity,sampleAt=from.at,interpolated=at>from.at,
         previous=moving and from or from.previous,headingX=moving and (to.x-from.x) or nil,headingY=moving and (to.y-from.y) or nil}
 end
 -- Follow mode needs a source map, not all the route geometry. Decode only the
@@ -446,7 +446,7 @@ function A.JourneyFrame(index,at)
     -- Marker limits are intentional; the timeline retains every event.
     return lines,markers,cursor,limited,invalid,motion
 end
-function A.TrailColor(at,stamp,strength,flight,mount,state)
+function A.TrailColor(at,stamp,strength,flight,mount,state,combat)
     strength=ns.Atlas.Number(strength,0,1) and strength or 0.75
     -- Thirty minutes behind the scrubber is halfway cooled. Keep an opacity
     -- floor so old travel remains discoverable, without altering stored history.
@@ -454,14 +454,18 @@ function A.TrailColor(at,stamp,strength,flight,mount,state)
     local fade=(1-heat)*strength
     if state=='dead' or state=='ghost' or state=='dead / ghost' then return 0.9,0.15,0.25,0.8-0.68*fade,heat end
     if flight then return 0.2-0.1*fade,1-0.35*fade,0.3+0.15*fade,0.8-0.68*fade,heat end
+    if combat==true then return 1,0.35,0.05,0.8-0.68*fade,heat end
     if mount==60 then return 0,112/255,221/255,0.8-0.68*fade,heat end
     if mount==100 then return 163/255,53/255,238/255,0.8-0.68*fade,heat end
     return 1-0.75*fade,0.82-0.27*fade,0.14+0.86*fade,0.8-0.68*fade,heat
 end
-function A.PlayerColor(state)
+function A.PlayerColor(state,combat,activity)
     if state=='flight' then return 0.2,1,0.3
     elseif state=='dead' or state=='dead / ghost' then return 1,0.25,0.25
-    elseif state=='ghost' then return 0.55,0.8,1 end
+    elseif state=='ghost' then return 0.55,0.8,1
+    elseif combat==true then return 1,0.35,0.05
+    elseif activity=='gathering' then return 1,0.85,0.1
+    elseif activity=='idle' then return 0.5,0.5,0.5 end
     return 1,1,1
 end
 -- Round only connected display edges. Shared endpoint identity distinguishes a
@@ -476,12 +480,12 @@ function A.SmoothTrail(lines,width,height)
     local budget=math.max(0,2048-#lines)
     local function between(a,b,t)
         return {x=a.x+(b.x-a.x)*t,y=a.y+(b.y-a.y)*t,
-            at=a.at+(b.at-a.at)*t,mapID=a.mapID,level=a.level,flight=b.flight,mount=b.mount,state=b.state}
+            at=a.at+(b.at-a.at)*t,mapID=a.mapID,level=a.level,flight=b.flight,mount=b.mount,state=b.state,combat=b.combat}
     end
     -- Prefer recent corners when the existing geometry approaches its budget.
     for i=#lines,1,-1 do
         local edge=lines[i];local p=edge.to;local nextEdge=outgoing[p]
-        if budget>=2 and incoming[p]==edge and nextEdge and edge.from.flight==p.flight and p.flight==nextEdge.to.flight and edge.from.mount==p.mount and p.mount==nextEdge.to.mount and edge.from.state==p.state and p.state==nextEdge.to.state then
+        if budget>=2 and incoming[p]==edge and nextEdge and edge.from.flight==p.flight and p.flight==nextEdge.to.flight and edge.from.mount==p.mount and p.mount==nextEdge.to.mount and edge.from.state==p.state and p.state==nextEdge.to.state and edge.from.combat==p.combat and p.combat==nextEdge.to.combat then
             local dx,dy=(p.x-edge.from.x)*width/10000,(p.y-edge.from.y)*height/10000
             local ex,ey=(nextEdge.to.x-p.x)*width/10000,(nextEdge.to.y-p.y)*height/10000
             local before,after=math.sqrt(dx*dx+dy*dy),math.sqrt(ex*ex+ey*ey)
@@ -626,13 +630,20 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         arrow:SetSize(size*2,size*2);arrow:ClearAllPoints()
         arrow:SetPoint('CENTER',self.canvas,'TOPLEFT',p.x/10000*self:GetWidth(),-p.y/10000*self:GetHeight())
         local state=p.state or (p.flight and 'flight') or 'unknown'
-        arrow:SetVertexColor(A.PlayerColor(state))
+        arrow:SetVertexColor(A.PlayerColor(state,p.combat,p.activity))
+        local activity=state
+        if not p.instanceName and (state=='alive' or state=='unknown') then
+            if p.combat==true then activity='in combat'
+            elseif p.activity=='gathering' then activity='gathering'
+            elseif p.activity=='idle' then activity='idle'
+            elseif p.combat==false then activity='out of combat' end
+        end
         local previous=p.previous
         local angle=previous and math.atan2(-(p.headingX or (p.x-previous.x))*self:GetWidth(),-(p.headingY or (p.y-previous.y))*self:GetHeight()) or 0
         arrow:SetRotation(angle);arrow:Show()
         local level=p.level or self.recordedLevel
         local position=p.instanceName and ('At entrance • '..ns.Atlas.Safe(p.instanceName)) or
-            string.format('%s: %.1f, %.1f • %s',p.interpolated and 'Estimated' or 'Recorded',p.x/100,p.y/100,state)
+            string.format('%s: %.1f, %.1f • %s',p.interpolated and 'Estimated' or 'Recorded',p.x/100,p.y/100,activity)
         self.playerCoordinates:SetText(ns.AtlasUI.Date(math.floor(p.at))..'\n'
             ..position..' • '..(level and ('Level '..level) or 'Level unknown'))
     end
@@ -671,7 +682,9 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         for i,segment in ipairs(adapter.lines) do
             local line=self.lines and self.lines[i]
             if line then
-                local r,g,b,alpha,heat=A.TrailColor(cutoff,segment.to.at,j.db.settings.trailContrast,segment.to.flight,segment.to.mount,segment.to.state)
+                -- A map/chunk join can end at a newly observed combat state.
+                -- The connecting interval still belongs to its starting state.
+                local r,g,b,alpha,heat=A.TrailColor(cutoff,segment.to.at,j.db.settings.trailContrast,segment.to.flight,segment.to.mount,segment.to.state,segment.from.combat)
                 line:SetColorTexture(r,g,b,alpha)
                 line:SetDrawLayer('ARTWORK',heat>=0.5 and 1 or 0)
             end
