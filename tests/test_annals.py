@@ -1917,6 +1917,45 @@ class AnnalsTests(unittest.TestCase):
             assert(c.last==fixed and not contains(outside),'Historical ranges must remain fixed')
         ''')
 
+    def test_zoom_separates_nearby_events_and_anchors_grouped_teleport(self):
+        l=full_client();l.execute(ENV)
+        l.execute('''
+            local c=ns.AnnalsController;local j=c.journal
+            c.shell:ShowSection('annals')
+            local map=c.main.map;local w,h=map:GetWidth(),map:GetHeight()
+            -- Same 18-pixel bucket at base zoom, different buckets at 4x.
+            local x1,x2,y=math.floor(185/w*10000),math.floor(195/w*10000),5000
+            j:Append('accepted','Quest',{questID=1},{mapID=101,x=x1,y=y},100)
+            j:Append('teleport','Departure',nil,{mapID=101,x=x2,y=y},110)
+            j:Append('completed','Same spot',{questID=2},{mapID=101,x=x2,y=y},111)
+            c:SetRange(100,111);c.mapID=101;c:Refresh();c:Seek(111)
+            w=map:GetWidth()
+            local function shown()
+                local result={}
+                for _,p in ipairs(map.pins) do if p:IsShown() then result[#result+1]=p end end
+                return result
+            end
+            local pins=shown();assert(#pins==1 and #pins[1].group==3)
+            assert(pins[1].icon.texture==ns.Annals.icons.teleport)
+            assert(math.abs(pins[1].point[4]-x2/10000*w)<0.001,
+                'grouped teleport must use its own position, not the oldest event')
+            map:ZoomBy(100);assert(map.zoom==4)
+            pins=shown();assert(#pins==2,'zoom must split nearby recorded positions')
+            local coincident
+            for _,p in ipairs(pins) do
+                if #p.group==2 then coincident=p else assert(#p.group==1) end
+                local point=p.group[1].point
+                assert(math.abs(p.point[4]-point.x/10000*w)<0.001)
+            end
+            assert(coincident,'identical coordinates must remain grouped')
+            coincident.scripts.OnClick(coincident,'LeftButton');assert(c.selected==2)
+            coincident.scripts.OnClick(coincident,'LeftButton');assert(c.selected==3)
+            map:ZoomBy(-100);pins=shown()
+            assert(map.zoom==1 and #pins==1 and #pins[1].group==3,
+                'zooming out must regroup events and hide obsolete pooled pins')
+            assert(#j.db.events==3 and j.db.events[2].x==x2,'rendering must preserve history')
+        ''')
+
     def test_actual_map_renderer_and_overlapping_marker_cycle(self):
         l=full_client();l.execute(ENV)
         l.execute('''

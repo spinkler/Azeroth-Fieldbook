@@ -755,3 +755,98 @@ for key in pairs(settings) do
 end
 ''')
 print('PASS: one live cast, four pins, mouse/keybind controls, capacity, dismissal, timeout and reset')
+
+lua.execute(r'''
+local window=ns.SpellIDWindow
+casting,channel=false,false;auras={player={},target={}}
+window:Initialize({spellIDWindowIndefinite=true})
+local creatureID=42
+local locked={}
+function UnitGUID() return 'Creature-0-1-2-3-'..creatureID..'-locks' end
+window:SetAssignmentCapture(function()
+    return {id=creatureID,guid=UnitGUID('target'),name='Lock test'}
+end)
+window:SetCreatureLockedCheck(function(candidate) return locked[candidate.id]==true end)
+local function count()
+    local n=0;for i=3,6 do if frames[i].shown then n=n+1 end end;return n
+end
+locked[42]=true
+casting,castID=true,secret
+fire('UNIT_SPELLCAST_START','target');assert(count()==0)
+casting=false;channel=true
+fire('UNIT_SPELLCAST_CHANNEL_START','target');assert(count()==0)
+channel=false
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,301);assert(count()==0)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,456,302);assert(count()==0)
+locked[42]=nil
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,303);assert(count()==1)
+locked[42]=true;advance(1);assert(count()==0,'locking clears an existing secret live cast')
+locked[42]=nil
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,304);pinBinding()
+locked[42]=true;advance(1);assert(count()==1,'explicit pins survive locking')
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,305);assert(count()==1)
+creatureID=43
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,306);assert(count()==2,'another creature remains visible')
+locked[42]=nil;advance(1);assert(count()==2)
+locked[43]=true;advance(1);assert(count()==1,'cleanup uses captured identity')
+assert(window:ObserveLossOfControl(6713,'Disarm','DISARM',nil,'lock-effect',{id=43}), 'effects are not gated by a cast lock')
+assert(frames[9].shown)
+window:SetCreatureLockedCheck(nil);window:SetAssignmentCapture(nil)
+window:Initialize({})
+''')
+print('PASS: locked creatures suppress public/secret casts and channels, unlock resumes, pins and effects survive')
+
+lua.execute(r'''
+local window=ns.SpellIDWindow
+casting,channel=false,false;auras={player={},target={}}
+local identities={target=42,nameplate1=43}
+local locks={[42]=true}
+local unavailable={}
+function UnitGUID(unit)
+    local id=identities[unit]
+    if id==secret then return secret end
+    return id and 'Creature-0-1-2-3-'..id..'-effects'
+end
+window:SetAssignmentCapture(function(unit)
+    if unavailable[unit] then return end
+    return {id=identities[unit],guid=UnitGUID(unit),name='Effect creature',unit=unit}
+end)
+window:SetCreatureLockedCheck(function(candidate) return locks[candidate.id]==true end)
+C_UnitAuras={GetAuraDataByIndex=function(unit,index) return auras[unit][index] end}
+window:Initialize({spellIDWindowAutoFade=true})
+local panel=AzerothFieldbookSpellIDWindow
+assert(panel.hint.text=='Suppressed target' and panel.hint.color[1]==1 and panel.hint.color[2]==0.15)
+advance(1);assert(panel.alpha==1,'suppression status survives auto-fade without observations')
+auras.target={{auraInstanceID=801,spellId=secret,name=secret,sourceUnit='nameplate1'}}
+fire('UNIT_AURA','target',{})
+assert(not frames[8].shown,'locked buff recipient suppresses a buff from an unlocked caster')
+auras.player={{auraInstanceID=802,spellId=secret,name=secret,sourceUnit='nameplate1'}}
+fire('UNIT_AURA','player',{})
+assert(frames[7].shown,'unlocked debuff source is not suppressed by a locked target')
+locks[43]=true;advance(1)
+assert(not frames[7].shown,'locking verified source clears its existing debuff row')
+fire('UNIT_AURA','player',{});assert(not frames[7].shown)
+locks[42]=nil;fire('UNIT_AURA','target',{})
+assert(frames[8].shown,'unchanged buff can appear after recipient unlocks')
+advance(1);assert(panel.hint.text~='Suppressed target' and panel.hint.color[1]==0.6)
+fire('UNIT_AURA','player',{});assert(not frames[7].shown,'off-target locked caster stays suppressed')
+locks[43]=nil;fire('UNIT_AURA','player',{})
+assert(frames[7].shown,'unchanged debuff can appear after source unlocks')
+-- A readable source token alone is insufficient if creature capture fails.
+locks[42]=true;unavailable.nameplate1=true
+auras.player={{auraInstanceID=803,spellId=secret,name=secret,sourceUnit='nameplate1'}}
+fire('UNIT_AURA','player',{});advance(1)
+assert(frames[7].shown,'fallback target cannot suppress an unverified debuff')
+assert(panel.hint.text=='Suppressed target')
+identities.target=44;fire('PLAYER_TARGET_CHANGED')
+assert(panel.hint.text~='Suppressed target','target change clears status immediately')
+identities.target=42;fire('PLAYER_TARGET_CHANGED')
+assert(panel.hint.text=='Suppressed target')
+identities.target=secret;fire('PLAYER_TARGET_CHANGED')
+assert(panel.hint.text~='Suppressed target','secret identity cannot show suppression status')
+identities.target=nil;fire('PLAYER_TARGET_CHANGED')
+assert(panel.hint.text~='Suppressed target','clearing target clears status')
+window:SetAssignmentCapture(nil);window:SetCreatureLockedCheck(nil)
+auras={player={},target={}};window:Initialize({})
+''')
+print('PASS: verified buff/debuff lock suppression, fallback isolation, aura retries and temporary target status')

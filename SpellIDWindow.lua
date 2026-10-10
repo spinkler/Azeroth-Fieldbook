@@ -6,6 +6,12 @@ ns.SpellIDWindow = window
 BINDING_NAME_AZEROTHFIELDBOOK_PIN_CAST = "Pin latest enemy cast"
 BINDING_NAME_AZEROTHFIELDBOOK_UNPIN_CAST = "Unpin last pinned enemy cast"
 local recordedAbility
+local creatureLocked
+local updateTargetSuppression
+local targetSuppressed = false
+local function suppressed(candidate)
+    return candidate and candidate.suppressionVerified and creatureLocked and creatureLocked(candidate)
+end
 local db, panel, background
 local captureAssignment
 local openCreature
@@ -299,7 +305,7 @@ end
 local function updateFade(delta)
     local hasData = false
     for _, row in ipairs(rows) do if row.observed then hasData = true; break end end
-    local fading = db.spellIDWindowAutoFade == true and not hasData
+    local fading = db.spellIDWindowAutoFade == true and not hasData and not targetSuppressed
     if fading then displayAlpha = math.max(0, displayAlpha - delta / 0.3)
     else displayAlpha = 1 end
     panel:SetAlpha(displayAlpha)
@@ -392,14 +398,19 @@ local function setup()
         elapsed = elapsed + delta
         if elapsed >= 0.25 then
             elapsed = 0
+            updateTargetSuppression()
             if not db.spellIDWindowIndefinite then
                 for _, row in ipairs(rows) do
                     if row.observed and not row.pinned and GetTime() - row.observed >= 120 then clear(row) end
                 end
             end
             for _, row in ipairs(rows) do
-                if row.observed and not row.pinned and validID(row.rawID) and row.candidate and recordedAbility
-                    and recordedAbility(row.candidate, row.rawID) then clear(row) end
+                if row.observed and not row.pinned and row.candidate then
+                    if suppressed(row.candidate) then
+                        clear(row)
+                        if not row.isCast then seen = { player = {}, target = {} } end
+                    elseif validID(row.rawID) and recordedAbility and recordedAbility(row.candidate, row.rawID) then clear(row) end
+                end
             end
         end
         updateFade(delta)
@@ -411,6 +422,9 @@ function window:SetAssignmentCapture(callback)
 end
 function window:SetRecordedAbilityCheck(callback)
     recordedAbility = callback
+end
+function window:SetCreatureLockedCheck(callback)
+    creatureLocked = callback
 end
 function window:SetCreatureOpener(callback)
     openCreature = callback
@@ -443,11 +457,28 @@ local function candidateFor(unit, spellID, kind, expectedGUID, description, labe
     local candidate = captureAssignment(unit, spellID, kind)
     if not candidate or expectedGUID and candidate.guid ~= expectedGUID then return end
     candidate.description, candidate.label = description, label
+    -- Buffs belong to the identified recipient; debuffs require their actual
+    -- source, never the fallback target offered for manual assignment.
+    candidate.suppressionVerified = kind == "cast" or kind == "buff" or kind == "debuff" and label == "Cast by:"
     return candidate
 end
+updateTargetSuppression = function()
+    local candidate
+    if not ns.InitializationBlocked and npcTarget() then
+        candidate = candidateFor("target", nil, "cast", read(UnitGUID, "target"))
+    end
+    targetSuppressed = suppressed(candidate) and true or false
+    if panel then
+        panel.hint:SetText(targetSuppressed and "Suppressed target" or "Cast: click to pin / Right-click: remove")
+        if targetSuppressed then panel.hint:SetTextColor(1, 0.15, 0.15)
+        else panel.hint:SetTextColor(0.6, 0.6, 0.6) end
+    end
+end
 local function present(index, id, name, effect, caster, token, candidate)
-    if public(id) and (type(id) ~= "number" or id <= 0) then return end
     local isCast = index==1 or index==2
+    -- Only positively attributed observations can use the creature's lock.
+    if suppressed(candidate) then return false,"locked" end
+    if public(id) and (type(id) ~= "number" or id <= 0) then return end
     local matching
     if isCast and token then
         for _, slot in ipairs(castRows) do
@@ -604,6 +635,9 @@ local function scanAuras(unit, updates)
             local shown,reason=present(unit == "player" and 3 or 4, spellID, name, effect,caster,"aura:"..unit..":"..key,candidate)
             if shown then
                 displayed = displayed + 1
+            elseif reason=="locked" then
+                unchanged=unchanged+1
+                current[key]=nil -- Allow the still-present aura after unlocking.
             elseif reason=="suppressed" then unchanged=unchanged+1
             else
                 problem = "aura ID absent or SetText rejected"
@@ -711,9 +745,11 @@ events:SetScript("OnEvent", function(_, event, unit, second, id, bar)
     if ns.InitializationBlocked then return end
     if not db or db.displaySpellIDWindow == false then return end
     if event == "PLAYER_TARGET_CHANGED" then
+        updateTargetSuppression();updateFade(0)
         seen.target = {}; castBars = {}; castBarOrder = {}
         scanAuras("target"); observeCast()
     elseif event == "PLAYER_ENTERING_WORLD" then
+        updateTargetSuppression();updateFade(0)
         seen = { player = {}, target = {} }; castBars = {}; castBarOrder = {}
         scanAuras("player"); scanAuras("target"); observeCast()
     elseif event == "PLAYER_REGEN_ENABLED" then
@@ -746,7 +782,7 @@ function window:ApplySettings()
     panel:SetMovable(not db.spellIDWindowLocked)
     panel.afbPinned=db.spellIDWindowLocked
     panel:EnableMouse(not db.spellIDWindowLocked)
-    panel.hint:SetText("Cast: click to pin / Right-click: remove")
+    updateTargetSuppression()
     background:SetColorTexture(0, 0, 0, db.spellIDWindowAlpha)
     events:UnregisterAllEvents()
     if db.displaySpellIDWindow == false then

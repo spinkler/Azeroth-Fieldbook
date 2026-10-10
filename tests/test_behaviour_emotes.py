@@ -22,6 +22,32 @@ def emote_client():
 
 
 class BehaviourEmoteTests(unittest.TestCase):
+    def test_locked_entry_gains_missing_flee_trait_with_automatic_provenance(self):
+        for guid in ('creatureGUID', 'nil'):
+            with self.subTest(guid=guid):
+                lua = emote_client()
+                lua.execute('''
+                    journal:SetEntryConfirmed(42,true)
+                    local e=journal.entries[42]
+                    lockedSnapshot=e.lockedBasic
+                    assert(e.confirmed and not e.behaviours['Flees at low health'])
+                    messages={}
+                ''')
+                lua.execute("flee('%s attempts to run away in fear!','Test creature'," + guid + ")")
+                lua.execute('''
+                    local e=journal.entries[42]
+                    assert(automatic() and e.confirmed and e.lockedBasic==lockedSnapshot)
+                    assert(#messages==1 and messages[1]:find('[A]',1,true))
+                    assert(not journal:SetBehaviour(42,'Flees at low health',false),
+                        'automatic discovery must not unlock manual edits')
+                    local revision=journal.revision
+                    flee('%s attempts to run away in fear!','Test creature',creatureGUID)
+                    assert(journal.revision==revision and #messages==1)
+                    fire('ADDON_LOADED','AzerothFieldbook')
+                    assert(automatic() and journal.entries[42].confirmed,
+                        'the automatic trait and entry lock must both survive reload')
+                ''')
+
     def test_call_for_help_uses_flee_identity_and_recording_rules(self):
         for prefix in ('%s', 'Test creature'):
             for guid in ('creatureGUID', 'nil'):

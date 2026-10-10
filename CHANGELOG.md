@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.39.0 - 2026-10-10
+
+- Verify locked creatures still accept newly observed automatic abilities and behaviours. Add an explicit missing-flee-trait regression covering automatic [A] provenance, duplicate detection, retained manual lock and reload persistence.
+- Delay the Annals grey idle arrow until 90 seconds stationary out of combat, allowing ordinary eating/drinking stops. Update the Legend, help and activity timing regressions; preserve previously recorded idle intervals.
+- Capture Annals death causes from observed fatal damage or a fresh client death recap. Save the killer's name and observed level, plus player race and class and the killing-blow ability when available; show these in event tooltips, details and search. Label ordinary swings as Melee attack. Preserve unknown fields and older deaths, handle environmental deaths, and guard duplicate deaths, stale evidence, loading/resurrection and unavailable or restricted APIs. Add focused capture, persistence and UI regressions; live Forever-client acceptance remains pending.
+- Regroup nearby Annals map events as you zoom in, revealing distinct recorded locations while preserving cycling for coincident events. Anchor grouped icons to the event they display, so a teleport marker remains at its recorded departure or arrival. Add focused zoom, regrouping and marker-position regressions.
+- Suppress casts, channels and reliably attributed buff/debuff observations for locked Bestiary creatures in Last observed spell IDs, including restricted spell IDs. Buffs use their identified recipient and debuffs their verified source, never an unverified fallback target. Clear their unpinned rows when locked, preserve pinned casts, and allow aura observations again after unlocking. Show a temporary red Suppressed target hint while targeting an identified locked creature, keeping it visible with auto-fade enabled. Automatic recording is unchanged. Update Help and add focused lock, unlock, identity, restricted-ID, aura retry and status lifecycle regressions.
+
 ## v0.38.0 - 2026-10-09
 
 - Fix blank Annals quest-reward names hiding both cached item names and fallback labels. Treat empty or whitespace-only names as unavailable during capture and display, restore readable names on existing entries through the item cache, and preserve saved history, icons, quantities and tooltips. Add regressions for delayed names, the affected detail rows and reward-snapshot refresh.

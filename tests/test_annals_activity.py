@@ -33,35 +33,35 @@ def activity_client():
 
 
 class AnnalsActivityTests(unittest.TestCase):
-    def test_idle_at_ten_seconds_and_no_periodic_idle_points(self):
+    def test_idle_at_ninety_seconds_and_no_periodic_idle_points(self):
         l = activity_client(); l.execute('''
-            local first=now;t:Poll();resting(8)
+            local first=now;t:Poll();resting(88)
             assert(position().activity==nil)
             resting(2)
-            assert(position(first+9.99).activity==nil and position(first+10).activity=='idle')
+            assert(position(first+89.99).activity==nil and position(first+90).activity=='idle')
             local count,revision=points(),trail.revision
             resting(60)
             assert(points()==count and trail.revision==revision)
             assert(#db.segments==2 and #db.events==0)
             local saved=ns.Annals.Copy(db);reset(saved)
-            assert(position(first+10).activity=='idle','reload must preserve the recorded interval')
+            assert(position(first+90).activity=='idle','reload must preserve the recorded interval')
         ''')
 
     def test_irregular_poll_crosses_exact_idle_threshold(self):
         l = activity_client(); l.execute('''
-            local first=now;t:Poll();advance(7);t:Poll();advance(4);t:Poll()
-            assert(db.segments[2].at==first+10)
-            assert(position(first+9.9).activity==nil and position(first+10).activity=='idle')
+            local first=now;t:Poll();resting(86);advance(3);t:Poll();advance(2);t:Poll()
+            assert(db.segments[2].at==first+90)
+            assert(position(first+89.9).activity==nil and position(first+90).activity=='idle')
         ''')
 
     def test_even_small_movement_resumes_and_restarts_idle_timer(self):
         l = activity_client(); l.execute('''
-            local first=now;t:Poll();resting(12)
+            local first=now;t:Poll();resting(92)
             advance(2);px=px+.0001;t:Poll()
             assert(position().activity==nil)
-            assert(position(first+11).activity=='idle')
-            assert(position(first+13).activity==nil and position(first+13).interpolated)
-            resting(8);assert(position().activity==nil)
+            assert(position(first+91).activity=='idle')
+            assert(position(first+93).activity==nil and position(first+93).interpolated)
+            resting(88);assert(position().activity==nil)
             resting(2);assert(position().activity=='idle')
             for i=1,10 do advance(2);px=px+.0001;t:Poll();assert(position().activity==nil) end
             assert(#db.events==0)
@@ -69,10 +69,10 @@ class AnnalsActivityTests(unittest.TestCase):
 
     def test_combat_interrupts_idle_and_keeps_stationary_fights_active(self):
         l = activity_client(); l.execute('''
-            t:Poll();resting(10);assert(position().activity=='idle')
+            t:Poll();resting(90);assert(position().activity=='idle')
             transition(true);assert(position().combat and position().activity==nil)
             resting(30);assert(position().combat and position().activity==nil)
-            transition(false);resting(8);assert(position().activity==nil)
+            transition(false);resting(88);assert(position().activity==nil)
             resting(2);assert(position().activity=='idle')
         ''')
 
@@ -80,13 +80,13 @@ class AnnalsActivityTests(unittest.TestCase):
         l = activity_client(); l.execute('''
             for _,spell in ipairs({2366,2575}) do
                 for _,ending in ipairs({'UNIT_SPELLCAST_STOP','UNIT_SPELLCAST_SUCCEEDED','UNIT_SPELLCAST_FAILED','UNIT_SPELLCAST_FAILED_QUIET','UNIT_SPELLCAST_INTERRUPTED'}) do
-                    reset();combat=false;castSpell=nil;t:Poll();resting(10)
+                    reset();combat=false;castSpell=nil;t:Poll();resting(90)
                     local began=now;start(spell)
                     assert(position().activity=='gathering')
                     advance(3);stop(ending,spell)
                     assert(position(began+1).activity=='gathering' and position().activity==nil)
                     assert(#db.events==0)
-                    resting(8);assert(position().activity==nil)
+                    resting(88);assert(position().activity==nil)
                     resting(2);assert(position().activity=='idle')
                 end
             end
@@ -137,7 +137,7 @@ class AnnalsActivityTests(unittest.TestCase):
             assert(position().combat==true and position().activity=='gathering')
             assert(select(2,ns.Annals.PlayerColor('alive',position().combat,position().activity))==.35)
             advance(2);stop();assert(position().combat==true)
-            transition(false);resting(10)
+            transition(false);resting(90)
             assert(position().combat==false and position().activity=='idle')
         ''')
 
@@ -145,10 +145,10 @@ class AnnalsActivityTests(unittest.TestCase):
         l = activity_client(); l.execute('''
             t:Poll();advance(20);t:Poll()
             assert(position().activity==nil and not db.segments[2].joinFrom)
-            resting(8);assert(position().activity==nil)
+            resting(88);assert(position().activity==nil)
             trail:SetEnabled(false);local count=#db.segments
-            resting(10);start(2366);stop();assert(#db.segments==count)
-            trail:SetEnabled(true);t:Poll();resting(8);assert(position().activity==nil)
+            resting(90);start(2366);stop();assert(#db.segments==count)
+            trail:SetEnabled(true);t:Poll();resting(88);assert(position().activity==nil)
             reset();UnitAffectingCombat=function() return secret end
             t:Poll();resting(20);assert(position().activity==nil)
             UnitCastingInfo=function() return secret end
@@ -166,16 +166,16 @@ class AnnalsActivityTests(unittest.TestCase):
             local c=ns.AnnalsController;j=c.journal;trail=j.trail;t=c.tracking
             local A=ns.Annals
             now=100;t:Poll()
-            for at=102,110,2 do now=at;t:Poll() end
-            now=112;start(2366)
-            now=116;stop()
+            for at=102,190,2 do now=at;t:Poll() end
+            now=192;start(2366)
+            now=196;stop()
             trail:SetEnabled(false)
-            c.shell:ShowSection('annals');c:SetRange(100,116)
+            c.shell:ShowSection('annals');c:SetRange(100,196)
             local map=c.main.map
-            c:Seek(109);assert(map.playerArrow.vertexColor[1]==1)
-            c:Seek(110);assert(map.playerArrow.vertexColor[1]==.5 and map.playerCoordinates:GetText():find('idle',1,true))
-            c:Seek(112);assert(map.playerArrow.vertexColor[2]==.85 and map.playerCoordinates:GetText():find('gathering',1,true))
-            c:Seek(116);assert(map.playerArrow.vertexColor[1]==1 and map.playerArrow.vertexColor[2]==1)
+            c:Seek(189);assert(map.playerArrow.vertexColor[1]==1)
+            c:Seek(190);assert(map.playerArrow.vertexColor[1]==.5 and map.playerCoordinates:GetText():find('idle',1,true))
+            c:Seek(192);assert(map.playerArrow.vertexColor[2]==.85 and map.playerCoordinates:GetText():find('gathering',1,true))
+            c:Seek(196);assert(map.playerArrow.vertexColor[1]==1 and map.playerArrow.vertexColor[2]==1)
             assert(#c.rows==0)
             local legend=c.main.legend;click(c.main.legendButton)
             assert(#legend.arrows==7 and #legend.trails==7)

@@ -478,8 +478,9 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
         -- Pixel buckets collect overlapping icons. Repeated clicks cycle every
         -- member; all records also remain accessible in the searchable index.
         local groups,byCell={},{}
+        local groupingScale=journal.zoomMarkerGroups and self.zoom or 1
         for _,m in ipairs(markers) do
-            local key=math.floor(m.point.x/10000*self:GetWidth()/18)..":"..math.floor(m.point.y/10000*self:GetHeight()/18)
+            local key=math.floor(m.point.x/10000*self:GetWidth()*groupingScale/18)..":"..math.floor(m.point.y/10000*self:GetHeight()*groupingScale/18)
             local group=byCell[key]
             if not group then group={};byCell[key]=group;groups[#groups+1]=group end
             group[#group+1]=m;if m.id==selected then group.selected=true end

@@ -11,9 +11,9 @@ rows, delayed cache refresh, immutable history, fallbacks and capture recovery.
 
 ## Idle and gathering arrow
 
-The arrow turns grey after ten seconds of observed stationary time out of combat.
+The arrow turns grey after 90 seconds of observed stationary time out of combat.
 Movement, combat or gathering resumes its active colour. After combat or a gather
-ends, a fresh ten-second stationary interval is required. Idle requires a known
+ends, a fresh 90-second stationary interval is required. Idle requires a known
 out-of-combat state and does not replace death, ghost or flight colours. It uses
 the existing two-second observations; the saved boundary is the ten-second mark
 even when a poll arrives later. Leaving idle through movement preserves the last

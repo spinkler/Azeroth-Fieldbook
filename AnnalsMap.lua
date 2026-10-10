@@ -113,6 +113,19 @@ function A.RewardBlocks(e,coloured,recordedOnly)
     if r.status=='incomplete' or r.status=='unknown' then add(paint('Some reward details were not captured.','999999')) end
     return rows
 end
+function A.DeathText(e)
+    if e.kind~='death' then return end
+    local k=e.killer
+    if not k then return 'Killer: unknown (not captured).' end
+    if k.environment then
+        local labels={FALLING='Falling',DROWNING='Drowning',FIRE='Fire',LAVA='Lava',SLIME='Slime',FATIGUE='Fatigue'}
+        return 'Killed by: '..(labels[k.environment] or k.environment)
+    end
+    local text='Killed by: '..k.name..' • Level '..(k.level or 'unknown')
+    if k.player then text=text..' • Player • '..(k.race or 'Race unknown')..' • '..(k.class or 'Class unknown') end
+    text=text..'\nKilling blow: '..(k.ability or (k.spellID and ('Spell #'..k.spellID)) or 'unknown')
+    return text
+end
 function A.EventText(e,coloured,recordedOnly)
     local function paint(value,colour)
         if not coloured then return tostring(value) end
@@ -124,6 +137,7 @@ function A.EventText(e,coloured,recordedOnly)
     if e.subzone and e.subzone~='' and e.subzone~=e.zone then text=text..' — '..paint(e.subzone,'dddddd') end
     if A.Int(e.x,0,10000) and A.Int(e.y,0,10000) then text=text..paint(string.format(' • %.1f, %.1f',e.x/100,e.y/100),'999999') end
     if e.removal=='abandoned' then text=text..'\nAbandon request observed.' end
+    local death=A.DeathText(e);if death then text=text..'\n'..paint(death,'ee7777') end
     local instanceNote=A.InstanceNote(e);if instanceNote then text=text..'\n'..paint(instanceNote,'999999') end
     for _,row in ipairs(A.QuestTextBlocks(e,coloured)) do text=text..(row.kind=='heading' and '\n\n' or '\n')..row.text end
     for _,row in ipairs(A.RewardBlocks(e,coloured,recordedOnly)) do text=text..(row.kind=='heading' and '\n\n' or '\n')..row.text end
@@ -566,7 +580,7 @@ function A.TrailRibbon(lines,width,height,thickness)
     return quads
 end
 function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
-    local adapter={lines={},markers={},state=j.db.settings,borderlessPins=true}
+    local adapter={lines={},markers={},state=j.db.settings,borderlessPins=true,zoomMarkerGroups=true}
     function adapter:Get(id) if id=='journey' then return {id=id,name='Journey',category='route',stops={{}}} end end
     function adapter:List() return self.markers end
     function adapter:RouteMap()
@@ -691,12 +705,16 @@ function ns.CreateAnnalsMap(parent,j,onSelect,onNavigate)
         end
         for _,pin in ipairs(self.pins or {}) do if pin.group and pin:IsShown() then
             pin:SetFrameLevel(self.canvas:GetFrameLevel()+1)
-            local event=pin.group[1].point.event
+            local representative=pin.group[1].point
+            local event=representative.event
             local priority={hearth=3,teleport=3,crossing=3,battleground=3,instance=3,flight=2}
             for _,member in ipairs(pin.group) do
                 local other=member.point.event;local rank,selected=priority[other.kind] or 0,priority[event.kind] or 0
-                if rank>selected or (rank==selected and (other.at>event.at or (other.at==event.at and (other.sequence or 0)>(event.sequence or 0)))) then event=other end
+                if rank>selected or (rank==selected and (other.at>event.at or (other.at==event.at and (other.sequence or 0)>(event.sequence or 0)))) then event=other;representative=member.point end
             end
+            -- Keep a grouped travel icon at its own recorded departure/arrival.
+            pin:ClearAllPoints()
+            pin:SetPoint('CENTER',self.canvas,'TOPLEFT',representative.x/10000*self:GetWidth(),-representative.y/10000*self:GetHeight())
             local alpha=0
             for _,member in ipairs(pin.group) do alpha=math.max(alpha,member.point.alpha or 1) end
             pin:SetAlpha(alpha*0.6)

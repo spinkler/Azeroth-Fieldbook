@@ -161,14 +161,14 @@ function ns.CreateAnnalsTrail(j,options)
             local combat=p.combat
             if p.activity~='gathering' then
                 p.activity=nil
-                if combat==false and not p.flight and (not p.state or p.state=='alive') and resting and p.at-resting.at>=10 then
+                if combat==false and not p.flight and (not p.state or p.state=='alive') and resting and p.at-resting.at>=90 then
                     p.activity='idle';idleStart=resting
                 end
             end
             if p.activity~=current.activity then
                 local boundary=p
                 if p.activity=='idle' then
-                    boundary=A.Copy(p);boundary.at=math.max(current.finish,resting.at+10)
+                    boundary=A.Copy(p);boundary.at=math.max(current.finish,resting.at+90)
                 elseif current.activity=='idle' and p.activity~='gathering' and lastPoll and distance(lastPoll,p)>0 then
                     -- Movement starts after the last confirmed stationary poll.
                     boundary=A.Copy(lastPoll)

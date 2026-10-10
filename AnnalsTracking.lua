@@ -1,5 +1,97 @@
 local _,ns=...
 local A=ns.Annals
+local function recapLink()
+    local link=A.Read(C_DeathRecap and C_DeathRecap.GetRecapLink or GetDeathRecapLink)
+    return A.Text(link,2048) and link or nil
+end
+local function deathCapture(j)
+    local d={units={},lastRecap=recapLink()}
+    function d:Observe(unit)
+        local guid=A.Read(UnitGUID,unit)
+        if not A.Text(guid,128) or guid=='' then return end
+        local level=A.Read(UnitLevel,unit)
+        local player=A.Read(UnitIsPlayer,unit)
+        local row={at=A.Now(),level=A.Int(level,1,1000) and level or nil,player=player==true}
+        if row.player then
+            local race,class=A.Read(UnitRace,unit),A.Read(UnitClass,unit)
+            row.race=A.RewardName(race);row.class=A.RewardName(class)
+        end
+        self.units[guid]=row
+        local count=0
+        for key,value in pairs(self.units) do
+            if A.Now()-value.at>30 then self.units[key]=nil else count=count+1 end
+        end
+        if count>128 then self.units={[guid]=row} end
+    end
+    function d:Snapshot(guid,name,environment)
+        if A.Text(environment,40) and environment~='' then return {environment=environment} end
+        if not A.RewardName(name) then return end
+        local result={name=name}
+        if A.Text(guid,128) and guid~='' then
+            for _,unit in ipairs({'target','mouseover','focus'}) do self:Observe(unit) end
+            local observed=self.units[guid]
+            if observed and A.Now()-observed.at<=30 then
+                result.level=observed.level;result.race=observed.race;result.class=observed.class
+            end
+            result.player=guid:match('^Player%-')~=nil
+            if result.player then
+                local class=A.Read(GetPlayerInfoByGUID,guid)
+                local race=A.Read(function() return select(3,GetPlayerInfoByGUID(guid)) end)
+                result.class=A.RewardName(class) or result.class;result.race=A.RewardName(race) or result.race
+            else result.race=nil;result.class=nil end
+        end
+        return result
+    end
+    function d:Save(killer)
+        if not killer or not self.pending or A.Now()-self.pending.at>2 then return end
+        self.pending.killer=killer;j.revision=j.revision+1
+        if j.onChange then j.onChange() end
+    end
+    function d:Combat()
+        if type(CombatLogGetCurrentEventInfo)~='function' then return end
+        local ok,_,event,_,guid,name,_,_,dest,_,_,_,p1,p2,p3,p4,p5=pcall(CombatLogGetCurrentEventInfo)
+        local player=A.Read(UnitGUID,'player')
+        if not ok or not A.Text(event,80) or not A.Text(dest,128) or not A.Text(player,128) or dest~=player then return end
+        local overkill,environment
+        if event=='SWING_DAMAGE' then overkill=p2
+        elseif event=='ENVIRONMENTAL_DAMAGE' then overkill=p3;environment=p1
+        elseif event=='SPELL_DAMAGE' or event=='SPELL_PERIODIC_DAMAGE' or event=='RANGE_DAMAGE' or event=='SPELL_BUILDING_DAMAGE' then overkill=p5
+        else return end
+        -- Nonlethal damage must never become a guessed killer.
+        self.blow=nil
+        if not A.Int(overkill,0,2147483647) then return end
+        local killer=self:Snapshot(guid,name,environment)
+        if killer then
+            killer.ability=event=='SWING_DAMAGE' and 'Melee attack' or (not environment and A.RewardName(p2) or nil)
+            killer.spellID=event~='SWING_DAMAGE' and not environment and A.Int(p1,1,2147483647) and p1 or nil
+        end
+        if killer then self.blow={at=A.Now(),killer=killer};self:Save(killer) end
+    end
+    function d:Recap()
+        if not self.pending or A.Now()-self.pending.at>2 then return end
+        local link=recapLink()
+        if not link or link==self.lastRecap then return end
+        local events=A.Read(C_DeathRecap and C_DeathRecap.GetRecapEvents or DeathRecap_GetEvents)
+        local first=type(events)=='table' and A.Read(function() return events[1] end)
+        if type(first)~='table' then return end
+        -- Blizzard's recap places the fatal event first. Never reuse an old recap.
+        self.lastRecap=link
+        local function field(key) return A.Read(function() return first[key] end) end
+        if field('hideCaster')==true then return end
+        if self.pending.killer then return end
+        local killer=self:Snapshot(field('sourceGUID'),field('sourceName'),field('environmentalType'))
+        if killer then
+            killer.ability=field('event')=='SWING_DAMAGE' and 'Melee attack' or A.RewardName(field('spellName'))
+            local spellID=field('spellId')
+            killer.spellID=A.Int(spellID,1,2147483647) and spellID or nil
+        end
+        self:Save(killer)
+    end
+    function d:Reset()
+        self.pending=nil;self.blow=nil;self.units={};self.lastRecap=recapLink()
+    end
+    return d
+end
 -- Travel spells, not portal-creation spells: creating a portal does not move
 -- its caster. IDs avoid depending on the client's localized spell names.
 local travelSpells={
@@ -172,6 +264,7 @@ local function recoverRewards(original,candidate)
 end
 function ns.CreateAnnalsTracking(j)
     local t={journal=j,capabilities={},loading=false};local db=j.db
+    local deaths=deathCapture(j)
     j.sessionStart=A.Int(db.sessionStart,0,A.Now()) and db.sessionStart or A.Now()
     local reward,offer,abandon=nil,nil,nil
     local rewardIndex,rewardClosed
@@ -370,6 +463,10 @@ function ns.CreateAnnalsTracking(j)
     end
     function t:Event(event,id,xp,money)
         if j.readOnly or ns.InitializationBlocked then return end
+        if event=='COMBAT_LOG_EVENT_UNFILTERED' then deaths:Combat();return end
+        if event=='PLAYER_TARGET_CHANGED' or event=='UPDATE_MOUSEOVER_UNIT' or event=='NAME_PLATE_UNIT_ADDED' then
+            deaths:Observe(event=='PLAYER_TARGET_CHANGED' and 'target' or event=='UPDATE_MOUSEOVER_UNIT' and 'mouseover' or id);return
+        end
         if gatheringEvents[event] then
             self:GatheringEvent(event,id,xp,money)
             if event=='UNIT_SPELLCAST_STOP' or event=='UNIT_SPELLCAST_FAILED_QUIET' then return end
@@ -414,6 +511,7 @@ function ns.CreateAnnalsTracking(j)
             return
         end
         if event=='PLAYER_ENTERING_WORLD' then
+            deaths:Reset()
             t.gatheringCast=nil;t.gatheringObservedAt=nil
             if not t.sessionStarted and (id==true or xp==true) then
                 t.sessionStarted=true
@@ -471,6 +569,7 @@ function ns.CreateAnnalsTracking(j)
             return
         end
         if event=='PLAYER_LEAVING_WORLD' or event=='PLAYER_LOGOUT' then
+            deaths:Reset()
             t.gatheringCast=nil;t.gatheringObservedAt=nil
             t.loginLocation=nil
             local logoutLocation=event=='PLAYER_LOGOUT' and t.beforeWorld and t.beforeWorld.from.location
@@ -502,7 +601,14 @@ function ns.CreateAnnalsTracking(j)
             if not t.dead then
                 t.dead=true
                 local location=A.Location();location.state='dead'
-                j:Append('death','Died',nil,location,A.Now())
+                local killer=deaths.blow and A.Now()-deaths.blow.at<=2 and deaths.blow.killer or nil
+                deaths.pending=j:Append('death','Died',{killer=killer},location,A.Now())
+                deaths.blow=nil
+                deaths:Recap()
+                local pending=deaths.pending
+                for _,delay in ipairs({0.2,1}) do later(delay,function()
+                    if not j.readOnly and not ns.InitializationBlocked and deaths.pending==pending then deaths:Recap() end
+                end) end
             end
             j.trail:Break(event);return
         end
@@ -515,6 +621,7 @@ function ns.CreateAnnalsTracking(j)
             return
         end
         if event=='PLAYER_ALIVE' or event=='PLAYER_UNGHOST' then
+            deaths:Reset()
             local dead=A.Read(UnitIsDeadOrGhost,'player')
             if event=='PLAYER_UNGHOST' or (event=='PLAYER_ALIVE' and (dead==false or dead==0)) then t.dead=false end
             j.trail:Break(event);return
@@ -631,6 +738,7 @@ function ns.CreateAnnalsTracking(j)
             'PLAYER_ENTERING_WORLD','PLAYER_LEAVING_WORLD','PLAYER_LOGOUT','ZONE_CHANGED_NEW_AREA','ZONE_CHANGED_INDOORS',
             'ZONE_CHANGED','PLAYER_DEAD','PLAYER_ALIVE','PLAYER_UNGHOST','PLAYER_LEVEL_UP','TAXIMAP_OPENED','TAXIMAP_CLOSED',
             'PLAYER_REGEN_DISABLED','PLAYER_REGEN_ENABLED',
+            'COMBAT_LOG_EVENT_UNFILTERED','PLAYER_TARGET_CHANGED','UPDATE_MOUSEOVER_UNIT','NAME_PLATE_UNIT_ADDED',
             'UNIT_SPELLCAST_START','UNIT_SPELLCAST_STOP','UNIT_SPELLCAST_SUCCEEDED','UNIT_SPELLCAST_FAILED','UNIT_SPELLCAST_FAILED_QUIET','UNIT_SPELLCAST_INTERRUPTED'}) do
             self.capabilities[event]=pcall(self.frame.RegisterEvent,self.frame,event)
         end

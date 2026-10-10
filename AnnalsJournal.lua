@@ -67,6 +67,17 @@ function A.ValidEvent(e)
         or not A.Text(e.title,240) or (e.questID~=nil and not A.Int(e.questID,1,2147483647)) then return false end
     for _,k in ipairs({'zone','subzone'}) do if e[k]~=nil and not A.Text(e[k],160) then return false end end
     if e.level~=nil and not A.Int(e.level,1,1000) then return false end
+    if e.killer~=nil then
+        local k=e.killer
+        if e.kind~='death' or type(k)~='table' then return false end
+        for _,key in ipairs({'name','race','class','environment','ability'}) do
+            if k[key]~=nil and not A.RewardName(k[key]) then return false end
+        end
+        if k.level~=nil and not A.Int(k.level,1,1000) then return false end
+        if k.spellID~=nil and not A.Int(k.spellID,1,2147483647) then return false end
+        if k.player~=nil and type(k.player)~='boolean' then return false end
+        if not k.name and not k.environment then return false end
+    end
     if e.sequence~=nil and not A.Int(e.sequence,1,1000000000000) then return false end
     if e.mapID~=nil and not A.Int(e.mapID,1,2147483647) then return false end
     if e.instanceType~=nil and not A.JourneyInstance(e.instanceType) then return false end

@@ -560,6 +560,12 @@ local function initializeImpl()
     if ns.CastIDs then ns.CastIDs:Initialize(db) end
     if ns.CreateBestiaryJournal then journal = ns.CreateBestiaryJournal(db, watchedEnemy, trackingDB) end
     if journal then
+        if ns.SpellIDWindow and ns.SpellIDWindow.SetCreatureLockedCheck then
+            ns.SpellIDWindow:SetCreatureLockedCheck(function(candidate)
+                local entry = journal.entries[candidate.id]
+                return entry and entry.confirmed == true or false
+            end)
+        end
         if ns.SpellIDWindow and ns.SpellIDWindow.SetRecordedAbilityCheck then
             ns.SpellIDWindow:SetRecordedAbilityCheck(function(candidate, spellID)
                 -- An unverified target is not evidence of who caused a debuff.
