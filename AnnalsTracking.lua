@@ -738,7 +738,9 @@ function ns.CreateAnnalsTracking(j)
             'PLAYER_ENTERING_WORLD','PLAYER_LEAVING_WORLD','PLAYER_LOGOUT','ZONE_CHANGED_NEW_AREA','ZONE_CHANGED_INDOORS',
             'ZONE_CHANGED','PLAYER_DEAD','PLAYER_ALIVE','PLAYER_UNGHOST','PLAYER_LEVEL_UP','TAXIMAP_OPENED','TAXIMAP_CLOSED',
             'PLAYER_REGEN_DISABLED','PLAYER_REGEN_ENABLED',
-            'COMBAT_LOG_EVENT_UNFILTERED','PLAYER_TARGET_CHANGED','UPDATE_MOUSEOVER_UNIT','NAME_PLATE_UNIT_ADDED',
+            -- Forever forbids addon combat-log registration. pcall does not
+            -- suppress ADDON_ACTION_FORBIDDEN; do not probe that event here.
+            'PLAYER_TARGET_CHANGED','UPDATE_MOUSEOVER_UNIT','NAME_PLATE_UNIT_ADDED',
             'UNIT_SPELLCAST_START','UNIT_SPELLCAST_STOP','UNIT_SPELLCAST_SUCCEEDED','UNIT_SPELLCAST_FAILED','UNIT_SPELLCAST_FAILED_QUIET','UNIT_SPELLCAST_INTERRUPTED'}) do
             self.capabilities[event]=pcall(self.frame.RegisterEvent,self.frame,event)
         end

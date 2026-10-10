@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.39.1 - 2026-10-10
+
+- Stop requesting the forbidden combat-log event during Annals startup on Forever. The protective `pcall` could not suppress Blizzard's blocked-action popup. Ordinary death records and the fresh-recap path remain available; the combat-log parser is not subscribed on this client. Add a regression that detects attempted registration even when its error is caught.
+- Add `/afbblocked` session diagnostics for protected actions attributed to Azeroth Fieldbook, registered before other modules to capture login failures. Retain the last 20 function names without changing Blizzard's protection or saving journal data. The operator confirmed that removing the combat-log registration resolves the login popup. Include focused diagnostic coverage.
+
 ## v0.39.0 - 2026-10-10
 
 - Verify locked creatures still accept newly observed automatic abilities and behaviours. Add an explicit missing-flee-trait regression covering automatic [A] provenance, duplicate detection, retained manual lock and reload persistence.

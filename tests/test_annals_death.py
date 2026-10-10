@@ -5,6 +5,34 @@ from atlas_test_harness import ENV
 
 
 class AnnalsDeathTests(unittest.TestCase):
+    def test_startup_never_requests_forbidden_combat_log(self):
+        l = self.host()
+        l.execute('''
+            local create=CreateFrame
+            local attempts=0
+            CreateFrame=function(...)
+                local frame=create(...)
+                local register=frame.RegisterEvent
+                frame.RegisterEvent=function(self,event,...)
+                    if event=='COMBAT_LOG_EVENT_UNFILTERED' then
+                        attempts=attempts+1
+                        error('forbidden registration already raised the native popup')
+                    end
+                    return register(self,event,...)
+                end
+                return frame
+            end
+            reset();t:Start()
+            assert(attempts==0,'pcall cannot make a forbidden registration safe')
+            t:Event('PLAYER_ENTERING_WORLD',true,false)
+            t:Event('PLAYER_DEAD')
+            local found=false
+            for _,event in ipairs(db.events) do
+                if event.kind=='death' then found=true;assert(not event.killer) end
+            end
+            assert(found,'ordinary death records must still work without combat log')
+        ''')
+
     def host(self):
         l = client()
         l.execute('''
