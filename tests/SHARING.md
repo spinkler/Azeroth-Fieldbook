@@ -1,13 +1,19 @@
 # Point-funded sharing: implementation and live checkpoint
 
-## Current verification — 2026-09-27
+## Current verification — Beast Lore update 2026-10-11
 
-The operator confirms that the Forever SavedVariables bug is fixed and data
+On 2026-09-27, the operator confirmed that the Forever SavedVariables bug is fixed and data
 and settings persist across reloads/logins. Persistence is no longer blocked.
 Existing in-session sharing, receipt and attribution results remain confirmed.
 The detailed scenarios below are retained as a regression checklist, not a claim
 that each network interruption/faction/throttle case has a recorded live pass.
-Beast Lore capture and lore delivery remain pending the beta level-cap increase.
+On 2026-10-11, the author confirmed live Beast Lore capture and persistence
+between sessions, with matching native-tooltip and Fieldbook screenshots.
+**Two-player Beast Lore delivery remains unverified in the live client**,
+including offer/receipt, attribution, zero cost, personal/shared precedence and
+interruption recovery. The capture/persistence confirmation and normal sharing
+results do not establish that delivery path. See [BEAST_LORE.md](BEAST_LORE.md)
+for the evidence and suspected client limitation on exposed tooltip fields.
 See [VERIFICATION.md](VERIFICATION.md) for the current release record.
 
 ## Historical development baseline

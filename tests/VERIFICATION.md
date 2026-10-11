@@ -1,8 +1,9 @@
 # Current verification record
 
-Updated 2026-09-28 for 0.16.0 Beta. Older research documents retain historical
-captures and limitations; this record distinguishes their status from current
-operator confirmations.
+Beast Lore status updated 2026-10-11 from the author's live confirmation and
+screenshots. Other entries retain their stated dates and evidence; this is not
+a new full-addon acceptance pass. Older research documents retain historical
+captures and limitations, including the former Beast Lore level-cap block.
 
 | Area | Evidence and current status |
 | --- | --- |
@@ -10,7 +11,8 @@ operator confirmations.
 | Pet kill credit | Operator confirmed live testing and correct credit on 2026-09-27. The former missing-pet-event issue is resolved, subject to future regressions. |
 | SavedVariables persistence | Operator confirmed on 2026-09-27 that the Forever bug is fixed and data/settings are saving correctly across reloads/logins. No longer blocked by the client. |
 | Normal sharing | Earlier live delivery, receipt and recipient attribution are recorded in SHARING.md. General persistence is now confirmed. Individual interruption, faction and throttle cases remain regression scenarios, not newly claimed live passes. |
-| Beast Lore | Live capture and two-player lore delivery await a beta level cap that permits testing the spell. Automated event, tooltip, storage and protocol tests do not replace this check. |
+| Beast Lore capture and persistence (2026-10-11) | Author confirmed live capture and persistence between sessions. Supplied Mangy Wolf screenshots show matching level 5, Tameable, Specialization: Default and Diet: Meat information in the native tooltip and Fieldbook. Persistence is established by the author's report. Additional expected native fields are absent; the author suspects a client bug, but its cause is not established. Fieldbook capture of the exposed information is confirmed. See [BEAST_LORE.md](BEAST_LORE.md). |
+| Beast Lore two-player delivery | Still unverified in the live client. Offer/receipt, recipient attribution, zero cost, personal/shared precedence and interruption recovery require separate acceptance. Capture/persistence confirmation, normal sharing results and automated protocol tests do not establish this path. |
 | Index layering | 0.10.8 places Index/A–Z buttons exactly one frame level below native/fallback trim and above parchment, with mouse-disabled trim and title controls above it. Widget checks pass; the inset rolodex appearance and native hit regions await in-game verification. |
 | Shared shell extraction | Automated tests cover lazy construction, section switching, preserved selection, page routing, closing, focus, legacy position restoration and inherited scaling. In-game visual acceptance of the refactor is not claimed. |
 | Seven-section navigation | 0.10.0 introduced the native right-side tabs and six wishlist pages; all seven slots now have implementations in 0.16.0. Automated checks cover order, default/active selection, tooltip routing, section lifetimes, Bestiary state, explicit creature opening, supported scales, full-column bounds and auxiliary placement. All seven icon files were read and decoded from installed Forever 1.60.1.70009 archives during the navigation work. That historical asset check is not a current native-rendering pass; see [SECTION_NAVIGATION.md](SECTION_NAVIGATION.md). |
@@ -28,9 +30,12 @@ operator confirmations.
 | Compact Spell ID window and blacklist | Local 0.9.144 adds upward resizing, populated-only sections, optional caster lines, dismissal and a character blacklist manager. Mock tests cover row geometry, anchor migration, caster handling, restricted values, filtering, persistence and the Options controls. Native layout and clicks still require SPELL_ID_WINDOW.md live checks. |
 | Creature Locations | Local 0.9.145 adds zone maps, persisted kill positions, a labelled player-position fallback, and triangles limited to 180-yard edges. Automated regressions cover credit integration, secrets, storage, geometry, backups and window controls. The operator screenshot confirms an area rendered in-game. 0.9.146 changes it to violet with a boundary glow and adds saved terrain brightness; the new styling and exact NPC-coordinate availability require the pending LOCATIONS.md checklist. 0.9.147 adds right/top book anchoring and parchment tied to UI brightness. |
 
-The operator intends to continue with 0.x Beta milestones for additional journal
-sections. Stable 1.0 is reserved for successful Beast Lore live testing,
-independently of how many other sections have shipped.
+The operator reserved the 1.0 milestone for successful Beast Lore live testing,
+independently of how many other sections have shipped. Live capture and
+cross-session persistence are now confirmed; two-player delivery remains
+unverified. The former level-cap block is no longer a capture/persistence release
+blocker. The author still decides whether to declare 1.0; this record does not
+authorize a version change or publication. Pre-1.0 builds may be Beta or Release.
 
 ## Automated checks
 
@@ -110,9 +115,12 @@ Check the shared-only question marks and disabled-control explanations, then
 personally encounter the creature. This is the focused in-game check for the
 new batch; it does not reopen the resolved pet-credit or persistence blocker.
 
-Use [BEAST_LORE.md](BEAST_LORE.md) once the spell can be tested. Exercise capture,
-target changes, delayed fields, repeated casts, persistence, backup/restore,
-zero-cost delivery and personal/shared precedence before declaring stable 1.0.
+Use [BEAST_LORE.md](BEAST_LORE.md) for the remaining acceptance and regression
+scenarios. Capture and cross-session persistence are confirmed as of 2026-10-11.
+Target changes, delayed fields, repeated casts and backup/restore have no new
+live confirmation; two-player zero-cost delivery and personal/shared precedence
+remain explicitly unverified. Missing native tooltip fields are a suspected
+client limitation, not evidence that Fieldbook failed to retain exposed data.
 
 Publication baseline for v0.9.150-beta: origin/main and v0.9.137-beta both resolve
 to be1016c4824b7fa77d1d1c571ff14c6aa0ac561c, verified before publication.

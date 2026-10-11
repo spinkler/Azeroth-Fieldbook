@@ -362,9 +362,14 @@ brightness remain dynamic. Verify the new composition in-game before release.
 ## Scope
 
 The operator reserves the 1.0 milestone for successful live Beast Lore testing
-after the Forever beta level cap permits it, regardless of other sections'
-progress. Meeting that condition does not authorize an automatic 1.0 transition;
-the operator must explicitly decide. Earlier versions may be stable Releases.
+regardless of other sections' progress. On 2026-10-11, the operator confirmed
+live capture of the client-exposed information and persistence between sessions.
+The former beta level-cap block is historical; do not report capture or persistence
+as awaiting live verification. Additional missing native tooltip fields are a
+suspected client limitation, not a demonstrated addon omission. Two-player
+Beast Lore delivery remains unverified; see `tests/BEAST_LORE.md` for the evidence
+and remaining checks. This confirmation does not authorize an automatic 1.0
+transition; the operator must explicitly decide. Earlier versions may be stable Releases.
 The operator designated sharing as 0.9.0, section navigation as 0.10.0 and Herbs & Minerals as
 0.11.0, Traveller’s Atlas as 0.12.0, Angler’s Almanac as 0.13.0, Merchant’s Ledger as 0.14.0,
 Treasure Journal as 0.15.0, and Lorekeeper's Chronicle as 0.16.0.

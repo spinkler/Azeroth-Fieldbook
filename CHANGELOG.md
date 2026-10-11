@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Record the author's 2026-10-11 confirmation of live Beast Lore capture and persistence between sessions. Reconcile the README, verification and sharing checklists, and 1.0 milestone guidance; retain two-player delivery as unverified and distinguish suspected missing client fields from addon capture failures. Preserve the separate remaining regression checks and historical release notes.
+
 ## v0.39.1 - 2026-10-10
 
 - Stop requesting the forbidden combat-log event during Annals startup on Forever. The protective `pcall` could not suppress Blizzard's blocked-action popup. Ordinary death records and the fresh-recap path remain available; the combat-log parser is not subscribed on this client. Add a regression that detects attempted registration even when its error is caught.

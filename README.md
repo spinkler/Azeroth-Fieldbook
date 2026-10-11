@@ -28,7 +28,9 @@ Whole-Fieldbook backup and recovery remains available through
 
 This is a Release-channel build. Remaining
 native acceptance work includes full mineral-catalog framing, tutorial placement,
-traced sub-zone outlines and the level-cap-gated Beast Lore milestone. Those checks remain pending.
+traced sub-zone outlines and two-player Beast Lore delivery. Beast Lore capture
+and persistence between sessions were confirmed by the author on 2026-10-11;
+the former level-cap block on capture testing is historical.
 
 Saved-data protections cover initialization, Lore consolidation and
 report validation boundaries. An unsupported or malformed main save disables
@@ -429,8 +431,10 @@ independent of Bestiary resets, backups and sharing. Click the field-notes area 
 that entry. Saved notes are independent for every herb and mineral. Unsaved
 note drafts remain when switching entries or sections during the same session.
 
-Development will continue through 0.x Beta milestones. Stable 1.0 is reserved until Beast Lore
-has been tested in game; it does not require every future section to be complete.
+Pre-1.0 builds may use the Beta or Release channel. Beast Lore live capture and
+cross-session persistence are confirmed; two-player delivery remains unverified.
+The 1.0 milestone remains an explicit author decision and does not require every
+future section to be complete. See [current verification](tests/VERIFICATION.md).
 
 ## Installation and opening
 
@@ -1364,9 +1368,15 @@ static review. The Classic ItemText reference is compatibility research, not a
 Forever live pass. Whole-book traversal, source attribution, reader restoration,
 dialogue surfaces and native layout still require the [Lore checklist](tests/LORE.md).
 
-**Beast Lore remains pending live verification** until the Forever beta level
-cap allows testing the spell. Its automated tests use public-tooltip mocks;
-they do not establish live capture, rendering or two-player lore delivery.
+**Beast Lore live capture and persistence between sessions are confirmed** by
+the author on 2026-10-11. Supplied screenshots show the Fieldbook matching the
+native tooltip's level-5 Mangy Wolf information: Tameable, Specialization:
+Default, and Diet: Meat. The author suspects a beta-client bug omits additional
+expected fields; that cause is not independently established. Missing native
+fields are not a demonstrated addon capture failure.
+**Two-player Beast Lore delivery remains unverified in the live client.**
+Automated protocol tests and confirmed local capture/persistence do not replace
+that check; no broader edge-case or backup/restore pass is claimed.
 See the [current verification record](tests/VERIFICATION.md) and
 [Beast Lore acceptance checklist](tests/BEAST_LORE.md).
 
