@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.39.2 (Release)
+# Azeroth Fieldbook 0.40.0 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -438,9 +438,9 @@ future section to be complete. See [current verification](tests/VERIFICATION.md)
 
 ## Installation and opening
 
-Options → Tracking includes **Auto-lock after X kills without changes**, enabled
+Options → Tracking includes **Auto-lock after X kills without recorded changes**, enabled
 by default at 10. Only credited kills count. Recorded-information changes and manual
-unlocking restart the count; repeated sightings do not. Newly learned loot items
+unlocking restart the count; repeated sightings, pending ability offers and restricted cast hints do not. The adjustable interval gives you time to manually record information before locking suppresses spell-ID observations. Newly learned loot items
 restart the count; repeated drops, quantities and corpse samples do not. Progress persists across
 sessions, and automatic locking does not confirm pending abilities. Existing kills
 are not counted retroactively. Automatic locks appear in the Event log.
@@ -876,6 +876,11 @@ collapse them. A grey **(Ctrl for details)** hint appears when a displayed abili
 has readable details. Unresolved abilities remain name-only, and unavailable or
 restricted descriptions are omitted.
 
+Known defenses appear below abilities as compact **Resists: Fire, Frost** and
+**Immune: Fear, Stun** lists, without holding Ctrl. Only recorded school and
+effect marks appear; empty categories, expected immunities and unverified rumours
+are omitted. The main tooltip toggle also controls these lines.
+
 The **Last detected spells** footer beneath the optional spell ID field keeps
 four numbered cast IDs for each creature, oldest first. A fifth cast replaces
 the oldest; changing targets or pages preserves the history. Hover a slot for
@@ -889,13 +894,15 @@ Spell ID window hidden and automatic recording off, and have no timeout.
 
 The **Spell ID window** shows only populated sections and grows upward from its
 bottom edge. Caster names appear when available; unknown casters leave no extra
-line. Right-click a section to dismiss it. Ctrl+Right-click also adds a readable
-ID to this character's blacklist. Manage the list, remove entries or add numeric
-IDs through **Options → Tooltips and cast IDs → Spell ID window blacklist**.
-Blacklisting affects this display only, leaving journal recording unchanged.
-Restricted IDs cannot be compared against the blacklist, even when entered
-manually; Ctrl+Right-click dismisses the section and opens the manager with that
-limitation explained. Empty windows retain the header unless auto-faded.
+line. Right-click a section to dismiss it. Creature locking governs suppression,
+including restricted spell IDs. Spell blacklisting is unavailable because the
+client restricts so many IDs that matching them would behave inconsistently.
+Empty windows retain the header unless auto-faded.
+
+For development, **Options → Tooltips and cast IDs → Highlight restricted data
+in pink** marks restricted fields in the observed spell-ID window, Last Spell ID
+and Bestiary footer detected-spell slots, plus retained aura-tooltip text. It is off by default and colours each field
+independently without reading restricted contents.
 
 Locking protects manual edits, pending observations and the displayed basic snapshot.
 Client-verified disposition continues to update quietly.
@@ -1175,7 +1182,7 @@ A separate movable **Last observed spell IDs** window has up to four enemy-cast
 slots, including channels and identifiable instant casts. It initially shows one
 live slot, which updates with each new cast. **Left-click** that row or its
 portrait to pin it; the next cast uses another slot. Pinned rows show **[Pinned]**
-and remain until removed. **Right-click** unpins and removes a row. If all four
+and remain until removed. Left-click an already pinned row or portrait to open its captured creature in the Bestiary. **Right-click** first unpins a pinned row and restarts its timer; a second right-click removes it. If all four
 are pinned, new casts are ignored until you clear a slot. **Ctrl+Click** a cast
 row or portrait opens its captured creature's Bestiary page without pinning it.
 Under **Key Bindings > Azeroth Fieldbook**, assign **Pin latest enemy cast** to
@@ -1198,7 +1205,7 @@ A non-damaging effect such as Disarm cannot be assumed to appear in damage-meter
 history. Displaying its ID does not automatically attribute a Disarm behaviour to
 an NPC. If an effect is missed, `/fieldbook debug` reports the latest aura scan
 path and access errors, the last player aura-event result and whether Disarm
-6713 is blacklisted. Capture it while the effect is still active when possible.
+the identified creature is locked. Capture it while the effect is still active when possible.
 
 Small clickable portraits identify eligible creatures captured with each row:
 
@@ -1207,12 +1214,16 @@ Small clickable portraits identify eligible creatures captured with each row:
   that another unit may have cast it and retains the caster's name when readable.
 - **Debuff on you** shows its eligible NPC source when available; otherwise it
   shows your captured target with an explicit unverified-caster explanation.
-- Unattributed **Loss of Control on you** shows your captured target as before.
+- **Loss of Control on you** shows its verified NPC caster, including after the
+  ability has been automatically recorded. Left-click a recorded row or its
+  portrait to open that creature's Bestiary page.
 
 Hover to review the captured creature and available controls. Cast portraits use
 the pin action described above; enter their displayed IDs in the Bestiary to
 record them. Clicking a buff, debuff or Loss of Control portrait manually confirms
-the readable spell for its creature. A successful assignment shows **Saved:** and a green rim.
+the readable spell for its creature when it has not already been saved. A successful
+assignment shows **Saved:** and a green rim; left-clicking its portrait again opens
+the creature's Bestiary page.
 **Ctrl+Click** a portrait to open that captured creature's Bestiary entry without
 assigning the spell. This also works on saved rows and restricted spell IDs.
 Each portrait stays with its own observation when targets change. This works in

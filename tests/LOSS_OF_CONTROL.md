@@ -76,6 +76,18 @@ recording/notification; this existing latest-observation window shows the latest
 Notes and its raw ID list are unchanged. Saved Bestiary abilities display the
 existing cyan [A], with player-effect attribution explained in their tooltip.
 
+## Recorded caster portrait correction — 2026-10-13
+
+The operator supplied a Net (6533), Rooted screenshot with Cast by: Mosshide
+Trapper but no portrait. The automatic recording path passed the caster name
+while discarding its captured creature reference. It now retains that verified
+reference, labels it Cast by, and exposes left-click Bestiary navigation on the
+recorded row and portrait. The recorded-ability display filter and its polling
+path preserve this LOC row, while the verified creature lock still suppresses it.
+Unrecorded effects retain manual assignment. Focused observer and widget checks
+cover retained identity, navigation after retargeting, periodic refresh,
+dismissal and locks. Native appearance remains to be verified after reload.
+
 ## Manual target portraits
 
 The shared capture and manual assignment methods now live in `BestiaryBuffs.lua`.

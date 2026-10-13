@@ -3,7 +3,7 @@
 ## IconTexture: Interface\Icons\INV_Misc_Book_02
 ## Notes: A personal monster journal for World of Warcraft.
 ## Author: Spinkler
-## Version: 0.39.2
+## Version: 0.40.0
 ## X-Curse-Project-ID: 1708795
 ## SavedVariablesPerCharacter: AzerothFieldbookDB, AzerothFieldbookGatheringDB, AzerothFieldbookAtlasDB, AzerothFieldbookAnglingDB, AzerothFieldbookLedgerDB, AzerothFieldbookTreasureDB, AzerothFieldbookLoreDB, AzerothFieldbookAnnalsDB
 ## SavedVariables: AzerothFieldbookAccountDB, AzerothFieldbookBackupDB
@@ -97,7 +97,6 @@ BestiaryBook.lua
 TargetCastIDs.lua
 AuraTooltipSnapshot.lua
 SpellIDWindow.lua
-SpellBlacklist.lua
 DebugReport.lua
 MinimapButton.lua
 AccountSections.lua

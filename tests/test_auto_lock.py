@@ -22,6 +22,32 @@ def loot_client():
 
 
 class AutoLockTests(unittest.TestCase):
+    def test_pending_casts_and_restricted_hints_do_not_reset_progress(self):
+        lua = new_client()
+        lua.execute(ROOT.joinpath('DetectedAbilities.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
+        lua.execute('''
+            beginKill('first');finishKill()
+            local j=ns.CreateBestiaryJournal(AzerothFieldbookDB,function() return 42 end)
+            local e=j.entries[42];j:SetAutoLockKills(4)
+            ns.InstallDetectedAbilities(j)
+            local opaque={};issecretvalue=function(value) return value==opaque end
+            for i=1,3 do
+                local before=e.unchangedKills
+                j:Offer(42,'Pending cast '..i,'Observed',100+i)
+                j:DetectAbility(42,opaque,opaque,i)
+                j:TrackStableContent(42)
+                assert(e.unchangedKills==before,'display evidence cannot restart auto-lock')
+                beginKill('cast'..i);finishKill()
+            end
+            assert(e.confirmed and e.unchangedKills==4)
+            j:SetEntryConfirmed(42,false)
+            e.unchangedKills=2;e.autoLockSignature='knowledge2:legacy'
+            local reloaded=ns.CreateBestiaryJournal(AzerothFieldbookDB,function() return 42 end)
+            assert(e.unchangedKills==2,'signature migration preserves progress')
+            reloaded:AddManual(42,'Recorded ability','Manual',{},1234)
+            assert(e.unchangedKills==0,'actual recording resets progress')
+        ''')
+
     def test_identical_loot_allows_auto_lock_and_new_items_restart_progress(self):
         lua = loot_client()
         lua.execute('''
@@ -125,9 +151,11 @@ class AutoLockTests(unittest.TestCase):
             beginKill('third');finishKill()
             assert(not e.confirmed)
             j:Offer(42,'New ability','Automatic observation',123)
-            assert(e.unchangedKills==0)
+            assert(e.unchangedKills==2,'pending observations retain count')
+            j:SetAbility(42,'New ability','confirmed')
+            assert(e.unchangedKills==0,'recorded ability resets count')
             for i=1,3 do beginKill('afterchange'..i);finishKill() end
-            assert(e.confirmed and e.abilities['New ability'].state=='pending', 'locked='..tostring(e.confirmed)..' streak='..tostring(e.unchangedKills)..' state='..tostring(e.abilities['New ability'].state))
+            assert(e.confirmed and e.abilities['New ability'].state=='confirmed', 'locked='..tostring(e.confirmed)..' streak='..tostring(e.unchangedKills)..' state='..tostring(e.abilities['New ability'].state))
             j:SetEntryConfirmed(42,false)
             assert(e.unchangedKills==0)
             j:SetAutoLockEnabled(false)

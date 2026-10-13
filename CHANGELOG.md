@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.40.0 - 2026-10-13
+
+- Retain the verified caster portrait and Bestiary navigation on automatically recorded Loss of Control rows. Recording previously left only the caster name, dropping its portrait and click action. Left-click the saved row or portrait to open that creature; preserve retargeting safety, dismissal and creature-lock suppression, with focused regressions.
+
+- Left-click an already pinned observed cast to open its captured creature's Bestiary page. Unpinned casts still pin on first click; update the pinned tooltip instructions.
+
+- Show recorded Bestiary defenses in creature tooltips as compact Resists and Immune lists, including school and effect immunities. Omit empty categories, type expectations and unverified rumours; keep defenses visible without Ctrl and respect the main tooltip setting.
+
+- Preserve fresh named chest-opening context through repeated left/right clicks and UI clicks, without extending its expiry. Another Solid Chest failure showed mouse-down clearing despite the earlier one-click exception. Failed/interrupted casts, unrelated casts, expiry, identified conflicting containers and exact loot-source guards still apply; add pending/completed click-spam and deduplication regressions.
+
+- Add an off-by-default "Highlight restricted data in pink" development option grouped under Tooltips and cast IDs. Apply it across the addon's restricted-data displays: observation fields, Last Spell ID, Bestiary footer detected-spell IDs and retained aura-tooltip text. Check each original value without inspecting its contents; public fields retain normal colours, and changing the setting updates existing displays.
+
+- Right-click a pinned spell-ID cast to unpin it and restart its observation timer; right-click the unpinned slot again to remove it. Update the pinned tooltip instructions.
+
+- Base auto-lock resets on recorded creature information, excluding pending ability offers and session-only restricted cast hints. This preserves the adjustable period for manually entering information before creature locking suppresses observed spell-ID rows. Confirmed automatic or manual records still restart the count; preserve saved progress when upgrading, and update Options explanations and documentation.
+
+- Remove the spell-ID blacklist, its Options manager, Ctrl+right-click blacklist action and tooltip guidance. Too many client spell IDs are restricted to match reliably, making spell filtering unpredictable; the creature lock button governs suppression, including restricted IDs. Ctrl+right-click now follows ordinary row dismissal, and retired saved spell blacklists no longer filter observations.
+- Show "X kills until auto-lock." in the creature lock tooltip when auto-lock is enabled and the unlocked creature has a positive remaining count, using a font one point smaller than normal tooltip text.
+
+- Expand regression coverage for chest event ordering and click spam, saved Loss of Control portraits and navigation, cast pin/unpin controls, restricted-data colours, recorded defense tooltips, auto-lock progress and blacklist removal. Update the README and live-test checklists; the latest chest and portrait fixes still require confirmation in the native client.
+
 ## v0.39.2 - 2026-10-13
 
 - Keep an empty spell-ID window faded with Auto-fade enabled when targeting a locked creature. The Suppressed target hint no longer reveals the window.

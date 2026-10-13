@@ -43,6 +43,7 @@ function methods:SetSize() end
 function methods:SetFrameStrata() end
 function methods:SetPoint(...) self.anchor = {...} end
 function methods:SetJustifyH() end
+function methods:SetTextColor(...) self.color={...} end
 function methods:Hide() self.shown = false end
 function methods:Show() self.shown = true end
 function methods:SetText(v)

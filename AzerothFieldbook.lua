@@ -364,10 +364,11 @@ local function addTooltip(tooltip)
 
         journal:ObserveTameability(unit)
         local names = journal:ConfirmedNames(id)
+        local resistances, immunities = journal:TooltipDefenses(id)
         local behaviours = journal:GetBehaviourTooltips() and journal:TooltipBehaviours(id) or {}
         local _,_,kills=journal:GetKillReward(id)
         local showKills=journal:GetKillCountTooltips() and journal.entries[id]~=nil and kills>0
-        if #names == 0 and #behaviours == 0 and not showKills then tooltipStatus = "No selected tooltip facts: review this entry in /fieldbook."; return end
+        if #names == 0 and #resistances == 0 and #immunities == 0 and #behaviours == 0 and not showKills then tooltipStatus = "No selected tooltip facts: review this entry in /fieldbook."; return end
         local expanded = readTrue(IsControlKeyDown)
         local hasDetails = false
         for _, name in ipairs(names) do
@@ -383,13 +384,19 @@ local function addTooltip(tooltip)
         if hasDetails and not expanded then
             tooltip:AddLine("(Ctrl for details)", 0.6, 0.6, 0.6, true)
         end
+        if #resistances > 0 then
+            tooltip:AddLine("Resists: " .. table.concat(resistances, ", "), 0.65, 0.8, 1, true)
+        end
+        if #immunities > 0 then
+            tooltip:AddLine("Immune: " .. table.concat(immunities, ", "), 1, 0.65, 0.5, true)
+        end
         if #behaviours>0 then
             tooltip:AddLine(table.concat(behaviours, ", "),0.72,0.80,0.72,true)
         end
         if showKills then
             tooltip:AddLine("Kills: " .. kills,1,0.82,0.14)
         end
-        tooltipStatus = "Added " .. #names .. " confirmed ability names and " .. #behaviours .. " behaviour traits" .. (showKills and " and kill count." or ".")
+        tooltipStatus = "Added " .. #names .. " confirmed ability names, " .. (#resistances + #immunities) .. " known defenses and " .. #behaviours .. " behaviour traits" .. (showKills and " and kill count." or ".")
         return
     end
     if not creature then tooltipStatus = "Eligible NPC, but no saved observations for this creature ID."; return end

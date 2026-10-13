@@ -1693,6 +1693,18 @@ local ink = { 0.75, 0.8, 0.8 }
         book.confirm:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
             GameTooltip:SetText(self.locked and "Unlock this entry" or "Lock this entry")
+            local entry=selected and journal.entries[selected]
+            if entry and not entry.confirmed and journal:GetAutoLockEnabled() then
+                local remaining=journal:GetAutoLockKills()-(entry.unchangedKills or 0)
+                if remaining>0 then
+                    GameTooltip:AddLine(remaining..(remaining==1 and " kill" or " kills").." until auto-lock.",0.7,0.7,0.7,true)
+                    local line=_G[GameTooltip:GetName().."TextLeft"..GameTooltip:NumLines()]
+                    if line and GameTooltipText then
+                        local font,size,flags=GameTooltipText:GetFont()
+                        if font and size then line:SetFont(font,math.max(1,size-1),flags) end
+                    end
+                end
+            end
             GameTooltip:Show()
         end)
         book.confirm:SetScript("OnLeave", function() GameTooltip:Hide() end)

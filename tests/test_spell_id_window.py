@@ -342,42 +342,35 @@ assert(not cast.shown,'dismissed cast token stays hidden')
 fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,20793,102)
 assert(cast.shown,'new cast can display again')
 ctrlDown=true;cast.scripts.OnMouseUp(cast,'RightButton');ctrlDown=false
-assert(window:IsBlacklisted(20793) and not cast.shown)
-fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,20793,103);assert(not cast.shown)
-window:Initialize(db);assert(window:IsBlacklisted(20793),'blacklist survives reload')
-assert(window:AddBlacklist(' 12544 '))
+assert(not cast.shown)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,20793,103);assert(cast.shown,'Ctrl-right-click only dismisses the current observation')
+db.spellIDWindowBlacklist={[20793]=true}
+window:Initialize(db);assert(db.spellIDWindowBlacklist==nil)
+fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,20793,104);assert(cast.shown,'retired saved blacklist cannot filter observations')
 auras.target={{auraInstanceID=902,spellId=12544,name='Frost Armor',sourceUnit='friend'}}
-fire('UNIT_AURA','target',{});assert(not buff.shown)
-window:RemoveBlacklist(12544);fire('UNIT_AURA','target',{})
-assert(buff.shown and buff.strings[7].text=='Helpful friend')
-ctrlDown=true;buff.scripts.OnMouseUp(buff,'RightButton');ctrlDown=false
-assert(not buff.shown and window:IsBlacklisted(12544))
-window:RemoveBlacklist(12544);fire('UNIT_AURA','target',{})
-assert(buff.shown,'removing blacklist also clears its dismissal token')
+fire('UNIT_AURA','target',{});assert(buff.shown)
 auras.target={{auraInstanceID=903,spellId=900,name='Unknown caster buff'}}
 fire('UNIT_AURA','target',{})
 assert(not buff.strings[6].shown and not buff.strings[7].shown and buff.height==52)
 auras.target={{auraInstanceID=904,spellId=901,name='Hidden caster buff',sourceUnit='hidden'}}
 fire('UNIT_AURA','target',{})
 assert(buff.strings[6].shown and rawequal(buff.strings[7].text,secret) and buff.height==68)
-local managerMessage
-window.OpenBlacklist=function(_,message) managerMessage=message end
 auras.target={{auraInstanceID=905,spellId=secret,name=secret,sourceUnit='target'}}
+db.highlightRestrictedData=true
 fire('UNIT_AURA','target',{})
+assert(buff.strings[2].color[2]==0.4 and buff.strings[4].color[3]==0.7,'restricted ID and name are pink')
+assert(buff.strings[7].color[2]==0.7,'public creature name keeps its colour')
+db.highlightRestrictedData=false;window:ApplySettings()
+assert(buff.strings[2].color[2]==1 and buff.strings[4].color[2]==1,'disabling restores normal colours')
 ctrlDown=true;buff.scripts.OnMouseUp(buff,'RightButton');ctrlDown=false
-assert(not buff.shown and managerMessage:find('restricted',1,true))
-assert(not window:IsBlacklisted(secret))
-for _,value in ipairs({'bad','-1','0','1.5','2147483648',secret}) do assert(not window:AddBlacklist(value)) end
-for key,value in pairs(db.spellIDWindowBlacklist) do
-    assert(type(key)=='number' and not issecretvalue(key) and value==true)
-end
-local ids=window:GetBlacklist();assert(#ids==1 and ids[1]==20793)
+assert(not buff.shown)
+assert(window.AddBlacklist==nil and window.OpenBlacklist==nil)
 -- Legacy anchors migrate to a bottom point, preserving the former bottom edge.
 db.spellIDWindowPosition={point='TOPLEFT',relativePoint='TOPLEFT',x=50,y=-40}
 window:Initialize(db)
 assert(panel.point[1]=='BOTTOMLEFT' and panel.point[5]==-326)
 ''')
-print('PASS: collapsing rows, caster attribution, dismissal, blacklist persistence and anchor migration')
+print('PASS: collapsing rows, caster attribution, dismissal, retired blacklist and anchor migration')
 
 # A short-lived disarm can arrive in UNIT_AURA without a cast or readable scan.
 lua.execute(r'''
@@ -392,10 +385,6 @@ fire('UNIT_AURA','player',{addedAuras={{spellId=123,isHelpful=true,isHarmful=fal
 assert(debuff.strings[2].text==6713,'helpful aura must not overwrite disarm')
 fire('UNIT_AURA','player',{addedAuras={{spellId=123,isHarmful=secret}}})
 assert(debuff.strings[2].text==6713,'restricted polarity is not classified')
-ns.SpellIDWindow:AddBlacklist(6713)
-fire('UNIT_AURA','player',{addedAuras={disarm}})
-assert(not debuff.shown,'direct event respects blacklist')
-ns.SpellIDWindow:RemoveBlacklist(6713)
 C_UnitAuras.GetAuraDataByIndex=function(unit,index) return auras[unit][index] end
 auras.player={disarm}
 fire('UNIT_AURA','player',{addedAuras={disarm}})
@@ -433,7 +422,7 @@ C_UnitAuras.GetAuraSlots=function() return nil end
 fire('PLAYER_REGEN_ENABLED')
 lines={};ns.SpellIDWindow:Report(function(line) lines[#lines+1]=line end)
 assert(table.concat(lines,'\n'):find('last event: path=index fallback',1,true))
-assert(table.concat(lines,'\n'):find('Disarm 6713 blacklisted=false',1,true))
+assert(not table.concat(lines,'\n'):find('blacklisted',1,true))
 -- Entirely restricted updates and denied containers must fail safely.
 fire('UNIT_AURA','player',secret)
 forbiddenTables[update]=true
@@ -456,8 +445,7 @@ assert(not loc.shown,'same application remains dismissed')
 assert(ns.SpellIDWindow:ObserveLossOfControl(12345,nil,'DISARM',nil,'loc:2'))
 assert(loc.shown and loc.strings[4].text=='Name unavailable' and not loc.strings[7].shown)
 advance(121);assert(not loc.shown)
-ns.SpellIDWindow:AddBlacklist(12345)
-assert(ns.SpellIDWindow:ObserveLossOfControl(12345,nil,'Disarm',nil,'loc:3') and not loc.shown)
+assert(ns.SpellIDWindow:ObserveLossOfControl(12345,nil,'Disarm',nil,'loc:3') and loc.shown)
 settings.displaySpellIDWindow=false;ns.SpellIDWindow:ApplySettings()
 assert(not ns.SpellIDWindow:ObserveLossOfControl(54321,nil,'SCHOOL_INTERRUPT',nil,'loc:4'))
 assert(not ns.SpellIDWindow:ObserveLossOfControl(secret,nil,nil,nil,'loc:5'))
@@ -514,14 +502,35 @@ portrait.scripts.OnClick(portrait,'LeftButton');assert(assignments==1)
 ns.SpellIDWindow:ObserveLossOfControl(6713,'Disarm','DISARM',nil,'portrait:3',candidate)
 advance(121);assert(not portrait.shown and not loc.shown)
 ns.SpellIDWindow:ObserveLossOfControl(6713,'Disarm','DISARM',nil,'portrait:4',candidate)
-ns.SpellIDWindow:AddBlacklist(6713);assert(not portrait.shown)
+portrait.scripts.OnClick(portrait,'RightButton');assert(not portrait.shown)
 -- Rejected assignments stay available for retry after unlocking the entry.
-ns.SpellIDWindow:RemoveBlacklist(6713)
 candidate.assign=function() return false end
 ns.SpellIDWindow:ObserveLossOfControl(6713,'Disarm','DISARM',nil,'portrait:5',candidate)
 portrait.scripts.OnClick(portrait,'LeftButton');assert(loc.strings[6].text=='Target:')
 candidate.assign=function() assignments=assignments+1;return true end
 portrait.scripts.OnClick(portrait,'LeftButton');assert(assignments==2 and loc.strings[6].text=='Saved:')
+-- Automatically recorded LOC keeps its verified source portrait and opens the
+-- source's Bestiary page instead of assigning an already recorded spell again.
+local savedCandidate={id=43,guid=targetGUID,unit='target',name='Mosshide Trapper',level=23,
+    label='Cast by:',suppressionVerified=true,recorded=true,
+    assign=function() error('recorded LOC must navigate, never reassign') end}
+local sourceLocked=false
+ns.SpellIDWindow:SetCreatureLockedCheck(function(value) return sourceLocked and value.id==43 end)
+ns.SpellIDWindow:SetRecordedAbilityCheck(function() return true end)
+ns.SpellIDWindow:ObserveLossOfControl(6533,'Net','Rooted','Mosshide Trapper','portrait:saved',savedCandidate)
+assert(loc.shown and portrait.shown and loc.strings[6].text=='Cast by:')
+assert(loc.strings[7].text=='Mosshide Trapper')
+local sourcePortrait=portrait.texture.image
+targetGUID='Creature-0-1-2-3-99-other';fire('PLAYER_TARGET_CHANGED');advance(1)
+assert(loc.shown and portrait.shown and portrait.texture.image==sourcePortrait,'recorded row survives polling and retargeting')
+opened=nil;portrait.scripts.OnClick(portrait,'LeftButton');assert(opened==43)
+opened=nil;loc.scripts.OnMouseUp(loc,'LeftButton');assert(opened==43)
+sourceLocked=true;advance(1);assert(not loc.shown and not portrait.shown,'creature lock still suppresses LOC')
+sourceLocked=false
+ns.SpellIDWindow:ObserveLossOfControl(6533,'Net','Rooted','Mosshide Trapper','portrait:new',savedCandidate)
+assert(portrait.shown)
+portrait.scripts.OnClick(portrait,'RightButton');assert(not loc.shown and not portrait.shown)
+ns.SpellIDWindow:SetCreatureLockedCheck(nil);ns.SpellIDWindow:SetRecordedAbilityCheck(nil)
 ''')
 print('PASS: frozen target portraits, explicit assignment, lifecycle and layout')
 
@@ -581,7 +590,7 @@ assert(instantPortrait.shown and instant.strings[7].text=='Creature A')
 instantPortrait.scripts.OnClick(instantPortrait,'LeftButton')
 assert(#assignments==2 and instant.strings[5].text:find('[Pinned]',1,true))
 ctrlDown=true;instantPortrait.scripts.OnClick(instantPortrait,'LeftButton');ctrlDown=false
-assert(opened[4]==42 and #assignments==2)
+assert(opened[#opened]==42 and #assignments==2)
 channel,castID=true,567;fire('UNIT_SPELLCAST_CHANNEL_START','target');channel=false
 cast,castPortrait=frames[5],frames[12]
 castPortrait.scripts.OnEnter(castPortrait);assert(GameTooltip.lines[2]:find('channeling',1,true))
@@ -598,10 +607,17 @@ castPortrait.scripts.OnEnter(castPortrait)
 assert(table.concat(GameTooltip.lines,' '):find('restricted',1,true))
 assert(table.concat(GameTooltip.lines,' '):find('Ctrl+Click',1,true))
 ctrlDown=true;castPortrait.scripts.OnClick(castPortrait,'LeftButton');ctrlDown=false
-assert(opened[5]==42 and #assignments==2,'restricted IDs still allow navigation')
+assert(opened[#opened]==42 and #assignments==2,'restricted IDs still allow navigation')
 ctrlDown=true;cast.scripts.OnMouseUp(cast,'LeftButton');ctrlDown=false
-assert(opened[6]==42 and not cast.strings[5].text:find('[Pinned]',1,true), 'Ctrl+Click on the row also opens its captured creature')
+assert(opened[#opened]==42 and not cast.strings[5].text:find('[Pinned]',1,true), 'Ctrl+Click on the row also opens its captured creature')
 castPortrait.scripts.OnClick(castPortrait,'LeftButton');assert(#assignments==2 and cast.strings[6].text=='Cast by:')
+local beforeOpen=#opened
+targets.target={id=44,name='Different target',guid='Creature-0-1-2-3-44-C'}
+cast.scripts.OnMouseUp(cast,'LeftButton')
+assert(opened[beforeOpen+1]==42 and cast.strings[5].text:find('[Pinned]',1,true),'pinned click opens captured creature after retargeting')
+castPortrait.scripts.OnClick(castPortrait,'LeftButton')
+assert(opened[beforeOpen+2]==42,'pinned portrait uses the same navigation')
+targets.target=targets.nameplate1
 -- Retargeting during aura/cast reads cannot associate the old spell with a new NPC.
 local normalCast=UnitCastingInfo
 frames[3].scripts.OnMouseUp(frames[3],'RightButton')
@@ -614,9 +630,10 @@ C_UnitAuras.GetAuraDataByIndex=function(unit,index)
 end
 fire('UNIT_AURA','target',{});assert(not buffPortrait.shown)
 C_UnitAuras.GetAuraDataByIndex=normalAura
--- All row portraits follow expiry, dismissal, hiding and blacklist settings.
+-- All row portraits follow expiry, dismissal, hiding settings.
+instantPortrait.scripts.OnClick(instantPortrait,'RightButton');assert(instantPortrait.shown)
 instantPortrait.scripts.OnClick(instantPortrait,'RightButton');assert(not instantPortrait.shown)
-ns.SpellIDWindow:AddBlacklist(6713);assert(not debuffPortrait.shown)
+debuffPortrait.scripts.OnClick(debuffPortrait,'RightButton');assert(not debuffPortrait.shown)
 settings.displaySpellIDWindow=false;ns.SpellIDWindow:ApplySettings()
 for i=10,16 do assert(not frames[i].shown) end
 ''')
@@ -684,7 +701,7 @@ assert(not frames[3].strings[5].text:find('[Pinned]',1,true))
 ns.InitializationBlocked=nil
 frames[3].scripts.OnMouseUp(frames[3],'LeftButton')
 assert(count()==1 and not frames[4].shown and frames[3].strings[5].text:find('[Pinned]',1,true))
-assert(table.concat(GameTooltip.lines,' '):find('Right-click: unpin and remove',1,true))
+assert(table.concat(GameTooltip.lines,' '):find('Right-click: unpin and restart',1,true))
 fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,110)
 assert(count()==1, 'pinning cannot capture the same cast twice')
 fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,99,111)
@@ -715,8 +732,11 @@ assert(count()==3 and not frames[5].shown and id(frames[6])==789, 'cleared holes
 pinBinding();fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,900,163)
 assert(count()==4 and id(frames[5])==900 and frames[5].strings[5].text=='4. Enemy cast')
 pinBinding();unpinBinding();assert(not frames[5].shown, 'last pinned follows capture order after slot reuse')
-window:AddBlacklist(99)
-assert(count()==2 and not frames[4].shown, 'explicit blacklist removal can clear a pin')
+frames[4].scripts.OnMouseUp(frames[4],'RightButton')
+assert(count()==3 and frames[4].shown and not frames[4].strings[5].text:find('[Pinned]',1,true),'first click unpins')
+advance(119);assert(frames[4].shown,'unpin restarts the timer')
+frames[4].scripts.OnMouseUp(frames[4],'RightButton')
+assert(count()==2 and not frames[4].shown, 'dismissal can clear a pin')
 settings.displaySpellIDWindow=false;window:ApplySettings()
 pinBinding();unpinBinding();assert(count()==0)
 
@@ -739,6 +759,7 @@ frames[3].scripts.OnMouseUp(frames[3],'LeftButton')
 assert(not frames[3].strings[5].text:find('[Pinned]',1,true), 'dragging does not pin')
 frames[3].scripts.OnMouseDown();frames[3].scripts.OnMouseUp(frames[3],'LeftButton')
 assert(frames[3].strings[5].text:find('[Pinned]',1,true))
+frames[3].scripts.OnMouseUp(frames[3],'RightButton');assert(count()==1)
 frames[3].scripts.OnMouseUp(frames[3],'RightButton');assert(count()==0)
 fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,456,202);assert(count()==0)
 fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,456,203);assert(count()==1)

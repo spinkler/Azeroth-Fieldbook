@@ -272,18 +272,21 @@ function ns.CreateTreasureTracking(journal)
         if event=="GLOBAL_MOUSE_DOWN" then
             local button=...
             local worldClick=T.Public(button) and button=="RightButton" and worldFocus()
-            -- SENT may precede the global notification for the opening click.
-            -- Consume that one immediate world click without erasing its cast.
-            -- Later/repeated clicks still invalidate context; never renew expiry.
-            local cast=self.cast
-            if worldClick and fresh(cast,0.5) and cast.spellID==3365 and not cast.mouseDownSeen then
-                self:ObserveWorldCursor()
-                local seen=fresh(self.world,0.5) and self.world or nil
-                if not seen or (seen.name==cast.name
-                    and (not seen.objectID or not cast.objectID or seen.objectID==cast.objectID)
-                    and (not seen.guid or not cast.guid or seen.guid==cast.guid)) then
-                    cast.mouseDownSeen=true
-                    self.openingState="pending; opening mouse down retained"
+            -- Mouse notifications are not evidence that a named Opening ended.
+            -- Retain its bounded context through left/right click spam and UI
+            -- clicks; only an identified conflicting container invalidates it.
+            local opening=fresh(self.cast,30) and self.cast.spellID==3365 and self.cast
+                or fresh(self.interaction,3) and self.interaction.spellID==3365 and self.interaction
+            if opening and T.Public(button) and (button=="LeftButton" or button=="RightButton") then
+                local seen
+                if worldClick then
+                    self:ObserveWorldCursor()
+                    seen=fresh(self.world,0.5) and self.world or nil
+                end
+                if not seen or (seen.name==opening.name
+                    and (not seen.objectID or not opening.objectID or seen.objectID==opening.objectID)
+                    and (not seen.guid or not opening.guid or seen.guid==opening.guid)) then
+                    self.openingState="opening retained through mouse down"
                     return
                 end
             end
@@ -320,7 +323,7 @@ function ns.CreateTreasureTracking(journal)
                     or (fresh(self.world,0.5) and self.world.name==name and self.world or nil)
                 self.world=seen
                 self.cast={name=name,guid=seen and seen.guid,objectID=seen and seen.objectID,
-                    castGUID=castID,spellID=spellID,at=clock(),mouseDownSeen=clicked~=nil}
+                    castGUID=castID,spellID=spellID,at=clock()}
                 self.openingState="pending"
             else self.world=nil end
             return

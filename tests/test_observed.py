@@ -417,6 +417,43 @@ GameTooltip.lines={};tooltipHook(GameTooltip)
 check(#GameTooltip.lines==2,'no empty behaviour line')
 AzerothFieldbookDB.showBehaviourTooltips=false
 
+-- Known defenses stay compact and visible without abilities or kill counts.
+AzerothFieldbookDB.showKillCountTooltips=false
+entry.abilities['Observed trap'].showInTooltip=false
+entry.category='Mechanical';AzerothFieldbookDB.showExpectedImmunities=true
+entry.rumours={{kind='resistance',value='Nature'},{kind='immunity',value='Polymorph'}}
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==0,'expected type immunities and unverified defense rumours add no lines')
+entry.resistances={Frost=true,Fire=true,Holy=false,Fear=true,Unknown=true,Arcane='true'}
+entry.immunities={Stun=true,Shadow=true,Fear=true,Polymorph=false,Unknown=true,Bleed='true'}
+for _,locked in ipairs({false,true}) do
+    entry.confirmed=locked;GameTooltip.lines={};tooltipHook(GameTooltip)
+    check(#GameTooltip.lines==2 and GameTooltip.lines[1]=='Resists: Fire, Frost'
+        and GameTooltip.lines[2]=='Immune: Fear, Shadow, Stun',
+        'locked and unlocked entries show only checked, recognised defenses in sorted compact lists')
+end
+AzerothFieldbookDB.showTooltips=false
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==0 and entry.resistances.Fire and entry.immunities.Fear,'master toggle hides defenses without changing knowledge')
+AzerothFieldbookDB.showTooltips=true
+entry.resistances=nil;GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==1 and GameTooltip.lines[1]=='Immune: Fear, Shadow, Stun','immunities alone need no resistance heading')
+entry.resistances={Frost=true};entry.immunities=nil
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==1 and GameTooltip.lines[1]=='Resists: Frost','resistances alone need no immunity heading')
+entry.immunities={Fear=true};entry.behaviours={Patrols=true}
+AzerothFieldbookDB.showBehaviourTooltips=true;AzerothFieldbookDB.showKillCountTooltips=true
+entry.abilities['Observed trap'].showInTooltip=true
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==5 and GameTooltip.lines[1]=='Observed trap'
+    and GameTooltip.lines[2]=='Resists: Frost' and GameTooltip.lines[3]=='Immune: Fear'
+    and GameTooltip.lines[4]=='Patrols' and GameTooltip.lines[5]=='Kills: 1',
+    'defenses coexist with abilities, behaviours and kill counts without spacer or header clutter')
+entry.resistances={};entry.immunities={};entry.behaviours={};entry.rumours={};entry.category='Humanoid'
+AzerothFieldbookDB.showExpectedImmunities=false;AzerothFieldbookDB.showBehaviourTooltips=false
+GameTooltip.lines={};tooltipHook(GameTooltip)
+check(#GameTooltip.lines==2,'empty defenses leave the existing tooltip unchanged')
+
 -- Resolved abilities render icons and optional public spell descriptions.
 entry.confirmed=false
 local ability=entry.abilities['Observed trap']
@@ -446,6 +483,15 @@ check(GameTooltip.lines[2]=='(Ctrl for details)' and #GameTooltip.lines==3,'Ctrl
 shown=false;ctrl=true;frames[5].handler(frames[5],'MODIFIER_STATE_CHANGED','LCTRL',1)
 check(GameTooltip.lines[2]=='(Ctrl for details)','hidden tooltip is not rebuilt')
 shown=true;ctrl=false
+entry.resistances={Fire=true};entry.immunities={Stun=true}
+GameTooltip:SetUnit('mouseover')
+for _,expanded in ipairs({true,false}) do
+    ctrl=expanded;frames[5].handler(frames[5],'MODIFIER_STATE_CHANGED','LCTRL',expanded and 1 or 0)
+    check(#GameTooltip.lines==5 and GameTooltip.lines[3]=='Resists: Fire' and GameTooltip.lines[4]=='Immune: Stun',
+        'Ctrl rebuilds preserve compact defenses without duplicating lines')
+    check(GameTooltip.colours[3][4] and GameTooltip.colours[4][4],'defense lists wrap within the tooltip')
+end
+entry.resistances={};entry.immunities={}
 for _,value in ipairs({secret,''}) do
     descriptionValue=value;GameTooltip:SetUnit('mouseover')
     check(#GameTooltip.lines==2,'secret or empty description has no hint')

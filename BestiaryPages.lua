@@ -188,7 +188,18 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     label(optionsBody,"Auto-lock after",58,-32,100,"GameFontHighlightSmall")
     options.autoLockKills=edit(optionsBody,166,-28,45,5)
     options.autoLockKills:SetNumeric(true)
-    label(optionsBody,"kills without changes",226,-32,300,"GameFontHighlightSmall")
+    label(optionsBody,"kills without recorded changes",226,-32,300,"GameFontHighlightSmall")
+    local function autoLockTooltip(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+        GameTooltip:SetText("Auto-lock after credited kills")
+        GameTooltip:AddLine("Choose how many kills to allow for manually recording creature information before locking suppresses its observed spell-ID rows. Changes to recorded information restart the count; pending ability offers and restricted cast hints do not. New automatically recorded information also restarts the count. Manual unlocking starts a fresh count.",1,1,1,true)
+        GameTooltip:Show()
+    end
+    options.autoLockEnabled:SetScript("OnEnter",autoLockTooltip)
+    options.autoLockEnabled:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+    options.autoLockKills:SetScript("OnEnter",autoLockTooltip)
+    options.autoLockKills:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
     options.autoLockEnabled:SetScript("OnClick",function(self)
         journal:SetAutoLockEnabled(self:GetChecked()==true)
         options.autoLockKills:SetEnabled(journal:GetAutoLockEnabled())
@@ -287,7 +298,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     local function windowCheck(key, title, y)
         local check=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
         check:SetPoint("TOPLEFT",30,y); check:SetSize(24,24)
-        label(optionsBody,title,58,y-6,470,"GameFontHighlightSmall")
+        options[key.."Label"]=label(optionsBody,title,58,y-6,470,"GameFontHighlightSmall")
         check:SetScript("OnClick",function(self) journal:SetSpellIDWindowOption(key,self:GetChecked() == true) end)
         options[key]=check
     end
@@ -296,6 +307,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     windowCheck("spellIDWindowIndefinite","Display Spell IDs in the ID window indefinitely",-996)
     windowCheck("displayHoveredAuraSnapshots","Retain hovered aura tooltips",-1024)
     windowCheck("spellIDWindowAutoFade","Auto-fade when the Spell ID window contains no data",-1052)
+    windowCheck("highlightRestrictedData","Highlight restricted data in pink",-1130)
     local alphaLabel=label(optionsBody,"Window background opacity: 35%",58,-1090,460,"GameFontHighlightSmall")
     options.spellIDWindowAlpha=CreateFrame("Slider",nil,optionsBody,"OptionsSliderTemplate")
     options.spellIDWindowAlpha:SetPoint("TOPLEFT",30,-1110); options.spellIDWindowAlpha:SetSize(180,16)
@@ -309,10 +321,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         journal:SetSpellIDWindowOption("spellIDWindowAlpha",value)
         alphaLabel:SetText("Window background opacity: " .. math.floor(value*100+0.5) .. "%")
     end)
-    options.spellIDBlacklist=button(optionsBody,"Spell ID window blacklist",255,-1106,265,function()
-        if ns.SpellIDWindow then ns.SpellIDWindow:OpenBlacklist() end
-    end)
-    label(optionsBody,"Each row expires two minutes after observation unless kept indefinitely. The ID window is display-only. Automatic ability recording below works independently.",35,-1150,510,"GameFontHighlightSmall")
+    label(optionsBody,"Each row expires two minutes after observation unless kept indefinitely. The ID window is display-only. Automatic ability recording below works independently.",35,-1180,510,"GameFontHighlightSmall")
     options.blockIncomingOffers=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
     options.blockIncomingOffers:SetPoint("TOPLEFT",30,-726); options.blockIncomingOffers:SetSize(24,24)
     label(optionsBody,"Block incoming offers",58,-732,470,"GameFontHighlightSmall")
@@ -524,7 +533,14 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         if type(y)=="number" then
             local section=optionSections[1]
             for _,candidate in ipairs(optionSections) do if -y>=candidate.originalY then section=candidate end end
-            section.items[#section.items+1]={control=control,point=point,x=x or 0,offset=-y-section.originalY}
+            local offset=-y-section.originalY
+            if control==options.highlightRestrictedData or control==options.highlightRestrictedDataLabel then
+                for _,candidate in ipairs(optionSections) do
+                    if candidate.heading:GetText()=="Tooltips and cast IDs" then section=candidate;break end
+                end
+                offset=control==options.highlightRestrictedData and 160 or 166
+            end
+            section.items[#section.items+1]={control=control,point=point,x=x or 0,offset=offset}
         end
     end
     for i,section in ipairs(optionSections) do
@@ -617,7 +633,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         options.autoArchiveLore:SetChecked(not ns.LoreSettings or ns.LoreSettings.Get("autoArchiveLore"))
         options.loreOnlyOpenedPages:SetChecked(not ns.LoreSettings or ns.LoreSettings.Get("loreOnlyOpenedPages"))
         options.displayCastIDs:SetChecked(journal:GetDisplayCastIDs())
-        for _, key in ipairs({"displaySpellIDWindow","spellIDWindowLocked","spellIDWindowIndefinite","displayHoveredAuraSnapshots","spellIDWindowAutoFade"}) do
+        for _, key in ipairs({"displaySpellIDWindow","spellIDWindowLocked","spellIDWindowIndefinite","displayHoveredAuraSnapshots","spellIDWindowAutoFade","highlightRestrictedData"}) do
             options[key]:SetChecked(journal:GetSpellIDWindowOption(key))
         end
         options.spellIDWindowAlpha:SetValue(journal:GetSpellIDWindowOption("spellIDWindowAlpha"))

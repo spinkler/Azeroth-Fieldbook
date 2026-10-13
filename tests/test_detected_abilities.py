@@ -181,6 +181,10 @@ class DetectedAbilityTests(unittest.TestCase):
             assert(h:IsShown() and rawequal(slot.ability.relayID,secret))
             assert(h.heading:GetText():find('Last detected spells:',1,true))
             assert(slot.ability.format=='|cff9999991:|r |cffffffff%s|r')
+            journal:SetSpellIDWindowOption('highlightRestrictedData',true);controller:Refresh()
+            assert(slot.ability.format=='|cff9999991:|r |cffff66b3%s|r','restricted footer IDs are pink')
+            journal:SetSpellIDWindowOption('highlightRestrictedData',false);controller:Refresh()
+            assert(slot.ability.format=='|cff9999991:|r |cffffffff%s|r','disabling restores footer colour')
             assert(h.point[3] < book.spellLink.point[3], 'hint below reference input')
             assert(h.point[3]-h:GetHeight() >= book.message.point[3], 'feedback below hint')
             GameTooltip={SetOwner=function() end,SetSpellByID=function(self,id) self.id=id end,

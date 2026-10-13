@@ -68,6 +68,9 @@ local function capture(tooltip, unit, kind, filter)
             if source then
                 local ok, value = pcall(source.GetText, source)
                 if ok and pcall(lines[index][side].SetText, lines[index][side], value) then
+                    destination.restrictedData=not public(value)
+                    if db.highlightRestrictedData and destination.restrictedData then destination:SetTextColor(1,0.4,0.7)
+                    else destination:SetTextColor(1,1,1) end
                     accepted = accepted + 1
                     -- Only measure public text. Secret text keeps a fixed wrapping allowance.
                     local height = public(value) and read(destination.GetStringHeight,destination) or nil
@@ -94,6 +97,10 @@ local function capture(tooltip, unit, kind, filter)
 end
 function snapshot:ApplySettings()
     if not panel then return end
+    for _,pair in ipairs(lines) do for _,destination in ipairs(pair) do
+        if db.highlightRestrictedData and destination.restrictedData then destination:SetTextColor(1,0.4,0.7)
+        else destination:SetTextColor(1,1,1) end
+    end end
     panel:SetBackdropColor(0,0,0,db.spellIDWindowAlpha or 0.35)
     if db.displayHoveredAuraSnapshots ~= true then clear() end
 end

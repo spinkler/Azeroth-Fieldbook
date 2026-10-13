@@ -573,7 +573,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         table.sort(parts)
         return "{"..table.concat(parts).."}"
     end
-    local stableFields={"name","category","rank","levelMin","levelMax","locations","subzones","abilities","ignoredAbilities",
+    local stableFields={"name","category","rank","levelMin","levelMax","locations","subzones","ignoredAbilities",
         "offenses","resistances","immunities","ignoredTypeImmunities","behaviours","behaviourSources","ignoredBehaviours","disposition","damage","idNotes","tameable","discoveryProgress"}
     -- Entries replaced by deletion, reset or backup restore must not be retained.
     local stableRevisions=setmetatable({},{__mode="k"})
@@ -583,6 +583,14 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if skipUnchanged and stableRevisions[entry]==self.revision then return end
         local content={}
         for _,key in ipairs(stableFields) do content[key]=entry[key] end
+        -- Pending offers and session-only cast hints are observation evidence.
+        -- Only confirmed ability records reset the credited-kill streak.
+        for name,ability in pairs(entry.abilities or {}) do
+            if ability.state=="confirmed" then
+                content.abilities=content.abilities or {}
+                content.abilities[name]=ability
+            end
+        end
         -- Item identities are knowledge; quantities, samples and corpse replay
         -- protection change on routine looting without teaching anything new.
         if entry.loot then
@@ -590,11 +598,12 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
                 content.loot=content.loot or {};content.loot[itemID]=true
             end
         end
-        local signature="knowledge2:"..contentSignature(content)
+        local signature="knowledge3:"..contentSignature(content)
         if entry.autoLockSignature~=signature then
             -- The previous format starts with a table brace. Upgrading its
             -- representation must not discard an existing saved kill streak.
-            local upgrading=type(entry.autoLockSignature)=="string" and entry.autoLockSignature:sub(1,1)=="{"
+            local upgrading=type(entry.autoLockSignature)=="string" and (entry.autoLockSignature:sub(1,1)=="{"
+                or entry.autoLockSignature:sub(1,11)=="knowledge2:")
             entry.autoLockSignature=signature
             if not upgrading then entry.unchangedKills=0 end
         end
@@ -687,10 +696,14 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:SetSpellIDWindowOption(key, value)
         if key == "spellIDWindowAlpha" then
             db[key] = math.max(0, math.min(1, tonumber(value) or 0.35))
-        elseif key == "displaySpellIDWindow" or key == "displayHoveredAuraSnapshots" or key == "spellIDWindowLocked" or key == "spellIDWindowIndefinite" or key == "spellIDWindowAutoFade" then
+        elseif key == "highlightRestrictedData" or key == "displaySpellIDWindow" or key == "displayHoveredAuraSnapshots" or key == "spellIDWindowLocked" or key == "spellIDWindowIndefinite" or key == "spellIDWindowAutoFade" then
             db[key] = value == true
         else return end
         if ns.SpellIDWindow then ns.SpellIDWindow:ApplySettings() end
+        if key=="highlightRestrictedData" then
+            if ns.CastIDs and ns.CastIDs.RefreshRestrictedColour then ns.CastIDs:RefreshRestrictedColour() end
+            self:Touch()
+        end
     end
     function journal:GetTooltips() return db.showTooltips ~= false end
     function journal:SetTooltips(enabled)
@@ -1624,6 +1637,24 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         end
         table.sort(names)
         return names
+    end
+    function journal:TooltipDefenses(id)
+        local entry,resistances,immunities=self.entries[id],{},{}
+        if entry and self:GetCreatureName(id) then
+            -- Recorded marks only; type expectations and rumours are unverified.
+            local resistant=type(entry.resistances)=="table" and entry.resistances or {}
+            local immune=type(entry.immunities)=="table" and entry.immunities or {}
+            for name in pairs(magicSchools) do
+                if resistant[name]==true then resistances[#resistances+1]=name end
+                if immune[name]==true then immunities[#immunities+1]=name end
+            end
+            for _,name in ipairs(ns.BestiaryImmunityEffects) do
+                if immune[name]==true then immunities[#immunities+1]=name end
+            end
+        end
+        table.sort(resistances)
+        table.sort(immunities)
+        return resistances,immunities
     end
     function journal:TooltipBehaviours(id)
         local entry,names=self.entries[id],{}

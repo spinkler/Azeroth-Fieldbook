@@ -167,9 +167,11 @@ function ns.CreateDetectedAbilityHint(parent,journal)
             slot.ability:SetText("")
             local rendered=false
             if slot.current then
+                local restricted=issecretvalue and issecretvalue(slot.current.spellID)
                 -- Only the native renderer formats the potentially opaque ID.
                 rendered=pcall(slot.ability.SetFormattedText,slot.ability,
-                    "|cff999999" .. index .. ":|r |cffffffff%s|r",slot.current.spellID)
+                    "|cff999999" .. index .. ":|r "..
+                    (journal:GetSpellIDWindowOption("highlightRestrictedData") and restricted and "|cffff66b3" or "|cffffffff").."%s|r",slot.current.spellID)
             end
             slot:SetShown(rendered)
             shown=shown or rendered

@@ -79,6 +79,17 @@ states. Acquisition history does not assert that the item is still owned.
 
 ## Pending live observation — 2026-10-04
 
+Further 2026-10-13 Solid Chest failure: the status reports Opening 3365,
+target Solid Chest, cast GUID present and context cleared by mouse down.
+The earlier single immediate world-click exception was insufficient. Named
+Opening context now survives repeated left/right mouse notifications, including
+UI clicks, within its original pending/completed lifetime. Clicks do not renew
+that lifetime; failed/interrupted casts, unrelated casts and an identified
+conflicting container still invalidate it. Existing exact-source, fishing,
+mixed-source and item-origin checks remain. Tests cover alternating click spam,
+completed-context expiry and single-encounter capture during loot-window spam.
+This is a tested correction; native acceptance remains pending.
+
 Second 2026-10-13 screenshot: the same Battered Chest source was rejected with
 `cast GUID present` and `opening state: cleared by mouse down`. The missing-GUID
 gap below is therefore not the cause of this attempt. The loot window visibly

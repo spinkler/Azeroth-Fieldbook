@@ -11,6 +11,12 @@ local events = CreateFrame("Frame")
 local lingerSeconds = 60
 local generation = 0
 local presented, lingering = false, false
+local restrictedID=false
+function display:RefreshRestrictedColour()
+    if not idText then return end
+    if settings and settings.highlightRestrictedData and restrictedID then idText:SetTextColor(1,0.4,0.7)
+    else idText:SetTextColor(1,1,1) end
+end
 local dismissed = false
 local activeCastBarID
 local traceFrame
@@ -139,6 +145,8 @@ local function Present(kind, spellID)
     end
     -- pcall's success boolean is public; never inspect or print its error payload.
     local accepted = pcall(idText.SetText, idText, spellID)
+    restrictedID=secret
+    display:RefreshRestrictedColour()
     presented = accepted
     current = kind .. " " .. visibility .. (accepted and ": SetText accepted" or ": SetText rejected")
     lastAttempt = current

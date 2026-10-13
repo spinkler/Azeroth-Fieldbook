@@ -124,13 +124,20 @@ class LossOfControlTests(unittest.TestCase):
             assert(ability() and ability().playerLossOfControl and abilityCount(42)==1)
             assert(journal.entries[42].name=='Creature A' and not journal.entries[43])
             assert(not journal.entries[42].idNotes)
-            assert(displayed[1].id==12345 and displayed[1].caster=='Creature A' and not displayed[1].candidate)
+            assert(displayed[1].id==12345 and displayed[1].caster=='Creature A')
+            local candidate=displayed[1].candidate
+            assert(candidate and candidate.id==42 and candidate.guid==units.nameplate1.guid)
+            assert(candidate.recorded and candidate.suppressionVerified and candidate.label=='Cast by:')
             assert(fallbackCount()==0)
             local rev=journal.revision;local count=#messages
             fire('LOSS_OF_CONTROL_UPDATE','player');fire('LOSS_OF_CONTROL_ADDED','player',1)
             fire('UNIT_AURA','player',{addedAuras={auras[10]}})
             assert(journal.revision==rev and #messages==count and #displayed==1)
             assert(abilityCount(42)==1);publicTree(AzerothFieldbookDB)
+            units.target=nil;units.nameplate1=nil
+            local opened
+            candidate.open(function(id) opened=id;return true end)
+            assert(opened==42,'recorded source navigation survives loss of its unit token')
         ''')
 
     def test_missing_source_does_not_mutate_current_or_previous_target(self):

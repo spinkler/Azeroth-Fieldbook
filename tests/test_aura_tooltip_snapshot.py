@@ -11,6 +11,7 @@ function GetTime() return now end
 local methods={}
 function methods:SetScript(k,f) self.scripts[k]=f end
 function methods:SetText(v) self.text=v end
+function methods:SetTextColor(...) self.color={...} end
 function methods:GetStringHeight()
     assert(not issecretvalue(self.text),'must not measure secret text')
     return self.text=='Wrapped public description' and 28 or 14
@@ -58,6 +59,10 @@ assert(panel.shown and panel.height==112) -- Secret wrapping allowance plus comp
 local found
 for _,o in ipairs(objects) do if rawequal(o.text,secret) then found=o end end
 assert(found) -- Relayed without interpreting the secret text.
+db.highlightRestrictedData=true;ns.AuraTooltipSnapshot:ApplySettings()
+assert(found.color[2]==0.4 and found.color[3]==0.7,'existing restricted snapshot text becomes pink')
+db.highlightRestrictedData=false;ns.AuraTooltipSnapshot:ApplySettings()
+assert(found.color[2]==1,'disabling restores snapshot colour')
 GameTooltipTextLeft1.GetText=function() return 'Different tooltip' end
 assert(rawequal(found.text,secret)) -- Snapshot is independent of the original fontstring.
 now=119; panel.scripts.OnUpdate(); assert(panel.shown)

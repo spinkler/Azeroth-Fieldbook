@@ -24,7 +24,6 @@ local castBars = {}
 local castBarOrder = {}
 local displayAlpha = 1
 local layoutHeight = 44
-local blacklistWindow
 local auraStatus = { player = "not scanned", target = "not scanned" }
 local auraEventSerial = 0
 local playerAuraEvents = 0
@@ -125,49 +124,20 @@ local function clear(row)
     row.body:Hide()
     layout()
 end
-function window:IsBlacklisted(id)
-    return validID(id) and db and db.spellIDWindowBlacklist and db.spellIDWindowBlacklist[id]==true or false
-end
-function window:GetBlacklist()
-    local list={}
-    for id,enabled in pairs(db and db.spellIDWindowBlacklist or {}) do
-        if validID(id) and enabled==true then list[#list+1]=id end
-    end
-    table.sort(list);return list
-end
-function window:AddBlacklist(id)
-    if not public(id) then return false,"This ID is restricted. Enter the displayed ID manually. Restricted future IDs cannot be matched to the blacklist." end
-    if type(id)=="string" then id=tonumber(id:match("^%s*(%d+)%s*$")) end
-    if not validID(id) or not db then return false,"Enter a positive numeric spell ID." end
-    db.spellIDWindowBlacklist=db.spellIDWindowBlacklist or {}
-    db.spellIDWindowBlacklist[id]=true
-    for _, row in ipairs(rows) do
-        if validID(row.rawID) and row.rawID==id then clear(row) end
-    end
-    if blacklistWindow then blacklistWindow:Refresh() end
-    return true,"Blacklisted spell ID "..id.."."
-end
-function window:RemoveBlacklist(id)
-    if not validID(id) or not db then return end
-    if db.spellIDWindowBlacklist then db.spellIDWindowBlacklist[id]=nil end
-    for _, row in ipairs(rows) do
-        if row.dismissedID==id then row.dismissedID=nil;row.dismissedToken=nil end
-    end
-    seen={player={},target={}}
-    for index=#castTokenOrder,1,-1 do
-        local token=castTokenOrder[index]
-        if castTokens[token]==id then castTokens[token]=nil;table.remove(castTokenOrder,index) end
-    end
-    if blacklistWindow then blacklistWindow:Refresh() end
-end
-function window:OpenBlacklist(message)
-    if not blacklistWindow and ns.CreateSpellBlacklistWindow then blacklistWindow=ns.CreateSpellBlacklistWindow(self) end
-    if blacklistWindow then blacklistWindow:Open(message) end
-end
 local function text(parent, x, y, width, template)
     local value = parent:CreateFontString(nil, "OVERLAY", textFont(template or "GameFontHighlightSmall"))
     value:SetPoint("TOPLEFT", x, y); value:SetSize(width, 14); value:SetJustifyH("LEFT")
     return value
+end
+local function restrictedColours(row)
+    for _,field in ipairs({"id","name","effect","caster"}) do
+        local colour=row.normalColours and row.normalColours[field]
+        if colour then
+            if db.highlightRestrictedData and row.restrictedFields and row.restrictedFields[field] then
+                row[field]:SetTextColor(1,0.4,0.7)
+            else row[field]:SetTextColor(unpack(colour)) end
+        end
+    end
 end
 local function castTooltip(row, owner)
     if not GameTooltip or not row.observed then return end
@@ -177,8 +147,9 @@ local function castTooltip(row, owner)
         GameTooltip:AddLine(row.candidate.description, 0.7, 0.7, 0.7, true)
     end
     if row.pinned then
-        GameTooltip:AddLine("Pinned. This cast stays until you remove it.", 0.5, 0.82, 1, true)
-        GameTooltip:AddLine("Right-click: unpin and remove this slot.", 1, 1, 1, true)
+        GameTooltip:AddLine("Pinned. This cast stays until you unpin it.", 0.5, 0.82, 1, true)
+        if row.candidate then GameTooltip:AddLine("Left-click: open this creature in the Bestiary.",1,1,1,true) end
+        GameTooltip:AddLine("Right-click: unpin and restart the timer. Right-click again to remove.", 1, 1, 1, true)
         local pinned=0
         for _,slot in ipairs(castRows) do if slot.pinned then pinned=pinned+1 end end
         if pinned==4 then
@@ -199,7 +170,6 @@ local function castTooltip(row, owner)
     else
         GameTooltip:AddLine("This spell ID is restricted. Enter the displayed ID manually in the Bestiary.", 1, 0.82, 0.4, true)
     end
-    GameTooltip:AddLine("Ctrl+Right-click: blacklist this ID, or enter it manually if restricted.", 0.7, 0.7, 0.7, true)
     GameTooltip:Show()
 end
 local function portraitTooltip(row)
@@ -209,6 +179,7 @@ local function portraitTooltip(row)
     GameTooltip:SetText(row.candidate.name)
     if row.assignmentSaved then
         GameTooltip:AddLine("Assigned to this creature in the Bestiary.", 0.5, 1, 0.5, true)
+        GameTooltip:AddLine("Left-click: open this creature in the Bestiary.",1,1,1,true)
     else
         GameTooltip:AddLine(row.candidate.description or "Your target when this effect was detected. The caster is unverified.", 1, 0.82, 0.4, true)
         if row.candidate.casterName then GameTooltip:AddLine("Cast by: " .. row.candidate.casterName, 0.7, 0.7, 0.7, true) end
@@ -265,7 +236,7 @@ local function createPortrait(row)
         if row.isCast or mouseButton == "RightButton" or IsShiftKeyDown() then
             row.body:GetScript("OnMouseUp")(row.body, mouseButton)
         elseif mouseButton == "LeftButton" and row.observed and row.candidate and not ns.InitializationBlocked then
-            if IsControlKeyDown and IsControlKeyDown() then
+            if row.assignmentSaved or IsControlKeyDown and IsControlKeyDown() then
                 if openCreature then openCreature(row.candidate) end
             elseif not row.assignmentSaved and row.candidate.assign() then
                 row.assignmentSaved=true
@@ -285,6 +256,7 @@ local function showCandidate(row, candidate)
     row.casterLabel:SetText(candidate and (candidate.label or "Target:") or "Cast by:")
     if not candidate then return end
     row.candidate=candidate
+    row.assignmentSaved=candidate.recorded==true
     row.portraitRing:SetColorTexture(0.67, 0.43, 0.19, 1)
     row.portraitUnknown:Show()
     -- Render once while the token still matches the captured identity. Never
@@ -341,7 +313,7 @@ local function setup()
     end)
     local titles = { "Enemy cast", "Enemy instant cast", "Debuff on you", "Buff on target", "Loss of Control on you" }
     for index, kind in ipairs({ 1, 1, 1, 1, 3, 4, 5 }) do
-        local row = {isCast=kind==1}
+        local row = {isCast=kind==1,isLossOfControl=kind==5}
         rows[index] = row
         if kind==1 then castRows[#castRows+1]=row else effectRows[kind]=row end
         row.body = CreateFrame("Frame", nil, panel)
@@ -368,23 +340,28 @@ local function setup()
             if row.dragged then row.dragged=nil;return end
             if ns.InitializationBlocked then return end
             if button=="RightButton" then
+                if row.isCast and row.pinned then
+                    row.pinned=nil;row.observed=GetTime()
+                    layout();updateFade(0)
+                    if row.hovered then castTooltip(row,row.body)
+                    elseif row.portraitHovered then castTooltip(row,row.portraitButton) end
+                    return
+                end
                 local token=row.token
                 local dismissedID=validID(row.rawID) and row.rawID or nil
-                if IsControlKeyDown and IsControlKeyDown() then
-                    local ok,message=window:AddBlacklist(row.rawID)
-                    if not ok then window:OpenBlacklist(message) end
-                end
                 row.dismissedToken=token
                 row.dismissedID=dismissedID
                 clear(row);updateFade(0)
             elseif button=="LeftButton" and IsShiftKeyDown() then
                 db.displaySpellIDWindow=false;window:ApplySettings()
             elseif button=="LeftButton" and row.isCast and row.observed then
-                if IsControlKeyDown and IsControlKeyDown() then
+                if row.pinned or IsControlKeyDown and IsControlKeyDown() then
                     if row.candidate and openCreature then openCreature(row.candidate) end
                 else
                     pin(row)
                 end
+            elseif button=="LeftButton" and row.observed and row.assignmentSaved and row.candidate then
+                if openCreature then openCreature(row.candidate) end
             end
         end)
         clear(row)
@@ -407,7 +384,8 @@ local function setup()
                     if suppressed(row.candidate) then
                         clear(row)
                         if not row.isCast then seen = { player = {}, target = {} } end
-                    elseif validID(row.rawID) and recordedAbility and recordedAbility(row.candidate, row.rawID) then clear(row) end
+                    elseif validID(row.rawID) and recordedAbility and recordedAbility(row.candidate, row.rawID)
+                        and not (row.isLossOfControl and row.candidate.recorded) then clear(row) end
                 end
             end
         end
@@ -485,7 +463,10 @@ local function present(index, id, name, effect, caster, token, candidate)
     end
     local duplicate = matching or isCast and token and castTokens[token]
     if matching and matching.pinned then return false,"suppressed" end
-    if window:IsBlacklisted(id) or validID(id) and candidate and recordedAbility and recordedAbility(candidate, id) then
+    -- A recorded LOC is still an active effect on the player. Retain its
+    -- caster portrait/action while the normal creature-lock gate remains above.
+    if validID(id) and candidate and recordedAbility and recordedAbility(candidate, id)
+        and not (index==5 and candidate.recorded) then
         if matching then clear(matching);updateFade(0) end
         return false,"suppressed"
     end
@@ -518,6 +499,11 @@ local function present(index, id, name, effect, caster, token, candidate)
     pcall(row.name.SetText, row.name, name)
     pcall(row.effect.SetText, row.effect, effect)
     caster = candidate and candidate.name or caster
+    if not row.normalColours then
+        row.normalColours={id={1,1,1},name={1,1,1},effect={1,1,1},caster={0.7,0.7,0.7}}
+    end
+    row.restrictedFields={id=not public(id),name=not public(name),effect=not public(effect),caster=not public(caster)}
+    restrictedColours(row)
     row.hasCaster=not public(caster) or (type(caster)=="string" and caster~="" and caster~="Unknown")
     row.casterLabel:SetShown(row.hasCaster);row.caster:SetShown(row.hasCaster)
     if row.hasCaster then
@@ -775,6 +761,7 @@ end)
 function window:ApplySettings()
     if not db then return end
     setup()
+    for _,row in ipairs(rows) do restrictedColours(row) end
     if ns.AuraTooltipSnapshot then ns.AuraTooltipSnapshot:ApplySettings() end
     panel:StopMovingOrSizing()
     panel:SetMovable(not db.spellIDWindowLocked)
@@ -811,7 +798,7 @@ end
 
 function window:Initialize(settings)
     db = settings
-    if type(db.spellIDWindowBlacklist)~="table" then db.spellIDWindowBlacklist={} end
+    db.spellIDWindowBlacklist=nil -- Retired: restricted IDs cannot be filtered reliably.
     db.displaySpellIDWindow = db.displaySpellIDWindow ~= false
     db.spellIDWindowLocked = db.spellIDWindowLocked == true
     db.spellIDWindowIndefinite = db.spellIDWindowIndefinite == true
@@ -848,8 +835,7 @@ end
 function window:Report(say)
     say("ID window player debuffs: " .. auraStatus.player)
     say("ID window player UNIT_AURA events=" .. playerAuraEvents .. "; last event: " .. lastPlayerAuraEvent)
-    say("ID window enabled=" .. tostring(db and db.displaySpellIDWindow ~= false)
-        .. "; Disarm 6713 blacklisted=" .. tostring(self:IsBlacklisted(6713)))
+    say("ID window enabled=" .. tostring(db and db.displaySpellIDWindow ~= false))
     say("ID window target buffs: " .. auraStatus.target)
     if ns.AuraTooltipSnapshot then ns.AuraTooltipSnapshot:Report(say) end
 end

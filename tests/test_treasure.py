@@ -36,7 +36,7 @@ class TreasureJournalTests(unittest.TestCase):
                         fishing=scenario=='fishing'
                         fire('LOOT_READY')
                         fire('LOOT_OPENED',false,scenario=='item_origin')
-                        if scenario=='pending' or scenario=='success' then
+                        if scenario=='pending' or scenario=='success' or scenario=='click' then
                             assert(T.Count(j.kinds)==1 and T.Count(j.encounters)==1)
                             local _,kind=next(j.kinds)
                             assert(kind.name=='Battered Chest' and kind.objectID==106319)
@@ -397,7 +397,7 @@ class TreasureCaptureTests(unittest.TestCase):
                 """)
 
     def test_opening_sent_before_its_world_mouse_down(self):
-        for scenario in ('pending', 'success', 'failed', 'interrupted', 'late_click', 'second_click', 'left_click', 'ui_click'):
+        for scenario in ('pending', 'success', 'failed', 'interrupted', 'late_click', 'second_click', 'left_click', 'ui_click', 'spam'):
             with self.subTest(scenario=scenario):
                 self.setUp();self.world_fixture()
                 self.lua.globals().scenario = scenario
@@ -409,17 +409,21 @@ class TreasureCaptureTests(unittest.TestCase):
                     now=now+(scenario=='late_click' and 1 or 0.01)
                     if scenario=='ui_click' then GetMouseFoci=function() return {{}} end end
                     fire('GLOBAL_MOUSE_DOWN',scenario=='left_click' and 'LeftButton' or 'RightButton')
-                    if scenario=='pending' or scenario=='success' then
+                    if scenario~='failed' and scenario~='interrupted' then
                         assert(t.cast and t.cast.at==started,'opening click must preserve cast without extending expiry')
                     end
                     if scenario=='second_click' then fire('GLOBAL_MOUSE_DOWN','RightButton') end
+                    if scenario=='spam' then
+                        for i=1,20 do fire('GLOBAL_MOUSE_DOWN',i%2==0 and 'LeftButton' or 'RightButton') end
+                        assert(t.cast and t.cast.at==started,'spam must not renew expiry')
+                    end
                     now=now+5
                     if scenario=='success' then fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-chest',3365) end
                     if scenario=='failed' then fire('UNIT_SPELLCAST_FAILED','player','Cast-chest',3365) end
                     if scenario=='interrupted' then fire('UNIT_SPELLCAST_INTERRUPTED','player','Cast-chest',3365) end
                     loot={lootrow(4541,1,'GameObject-0-4621-1-175299-106319-00004D71C0')}
                     fire('LOOT_READY');fire('LOOT_OPENED',false,false)
-                    if scenario=='pending' or scenario=='success' then
+                    if scenario~='failed' and scenario~='interrupted' then
                         assert(T.Count(j.encounters)==1,t.status)
                         local _,kind=next(j.kinds);assert(kind.name=='Battered Chest' and kind.objectID==106319)
                     else assert(T.Count(j.encounters)==0,scenario) end
@@ -442,6 +446,29 @@ class TreasureCaptureTests(unittest.TestCase):
                     fire('LOOT_READY');fire('LOOT_OPENED',false,case=='item_origin');fire('LOOT_CLOSED')
                     assert(T.Count(j.encounters)==0)
                 """)
+
+    def test_solid_chest_click_spam_after_success_and_expiry(self):
+        for expired in (False, True):
+            with self.subTest(expired=expired):
+                self.setUp();self.world_fixture()
+                self.lua.globals().expired=expired
+                self.lua.execute('''
+                    worldData=nil;GetMouseFoci=function() return {WorldFrame} end
+                    fire('UNIT_SPELLCAST_SENT','player','Solid Chest','Cast-solid',3365)
+                    fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-solid',3365)
+                    local started=t.interaction.at
+                    for i=1,20 do
+                        now=now+0.1
+                        fire('GLOBAL_MOUSE_DOWN',i%2==0 and 'LeftButton' or 'RightButton')
+                    end
+                    assert(t.interaction and t.interaction.at==started,'click spam cannot renew completed context')
+                    if expired then now=now+2;fire('GLOBAL_MOUSE_DOWN','RightButton') end
+                    loot={lootrow(858,2,'GameObject-0-4621-0-175419-2850-00004D9023')}
+                    fire('LOOT_READY');fire('LOOT_OPENED',false,false)
+                    fire('GLOBAL_MOUSE_DOWN','LeftButton');fire('GLOBAL_MOUSE_DOWN','RightButton')
+                    fire('LOOT_SLOT_CHANGED')
+                    assert(T.Count(j.encounters)==(expired and 0 or 1),'capture is bounded and deduplicated')
+                ''')
 
     def test_food_crate_autoloot_closed_without_opened_preserves_ready(self):
         self.world_fixture()

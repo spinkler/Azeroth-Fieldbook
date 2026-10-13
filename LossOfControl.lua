@@ -110,6 +110,15 @@ function ns.CreateLossOfControlObserver(journal, identify, say)
             seen[key] = state
         end
         if identify(verifiedUnit, false, verifiedGUID) ~= verifiedID or read(UnitGUID, verifiedUnit) ~= verifiedGUID then seen[key] = nil; return false end
+        if not state.candidate then
+            state.candidate=journal:CaptureSpellAssignment(verifiedUnit,spellID,"Loss of Control",say)
+        end
+        if state.candidate then
+            if state.candidate.id~=verifiedID or state.candidate.guid~=verifiedGUID then seen[key]=nil;return false end
+            state.candidate.label="Cast by:"
+            state.candidate.description="This creature caused the observed Loss of Control effect."
+            state.candidate.suppressionVerified=true
+        end
         state.at, state.absentAt, state.active = at, nil, true
         local name = text(C_Spell and read(C_Spell.GetSpellName, spellID))
         local reason, caster = "no readable aura instance (" .. auraState .. ")", state.caster
@@ -139,8 +148,11 @@ function ns.CreateLossOfControlObserver(journal, identify, say)
         end
         if not state.displayed or state.saved and not state.displayedSaved then
             if ns.SpellIDWindow and ns.SpellIDWindow.ObserveLossOfControl then
+                -- Keep the verified caster after recording. The display still
+                -- needs its identity for the portrait, navigation and lock check.
+                if state.candidate then state.candidate.recorded=state.saved==true end
                 state.displayed = ns.SpellIDWindow:ObserveLossOfControl(spellID, name, label, caster, state.token,
-                    not state.saved and state.candidate or nil)
+                    state.candidate)
                 state.displayedSaved = state.saved
             end
         end
