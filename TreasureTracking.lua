@@ -124,8 +124,8 @@ function ns.CreateTreasureTracking(journal)
         for guid,v in pairs(self.bagGUIDs) do if v.absentAt and now-v.absentAt>60 then self.bagGUIDs[guid]=nil end end
         for guid,v in pairs(self.recent) do if now-v.at>120 then self.recent[guid]=nil end end
         if self.world and now-self.world.at>15 then self.world=nil end
-        if self.interaction and not fresh(self.interaction,3) then self.interaction=nil end
-        if self.cast and not fresh(self.cast,30) then self.cast=nil end
+        if self.interaction and not fresh(self.interaction,3) then self.interaction=nil;self.openingState="interaction expired" end
+        if self.cast and not fresh(self.cast,30) then self.cast=nil;self.openingState="cast expired" end
         if self.pending and now-self.pending.at>3 then self.pending=nil end
         if self.waiting and now-self.waiting.at>60 then self.waiting=nil end
         if self.active and now-self.active.at>60 then self.active=nil end
@@ -191,7 +191,8 @@ function ns.CreateTreasureTracking(journal)
                             .."; observed container: "..(seen and seen.name or "none")
                             .."; tooltip object ID: "..tostring(seen and seen.objectID or "none")
                             .."; opening: "..(self.lastOpening or "none").."."
-                            .." Cast pending: "..tostring(self.cast~=nil).."; interaction active: "..tostring(self.interaction~=nil).."."
+                            .." Cast pending: "..tostring(self.cast~=nil).."; interaction active: "..tostring(self.interaction~=nil)
+                            .."; opening state: "..(self.openingState or "none").."."
                     end
                     -- Retain the rejected readable identity so native client
                     -- differences can be diagnosed after the loot window closes.
@@ -269,9 +270,26 @@ function ns.CreateTreasureTracking(journal)
         if ns.InitializationBlocked then return end
         self:Expire()
         if event=="GLOBAL_MOUSE_DOWN" then
-            self.interaction=nil;self.cast=nil;self.pending=nil
             local button=...
-            if not T.Public(button) or button~="RightButton" or not worldFocus() then self.world=nil;return end
+            local worldClick=T.Public(button) and button=="RightButton" and worldFocus()
+            -- SENT may precede the global notification for the opening click.
+            -- Consume that one immediate world click without erasing its cast.
+            -- Later/repeated clicks still invalidate context; never renew expiry.
+            local cast=self.cast
+            if worldClick and fresh(cast,0.5) and cast.spellID==3365 and not cast.mouseDownSeen then
+                self:ObserveWorldCursor()
+                local seen=fresh(self.world,0.5) and self.world or nil
+                if not seen or (seen.name==cast.name
+                    and (not seen.objectID or not cast.objectID or seen.objectID==cast.objectID)
+                    and (not seen.guid or not cast.guid or seen.guid==cast.guid)) then
+                    cast.mouseDownSeen=true
+                    self.openingState="pending; opening mouse down retained"
+                    return
+                end
+            end
+            self.openingState="cleared by mouse down"
+            self.interaction=nil;self.cast=nil;self.pending=nil
+            if not worldClick then self.world=nil;return end
             self:ObserveWorldCursor()
             if fresh(self.world,0.5) then self.interaction=T.Copy(self.world);self.interaction.at=clock() end
             return
@@ -286,29 +304,39 @@ function ns.CreateTreasureTracking(journal)
             -- spell or hover. Completion and exact loot-source checks remain.
             local unnamed=T.Public(target) and (target==nil or target=="")
             local opening=T.Public(spellID) and spellID==3365
+            local castID=T.Text(castGUID,160) and castGUID or nil
+            local missingCastID=T.Public(castGUID) and (castGUID==nil or castGUID=="")
             if not name and unnamed and opening and clicked then name=clicked.name end
             self.lastOpening="spell "..(T.Integer(spellID,1,2147483647) and tostring(spellID) or "unreadable")
                 ..", target "..(T.Name(target) or "none")..", clicked "..(clicked and clicked.name or "none")
-            if name and T.Text(castGUID,160) and T.Integer(spellID,1,2147483647) then
+                ..", cast GUID "..(castID and "present" or (missingCastID and "missing" or "unreadable"))
+            self.openingState="sent rejected"
+            -- A public absent cast GUID must not discard a named Opening.
+            -- Keep the same bounded single-world-source checks; restricted or
+            -- malformed identifiers and other spells cannot use this path.
+            if name and (castID or (opening and missingCastID)) and T.Integer(spellID,1,2147483647) then
                 self:ObserveWorldCursor()
                 local seen=clicked and clicked.name==name and clicked
                     or (fresh(self.world,0.5) and self.world.name==name and self.world or nil)
                 self.world=seen
                 self.cast={name=name,guid=seen and seen.guid,objectID=seen and seen.objectID,
-                    castGUID=castGUID,spellID=spellID,at=clock()}
+                    castGUID=castID,spellID=spellID,at=clock(),mouseDownSeen=clicked~=nil}
+                self.openingState="pending"
             else self.world=nil end
             return
         elseif event=="UNIT_SPELLCAST_SUCCEEDED" or event=="UNIT_SPELLCAST_FAILED" or event=="UNIT_SPELLCAST_FAILED_QUIET" or event=="UNIT_SPELLCAST_INTERRUPTED" then
             local unit,castGUID,spellID=...
             if T.Public(unit) and unit=="player" and self.cast and T.Public(castGUID) and T.Public(spellID)
-                and self.cast.castGUID==castGUID and self.cast.spellID==spellID then
+                and (self.cast.castGUID==castGUID or (not self.cast.castGUID
+                    and (castGUID==nil or castGUID=="" or T.Text(castGUID,160)))) and self.cast.spellID==spellID then
+                self.openingState=event
                 if event=="UNIT_SPELLCAST_SUCCEEDED" then self.interaction=self.cast;self.interaction.at=clock()
                 else self.interaction=nil;self.world=nil;self.pending=nil end
                 self.cast=nil
             end
             return
         end
-        if event=="PLAYER_ENTERING_WORLD" then self.active=nil;self.pending=nil;self.waiting=nil;self.world=nil;self.interaction=nil;self.cast=nil;self.lastOpening=nil;self.bagGUIDs={};self.recent={} end
+        if event=="PLAYER_ENTERING_WORLD" then self.active=nil;self.pending=nil;self.waiting=nil;self.world=nil;self.interaction=nil;self.cast=nil;self.lastOpening=nil;self.openingState=nil;self.bagGUIDs={};self.recent={} end
         if event=="BAG_UPDATE_DELAYED" or event=="PLAYER_ENTERING_WORLD" then
             if self.bagQueued then return end;self.bagQueued=true
             local function scan() self.bagQueued=false;self:ScanBags() end
@@ -358,6 +386,7 @@ function ns.CreateTreasureTracking(journal)
                 self:Status("Container identified, but no readable item contents were captured.")
             end
             self.active=nil;self.pending=nil;self.waiting=nil;self.interaction=nil;self.cast=nil
+            self.openingState="loot closed"
             for guid,v in pairs(self.recent) do if v.suppressed then self.recent[guid]=nil end end
         elseif event=="GET_ITEM_INFO_RECEIVED" or event=="ITEM_DATA_LOAD_RESULT" then
             self:UpdateLoot()

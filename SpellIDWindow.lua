@@ -185,7 +185,6 @@ local function castTooltip(row, owner)
             GameTooltip:AddLine("All four slots are pinned. Clear one to capture another cast.", 1, 0.82, 0.4, true)
         end
     else
-        GameTooltip:AddLine("Live slot: new casts replace this observation until pinned.", 1, 0.82, 0.4, true)
         GameTooltip:AddLine("Left-click: pin this cast and capture the next in another slot.", 1, 1, 1, true)
         GameTooltip:AddLine("Right-click: remove this slot.", 1, 1, 1, true)
         if not db.spellIDWindowIndefinite then
@@ -201,7 +200,6 @@ local function castTooltip(row, owner)
         GameTooltip:AddLine("This spell ID is restricted. Enter the displayed ID manually in the Bestiary.", 1, 0.82, 0.4, true)
     end
     GameTooltip:AddLine("Ctrl+Right-click: blacklist this ID, or enter it manually if restricted.", 0.7, 0.7, 0.7, true)
-    GameTooltip:AddLine("Pin/unpin keybinds: Key Bindings > Azeroth Fieldbook.", 0.7, 0.7, 0.7, true)
     GameTooltip:Show()
 end
 local function portraitTooltip(row)
@@ -305,7 +303,7 @@ end
 local function updateFade(delta)
     local hasData = false
     for _, row in ipairs(rows) do if row.observed then hasData = true; break end end
-    local fading = db.spellIDWindowAutoFade == true and not hasData and not targetSuppressed
+    local fading = db.spellIDWindowAutoFade == true and not hasData
     if fading then displayAlpha = math.max(0, displayAlpha - delta / 0.3)
     else displayAlpha = 1 end
     panel:SetAlpha(displayAlpha)

@@ -79,6 +79,41 @@ states. Acquisition history does not assert that the item is still owned.
 
 ## Pending live observation — 2026-10-04
 
+Second 2026-10-13 screenshot: the same Battered Chest source was rejected with
+`cast GUID present` and `opening state: cleared by mouse down`. The missing-GUID
+gap below is therefore not the cause of this attempt. The loot window visibly
+contains Freshly Baked Bread and Fisherman Knife. The diagnostic establishes
+mouse-down invalidation, but not its timing or focus. A regression reproduces
+SENT followed by its immediate world right-click erasing the cast. The observer
+now consumes one world right-click within 0.5 seconds of a pending Opening,
+provided observed container identity does not conflict, without renewing the
+cast's expiry. A prior recognized click, repeated/later clicks, left/UI clicks,
+failed/interrupted casts and existing source guards retain their exclusions.
+All 84 Treasure tests pass. Native confirmation remains pending; reload and
+reopen this chest if still available, or check the next natural encounter.
+
+The operator subsequently confirmed capture when left-clicking, while
+right-clicking failed. This validates the left-click path and supports the
+mouse-down diagnosis; acceptance of right-click capture after the correction
+remains unverified.
+
+Follow-up on 2026-10-13: a Battered Chest was missed with source
+`GameObject-0-4621-1-175299-106319-00004D71C0`, no observed container or tooltip
+object ID, and last Opening 3365 targeting Battered Chest. Both pending cast
+and active interaction were false. This establishes missing correlation context,
+but does not identify why it was missing. Review reproduced one gap: SENT with
+a nil or empty public cast GUID discarded the named Opening immediately.
+Such casts now retain the existing bounded pending context and exact world-source
+validation. Matching spell completion/failure can resolve the sole pending
+GUID-less cast; a supplied GUID still requires exact matching. Malformed or
+restricted identifiers do not qualify. Failure, interruption, expiry, other
+casts/clicks, close, fishing, mixed sources and item-origin exclusions remain.
+Diagnostics now include cast-GUID availability and the last opening state
+(rejected, pending, completion/failure, expiry, mouse down or close), so a later
+miss can distinguish these paths. Synthetic regressions pass; this screenshot's
+specific cause and native correction remain unverified. Previously missed loot
+is not backfilled. Reload and check the next naturally encountered chest.
+
 Follow-up on 2026-10-08: a Battered Chest in Darkshore recorded Haunch of
 Meat ×2, Minor Mana Potion ×3 and Small Dagger ×1, but omitted the
 Red-speckled Mushroom ×3 visible in the loot chat. The screenshot establishes

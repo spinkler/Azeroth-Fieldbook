@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## v0.39.2 - 2026-10-13
+
+- Keep an empty spell-ID window faded with Auto-fade enabled when targeting a locked creature. The Suppressed target hint no longer reveals the window.
+
+- Simplify observed spell-ID tooltips by removing the live-slot explanation and pin/unpin keybinding guidance.
+
+- Preserve a pending Treasure Opening across its immediate world right-click notification when SENT arrives first. Consume only one click within 0.5 seconds without renewing expiry; later, repeated, UI and left clicks still clear context. Add event-order regressions after live Battered Chest diagnostics identified mouse-down clearing with a present cast GUID.
+
+- Retain named Opening casts when the client supplies no cast GUID, allowing Treasure capture from a fresh interaction and validated single world-loot source. Preserve failure, expiry and source exclusions; add regression coverage and opening-state diagnostics. This corrects a reproducible gap exposed while investigating another missed Battered Chest; the reported native event sequence remains unverified.
 
 - Record the author's 2026-10-11 confirmation of live Beast Lore capture and persistence between sessions. Reconcile the README, verification and sharing checklists, and 1.0 milestone guidance; retain two-player delivery as unverified and distinguish suspected missing client fields from addon capture failures. Preserve the separate remaining regression checks and historical release notes.
 

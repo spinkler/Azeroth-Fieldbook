@@ -10,6 +10,39 @@ class TreasureJournalTests(unittest.TestCase):
     def setUp(self):
         self.lua = new_treasure()
 
+    def test_named_opening_without_cast_guid(self):
+        for cast_id in ('nil', "''"):
+            for outcome in ('pending', 'success', 'failed', 'interrupted', 'expired', 'other_spell', 'click', 'closed', 'mixed', 'fishing', 'item_origin', 'malformed', 'restricted'):
+                with self.subTest(cast_id=cast_id, outcome=outcome):
+                    lua = new_treasure()
+                    lua.execute("scenario='" + outcome + "'; missing_id=" + cast_id)
+                    lua.execute('''
+                        local guid='GameObject-0-4621-1-175299-106319-00004D71C0'
+                        if scenario=='malformed' then missing_id={} end
+                        if scenario=='restricted' then
+                            missing_id={};local old=T.Public
+                            T.Public=function(v) if v==missing_id then return false end;return old(v) end
+                        end
+                        fire('UNIT_SPELLCAST_SENT','player','Battered Chest',missing_id,
+                            scenario=='other_spell' and 133 or 3365)
+                        if scenario=='success' then fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-later',3365) end
+                        if scenario=='failed' then fire('UNIT_SPELLCAST_FAILED','player','Cast-later',3365) end
+                        if scenario=='interrupted' then fire('UNIT_SPELLCAST_INTERRUPTED','player',missing_id,3365) end
+                        if scenario=='expired' then now=now+31 end
+                        if scenario=='click' then fire('GLOBAL_MOUSE_DOWN','LeftButton') end
+                        if scenario=='closed' then fire('LOOT_CLOSED') end
+                        loot={lootrow(2001,2,guid)}
+                        if scenario=='mixed' then loot[2]=lootrow(2002,1,'Creature-0-1-1-1-123-000001') end
+                        fishing=scenario=='fishing'
+                        fire('LOOT_READY')
+                        fire('LOOT_OPENED',false,scenario=='item_origin')
+                        if scenario=='pending' or scenario=='success' then
+                            assert(T.Count(j.kinds)==1 and T.Count(j.encounters)==1)
+                            local _,kind=next(j.kinds)
+                            assert(kind.name=='Battered Chest' and kind.objectID==106319)
+                        else assert(next(j.encounters)==nil,scenario) end
+                    ''')
+
     def test_empty_per_character_store_and_background_isolation(self):
         self.lua.execute('''
             assert(next(j.kinds)==nil and next(j.encounters)==nil and shell:GetFrame()==nil)
@@ -361,6 +394,35 @@ class TreasureCaptureTests(unittest.TestCase):
                     local _,v=next(j.encounters);local e=j:Get(v.kindID)
                     assert(e.name=='Solid Chest' and e.objectID==2850)
                     assert(#v.items==3 and v.capture=='partial' and v.items[1].recovered==nil)
+                """)
+
+    def test_opening_sent_before_its_world_mouse_down(self):
+        for scenario in ('pending', 'success', 'failed', 'interrupted', 'late_click', 'second_click', 'left_click', 'ui_click'):
+            with self.subTest(scenario=scenario):
+                self.setUp();self.world_fixture()
+                self.lua.globals().scenario = scenario
+                self.lua.execute("""
+                    worldData=nil
+                    GetMouseFoci=function() return {WorldFrame} end
+                    fire('UNIT_SPELLCAST_SENT','player','Battered Chest','Cast-chest',3365)
+                    local started=t.cast.at
+                    now=now+(scenario=='late_click' and 1 or 0.01)
+                    if scenario=='ui_click' then GetMouseFoci=function() return {{}} end end
+                    fire('GLOBAL_MOUSE_DOWN',scenario=='left_click' and 'LeftButton' or 'RightButton')
+                    if scenario=='pending' or scenario=='success' then
+                        assert(t.cast and t.cast.at==started,'opening click must preserve cast without extending expiry')
+                    end
+                    if scenario=='second_click' then fire('GLOBAL_MOUSE_DOWN','RightButton') end
+                    now=now+5
+                    if scenario=='success' then fire('UNIT_SPELLCAST_SUCCEEDED','player','Cast-chest',3365) end
+                    if scenario=='failed' then fire('UNIT_SPELLCAST_FAILED','player','Cast-chest',3365) end
+                    if scenario=='interrupted' then fire('UNIT_SPELLCAST_INTERRUPTED','player','Cast-chest',3365) end
+                    loot={lootrow(4541,1,'GameObject-0-4621-1-175299-106319-00004D71C0')}
+                    fire('LOOT_READY');fire('LOOT_OPENED',false,false)
+                    if scenario=='pending' or scenario=='success' then
+                        assert(T.Count(j.encounters)==1,t.status)
+                        local _,kind=next(j.kinds);assert(kind.name=='Battered Chest' and kind.objectID==106319)
+                    else assert(T.Count(j.encounters)==0,scenario) end
                 """)
 
     def test_pending_opening_requires_fresh_compatible_world_loot(self):

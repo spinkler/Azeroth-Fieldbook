@@ -675,7 +675,8 @@ assert(count()==1 and rawequal(id(frames[3]),secret), 'same cast consumes only o
 for token=101,110 do fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,secret,token) end
 assert(count()==1 and rawequal(id(frames[3]),secret))
 frames[3].scripts.OnEnter()
-assert(table.concat(GameTooltip.lines,' '):find('Live slot',1,true))
+assert(not table.concat(GameTooltip.lines,' '):find('Live slot',1,true))
+assert(not table.concat(GameTooltip.lines,' '):find('Pin/unpin keybinds',1,true))
 assert(table.concat(GameTooltip.lines,' '):find('Left-click: pin',1,true))
 ns.InitializationBlocked=true
 frames[3].scripts.OnMouseUp(frames[3],'LeftButton');pinBinding()
@@ -698,7 +699,7 @@ fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,123,113)
 pinBinding();assert(count()==4 and not AzerothFieldbookPinLatestCast())
 frames[6].scripts.OnEnter()
 assert(table.concat(GameTooltip.lines,' '):find('All four slots are pinned',1,true))
-assert(table.concat(GameTooltip.lines,' '):find('Key Bindings > Azeroth Fieldbook',1,true))
+assert(not table.concat(GameTooltip.lines,' '):find('Key Bindings > Azeroth Fieldbook',1,true))
 for token=114,160 do fire('UNIT_SPELLCAST_SUCCEEDED','target',nil,456,token) end
 assert(count()==4 and id(frames[4])==99 and id(frames[6])==123, 'full pinned history cannot be replaced')
 advance(500);assert(count()==4, 'pins survive the normal timeout')
@@ -816,7 +817,7 @@ C_UnitAuras={GetAuraDataByIndex=function(unit,index) return auras[unit][index] e
 window:Initialize({spellIDWindowAutoFade=true})
 local panel=AzerothFieldbookSpellIDWindow
 assert(panel.hint.text=='Suppressed target' and panel.hint.color[1]==1 and panel.hint.color[2]==0.15)
-advance(1);assert(panel.alpha==1,'suppression status survives auto-fade without observations')
+advance(1);assert(panel.alpha==0,'suppression status cannot reveal an empty auto-faded window')
 auras.target={{auraInstanceID=801,spellId=secret,name=secret,sourceUnit='nameplate1'}}
 fire('UNIT_AURA','target',{})
 assert(not frames[8].shown,'locked buff recipient suppresses a buff from an unlocked caster')
