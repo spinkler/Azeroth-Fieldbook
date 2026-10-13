@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.40.1 - 2026-10-13
+
+- Redraw the Bestiary padlock at a slightly larger size with a broad arched shackle, rounded corners and a centred round-headed keyhole. Rasterize the approved symmetrical silhouette into one transparent PNG, with a transparent keyhole and pixel-aligned placement, so its details scale together. Preserve its position and grey, red and cyan states.
+
+- Keep the selected Bestiary creature visible when opening its page directly or clearing search and list filters. Direct opens clear filters that hide the requested creature; manual list scrolling retains its position during routine refreshes.
+
+- Show automatically locked Bestiary creatures with a cyan padlock matching the [A] tags, plus a cyan [Auto-locked] label in its tooltip. Remember the lock origin through reloads and backups; manual locks remain red. Recover older automatic locks when a completed saved kill streak remains available.
+
+- Refresh the visible padlock tooltip when Bestiary progress changes, so the remaining auto-lock count and lock status update while hovering. Previously they stayed at their mouse-entry values. Verify mixed creature levels contribute to one streak across reloads; discovering a new level still restarts it once.
+
+- Add a concise "Last reset" debug line to the Bestiary padlock tooltip identifying the latest auto-lock streak reset, such as a changed level range, recorded abilities, manual unlock or an auto-lock option change. Retain the explanation across reloads and backups; older resets without a recorded reason show "none recorded".
+
+- Make loot independent of creature auto-locking: newly discovered items never restart the kill streak, and locked creatures continue recording drops, quantities and corpse samples. Preserve existing streaks when upgrading the tracking signature and verify new drops on locked pages remain deduplicated.
+
+- Expand regression coverage for selection visibility, auto-lock origin and progress, mixed creature levels, persistent reset reasons, backups and loot capture on locked creatures. Update the Bestiary documentation and retain the editable padlock geometry outside release packages.
+
 ## v0.40.0 - 2026-10-13
 
 - Retain the verified caster portrait and Bestiary navigation on automatically recorded Loss of Control rows. Recording previously left only the caster name, dropping its portrait and click action. Left-click the saved row or portrait to open that creature; preserve retargeting safety, dismissal and creature-lock suppression, with focused regressions.

@@ -1,0 +1,164 @@
+{
+  "canvas": [
+    32,
+    32
+  ],
+  "crop": [
+    8,
+    7,
+    23,
+    25
+  ],
+  "rectangles": [
+    {
+      "name": "lockBodyTop",
+      "bounds": [
+        10,
+        14,
+        21,
+        15
+      ],
+      "alpha": 255
+    },
+    {
+      "name": "lockBodyUpper",
+      "bounds": [
+        9,
+        15,
+        22,
+        16
+      ],
+      "alpha": 255
+    },
+    {
+      "name": "lockBody",
+      "bounds": [
+        8,
+        16,
+        23,
+        23
+      ],
+      "alpha": 255
+    },
+    {
+      "name": "lockBodyLower",
+      "bounds": [
+        9,
+        23,
+        22,
+        24
+      ],
+      "alpha": 255
+    },
+    {
+      "name": "lockBodyBottom",
+      "bounds": [
+        10,
+        24,
+        21,
+        25
+      ],
+      "alpha": 255
+    },
+    {
+      "name": "lockTop",
+      "bounds": [
+        13,
+        7,
+        18,
+        8
+      ],
+      "alpha": 255
+    },
+    {
+      "name": "lockShoulders",
+      "bounds": [
+        11,
+        8,
+        20,
+        9
+      ],
+      "alpha": 255
+    },
+    {
+      "name": "lockLeft",
+      "bounds": [
+        10,
+        9,
+        12,
+        15
+      ],
+      "alpha": 255
+    },
+    {
+      "name": "lockRight",
+      "bounds": [
+        19,
+        9,
+        21,
+        15
+      ],
+      "alpha": 255
+    },
+    {
+      "name": "keyholeTop",
+      "bounds": [
+        14,
+        16,
+        17,
+        17
+      ],
+      "alpha": 0
+    },
+    {
+      "name": "keyhole",
+      "bounds": [
+        13,
+        17,
+        18,
+        19
+      ],
+      "alpha": 0
+    },
+    {
+      "name": "keyholeBottom",
+      "bounds": [
+        14,
+        19,
+        17,
+        20
+      ],
+      "alpha": 0
+    },
+    {
+      "name": "keyStem",
+      "bounds": [
+        14,
+        20,
+        17,
+        22
+      ],
+      "alpha": 0
+    },
+    {
+      "name": "shackleInnerTopLeft",
+      "bounds": [
+        12,
+        9,
+        13,
+        10
+      ],
+      "alpha": 255
+    },
+    {
+      "name": "shackleInnerTopRight",
+      "bounds": [
+        18,
+        9,
+        19,
+        10
+      ],
+      "alpha": 255
+    }
+  ]
+}

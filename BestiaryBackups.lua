@@ -134,14 +134,14 @@ local entry=record({id=positive,name=names,category=names,rank=names,levelMin=po
         recent=array(record({guid=names,items=map(positive,natural)},{"guid","items"}))},{"samples","items","recent"}),
     pickpocketLoot=record({samples=natural,items=map(positive,record({quantity=natural,drops=natural},{"quantity","drops"})),
         recent=array(record({guid=names,items=map(positive,natural)},{"guid","items"}))},{"samples","items","recent"}),
-    kills=natural,sightings=natural,confirmed=boolean,personalEncountered=boolean,lockedBasic=basic,
+    kills=natural,sightings=natural,confirmed=boolean,autoLocked=boolean,personalEncountered=boolean,lockedBasic=basic,
     locations=flags,subzones=map(names,flags),offenses=flags,resistances=flags,immunities=flags,ignoredTypeImmunities=flags,behaviours=flags,
     behaviourSources=map(names,enum({monsterEmote=true,unitReaction=true})),ignoredBehaviours=flags,
     abilities=map(names,ability),ignoredAbilities=flags,damage=map(positive,damage),
     idNotes=record({spells=array(positive),text=prose}),tameable=boolean,tameabilitySource=names,
     beastLore=record({level=positive,observed=timestamp,rows=array(record({left=names,right=names},{"left"}))},{"level","observed","rows"}),
     beastLoreSource=enum({gameTooltip=true,WHISPER=true}),beastLoreSender=names,
-    discoveryProgress=progress,sharedReports=array(shared),rumours=array(rumour),unchangedKills=natural},{"id"})
+    discoveryProgress=progress,sharedReports=array(shared),rumours=array(rumour),unchangedKills=natural,autoLockResetReason=names},{"id"})
 local bestiary=record({entries=map(positive,entry),deletedEntries=map(positive,boolean),creatures=map(positive,record({names=flags,spells=map(positive,record({name=names},{"name"}))})),
     zoneTerritories=boundedMap(names,map(enum({Alliance=true,Horde=true,Neutral=true}),
         enum({friendly=true,hostile=true,contested=true,sanctuary=true,arena=true,combat=true,none=true})),1024),

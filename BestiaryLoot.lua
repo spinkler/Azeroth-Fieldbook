@@ -146,11 +146,9 @@ function ns.StartBestiaryLoot(journal)
                 loot.samples=loot.samples+1;changed=true
             end
             -- Preserve the maximum snapshot across autoloot and repeated opens.
-            local learned=false
             for id,quantity in pairs(sample.items) do
                 local old=previous.items[id] or 0
                 if quantity>old then
-                    if not loot.items[id] then learned=true end
                     local item=loot.items[id] or {quantity=0,drops=0}
                     loot.items[id]=item
                     item.quantity=item.quantity+quantity-old
@@ -158,7 +156,6 @@ function ns.StartBestiaryLoot(journal)
                     previous.items[id]=quantity;changed=true
                 end
             end
-            if learned and not sample.pocket and journal.TrackStableContent then journal:TrackStableContent(sample.id) end
         end
         if changed then journal:Touch() end
     end

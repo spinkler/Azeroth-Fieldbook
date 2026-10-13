@@ -26,6 +26,7 @@ function open(db)
     return ns.CreateBestiaryJournal(db,function() end,selected),selected
 end
 alice=character(25,'Fireball',9,'Elwynn')
+alice.bestiary.entries[42].autoLocked=true
 alice.bestiary.entries[42].idNotes={spells={1,2},text='Alice notes'}
 alice.bestiary.entries[42].damage[9]={low=5,high=10,reports=1}
 alice.bestiary.entries[42].offenses={Fire=true}
@@ -39,6 +40,7 @@ alice.bestiary.points.reservations.outgoing=1
 alice.bestiary.sharing={sequence=5,receipts={},incoming={},outgoing={id='outgoing',stage='preflight',recipient='Carol'}}
 local localAlice=alice.bestiary
 local a,account=open(alice)
+assert(a:IsEntryAutoLocked(42),'account import preserves automatic lock origin')
 assert(alice.accountWideTracking and account==AzerothFieldbookAccountDB)
 assert(a.entries~=alice.bestiary.entries and a.entries[42]~=alice.bestiary.entries[42],'imports deep-copy character records')
 eq(a.entries[42].kills,25);eq(select(2,a:GetTotals()),3)
@@ -51,6 +53,7 @@ eq(select(2,again:GetTotals()),3,'reload does not add historical points twice')
 eq(alice.accountTrackingKey,key)
 
 bob=character(25,'Frostbolt',11,'Westfall')
+bob.bestiary.entries[42].autoLocked=true
 bob.bestiary.entries[42].pickpocketLoot={samples=1,items={[123]={quantity=3,drops=1}},recent={}}
 bob.uiScale=1.25
 bob.bestiary.entries[42].idNotes={spells={2,3},text='Bob notes'}
@@ -62,6 +65,7 @@ bob.bestiary.entries[43]={id=43,name='Other creature',category='Beast',kills=0,a
 -- Ensure the additional entry has genuine credit, as normal observation does.
 ns.CreateBestiaryJournal(bob,function() end):Ensure(43,false,nil,{level=9})
 local b,bobAccount=open(bob)
+assert(b:IsEntryAutoLocked(42),'merging automatically locked pages retains the origin')
 eq(b.entries[42].pickpocketLoot.samples,2);eq(b.entries[42].pickpocketLoot.items[123].quantity,5)
 assert(bobAccount==account and bob.accountTrackingKey~=key)
 eq(b.entries[42].kills,50,'different characters contribute their recorded kills')
@@ -148,8 +152,11 @@ open(broken);eq(account.bestiary.entries[42].kills,5,'retry imports only once af
 AzerothFieldbookAccountDB=nil
 local crownAlice=character(50,'Fireball',9,'Elwynn')
 local crownBob=character(50,'Frostbolt',9,'Elwynn')
+crownAlice.bestiary.entries[42].autoLocked=true
 open(crownAlice)
 local crown=open(crownBob)
+assert(crown.entries[42].confirmed and not crown:IsEntryAutoLocked(42),
+    'a manual lock in the merged records keeps the manual indicator')
 eq(crown.entries[42].kills,100);eq(select(2,crown:GetKillReward(42)),'crown')
 eq(select(2,crown:GetTotals()),13,'two migrated five-point journals plus the new three-point crown')
 crown=open(crownBob)

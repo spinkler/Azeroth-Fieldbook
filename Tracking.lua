@@ -101,6 +101,7 @@ local function mergeEntry(target, source)
         target.tameable=source.tameable;target.tameabilitySource="gameTooltip"
     end
     target.confirmed = target.confirmed == true and source.confirmed == true
+    target.autoLocked = target.confirmed and target.autoLocked == true and source.autoLocked == true
     -- Preserve the account's locked snapshot until the page is unlocked.
     if not target.confirmed then target.lockedBasic = nil end
     target.behaviours=target.behaviours or {}

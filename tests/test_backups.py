@@ -39,6 +39,27 @@ def client():
 
 
 class BackupTests(unittest.TestCase):
+    def test_automatic_lock_origin_round_trip_and_restore(self):
+        lua = client()
+        lua.execute('''
+            local j,db,store,e=fresh()
+            e.autoLockResetReason='abilities changed';e.unchangedKills=5
+            j:SetEntryConfirmed(42,true,true)
+            local snapshot=assert(j:CreateBackup())
+            local decoded=assert(ns.BestiaryBackups.Decode(assert(ns.BestiaryBackups.Encode(snapshot))))
+            assert(decoded.bestiary.entries[42].autoLocked)
+            assert(decoded.bestiary.entries[42].autoLockResetReason=='abilities changed')
+            j:SetEntryConfirmed(42,false);j:SetEntryConfirmed(42,true)
+            local manual=assert(j:CreateBackup())
+            assert(manual.bestiary.entries[42].autoLocked==false)
+            assert(j:RestoreBackup(decoded))
+            assert(j:IsEntryAutoLocked(42),'automatic origin survives backup restore')
+            assert(j.entries[42].autoLockResetReason=='abilities changed' and j.entries[42].unchangedKills==5,
+                'restoring progress must not record a reset while rebuilding its signature')
+            assert(j:RestoreBackup(manual))
+            assert(j.entries[42].confirmed and not j:IsEntryAutoLocked(42))
+        ''')
+
     def test_round_trip_full_records_and_unicode(self):
         lua = client()
         lua.execute('''

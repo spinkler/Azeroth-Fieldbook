@@ -482,7 +482,7 @@ local ink = { 0.75, 0.8, 0.8 }
         for _,enabled in pairs(effects or {}) do if enabled then count=count+1 end end
         return count>0 and ("Effects ("..count..")") or "Choose effects"
     end
-    local function choose(id)
+    local function choose(id,clearBlockingFilters)
         if id~=selected and book.notesForm then book.notesForm:Hide() end
         if book.titleHover then book.titleHover:StopNameScroll() end
         if book.deleteForm then book.deleteForm:Hide() end
@@ -500,7 +500,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.manualEffects={}; if book.effectButton then book.effectButton:SetText("Choose effects") end
         book.damageForm:Hide()
         message("")
-        refresh()
+        refresh(true,clearBlockingFilters)
     end
     local function cycleEntry(direction)
         local rows=journal:List(category,book.search:GetText(),reviewOnly,nil,locationFilters,rankFilters)
@@ -513,7 +513,7 @@ local ink = { 0.75, 0.8, 0.8 }
         choose(rows[nextIndex].id)
         return true
     end
-    refresh = function()
+    refresh = function(revealSelected,clearBlockingFilters)
         if not book then return end
         local available, observedLocations = {}, {}
         for id in pairs(journal.entries) do
@@ -553,6 +553,21 @@ local ink = { 0.75, 0.8, 0.8 }
             letterButton:SetSelected(initial == letterButton.letter)
         end
         local rows = unletteredRows
+        if revealSelected and selected then
+            local selectedIndex
+            for index,row in ipairs(rows) do
+                if row.id==selected then selectedIndex=index;break end
+            end
+            if selectedIndex then
+                -- Move only far enough to reveal the selected row; ordinary
+                -- refreshes and manual scrolling retain their list position.
+                if selectedIndex<=offset then offset=selectedIndex-1
+                elseif selectedIndex>offset+creaturePageSize then offset=selectedIndex-creaturePageSize end
+            elseif clearBlockingFilters and journal.entries[selected] then
+                book.listFilterButton.ResetFilters()
+                return
+            end
+        end
         offset = math.max(0, math.min(offset, math.max(0, #rows - creaturePageSize)))
         book.updatingCreatureScroll=true
         book.creatureScrollBar:SetMinMaxValues(0,math.max(0,#rows-creaturePageSize))
@@ -815,9 +830,12 @@ local ink = { 0.75, 0.8, 0.8 }
         if #behaviours > 0 then combat[#combat + 1] = "Behaviour: " .. table.concat(behaviours, ", ") end
         layoutSummary(status,combat)
         book.confirm:SetText(e.confirmed and "Unlock this entry" or "Lock this entry")
-        book.confirm:SetLockedState(e.confirmed)
+        book.confirm:SetLockedState(e.confirmed,journal:IsEntryAutoLocked(selected))
         book.confirm:SetEnabled(true)
         book.confirm:Show()
+        if GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(book.confirm) and GameTooltip:IsShown() then
+            book.confirm:GetScript("OnEnter")(book.confirm)
+        end
         local names = {}
         for name in pairs(e.abilities) do names[#names + 1] = name end
         table.sort(names)
@@ -1075,7 +1093,7 @@ local ink = { 0.75, 0.8, 0.8 }
         local function addTypeButton(name, y)
             local typeButton = button(book, name == "All creatures" and "All" or name, 42, y, 88, function()
                 if name=="All creatures" or category==name then category=nil else category=name end
-                offset = 0; refresh()
+                offset = 0; refresh(true)
             end)
             styleSelection(typeButton)
             book.typeButtons[name] = typeButton
@@ -1094,17 +1112,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.pointsCount:SetTextColor(0.55,0.58,0.58)
         book.search = ui.Search(book,70,-110,168,100)
         book.searchClear=book.search.clearButton
-        book.search:HookScript("OnTextChanged", function() offset=0;refresh() end)
-        book.searchClear:HookScript("OnClick",function()
-            local rows=journal:List(category,"",reviewOnly,nil,locationFilters,rankFilters)
-            for index,row in ipairs(rows) do
-                if row.id==selected then
-                    offset=index-1
-                    refresh()
-                    break
-                end
-            end
-        end)
+        book.search:HookScript("OnTextChanged", function() offset=0;refresh(book.search:GetText()=="") end)
         -- Keep the popup independent of book focus/strata changes. Its entire
         -- hierarchy must draw above nested row rewards and scrollbar buttons.
         local sortDismiss=CreateFrame("Button","AzerothFieldbookSortMenu",UIParent)
@@ -1167,7 +1175,7 @@ local ink = { 0.75, 0.8, 0.8 }
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookSortMenu" end
         book.review = button(book, "Pending", 42, -543, 88, function()
             reviewOnly = not reviewOnly
-            offset = 0; refresh()
+            offset = 0; refresh(true)
         end)
         styleSelection(book.review)
         -- Filters live in the dropdown; the list uses the full left pane.
@@ -1180,7 +1188,7 @@ local ink = { 0.75, 0.8, 0.8 }
             category=nil;initial=nil;reviewOnly=false;offset=0
             for key in pairs(locationFilters) do locationFilters[key]=nil end
             for key in pairs(rankFilters) do rankFilters[key]=nil end
-            book.search:SetText("");book.listFilterMenu:Hide();book.HideFilterSubmenus();refresh()
+            book.search:SetText("");book.listFilterMenu:Hide();book.HideFilterSubmenus();refresh(true)
         end
         local listFilter=book.listFilterButton
         styleSelection(listFilter,nil,true)
@@ -1238,7 +1246,7 @@ local ink = { 0.75, 0.8, 0.8 }
                         row.label=label(row,"",26,-5,188,"GameFontHighlightSmall");row.label:SetWordWrap(true)
                         row:SetScript("OnClick",function(self)
                             selectedFilters[self.value]=self:GetChecked()==true or nil
-                            offset=0;refresh()
+                            offset=0;refresh(true)
                         end)
                         self.rows[i]=row
                     end
@@ -1255,7 +1263,7 @@ local ink = { 0.75, 0.8, 0.8 }
             end
             menu.clear=button(menu,"Clear all",12,0,236,function()
                 for name in pairs(selectedFilters) do selectedFilters[name]=nil end
-                offset=0;refresh()
+                offset=0;refresh(true)
             end)
             menu.clear:ClearAllPoints();menu.clear:SetPoint("BOTTOMLEFT",12,10)
             local function open()
@@ -1398,8 +1406,8 @@ local ink = { 0.75, 0.8, 0.8 }
             hiddenForDelete=nil;refresh()
         end)
         local refreshWithList=refresh
-        refresh=function()
-            refreshWithList()
+        refresh=function(revealSelected,clearBlockingFilters)
+            refreshWithList(revealSelected,clearBlockingFilters)
             if hiddenForDelete and deleteForm:IsShown() then hideDeleteControls() end
         end
         book.indexCount = label(book, "* Unlocked", 42, -628, 250, "GameFontHighlightSmall")
@@ -1650,50 +1658,45 @@ local ink = { 0.75, 0.8, 0.8 }
         book.confirm:SetSize(24, 24)
         book.confirm:SetPoint("TOPLEFT",book.modelBorder,"TOPLEFT",6,-6)
         book.confirm:SetFrameLevel(detail:GetFrameLevel() + 5)
-        -- Preserve the original screen center while shrinking the button and artwork.
-        local function lockPart(width, height, x, y, layer)
-            local part = book.confirm:CreateTexture(nil, layer or "ARTWORK")
-            part:SetSize(width, height)
-            part:SetPoint("TOP", x, y + 1)
-            return part
+        -- One raster texture keeps the shackle, body and keyhole together.
+        local lockIcon = book.confirm:CreateTexture(nil, "ARTWORK")
+        lockIcon:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\BestiaryLock.png")
+        lockIcon:SetTexCoord(8/32, 23/32, 7/32, 25/32)
+        lockIcon:SetSize(15, 18)
+        lockIcon:SetPoint("TOP", 0, -4)
+        if lockIcon.SetSnapToPixelGrid then lockIcon:SetSnapToPixelGrid(false) end
+        if lockIcon.SetTexelSnappingBias then lockIcon:SetTexelSnappingBias(0) end
+        book.confirm.lockIcon = lockIcon
+        local lastLockLeft, lastLockTop, lastLockScale
+        local function alignLockPixels()
+            local left, top, scale = book.confirm:GetLeft(), book.confirm:GetTop(), book.confirm:GetEffectiveScale()
+            if type(left) ~= "number" or type(top) ~= "number" or type(scale) ~= "number" or scale <= 0 then return end
+            if left == lastLockLeft and top == lastLockTop and scale == lastLockScale then return end
+            lastLockLeft, lastLockTop, lastLockScale = left, top, scale
+            local width = math.max(1, math.floor(15 * scale + 0.5))
+            local height = math.max(1, math.floor(18 * scale + 0.5))
+            local x = math.floor((left + book.confirm:GetWidth() / 2) * scale - width / 2 + 0.5)
+            local y = math.floor((top - 4) * scale + 0.5)
+            lockIcon:ClearAllPoints()
+            lockIcon:SetSize(width / scale, height / scale)
+            lockIcon:SetPoint("TOPLEFT", book.confirm, "TOPLEFT", x / scale - left, y / scale - top)
         end
-        local lockBody = lockPart(10, 8, 0, -12)
-        local lockCorners = {}
-        for _, point in ipairs({"TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT"}) do
-            -- Two stepped pixels round each corner without enlarging the silhouette.
-            for _, size in ipairs({{2, 1}, {1, 2}}) do
-                local corner = book.confirm:CreateTexture(nil, "OVERLAY")
-                corner:SetSize(size[1], size[2])
-                corner:SetPoint(point, lockBody, point)
-                lockCorners[#lockCorners + 1] = corner
-            end
-        end
-        -- A raised, arched shackle and central keyhole distinguish it from a case.
-        local lockTop = lockPart(2, 1, 0, -8)
-        local lockShoulders = lockPart(4, 1, 0, -9)
-        local lockLeft = lockPart(2, 4, -2, -10)
-        local lockRight = lockPart(2, 4, 2, -10)
-        local keyhole = lockPart(2, 2, 0, -14, "OVERLAY")
-        local keyStem = lockPart(1, 2, 0, -16, "OVERLAY")
-        lockCorners[#lockCorners + 1] = keyhole
-        lockCorners[#lockCorners + 1] = keyStem
-        book.confirm.lockParts = { lockBody, lockTop, lockShoulders, lockLeft, lockRight }
-        book.confirm.lockCorners = lockCorners
-        function book.confirm:SetLockedState(locked)
+        book.confirm:HookScript("OnShow", alignLockPixels)
+        book.confirm:HookScript("OnUpdate", alignLockPixels)
+        alignLockPixels()
+        function book.confirm:SetLockedState(locked, automatic)
             self.locked = locked and true or false
             local r, g, b = self.locked and 0.95 or 0.22, self.locked and 0.12 or 0.22, self.locked and 0.06 or 0.22
-            for _, part in ipairs(self.lockParts) do
-                part:SetColorTexture(r, g, b, 1)
-            end
-            local bgR, bgG, bgB = self.locked and 0.22 or 0.06, 0.04, 0.02
-            for _, corner in ipairs(self.lockCorners) do
-                corner:SetColorTexture(bgR, bgG, bgB, 1)
-            end
+            if self.locked and automatic then r,g,b=128/255,208/255,1 end -- [A] cyan: #80d0ff.
+            self.lockIcon:SetVertexColor(r, g, b, 1)
         end
         book.confirm:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
             GameTooltip:SetText(self.locked and "Unlock this entry" or "Lock this entry")
             local entry=selected and journal.entries[selected]
+            if journal:IsEntryAutoLocked(selected) then
+                GameTooltip:AddLine("|cff80d0ff[Auto-locked]|r")
+            end
             if entry and not entry.confirmed and journal:GetAutoLockEnabled() then
                 local remaining=journal:GetAutoLockKills()-(entry.unchangedKills or 0)
                 if remaining>0 then
@@ -1704,6 +1707,9 @@ local ink = { 0.75, 0.8, 0.8 }
                         if font and size then line:SetFont(font,math.max(1,size-1),flags) end
                     end
                 end
+            end
+            if entry then
+                GameTooltip:AddLine("Last reset: "..(entry.autoLockResetReason or "none recorded")..".",0.7,0.7,0.7,true)
             end
             GameTooltip:Show()
         end)
@@ -2552,13 +2558,13 @@ local ink = { 0.75, 0.8, 0.8 }
     shell:RegisterSection("bestiary",{
         title="Bestiary",icon="Interface\\Icons\\Ability_Tracking",frameName="AzerothFieldbookBestiarySection",build=build,
         onOpen=function(context)
-            if context and context.creatureID then choose(context.creatureID);return end
+            if context and context.creatureID then choose(context.creatureID,true);return end
             -- Previous browsing selection wins; only fall back to a known target.
             if selected and journal.entries[selected] then
                 safeModel(selected)
             else
                 local target=journal:ExistingUnitEntry("target")
-                if target then choose(target);return end
+                if target then choose(target,true);return end
             end
             refresh()
         end,

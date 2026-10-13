@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.40.0 (Release)
+# Azeroth Fieldbook 0.40.1 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -440,10 +440,22 @@ future section to be complete. See [current verification](tests/VERIFICATION.md)
 
 Options → Tracking includes **Auto-lock after X kills without recorded changes**, enabled
 by default at 10. Only credited kills count. Recorded-information changes and manual
-unlocking restart the count; repeated sightings, pending ability offers and restricted cast hints do not. The adjustable interval gives you time to manually record information before locking suppresses spell-ID observations. Newly learned loot items
-restart the count; repeated drops, quantities and corpse samples do not. Progress persists across
+unlocking restart the count; repeated sightings, pending ability offers and restricted cast hints do not. The adjustable interval gives you time to manually record information before locking suppresses spell-ID observations. Loot is independent:
+new items, repeated drops, quantities and corpse samples never restart the count,
+and locked creatures continue recording all loot. Progress persists across
 sessions, and automatic locking does not confirm pending abilities. Existing kills
 are not counted retroactively. Automatic locks appear in the Event log.
+All observed levels of the same creature contribute to one streak. Discovering a
+new level expands its recorded range and restarts the count once; subsequent kills
+at either known level count normally. The padlock's remaining-kills tooltip updates
+while hovered, including after a reset or automatic lock.
+Its **Last reset** debug line briefly explains the latest recorded restart, such as
+"abilities changed" or "level range changed". The reason persists across reloads and
+backups; resets from before this diagnostic was added have no recorded explanation.
+Automatically locked pages use a cyan padlock matching the **[A]** tags and show
+**[Auto-locked]** in cyan in the padlock tooltip. Manual locks use red. Older saved
+locks are identified as automatic only when their retained kill streak still meets
+the configured threshold; locks without that evidence keep the red indicator.
 
 **Lock newly encountered critters** is also on by default under Tracking. It
 records their first basic information, then locks the page. Turn it off to start

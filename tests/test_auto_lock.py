@@ -22,6 +22,68 @@ def loot_client():
 
 
 class AutoLockTests(unittest.TestCase):
+    def test_known_level_variants_share_one_counter_across_reload(self):
+        lua = new_client()
+        lua.execute('''
+            for level=7,8 do
+                units.target=spawn('observe'..level,false);units.target.level=level
+                fire('PLAYER_TARGET_CHANGED')
+            end
+            local e=AzerothFieldbookDB.bestiary.entries[42]
+            assert(e.levelMin==7 and e.levelMax==8 and e.unchangedKills==0)
+            for i=1,10 do
+                units.target=spawn('mixed'..i,false);units.target.level=i%2==0 and 8 or 7
+                fire('PLAYER_TARGET_CHANGED');units.target.combat=true;finishKill()
+                assert(e.kills==i and e.unchangedKills==i,
+                    'each known level must advance the same auto-lock streak')
+                if i==5 then fire('ADDON_LOADED','AzerothFieldbook') end
+            end
+            assert(e.confirmed and e.autoLocked)
+        ''')
+
+    def test_new_level_restarts_once_then_both_levels_count(self):
+        lua = new_client()
+        lua.execute('''
+            for i,level in ipairs({7,7,8,8,7,8}) do
+                units.target=spawn('newlevel'..i,false);units.target.level=level
+                fire('PLAYER_TARGET_CHANGED');units.target.combat=true;finishKill()
+                local e=AzerothFieldbookDB.bestiary.entries[42]
+                local expected=i<3 and i or i-2
+                assert(e.kills==i and e.unchangedKills==expected,
+                    'a new level resets once, repeated level variants do not')
+                if i>=3 then assert(e.autoLockResetReason=='level range changed') end
+            end
+        ''')
+
+    def test_lock_origin_survives_reload_settings_changes_and_manual_relocking(self):
+        lua = new_client()
+        lua.execute('''
+            for i=1,10 do beginKill('origin'..i);finishKill() end
+            local db=AzerothFieldbookDB
+            local j=ns.CreateBestiaryJournal(db,function() return 42 end)
+            local e=j.entries[42]
+            assert(e.autoLocked and j:IsEntryAutoLocked(42))
+            e.autoLocked=nil
+            j=ns.CreateBestiaryJournal(db,function() return 42 end)
+            assert(j:IsEntryAutoLocked(42),'legacy completed streaks retain automatic origin')
+            j:SetAutoLockKills(50);j:SetAutoLockEnabled(false)
+            j=ns.CreateBestiaryJournal(db,function() return 42 end)
+            assert(j:IsEntryAutoLocked(42) and e.unchangedKills==0,
+                'changing the threshold or disabling auto-lock preserves its origin')
+            assert(e.autoLockResetReason=='auto-lock disabled')
+            j:SetEntryConfirmed(42,false)
+            assert(not e.autoLocked and not j:IsEntryAutoLocked(42))
+            assert(e.autoLockResetReason=='manually unlocked')
+            j:SetEntryConfirmed(42,true)
+            e.unchangedKills=50
+            j=ns.CreateBestiaryJournal(db,function() return 42 end)
+            assert(e.confirmed and not j:IsEntryAutoLocked(42),
+                'an explicit manual lock cannot be inferred as automatic')
+            e.autoLocked=nil;e.unchangedKills=0
+            j=ns.CreateBestiaryJournal(db,function() return 42 end)
+            assert(not j:IsEntryAutoLocked(42),'legacy locks without evidence stay unmarked')
+        ''')
+
     def test_pending_casts_and_restricted_hints_do_not_reset_progress(self):
         lua = new_client()
         lua.execute(ROOT.joinpath('DetectedAbilities.lua').read_text(encoding='utf-8'), 'AzerothFieldbook', lua.globals().ns)
@@ -48,40 +110,51 @@ class AutoLockTests(unittest.TestCase):
             assert(e.unchangedKills==0,'actual recording resets progress')
         ''')
 
-    def test_identical_loot_allows_auto_lock_and_new_items_restart_progress(self):
+    def test_new_loot_never_resets_progress_and_locked_entries_keep_recording(self):
         lua = loot_client()
         lua.execute('''
             for i=1,10 do killAndLoot('same'..i) end
             local e=activeJournal.entries[42]
-            assert(not e.confirmed and e.unchangedKills==9,
-                'Only the first newly learned drop restarts the streak')
+            assert(e.confirmed and e.unchangedKills==10,
+                'Even the first newly learned drop must not restart the streak')
             for i=11,30 do killAndLoot('same'..i) end
             assert(e.confirmed and e.unchangedKills==10 and e.kills==30)
             assert(e.loot.samples==30 and e.loot.items[100].quantity==30)
+            lootItem=102;killAndLoot('lockednew')
+            assert(e.confirmed and e.unchangedKills==10 and e.kills==31)
+            assert(e.loot.samples==31 and e.loot.items[102].quantity==1 and e.loot.items[102].drops==1,
+                'locked creatures still record previously unseen drops')
+            fire('LOOT_READY');fire('LOOT_OPENED');tick()
+            assert(e.loot.samples==31 and e.loot.items[102].quantity==1,'locked loot stays deduplicated')
             activeJournal:SetEntryConfirmed(42,false)
-            for i=31,33 do killAndLoot('same'..i) end
+            for i=32,34 do killAndLoot('same'..i) end
             assert(e.unchangedKills==3)
             lootItem=101;fire('LOOT_READY')
-            assert(e.unchangedKills==0,'A new drop resets progress immediately')
-            for i=34,35 do killAndLoot('new'..i) end
-            assert(e.unchangedKills==2)
+            assert(e.unchangedKills==3,'A previously unseen drop does not reset progress')
+            assert(e.autoLockResetReason=='manually unlocked')
+            for i=35,36 do killAndLoot('new'..i) end
+            assert(e.unchangedKills==5)
             lootQuantity=4;fire('LOOT_READY');fire('LOOT_OPENED');tick()
-            assert(e.unchangedKills==2,'Quantity and duplicate snapshots are bookkeeping')
+            assert(e.unchangedKills==5,'Quantity and duplicate snapshots are bookkeeping')
             fire('ADDON_LOADED','AzerothFieldbook')
-            assert(activeJournal.entries[42].unchangedKills==2,'Reload preserves the streak')
+            assert(activeJournal.entries[42].unchangedKills==5,'Reload preserves the streak')
+            assert(activeJournal.entries[42].autoLockResetReason=='manually unlocked','Reload preserves the reset explanation')
         ''')
 
     def test_signature_upgrade_preserves_existing_progress(self):
-        lua = new_client()
-        lua.execute('''
-            for i=1,8 do beginKill('legacy'..i);finishKill() end
-            local e=AzerothFieldbookDB.bestiary.entries[42]
-            e.autoLockSignature='{legacy full-loot signature}'
-            fire('ADDON_LOADED','AzerothFieldbook')
-            assert(e.unchangedKills==8,'Changing the signature format is not new knowledge')
-            for i=9,10 do beginKill('legacy'..i);finishKill() end
-            assert(e.confirmed and e.unchangedKills==10)
-        ''')
+        for signature in ['{legacy full-loot signature}', 'knowledge2:legacy', 'knowledge3:legacy']:
+            with self.subTest(signature=signature):
+                lua = new_client()
+                lua.globals().legacySignature = signature
+                lua.execute('''
+                    for i=1,8 do beginKill('legacy'..i);finishKill() end
+                    local e=AzerothFieldbookDB.bestiary.entries[42]
+                    e.autoLockSignature=legacySignature
+                    fire('ADDON_LOADED','AzerothFieldbook')
+                    assert(e.unchangedKills==8,'Changing the signature format is not new knowledge')
+                    for i=9,10 do beginKill('legacy'..i);finishKill() end
+                    assert(e.confirmed and e.unchangedKills==10)
+                ''')
 
     def test_idle_observation_does_not_serialize_loot_history(self):
         lua = loot_client()
@@ -128,8 +201,8 @@ class AutoLockTests(unittest.TestCase):
             assert(refs[1]==nil,'The content cache must not retain deleted entries')
             killAndLoot('replacement')
             local e=activeJournal.entries[42]
-            assert(not e.confirmed and e.unchangedKills==0 and e.loot.samples==1)
-            killAndLoot('replacementAgain');assert(e.unchangedKills==1)
+            assert(not e.confirmed and e.unchangedKills==1 and e.loot.samples==1)
+            killAndLoot('replacementAgain');assert(e.unchangedKills==2)
         ''')
 
     def test_changes_noops_unlock_disable_and_validation(self):
@@ -145,6 +218,7 @@ class AutoLockTests(unittest.TestCase):
             assert(j:GetAutoLockKills()==3)
             j:SetCreatureNotes(42,'Changed')
             assert(e.unchangedKills==0)
+            assert(e.autoLockResetReason=='notes changed')
             beginKill('second');finishKill()
             j:SetCreatureNotes(42,'Changed')
             assert(e.unchangedKills==1,'no-op note edit retains streak')
@@ -154,6 +228,7 @@ class AutoLockTests(unittest.TestCase):
             assert(e.unchangedKills==2,'pending observations retain count')
             j:SetAbility(42,'New ability','confirmed')
             assert(e.unchangedKills==0,'recorded ability resets count')
+            assert(e.autoLockResetReason=='abilities changed')
             for i=1,3 do beginKill('afterchange'..i);finishKill() end
             assert(e.confirmed and e.abilities['New ability'].state=='confirmed', 'locked='..tostring(e.confirmed)..' streak='..tostring(e.unchangedKills)..' state='..tostring(e.abilities['New ability'].state))
             j:SetEntryConfirmed(42,false)
@@ -179,13 +254,13 @@ class AutoLockTests(unittest.TestCase):
             units.mouseover=spawn('critter',false)
             fire('UPDATE_MOUSEOVER_UNIT')
             local e=activeJournal.entries[42]
-            assert(activeJournal:GetLockNewCritters() and e.confirmed)
+            assert(activeJournal:GetLockNewCritters() and e.confirmed and e.autoLocked)
             assert(e.lockedBasic.category=='Critter' and e.lockedBasic.levelMin==5)
             assert(not next(e.lockedBasic.locations) and points()==0)
             assert(not activeJournal:Offer(42,'New ability','Automatic observation',123))
             activeJournal:SetEntryConfirmed(42,false)
             fire('UPDATE_MOUSEOVER_UNIT');tick()
-            assert(not e.confirmed,'manual unlock is respected')
+            assert(not e.confirmed and not e.autoLocked,'manual unlock clears the automatic origin')
             assert(activeJournal:Offer(42,'New ability','Automatic observation',123))
             activeJournal:SetLockNewCritters(false)
             assert(activeJournal:DeleteEntry(42))

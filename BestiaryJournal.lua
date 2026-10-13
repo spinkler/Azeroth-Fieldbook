@@ -552,9 +552,24 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     journal.SetAutoRecordBuffs = journal.SetAutoRecordAbilities
     function journal:GetAutoLockEnabled() return db.autoLockEnabled~=false end
     function journal:GetAutoLockKills() return number(db.autoLockKills) and db.autoLockKills or 10 end
+    function journal:IsEntryAutoLocked(id)
+        local entry=self.entries[id]
+        if not entry or not entry.confirmed then return false end
+        if entry.autoLocked==nil then
+            -- Legacy entries have no lock origin. Retain a completed saved
+            -- streak as evidence before later content or option changes reset it.
+            entry.autoLocked=(entry.unchangedKills or 0)>=self:GetAutoLockKills()
+        end
+        return entry.autoLocked==true
+    end
     function journal:SetAutoLockEnabled(enabled)
         if self:GetAutoLockEnabled()~=(enabled==true) then
-            for _,entry in pairs(self.entries) do entry.unchangedKills=0 end
+            for _,entry in pairs(self.entries) do
+                if (entry.unchangedKills or 0)>0 then
+                    entry.autoLockResetReason=enabled==true and "auto-lock enabled" or "auto-lock disabled"
+                end
+                entry.unchangedKills=0
+            end
         end
         db.autoLockEnabled=enabled==true
     end
@@ -563,11 +578,13 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not number(value) then return false end
         db.autoLockKills=value;return true
     end
-    local function contentSignature(value)
+    local function contentSignature(value,fields)
         if type(value)~="table" then return type(value)..":"..tostring(value) end
         local parts={}
         for key,item in pairs(value) do
-            local part=contentSignature(key).."="..contentSignature(item)
+            local encoded=contentSignature(item)
+            if fields then fields[key]=encoded end
+            local part=contentSignature(key).."="..encoded
             parts[#parts+1]=#part..":"..part
         end
         table.sort(parts)
@@ -577,6 +594,17 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         "offenses","resistances","immunities","ignoredTypeImmunities","behaviours","behaviourSources","ignoredBehaviours","disposition","damage","idNotes","tameable","discoveryProgress"}
     -- Entries replaced by deletion, reset or backup restore must not be retained.
     local stableRevisions=setmetatable({},{__mode="k"})
+    local stableContentSignatures=setmetatable({},{__mode="k"})
+    local resetReasons={
+        {"levelMin","level range changed"},{"levelMax","level range changed"},
+        {"abilities","abilities changed"},{"idNotes","notes changed"},{"damage","damage records changed"},
+        {"locations","location changed"},{"subzones","location changed"},
+        {"behaviours","behaviour changed"},{"behaviourSources","behaviour changed"},{"ignoredBehaviours","behaviour changed"},
+        {"offenses","offenses changed"},{"resistances","resistances changed"},{"immunities","immunities changed"},
+        {"ignoredTypeImmunities","immunities changed"},{"ignoredAbilities","abilities changed"},
+        {"name","creature details changed"},{"category","creature details changed"},{"rank","creature details changed"},
+        {"disposition","disposition changed"},{"tameable","tameability changed"},{"discoveryProgress","discovery record changed"},
+    }
     function journal:TrackStableContent(id,skipUnchanged)
         local entry=self.entries[id]
         if not entry then return end
@@ -591,22 +619,30 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
                 content.abilities[name]=ability
             end
         end
-        -- Item identities are knowledge; quantities, samples and corpse replay
-        -- protection change on routine looting without teaching anything new.
-        if entry.loot then
-            for itemID in pairs(entry.loot.items or {}) do
-                content.loot=content.loot or {};content.loot[itemID]=true
+        -- Loot is independent of creature recording and never restarts auto-lock.
+        local fields={}
+        local signature="knowledge4:"..contentSignature(content,fields)
+        if entry.autoLockSignature~=signature then
+            -- Upgrading a previous signature format must preserve saved progress.
+            local upgrading=type(entry.autoLockSignature)=="string" and (entry.autoLockSignature:sub(1,1)=="{"
+                or entry.autoLockSignature:sub(1,11)=="knowledge2:"
+                or entry.autoLockSignature:sub(1,11)=="knowledge3:")
+            entry.autoLockSignature=signature
+            if not upgrading then
+                if (entry.unchangedKills or 0)>0 then
+                    local previous=stableContentSignatures[entry]
+                    local reason="recorded information changed"
+                    if previous then
+                        for _,change in ipairs(resetReasons) do
+                            if previous[change[1]]~=fields[change[1]] then reason=change[2];break end
+                        end
+                    end
+                    entry.autoLockResetReason=reason
+                end
+                entry.unchangedKills=0
             end
         end
-        local signature="knowledge3:"..contentSignature(content)
-        if entry.autoLockSignature~=signature then
-            -- The previous format starts with a table brace. Upgrading its
-            -- representation must not discard an existing saved kill streak.
-            local upgrading=type(entry.autoLockSignature)=="string" and (entry.autoLockSignature:sub(1,1)=="{"
-                or entry.autoLockSignature:sub(1,11)=="knowledge2:")
-            entry.autoLockSignature=signature
-            if not upgrading then entry.unchangedKills=0 end
-        end
+        stableContentSignatures[entry]=fields
         stableRevisions[entry]=self.revision
     end
     function journal:GetAlwaysAnchorToMain()
@@ -1025,7 +1061,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         -- Snapshot the complete first observation before locking. Do not relock
         -- existing critters after a manual unlock or a later option change.
         if unclassified and entry.category == "Critter" and self:GetLockNewCritters() then
-            self:SetEntryConfirmed(id,true)
+            self:SetEntryConfirmed(id,true,true)
         end
         if (not wasNamed or not wasPersonal) and onEntryAdded then onEntryAdded(entry, discovered, observation, creditFor(id).discovered) end
         if changed then self:Touch() end
@@ -1284,7 +1320,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not entry.confirmed then
             entry.unchangedKills=self:GetAutoLockEnabled() and ((entry.unchangedKills or 0)+1) or 0
             if entry.unchangedKills>=self:GetAutoLockKills() then
-                self:SetEntryConfirmed(id,true)
+                self:SetEntryConfirmed(id,true,true)
                 self:RecordEvent("Auto-locked: "..(self:GetCreatureName(id) or "Creature").." after "..entry.unchangedKills.." kills without changes.",
                     {kind="autoLock",creatureID=id})
             end
@@ -1387,13 +1423,17 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if not wasNamed and onEntryAdded then onEntryAdded(entry, discovered, nil, creditFor(id).discovered) end
         return true
     end
-    function journal:SetEntryConfirmed(id, confirmed)
+    function journal:SetEntryConfirmed(id, confirmed, automatic)
         local entry = self.entries[id]
         if not entry then return false end
         if confirmed==true and not entry.confirmed and self.GetBasicInfo then
             entry.lockedBasic = self:GetBasicInfo(id)
-        elseif confirmed~=true then entry.lockedBasic=nil;entry.unchangedKills=0 end
+        elseif confirmed~=true then
+            entry.lockedBasic=nil;entry.unchangedKills=0
+            entry.autoLockResetReason="manually unlocked"
+        end
         entry.confirmed = confirmed == true
+        entry.autoLocked = entry.confirmed and automatic == true
         self:Touch()
         return true
     end
@@ -1789,8 +1829,11 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             clearSightings();killInstances={}
             for id,e in pairs(journal.entries) do
                 local unchanged=e.unchangedKills
+                local resetReason=e.autoLockResetReason
+                journal:IsEntryAutoLocked(id)
                 journal:TrackStableContent(id)
                 e.unchangedKills=unchanged or 0
+                e.autoLockResetReason=resetReason
             end
             journal:Touch()
         end)
@@ -1830,7 +1873,10 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if id then self:TrackStableContent(id,true) end
         return id
     end
-    for id in pairs(journal.entries) do journal:TrackStableContent(id) end
+    for id in pairs(journal.entries) do
+        journal:IsEntryAutoLocked(id)
+        journal:TrackStableContent(id)
+    end
     for id in pairs(trackingDB.bestiary.creatures) do restoreObservations(journal, id) end
     for _,entry in pairs(journal.entries) do
         for zone,subs in pairs(entry.subzones or {}) do
