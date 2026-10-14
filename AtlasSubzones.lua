@@ -394,6 +394,7 @@ function S.Attach(j)
         return true,"Traveller’s Atlas point recorded: "..A.Safe(name).."."
     end
     function s:Observe(deferred)
+        if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("atlas") then self:Reset(true);return end
         if j.readOnly or j.state.automaticMapping==false then self:Reset();return end
         if deadOrGhost() or blockedSignal(UnitOnTaxi,"player") or blockedSignal(IsFlying) then self:Reset();return end
         -- Read the raw labels: unavailable/secret values must not become an
@@ -1490,9 +1491,25 @@ end
 
 function S.Track(j,onChange)
     local s=j.subzones;local observer=CreateFrame("Frame");local elapsed=0;local away=false
+    local function paused() return ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("atlas") end
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("atlas",function(enabled)
+            s:Reset(true);elapsed=0;away=false
+            for id,index in pairs(s.index) do
+                if not enabled then S.Cancel(index.job);index.job=nil
+                elseif index.build and not index.job then
+                    index.job=S.Queue(index.build,function(ok,changed)
+                        index.job=nil
+                        if ok then index.build=nil else index.error=tostring(changed) end
+                        if ok and changed and onChange then onChange(id) end
+                    end)
+                end
+            end
+        end)
+    end
     s.onChange=onChange
     observer:SetScript("OnEvent",function(_,event)
-        if ns.InitializationBlocked then return end
+        if ns.InitializationBlocked or paused() then return end
         if event=="PLAYER_LOGOUT" then s:Flush();return end
         if event=="PLAYER_LEAVING_WORLD" then away=true;s:Reset(true);return end
         if event=="PLAYER_ENTERING_WORLD" or event=="ZONE_CHANGED_NEW_AREA" then away=false;s:Reset(true) end
@@ -1502,7 +1519,7 @@ function S.Track(j,onChange)
         pcall(observer.RegisterEvent,observer,event)
     end
     observer:SetScript("OnUpdate",function(_,dt)
-        if ns.InitializationBlocked then return end
+        if ns.InitializationBlocked or paused() then return end
         elapsed=elapsed+dt
         if elapsed<0.25 then return end
         elapsed=0
@@ -1819,7 +1836,8 @@ function S.CreateWorldOverlay(journal)
     local world,overlay,pending
     local function updateLabelControl()
         if not world then return end
-        local visible=journal.state.showSubzonesOnWorldMap==true and selected("Labels") and world:IsShown()
+        local visible=(not ns.IsFieldbookSectionEnabled or ns.IsFieldbookSectionEnabled("atlas"))
+            and journal.state.showSubzonesOnWorldMap==true and selected("Labels") and world:IsShown()
         local panel=controller.labelControl
         if visible and not panel then
             panel=CreateFrame("Frame",nil,world);controller.labelControl=panel
@@ -1853,6 +1871,7 @@ function S.CreateWorldOverlay(journal)
     end
     local function draw()
         pending=nil
+        if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("atlas") then stop();return end
         if not world or journal.state.showSubzonesOnWorldMap~=true or not world:IsShown() then stop();return end
         local canvas=A.Read(world.GetCanvas,world)
         local id=A.Read(world.GetMapID,world)
@@ -1885,6 +1904,7 @@ function S.CreateWorldOverlay(journal)
         overlay:RenderSubzones()
     end
     function controller:Refresh()
+        if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("atlas") then stop();return end
         if not world then self:Attach() end
         updateLabelControl()
         if journal.state.showSubzonesOnWorldMap~=true then stop();return end
@@ -1898,6 +1918,7 @@ function S.CreateWorldOverlay(journal)
         if C_Timer and type(C_Timer.After)=="function" then pending=true;C_Timer.After(0,draw)
         else draw() end
     end
+    if ns.RegisterSectionVisibilityListener then ns.RegisterSectionVisibilityListener("atlas",function() controller:Refresh() end) end
     function controller:Attach()
         if world or not WorldMapFrame or type(WorldMapFrame.GetCanvas)~="function" then return end
         world=WorldMapFrame

@@ -1,4 +1,7 @@
 local _, ns = ...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("angling")
+end
 local A=ns.Angling
 
 -- Contracts checked in Blizzard's Forever source, commit bd2470ae.
@@ -122,9 +125,15 @@ end
 function ns.CreateAnglingTracking(journal)
     local t={journal=journal,status="Fishing catches record automatically when fishing loot is readable."}
     local cast,assignment,failedWindow
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("angling",function()
+            cast,assignment,failedWindow=nil,nil,nil
+            journal:EndSession()
+        end)
+    end
     local function changed() if t.onChange then t.onChange() end end
     function t:ObserveWorldCursor()
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         local pool=worldPool();if not pool then return end
         self.observingHover=true
         local e=journal:ObservePool(pool,A.CurrentLocation())
@@ -262,7 +271,7 @@ function ns.CreateAnglingTracking(journal)
         return fact,err
     end
     function t:OnEvent(event,a,b,c,d)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if event=="UI_ERROR_MESSAGE" or event=="UI_INFO_MESSAGE" then
             local failure=fishingFailure(a,b)
             if failure then

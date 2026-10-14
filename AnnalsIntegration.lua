@@ -141,6 +141,7 @@ function ns.InitializeAnnals(shell,sources)
         end})
     end
     ns.RegisterFieldbookDiscoveryListener('annals',function(section,e,publisher)
+        if ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("annals") then return end
         if type(e)~='table' or not e.id or not c.adapters[section] then return end
         local owner=sources[section];local active=owner and (owner.journal or owner)
         if publisher and publisher~=active and publisher~=(active and active.entrances) then return end

@@ -1,5 +1,8 @@
 -- Ephemeral observations only. Secret values go directly to FontStrings, never SavedVariables.
 local _, ns = ...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary")
+end
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local window = {}
 ns.SpellIDWindow = window
@@ -114,6 +117,7 @@ local function clear(row)
     row.hovered=nil
     row.rawID=nil;row.token=nil
     row.candidate=nil;row.assignmentSaved=nil
+    row.portraitPending=nil;row.portraitRetryUntil=nil
     if row.portraitButton then
         row.portraitButton:Hide();row.portrait:SetTexture(nil)
         if row.portraitHovered and GameTooltip then GameTooltip:Hide() end
@@ -235,7 +239,7 @@ local function createPortrait(row)
     button:SetScript("OnClick", function(_, mouseButton)
         if row.isCast or mouseButton == "RightButton" or IsShiftKeyDown() then
             row.body:GetScript("OnMouseUp")(row.body, mouseButton)
-        elseif mouseButton == "LeftButton" and row.observed and row.candidate and not ns.InitializationBlocked then
+        elseif mouseButton == "LeftButton" and row.observed and row.candidate and not paused() then
             if row.assignmentSaved or IsControlKeyDown and IsControlKeyDown() then
                 if openCreature then openCreature(row.candidate) end
             elseif not row.assignmentSaved and row.candidate.assign() then
@@ -248,6 +252,31 @@ local function createPortrait(row)
     end)
     button:Hide()
 end
+local function loadPortrait(row)
+    local candidate=row.candidate
+    if not row.portraitPending or not candidate then return end
+    local unit=candidate.unit or "target"
+    local guid=read(UnitGUID,unit)
+    if not public(guid) or type(guid)~="string" or guid=="" or guid~=candidate.guid then return end
+    if type(IsUnitModelReadyForUI)=="function" then
+        local ready=read(IsUnitModelReadyForUI,unit)
+        if not public(ready) or ready~=true then return end
+    end
+    -- A successful native call does not guarantee a texture was supplied.
+    -- Clear first and keep the fallback until public texture metadata exists.
+    row.portrait:SetTexture(nil)
+    row.portrait:Hide();row.portraitUnknown:Show()
+    local ok=false
+    if type(SetPortraitTexture)=="function" then ok=pcall(SetPortraitTexture,row.portrait,unit) end
+    local after=read(UnitGUID,unit)
+    local texture=read(row.portrait.GetTexture,row.portrait)
+    local supplied=public(texture) and (type(texture)=="string" and texture~=""
+        or type(texture)=="number" and texture>0)
+    if ok and public(after) and after==candidate.guid and supplied then
+        row.portraitPending=nil;row.portraitRetryUntil=nil
+        row.portrait:Show();row.portraitUnknown:Hide()
+    else row.portrait:SetTexture(nil) end
+end
 local function showCandidate(row, candidate)
     row.title:SetSize(candidate and 260 or 310, 14)
     row.name:SetSize(candidate and 260 or 310, 14)
@@ -259,16 +288,11 @@ local function showCandidate(row, candidate)
     row.assignmentSaved=candidate.recorded==true
     row.portraitRing:SetColorTexture(0.67, 0.43, 0.19, 1)
     row.portraitUnknown:Show()
-    -- Render once while the token still matches the captured identity. Never
-    -- refresh this texture on target changes or inspect native portrait pixels.
-    local unit = candidate.unit or "target"
-    local guid = read(UnitGUID, unit)
-    if public(guid) and guid == candidate.guid and type(SetPortraitTexture) == "function" then
-        local ok = pcall(SetPortraitTexture, row.portrait, unit)
-        local after = read(UnitGUID, unit)
-        if ok and public(after) and after == candidate.guid then row.portraitUnknown:Hide()
-        else row.portrait:SetTexture(nil) end
-    end
+    row.portrait:Hide()
+    -- Retry slow native loads for five seconds, then wait for a portrait event.
+    -- Every attempt verifies the captured GUID; completed portraits stay frozen.
+    row.portraitPending=true;row.portraitRetryUntil=GetTime()+5
+    loadPortrait(row)
     row.portraitLevel:SetText(candidate.level or "")
     row.portraitButton:Show()
 end
@@ -338,7 +362,7 @@ local function setup()
         end
         row.body:SetScript("OnMouseUp",function(_,button)
             if row.dragged then row.dragged=nil;return end
-            if ns.InitializationBlocked then return end
+            if paused() then return end
             if button=="RightButton" then
                 if row.isCast and row.pinned then
                     row.pinned=nil;row.observed=GetTime()
@@ -369,7 +393,7 @@ local function setup()
     for _, row in ipairs(rows) do createPortrait(row) end
     local elapsed = 0
     panel:SetScript("OnUpdate", function(_, delta)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         elapsed = elapsed + delta
         if elapsed >= 0.25 then
             elapsed = 0
@@ -387,6 +411,10 @@ local function setup()
                     elseif validID(row.rawID) and recordedAbility and recordedAbility(row.candidate, row.rawID)
                         and not (row.isLossOfControl and row.candidate.recorded) then clear(row) end
                 end
+            end
+            for _,row in ipairs(rows) do
+                if row.observed and row.portraitPending and row.portraitRetryUntil
+                    and GetTime()<=row.portraitRetryUntil then loadPortrait(row) end
             end
         end
         updateFade(delta)
@@ -406,14 +434,14 @@ function window:SetCreatureOpener(callback)
     openCreature = callback
 end
 function window:PinLatestCast()
-    if not db or db.displaySpellIDWindow==false or ns.InitializationBlocked then return false end
+    if not db or db.displaySpellIDWindow==false or paused() then return false end
     for _,row in ipairs(castRows) do
         if row.observed and not row.pinned then return pin(row) end
     end
     return false
 end
 function window:UnpinLastCast()
-    if not db or db.displaySpellIDWindow==false or ns.InitializationBlocked then return false end
+    if not db or db.displaySpellIDWindow==false or paused() then return false end
     local latest
     for _,row in ipairs(castRows) do
         if row.observed and row.pinned and (not latest or row.serial>latest.serial) then latest=row end
@@ -440,7 +468,7 @@ local function candidateFor(unit, spellID, kind, expectedGUID, description, labe
 end
 updateTargetSuppression = function()
     local candidate
-    if not ns.InitializationBlocked and npcTarget() then
+    if not paused() and npcTarget() then
         candidate = candidateFor("target", nil, "cast", read(UnitGUID, "target"))
     end
     targetSuppressed = suppressed(candidate) and true or false
@@ -537,7 +565,7 @@ end
 -- LOC owns its event/deduplication path. Keep a separate row so an unrelated
 -- harmful aura or the window's event order cannot overwrite the LOC evidence.
 function window:ObserveLossOfControl(id, name, effect, caster, token, candidate)
-    if not db or db.displaySpellIDWindow == false or ns.InitializationBlocked then return false end
+    if not db or db.displaySpellIDWindow == false or paused() then return false end
     if not validID(id) then return false end
     local shown, reason = present(5, id, name or "Name unavailable", effect, caster, token, candidate)
     return shown or reason == "suppressed"
@@ -726,9 +754,15 @@ local function observeCast()
     end
 end
 events:SetScript("OnEvent", function(_, event, unit, second, id, bar)
-    if ns.InitializationBlocked then return end
+    if paused() then return end
     if not db or db.displaySpellIDWindow == false then return end
-    if event == "PLAYER_TARGET_CHANGED" then
+    if event == "UNIT_PORTRAIT_UPDATE" then
+        if not public(unit) or type(unit)~="string" then return end
+        for _,row in ipairs(rows) do
+            if row.observed and row.portraitPending and row.candidate
+                and unit==(row.candidate.unit or "target") then loadPortrait(row) end
+        end
+    elseif event == "PLAYER_TARGET_CHANGED" then
         updateTargetSuppression();updateFade(0)
         seen.target = {}; castBars = {}; castBarOrder = {}
         scanAuras("target"); observeCast()
@@ -770,7 +804,7 @@ function window:ApplySettings()
     updateTargetSuppression()
     background:SetColorTexture(0, 0, 0, db.spellIDWindowAlpha)
     events:UnregisterAllEvents()
-    if db.displaySpellIDWindow == false then
+    if db.displaySpellIDWindow == false or paused() then
         panel:Hide()
         for _, row in ipairs(rows) do clear(row) end
         castTokens,castTokenOrder={},{};castSerial=0
@@ -780,6 +814,7 @@ function window:ApplySettings()
     events:RegisterEvent("PLAYER_TARGET_CHANGED")
     events:RegisterEvent("PLAYER_ENTERING_WORLD")
     events:RegisterEvent("PLAYER_REGEN_ENABLED")
+    events:RegisterEvent("UNIT_PORTRAIT_UPDATE")
     events:RegisterUnitEvent("UNIT_AURA", "player", "target")
     events:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     for _, event in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_EMPOWER_START" }) do
@@ -829,7 +864,7 @@ function window:Initialize(settings)
         end)
     end
     self:ApplySettings()
-    if db.displaySpellIDWindow then observeCast() end
+    if db.displaySpellIDWindow and not paused() then observeCast() end
 end
 
 function window:Report(say)

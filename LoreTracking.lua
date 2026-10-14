@@ -1,4 +1,7 @@
 local _, ns = ...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("lore")
+end
 local L=ns.Lore
 
 -- This adapter follows the Classic ItemTextFrame contract. Availability checks
@@ -140,10 +143,17 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         if a.Progress then a.Progress(s and (s.traversing or s.restoring) and text or nil) end
         changed()
     end
-    local function alive(s) return not ns.InitializationBlocked and t.active==s and not s.closed end
+    local function alive(s) return not paused() and t.active==s and not s.closed end
     local function release(s)
         s.closed=true
         if journal.EndCapture then journal:EndCapture(s.sessionID) end
+    end
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("lore",function()
+            serial=serial+1
+            if t.active then release(t.active);t.active=nil end
+            if a.Progress then a.Progress(nil) end
+        end)
     end
     local function after(s,delay,fn)
         return a.After and a.After(delay,function() if alive(s) then fn() end end)==true
@@ -311,7 +321,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         if not after(s,0.05,sample) then sample() end
     end
     function t:OnNavigation(direction)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if self.issuing then return end
         local s=self.active;if not s then return end
         if s.traversing or s.restoring or s.pending or s.queue then finish(s,"Capture interrupted: you took control of the reader.") end
@@ -348,7 +358,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         return e,err
     end
     function t:CaptureCurrent()
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if self.dialogue and self.dialogue.writing then
             local d=a.Dialogue and a.Dialogue("gossip")
             if not d or not d.writing or d.identity~=self.dialogue.identity or d.sourceTitle~=self.dialogue.sourceTitle then
@@ -384,7 +394,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
             sourceTitle=context.sublabel,npcID=context.npcID,locale=read(GetLocale) or "unknown",subtype="NPC"})
     end
     function t:RecordPerson()
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         local context
         if self.dialogue then
             context=self.dialogue.speaker
@@ -395,7 +405,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         return e,err
     end
     function t:SavePassage()
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         local d=self.dialogue
         if not d then return nil,"Open supported gossip or quest text, or add a manual quotation." end
         local current=a.Dialogue and a.Dialogue(d.kind)
@@ -409,7 +419,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         journal:AddLocation(e.id,d.location);return e
     end
     function t:Event(event,...)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if event=="ITEM_TEXT_BEGIN" then
             local v=a.Read and a.Read() or {}
             local active=self.active
@@ -435,7 +445,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
             if not s then
                 local expected=serial
                 local function recover()
-                    if ns.InitializationBlocked or self.active or serial~=expected or not a.IsOpen or a.IsOpen()~=true then return end
+                    if paused() or self.active or serial~=expected or not a.IsOpen or a.IsOpen()~=true then return end
                     self:Event("ITEM_TEXT_BEGIN")
                     self:Event("ITEM_TEXT_READY")
                 end

@@ -1,4 +1,12 @@
 local _,ns=...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("annals")
+end
+local function sectionAfter(delay,callback)
+    if paused() then return end
+    if ns.GuardSectionCallback then callback=ns.GuardSectionCallback("annals",callback) end
+    C_Timer.After(delay,callback)
+end
 local A=ns.Annals
 local function recapLink()
     local link=A.Read(C_DeathRecap and C_DeathRecap.GetRecapLink or GetDeathRecapLink)
@@ -268,8 +276,20 @@ function ns.CreateAnnalsTracking(j)
     j.sessionStart=A.Int(db.sessionStart,0,A.Now()) and db.sessionStart or A.Now()
     local reward,offer,abandon=nil,nil,nil
     local rewardIndex,rewardClosed
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("annals",function(enabled)
+            reward,offer,abandon,rewardIndex,rewardClosed=nil,nil,nil,nil,nil
+            deaths:Reset()
+            local frame,ticker,capabilities=t.frame,t.ticker,t.capabilities
+            for key,value in pairs(t) do if type(value)~="function" then t[key]=nil end end
+            t.journal,t.frame,t.ticker,t.capabilities,t.loading=j,frame,ticker,capabilities,false
+            t.visitLoaded=true
+            if enabled then t:Seed() end
+            -- Discard only runtime context. Saved pending records stay intact.
+        end)
+    end
     local function later(delay,fn)
-        if C_Timer and type(C_Timer.After)=='function' then C_Timer.After(delay,fn);return true end
+        if C_Timer and type(C_Timer.After)=='function' then sectionAfter(delay,fn);return true end
     end
     function t:RestoreInstanceVisit()
         if self.visitLoaded then return end
@@ -305,7 +325,7 @@ function ns.CreateAnnalsTracking(j)
     end
     function t:CheckWorldTransfer()
         local transfer=self.worldTransfer
-        if not transfer or self.loading or j.readOnly or ns.InitializationBlocked then return end
+        if not transfer or self.loading or j.readOnly or paused() then return end
         local elapsed=A.Now()-(transfer.readyAt or transfer.at)
         if elapsed>30 then self.worldTransfer=nil;return end
         local from,to=transfer.from,travelContext()
@@ -354,7 +374,7 @@ function ns.CreateAnnalsTracking(j)
         self.travelContext=to
     end
     function t:Flush(id,force)
-        if j.readOnly or ns.InitializationBlocked then return end
+        if j.readOnly or paused() then return end
         local p=db.pending[id];if type(p)~='table' then return end
         local r=p.reward
         if p.kind=='accepted' then
@@ -413,7 +433,7 @@ function ns.CreateAnnalsTracking(j)
         if rewardIndex~=nil then self:RewardRequested(rewardIndex) end
     end
     function t:RewardRequested(index)
-        if j.readOnly or ns.InitializationBlocked or not reward or A.Now()-reward.at>600 or not A.Int(index,0,64) then return end
+        if j.readOnly or paused() or not reward or A.Now()-reward.at>600 or not A.Int(index,0,64) then return end
         -- Retries within one reward dialogue are one transaction. A new dialogue
         -- or accepted quest cycle can legitimately produce another completion.
         reward.token=reward.token or tostring(j:Sequence())
@@ -427,7 +447,7 @@ function ns.CreateAnnalsTracking(j)
         if p and p.kind=='completed' and p.token==reward.token and p.at>=reward.at then p.snapshot=A.Copy(reward) end
     end
     function t:Seed()
-        if j.readOnly or ns.InitializationBlocked then return end
+        if j.readOnly or paused() then return end
         local count=A.Read(C_QuestLog and C_QuestLog.GetNumQuestLogEntries)
         if not A.Int(count,0,1000) then return end
         -- One login baseline, never a repeated quest-log scan or invented acceptance.
@@ -462,7 +482,7 @@ function ns.CreateAnnalsTracking(j)
         j.trail:Sample(p)
     end
     function t:Event(event,id,xp,money)
-        if j.readOnly or ns.InitializationBlocked then return end
+        if j.readOnly or paused() then return end
         if event=='COMBAT_LOG_EVENT_UNFILTERED' then deaths:Combat();return end
         if event=='PLAYER_TARGET_CHANGED' or event=='UPDATE_MOUSEOVER_UNIT' or event=='NAME_PLATE_UNIT_ADDED' then
             deaths:Observe(event=='PLAYER_TARGET_CHANGED' and 'target' or event=='UPDATE_MOUSEOVER_UNIT' and 'mouseover' or id);return
@@ -529,7 +549,7 @@ function ns.CreateAnnalsTracking(j)
                     if entry and (not entry.zone or entry.zone=='' or not entry.mapID or not entry.x or not entry.y) then
                         local pending={entry=entry,index=index};t.loginLocation=pending
                         for _,delay in ipairs({1,2,3,5,10}) do later(delay,function()
-                            if t.loginLocation~=pending or t.loading or j.readOnly or ns.InitializationBlocked then return end
+                            if t.loginLocation~=pending or t.loading or j.readOnly or paused() then return end
                             if db.events[index]~=entry then t.loginLocation=nil;return end
                             local location=A.Location();local changed=false
                             -- A retry on another map cannot describe the login location.
@@ -607,7 +627,7 @@ function ns.CreateAnnalsTracking(j)
                 deaths:Recap()
                 local pending=deaths.pending
                 for _,delay in ipairs({0.2,1}) do later(delay,function()
-                    if not j.readOnly and not ns.InitializationBlocked and deaths.pending==pending then deaths:Recap() end
+                    if not j.readOnly and not paused() and deaths.pending==pending then deaths:Recap() end
                 end) end
             end
             j.trail:Break(event);return
@@ -697,7 +717,7 @@ function ns.CreateAnnalsTracking(j)
         end
     end
     function t:Poll()
-        if t.loading or j.readOnly or ns.InitializationBlocked then return end
+        if t.loading or j.readOnly or paused() then return end
         local now=A.Now()
         t:CheckWorldTransfer()
         t.travelContext=travelContext()
@@ -730,7 +750,7 @@ function ns.CreateAnnalsTracking(j)
     end
     function t:Start()
         if j.readOnly then return end
-        self.travelContext=travelContext()
+        if not paused() then self.travelContext=travelContext() end
         for id in pairs(db.pending) do t:Flush(id) end -- persisted provisional records survive reload
         self.frame=CreateFrame('Frame')
         for _,event in ipairs({'QUEST_ACCEPTED','QUEST_REMOVED','QUEST_TURNED_IN','QUEST_DETAIL','QUEST_ITEM_UPDATE','QUEST_COMPLETE','QUEST_FINISHED',
@@ -750,10 +770,10 @@ function ns.CreateAnnalsTracking(j)
             if C_QuestLog and type(C_QuestLog.SetAbandonQuest)=='function' and type(C_QuestLog.AbandonQuest)=='function' then
                 local selected
                 pcall(hooksecurefunc,C_QuestLog,'SetAbandonQuest',function()
-                    if not j.readOnly and not ns.InitializationBlocked then selected=A.Read(C_QuestLog.GetAbandonQuest) end
+                    if not j.readOnly and not paused() then selected=A.Read(C_QuestLog.GetAbandonQuest) end
                 end)
                 pcall(hooksecurefunc,C_QuestLog,'AbandonQuest',function()
-                    if not j.readOnly and not ns.InitializationBlocked and A.Int(selected,1,2147483647) then
+                    if not j.readOnly and not paused() and A.Int(selected,1,2147483647) then
                         abandon={id=selected,at=A.Now()}
                         local pending=db.pending[selected]
                         if pending and pending.kind=='removed' then pending.location.removal='abandoned' end

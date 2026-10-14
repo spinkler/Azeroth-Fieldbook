@@ -251,6 +251,7 @@ function ns.CreateAtlasJournal(saved)
             string.format('%d estimated saved-data bytes\n%d survey points • %d crossing points\n%d estimated point bytes • %.0f bytes per point on average\n%d compact coverage positions • %d estimated coverage bytes\nIncludes the active Atlas store: discoveries, expeditions, sub-zone samples, coverage, weather, references and settings. Excludes separate backups and inactive character stores. Estimated Lua formatting; actual SavedVariables file size and memory usage differ. Updates while this page is open.',bytes,surveys,crossings,pointBytes,count>0 and pointBytes/count or 0,coverageCount,coverageBytes)
     end
     function j:ObserveWeather()
+        if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("atlas") then return end
         if self.readOnly then return end
         local mapID=A.Read(C_Map and C_Map.GetBestMapForUnit,"player")
         local info=A.Read(C_Weather and C_Weather.GetCurrentWeather)

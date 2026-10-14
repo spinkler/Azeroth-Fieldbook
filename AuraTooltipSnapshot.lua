@@ -1,5 +1,8 @@
 -- Experimental relay of rendered tooltip text. Never parse or save its contents.
 local _, ns = ...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary")
+end
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local snapshot = {}
 ns.AuraTooltipSnapshot = snapshot
@@ -23,6 +26,7 @@ local function clear()
     end
 end
 local function capture(tooltip, unit, kind, filter)
+    if paused() then return end
     if not db or db.displayHoveredAuraSnapshots ~= true then return end
     if not public(unit) or type(unit) ~= "string" then status = "hover unit unavailable"; return end
     if kind == "aura" then
@@ -96,6 +100,7 @@ local function capture(tooltip, unit, kind, filter)
     panel:Show()
 end
 function snapshot:ApplySettings()
+    if paused() then clear();return end
     if not panel then return end
     for _,pair in ipairs(lines) do for _,destination in ipairs(pair) do
         if db.highlightRestrictedData and destination.restrictedData then destination:SetTextColor(1,0.4,0.7)

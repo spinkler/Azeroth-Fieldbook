@@ -82,6 +82,7 @@ function ns.CreateGatheringMapPins(journal)
         p:ClearAllPoints();p:SetPoint("CENTER",parent,anchor,x/scale,y/scale);p:Show()
     end
     function controller:RefreshWorld()
+        if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("gathering") then release("world",self.worldPins);return end
         local map=WorldMapFrame
         local canvas=map and journal:ShowNodesOn("worldMap") and map:IsShown() and read(map.GetCanvas,map)
         local id=canvas and read(map.GetMapID,map)
@@ -109,6 +110,7 @@ function ns.CreateGatheringMapPins(journal)
         hide(self.worldPins,count+1)
     end
     function controller:RefreshMinimap()
+        if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("gathering") then release("minimap",self.miniPins);return end
         local mini=Minimap
         if not mini or not mini:IsShown() or not journal:ShowNodesOn("minimap") then release("minimap",self.miniPins);return end
         local map=ns.CreatureLocations.CurrentMap()
@@ -149,6 +151,7 @@ function ns.CreateGatheringMapPins(journal)
         hide(self.miniPins,count+1)
     end
     function controller:Refresh() self:RefreshWorld();self:RefreshMinimap() end
+    if ns.RegisterSectionVisibilityListener then ns.RegisterSectionVisibilityListener("gathering",function() controller:Refresh() end) end
     if ns.RegisterWorldMapLayer then
         ns.RegisterWorldMapLayer("Nodes",function() return journal:ShowNodesOn("worldMap") end,function(on)
             journal:SetShowNodesOn("worldMap",on)

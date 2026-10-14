@@ -1,4 +1,7 @@
 local _, ns = ...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary")
+end
 
 -- Shared ability storage, plus the outside-combat buff scanner.
 -- Cast callers provide direct evidence from a watched NPC, including in combat.
@@ -95,6 +98,7 @@ function ns.InstallBestiaryBuffs(journal, identify)
         self:SetAutomaticRecordCallback(callback)
     end
     function journal:RecordVerifiedCast(id, spellID, observedName)
+        if paused() then return false end
         if not self:GetAutoRecordAbilities() then return false, "automatic recording disabled" end
         if not number(id) or not number(spellID) then return false, "cast identity unreadable or invalid" end
         local name = spellName(C_Spell and read(C_Spell.GetSpellName, spellID)) or spellName(observedName)
@@ -102,6 +106,7 @@ function ns.InstallBestiaryBuffs(journal, identify)
         return record(id, name, spellID, "cast")
     end
     function journal:RecordPlayerLossOfControl(id, spellID)
+        if paused() then return false end
         if not self:GetAutoRecordAbilities() then return false, "automatic recording disabled" end
         if not number(id) or not number(spellID) then return false, "effect identity unreadable or invalid" end
         local name = spellName(C_Spell and read(C_Spell.GetSpellName, spellID)) or ("Spell ID " .. spellID)
@@ -111,14 +116,14 @@ function ns.InstallBestiaryBuffs(journal, identify)
     -- was already observed publicly; resolving a link in combat is unnecessary.
     local assignmentKinds = {cast=true, buff=true, debuff=true, ["Loss of Control"]=true}
     function journal:AssignObservedAbility(id, spellID, kind)
-        if ns.InitializationBlocked then return false, "The Bestiary is not available yet." end
+        if paused() then return false, "The Bestiary is not available yet." end
         if not number(id) or not number(spellID) then return false, "effect identity unreadable or invalid" end
         if not public(kind) or not assignmentKinds[kind] then return false, "observation kind unavailable" end
         local name = spellName(C_Spell and read(C_Spell.GetSpellName, spellID)) or ("Spell ID " .. spellID)
         return record(id, name, spellID, "manual " .. kind, true)
     end
     function journal:CaptureSpellAssignment(unit, spellID, kind, say, canAssign)
-        if ns.InitializationBlocked or not public(unit) or type(unit) ~= "string" then return end
+        if paused() or not public(unit) or type(unit) ~= "string" then return end
         if not public(kind) or not assignmentKinds[kind] then return end
         local guid = read(UnitGUID, unit)
         if type(guid) ~= "string" or guid == "" then return end
@@ -135,7 +140,7 @@ function ns.InstallBestiaryBuffs(journal, identify)
         -- evidence. Retain only the public ID; native display can still relay secrets.
         local observedID = number(spellID) and spellID or nil
         local function available()
-            if ns.InitializationBlocked or canAssign and not canAssign()
+            if paused() or canAssign and not canAssign()
                 or self.entries ~= entries or entry and self.entries[id] ~= entry then
                 say("This observation is no longer available after the Bestiary changed.")
                 return false
@@ -174,6 +179,7 @@ function ns.InstallBestiaryBuffs(journal, identify)
         for _, unit in ipairs({"target", "mouseover"}) do say("Automatic buffs " .. unit .. ": " .. status[unit]) end
     end
     function journal:ObserveBuffs(unit)
+        if paused() then return false end
         if not public(unit) or (unit ~= "target" and unit ~= "mouseover") then return false end
         local function skip(reason) status[unit] = reason; return false end
         if not self:GetAutoRecordAbilities() then return skip("option disabled") end
@@ -223,6 +229,7 @@ function ns.InstallBestiaryBuffs(journal, identify)
         return changed
     end
     function journal:PollBuffs(delta)
+        if paused() then return end
         elapsed = elapsed + delta
         if elapsed < 1 then return end
         elapsed = 0

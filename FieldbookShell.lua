@@ -331,6 +331,18 @@ function ns.CreateFieldbookShell(settings)
     local layoutWidth,layoutHeight,layoutRight,layoutMaxScale
     function shell:GetFrame() return book end
     function shell:GetBaseScale() return baseScale end
+    function shell:IsSectionEnabled(id)
+        return self.sections[id]~=nil and (not ns.IsFieldbookSectionEnabled or ns.IsFieldbookSectionEnabled(id))
+    end
+    function shell:GetVisibleSections()
+        local visible={}
+        for _,id in ipairs(self.order) do if self:IsSectionEnabled(id) then visible[#visible+1]=id end end
+        return visible
+    end
+    function shell:SetSectionEnabled(id,enabled)
+        if not self.sections[id] or not ns.SetFieldbookSectionEnabled then return false end
+        return ns.SetFieldbookSectionEnabled(id,enabled)
+    end
     function shell:UpdateLayout()
         if not book then return end
         -- Include the complete native tab art in dragging, saved-position
@@ -367,7 +379,16 @@ function ns.CreateFieldbookShell(settings)
         -- The same frame art, mask, gold selection and hover used by Forever's
         -- Character panel. Its template supplies the client-specific dimensions.
         local width,height
-        for index,id in ipairs(self.order) do
+        local visible=self:GetVisibleSections()
+        local showTabs=#visible>1
+        local single=#visible==1 and self.sections[visible[1]]
+        book.titleIcon.icon:SetTexture(single and single.definition.icon or "Interface\\Icons\\INV_Misc_Book_02")
+        book.sectionTabs={}
+        for _,id in ipairs(self.order) do
+            local tab=self.sections[id].tab
+            if tab then tab:SetShown(showTabs and self:IsSectionEnabled(id)) end
+        end
+        for index,id in ipairs(visible) do
             local section=self.sections[id]
             local tab=section.tab
             if not tab then
@@ -385,12 +406,13 @@ function ns.CreateFieldbookShell(settings)
                 section.tab=tab
             end
             book.sectionTabs[index]=tab
+            tab:SetShown(showTabs)
             width,height=tab:GetWidth(),tab:GetHeight()
             tab:ClearAllPoints();tab:SetPoint("TOPLEFT",0,-(index-1)*(height+tabGap))
-            tab:SetChecked(id==(self.active or self.order[1]))
+            tab:SetChecked(id==(self.active or visible[1]))
         end
-        navigation:SetSize(width or 0,height and (#self.order*(height+tabGap)-tabGap) or 0)
-        navigation:SetShown(#self.order>0)
+        navigation:SetSize(showTabs and (width or 0) or 0,showTabs and height and (#visible*(height+tabGap)-tabGap) or 0)
+        navigation:SetShown(showTabs)
         self:UpdateLayout()
     end
     function shell:EnsureFrame()
@@ -509,6 +531,7 @@ function ns.CreateFieldbookShell(settings)
         book:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",tile=true,tileSize=32,
             insets={left=8,right=8,top=8,bottom=8}})
         local trackingIcon=book.titleIcon:CreateTexture(nil,"ARTWORK")
+        book.titleIcon.icon=trackingIcon
         trackingIcon:SetSize(61,61); trackingIcon:SetPoint("TOPLEFT",0,4)
         trackingIcon:SetTexture("Interface\\Icons\\INV_Misc_Book_02")
         trackingIcon:SetTexCoord(0,1,0,1)
@@ -844,6 +867,21 @@ function ns.CreateFieldbookShell(settings)
             if (sectionOrder[id] or math.huge)<(sectionOrder[other] or math.huge) then position=index;break end
         end
         table.insert(self.order,position,id)
+        if ns.RegisterSectionVisibilityListener then
+            ns.RegisterSectionVisibilityListener(id,function()
+                if not book then return end
+                if self.active and not self:IsSectionEnabled(self.active) then
+                    local shown=book:IsShown()
+                    local first=self:GetVisibleSections()[1]
+                    if shown and first then self:ShowSection(first,{navigation=true})
+                    else self:ShowBlank();if not shown then book:Hide() end end
+                elseif not self.active and book:IsShown() then
+                    local first=self:GetVisibleSections()[1]
+                    if first then self:ShowSection(first,{navigation=true}) end
+                end
+                self:UpdateNavigation()
+            end)
+        end
         self:UpdateNavigation()
     end
     function shell:EnsureSection(id)
@@ -889,7 +927,7 @@ function ns.CreateFieldbookShell(settings)
     function shell:ShowSection(id,context)
         if ns.InitializationBlocked then return false end
         local section=self.sections[id]
-        if not section then return false end
+        if not section or not self:IsSectionEnabled(id) then return false end
         local content=self:EnsureSection(id)
         local shared=self.sections.bestiary and self.sections.bestiary.pages
         if self.active~=id then
@@ -919,19 +957,43 @@ function ns.CreateFieldbookShell(settings)
         return true
     end
     function shell:Hide() if book then book:Hide() end end
+    function shell:ShowBlank()
+        if ns.InitializationBlocked then return false end
+        self:EnsureFrame()
+        local previous=self.sections[self.active]
+        if previous then
+            if previous.frame then previous.frame:Hide() end
+            for key,page in pairs(previous.pages or {}) do if key~="options" then page:Hide() end end
+            if previous.definition.onLeave then previous.definition.onLeave() end
+        end
+        self.active=nil
+        book:SetSize(960,740)
+        book.windowTitle:SetText("Azeroth Fieldbook - v"..addonVersion())
+        book.helpButton:Hide();book.eventLogButton:Hide()
+        book.optionsButton:SetEnabled(self.sections.bestiary~=nil)
+        book.optionsButton:SetShown(self.sections.bestiary~=nil)
+        self:UpdateNavigation();book:Show()
+        if ns.WindowPositions then ns.WindowPositions:Register(book,book:GetName()) end
+        if ns.WindowFocus then ns.WindowFocus:Register(book) end
+        return true
+    end
     function shell:CycleSection(direction)
-        if ns.InitializationBlocked or #self.order==0 then return false end
+        local visible=self:GetVisibleSections()
+        if ns.InitializationBlocked or #visible==0 then return false end
         local index=1
-        for i,id in ipairs(self.order) do if id==self.active then index=i;break end end
-        if self.active then index=(index-1+(direction<0 and -1 or 1))%#self.order+1 end
-        return self:ShowSection(self.order[index],{navigation=true})
+        for i,id in ipairs(visible) do if id==self.active then index=i;break end end
+        if self.active then index=(index-1+(direction<0 and -1 or 1))%#visible+1 end
+        return self:ShowSection(visible[index],{navigation=true})
     end
     function shell:ToggleSection(id)
         if self:IsSectionShown(id) then self:Hide();return end
         return self:ShowSection(id)
     end
     function shell:Toggle()
-        return self:ToggleSection(self.active or self.order[1])
+        if book and book:IsShown() then self:Hide();return end
+        local id=self:IsSectionEnabled(self.active) and self.active or self:GetVisibleSections()[1]
+        if id then return self:ShowSection(id) end
+        return self:ShowBlank()
     end
     return shell
 end

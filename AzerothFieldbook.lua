@@ -2,6 +2,9 @@
 -- Original monster-tooltip concept by Urbit @ Benediction.
 -- No bundled spell list or creature database. Sharing requires explicit acceptance.
 local addonName, ns = ...
+local function bestiaryPaused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary")
+end
 ns = ns or {}
 -- The observer also supports running without the optional journal module.
 local applySpellIDTooltipPreference = ns.ApplySpellIDTooltipPreference or function(settings)
@@ -197,6 +200,7 @@ end
 ]]
 
 local function storeObserved(id, spellID, observedName, creatureName)
+    if bestiaryPaused() then return false end
     if not db or not positiveID(id) then return end
     local hasID = positiveID(spellID)
     local hasName = publicString(observedName)
@@ -274,6 +278,7 @@ local function remember(unit, spellID, observedName, castBarID)
 end
 
 local function observeCurrent(unit, explicit)
+    if bestiaryPaused() then return end
     if afterWipeHold then return end
     if not db then return end
     if journal then journal:RecordKill(unit) end
@@ -350,6 +355,7 @@ local function refreshAbilityTooltip()
 end
 
 local function addTooltip(tooltip)
+    if bestiaryPaused() then return end
     if not db or tooltip ~= GameTooltip then return end
     tooltipCreatureID = nil
     if db.showTooltips == false then tooltipStatus = "Fieldbook tooltips disabled."; return end
@@ -423,6 +429,7 @@ local function addTooltip(tooltip)
 end
 
 local function addSpellIDTooltip(tooltip, tooltipData)
+    if bestiaryPaused() then return end
     -- Forever's native aura-tooltip CVar provides the correct ID for aura
     -- tooltips. Retain this callback only as a fallback for clients without it.
     if type(GetCVarBool) == "function" then return end
@@ -678,6 +685,19 @@ local function initializeImpl()
         end)
     end
     if encounters and db.ignoreEncounterHistory then encounters:ForgetHistory() end
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("bestiary",function()
+            if journal then
+                journal:ClearKillEvidence()
+                if journal.ClearBeastLoreCapture then journal:ClearBeastLoreCapture() end
+            end
+            if encounters then encounters:ForgetHistory() end
+            if ns.SpellIDWindow then ns.SpellIDWindow:ApplySettings() end
+            if ns.CastIDs then ns.CastIDs:SetEnabled(db.displayCastIDs~=false) end
+            if ns.AuraTooltipSnapshot then ns.AuraTooltipSnapshot:ApplySettings() end
+            if AzerothFieldbookCreatureNotes then AzerothFieldbookCreatureNotes:Hide() end
+        end)
+    end
     if ns.ReportTrackingTransition then ns.ReportTrackingTransition(db, say) end
 end
 
@@ -749,7 +769,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         if unit == addonName then initialize() end
         return
     end
-    if not db then return end
+    if not db or bestiaryPaused() then return end
     if lossOfControl and not afterWipeHold then lossOfControl:Event(event, ...) end
     if journal and not afterWipeHold and journal.BeastLoreEvent then
         journal:BeastLoreEvent(event,unit,castGUID,spellID,sentSpellID)
@@ -820,7 +840,7 @@ end)
 -- target/mouseover. Never scan spell lists or inspect completed/hidden casts.
 local elapsedSinceScan = 0
 frame:SetScript("OnUpdate", function(_, elapsed)
-    if not db then return end
+    if not db or bestiaryPaused() then return end
     if journal and not afterWipeHold and journal.PollBeastLore then journal:PollBeastLore(elapsed) end
     if journal and not afterWipeHold and journal.PollBuffs then journal:PollBuffs(elapsed) end
     if encounters then encounters:Update(elapsed) end

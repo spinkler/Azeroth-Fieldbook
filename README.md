@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.40.1 (Release)
+# Azeroth Fieldbook 0.41.0 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -177,6 +177,18 @@ writings, significant places, noteworthy people and personal investigations.
 Hover a tab for its name; the selected tab has a gold border. Switching
 tabs retains the Bestiary's creature selection, filters, list/ability browsing
 positions and unfinished fields. Creature-entry actions select the Bestiary.
+
+**Options → Journals → Fieldbook tabs** lets you show or hide each of the eight
+journals. All tabs start enabled. Hiding a tab immediately pauses its automatic
+features and keeps its recorded data; showing it resumes tracking with fresh
+interaction context. Choices are saved per character, independently of account-wide
+journal storage. Hide every tab to leave a blank Fieldbook with Options and Close
+at the top; Options remains available to show tabs again.
+With only one journal enabled, its side tab is hidden and its icon replaces the
+book icon in the circular portrait. Enabling another journal restores the tabs
+and the shared book icon.
+Hiding Bestiary also blocks new sharing offers; transfers already accepted can
+finish their delivery and receipt exchange.
 
 Each newly recorded Lore entry is announced in chat and the persistent Event log,
 available from Lorekeeper's Chronicle. Rereads and extra pages do not repeat the announcement.
@@ -1241,7 +1253,10 @@ assigning the spell. This also works on saved rows and restricted spell IDs.
 Each portrait stays with its own observation when targets change. This works in
 combat and with automatic recording disabled, respects entry locks and preserves
 existing notes and spell records without granting automatic [A] evidence. A **?**
-keeps the named choice available if its portrait cannot be rendered. Creatures
+keeps the named choice available if its portrait cannot be rendered. Pending
+portraits retry briefly and when the client reports a portrait update, only
+while the unit still matches the captured creature. Loaded portraits stay frozen.
+Creatures
 must pass the Bestiary's normal identity and eligibility checks. Restricted spell
 IDs may still be displayed by the cast/aura rows, but cannot be saved by clicking;
 the tooltip explains that the displayed ID must be entered manually instead.

@@ -1,4 +1,7 @@
 local _,ns=...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("atlas")
+end
 local A,C=ns.Atlas,ns.AtlasEnvironment
 local D={SETTLE_SECONDS=0.35,SAMPLE_SECONDS=1,MAX_GAP=2.5,MAX_SPEED=24,JUMP_SLOP=6,
     MAX_STEP=60,MIN_CROSSING_YARDS=0.5,REARM_YARDS=8,MIN_CROSSING_SECONDS=3,
@@ -61,7 +64,7 @@ function D.Track(j,onChange)
     local function changed(id) if onChange then onChange(id,away) end end
     local update,queue,startMovement
     update=function()
-        if ns.InitializationBlocked then d:Reset();return end
+        if paused() then d:Reset();return end
         if not j.entrances:Enabled() then d:Reset();changed();return end
         if away or death or controlLost or casting or clock()<holdUntil then d:Reset();changed();return end
         local id,pending=d:Feed(C.Capture())
@@ -81,19 +84,27 @@ function D.Track(j,onChange)
         generation=generation+1;queued=false;d:Reset()
     end
     local function stopMovement() movementGeneration=movementGeneration+1;moving=false end
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("atlas",function()
+            cancel();stopMovement()
+            away,casting,death,controlLost=false,false,false,false
+            holdUntil=clock()+D.SETTLE_SECONDS
+            if not paused() then queue(D.SETTLE_SECONDS) end
+        end)
+    end
     startMovement=function()
-        if moving or away or death or controlLost or casting or not j.entrances:Enabled() then return end
+        if paused() or moving or away or death or controlLost or casting or not j.entrances:Enabled() then return end
         moving=true;movementGeneration=movementGeneration+1
         local ticket=movementGeneration
         local function tick()
             if ticket~=movementGeneration or not moving then return end
-            if away or not j.entrances:Enabled() or ns.InitializationBlocked then stopMovement();return end
+            if away or not j.entrances:Enabled() or paused() then stopMovement();return end
             update();after(D.SAMPLE_SECONDS,tick)
         end
         after(D.SAMPLE_SECONDS,tick)
     end
     function frame:SetEnabled(on)
-        if j.entrances.readOnly or ns.InitializationBlocked then return end
+        if j.entrances.readOnly or paused() then return end
         j.state.autoEntrances=on==true;cancel();stopMovement()
         -- Enabling while already indoors establishes a baseline, never entry.
         if not away and not death and not controlLost and not casting and clock()>=holdUntil then d:Reset(C.Capture()) end
@@ -102,7 +113,7 @@ function D.Track(j,onChange)
         changed()
     end
     frame:SetScript("OnEvent",function(_,event,unit)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if event=="CONFIRM_SUMMON" or event=="CANCEL_SUMMON" or event=="INCOMING_SUMMON_CHANGED" then
             if event=="INCOMING_SUMMON_CHANGED" and unit~=nil and (not A.Public(unit) or unit~="player") then return end
             cancel()
@@ -151,7 +162,7 @@ function D.Track(j,onChange)
         "INCOMING_SUMMON_CHANGED","PLAYER_CONTROL_LOST","PLAYER_CONTROL_GAINED"}) do
         pcall(frame.RegisterEvent,frame,event)
     end
-    d:Reset(j.entrances:Enabled() and C.Capture() or nil)
+    d:Reset(not paused() and j.entrances:Enabled() and C.Capture() or nil)
     local speed=A.Read(GetUnitSpeed,"player");if A.Number(speed,0.001,1000) then startMovement() end
     return frame
 end

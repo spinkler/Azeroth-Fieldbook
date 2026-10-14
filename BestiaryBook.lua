@@ -2587,6 +2587,7 @@ local ink = { 0.75, 0.8, 0.8 }
     end
     function controller:Toggle() return shell:ToggleSection("bestiary") end
     function controller:OpenAtUnit(unit)
+        if not shell:IsSectionEnabled("bestiary") then return false end
         shell:EnsureSection("bestiary")
         local id=journal:Observe(unit,true)
         if not id then return false end
@@ -2601,6 +2602,7 @@ local ink = { 0.75, 0.8, 0.8 }
         if creatureNotes then creatureNotes:FollowTarget() end
     end
     function controller:OpenNotes()
+        if not shell:IsSectionEnabled("bestiary") then return false end
         shell:EnsureSection("bestiary")
         if not selected or not journal.entries[selected] then
             local target=journal:Observe("target")

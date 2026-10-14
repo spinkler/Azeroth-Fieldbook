@@ -1,4 +1,12 @@
 local _, ns = ...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("merchants")
+end
+local function sectionAfter(delay,callback)
+    if paused() then return end
+    if ns.GuardSectionCallback then callback=ns.GuardSectionCallback("merchants",callback) end
+    C_Timer.After(delay,callback)
+end
 local L=ns.Ledger
 -- Only public values reach persisted facts. A failed native read is not a zero.
 local function values(fn,...)
@@ -176,11 +184,23 @@ local function trainerItem(index)
 end
 function ns.CreateLedgerTracking(journal)
     local t={journal=journal,pending={},pendingCount=0,visits={},opening={}}
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("merchants",function(enabled)
+            for _,visit in pairs(t.visits) do visit.closed=true end
+            t.visits,t.opening,t.pending,t.pendingCount={},{},{},0
+            t.pendingLoot,t.pendingLootContext,t.lootRun,t.flightFare=nil,nil,nil,nil
+            t.moneyCandidate,t.moneyCandidateContext,t.candidateRun,t.moneyContext=nil,nil,nil,nil
+            -- The next balance is a baseline, never income accumulated while paused.
+            t.moneyBalance=nil;t.moneySessionStarted=true
+            t.moneyActivity,t.flightClosedAt,t.flightPaid=nil,nil,nil
+            if enabled then t:Money(true) end
+        end)
+    end
     -- Repair the existing latest run identified as loot before icon-format
     -- detection was fixed. New histories never infer loot from income alone.
     local personal=AzerothFieldbookLedgerDB
     local existing=type(personal)=="table" and personal.cashFlow
-    if not ns.InitializationBlocked and not journal.readOnly and type(existing)=="table"
+    if not paused() and not journal.readOnly and type(existing)=="table"
         and not existing.lootGroupingMigration and (personal.schema or 0)<=L.SCHEMA then
         existing.lootGroupingMigration=1
         local entries=existing.entries or {}
@@ -200,7 +220,7 @@ function ns.CreateLedgerTracking(journal)
         local pocket=self.pendingLootContext
         local priorRun=self.lootRun
         local function apply()
-            if ns.InitializationBlocked or journal.readOnly or not AzerothFieldbookLedgerDB
+            if paused() or journal.readOnly or not AzerothFieldbookLedgerDB
                 or AzerothFieldbookLedgerDB.cashFlow~=cash then return end
             -- Match actual loot income to a successful pick even when coin-only
             -- autoloot exposes no slots. A cast alone never creates a transaction.
@@ -226,12 +246,12 @@ function ns.CreateLedgerTracking(journal)
             -- a chance to arrive, so a later label cannot relabel a combined run.
             entry.source="loot";entry.context="Looted cash";entry.counterparty=nil;entry.lootCount=1
             self.lootRun=nil
-            C_Timer.After(0.2,apply)
+            sectionAfter(0.2,apply)
         else apply() end
     end
     function t:LootMoney(message)
         if ns.PickpocketDiagnostics then ns.PickpocketDiagnostics:Log("CHAT_MSG_MONEY",message) end
-        if ns.InitializationBlocked or journal.readOnly or not L.Public(message) or type(message)~="string" or #message>2000 then return end
+        if paused() or journal.readOnly or not L.Public(message) or type(message)~="string" or #message>2000 then return end
         local plain=message:gsub("|c%x%x%x%x%x%x%x%x",""):gsub("|r","")
         local amount=0
         for _,unit in ipairs({{GOLD_AMOUNT,10000},{SILVER_AMOUNT,100},{COPPER_AMOUNT,1}}) do
@@ -257,10 +277,10 @@ function ns.CreateLedgerTracking(journal)
             self.candidateRun=nil
         end
         local pending=self.pendingLoot
-        if C_Timer and C_Timer.After then C_Timer.After(1,function() if self.pendingLoot==pending then self.pendingLoot=nil;self.pendingLootContext=nil end end) end
+        if C_Timer and C_Timer.After then sectionAfter(1,function() if self.pendingLoot==pending then self.pendingLoot=nil;self.pendingLootContext=nil end end) end
     end
     function t:ConfirmFlightFare(entry,quiet)
-        if ns.InitializationBlocked or journal.readOnly or self.flightFare~=entry then return end
+        if paused() or journal.readOnly or self.flightFare~=entry then return end
         local cash=AzerothFieldbookLedgerDB and AzerothFieldbookLedgerDB.cashFlow
         if L.Now()-entry.at>3 or not cash or cash.entries[1]~=entry or entry.source
             or self.visits.merchant or self.visits.trainer
@@ -273,7 +293,7 @@ function ns.CreateLedgerTracking(journal)
     end
     -- Money belongs to this character even when the contact directory is shared.
     function t:Money(baseline)
-        if ns.InitializationBlocked or journal.readOnly then return end
+        if paused() or journal.readOnly then return end
         local balance=L.Read(GetMoney)
         if not L.Integer(balance,0,9007199254740991) then return end
         local saved=AzerothFieldbookLedgerDB
@@ -281,6 +301,7 @@ function ns.CreateLedgerTracking(journal)
         if type(saved.cashFlow)~="table" then saved.cashFlow={income=0,expense=0,entries={},started=L.Now(),lootGroupingMigration=1} end
         local cash=saved.cashFlow
         local previous=self.moneyBalance
+        if self.moneySessionStarted and previous==nil then previous=balance end
         local checkpoint=cash.lastBalance
         if checkpoint==nil and type(cash.entries)=="table" and cash.entries[1] then checkpoint=cash.entries[1].balance end
         local discrepancy=not self.moneySessionStarted and L.Integer(checkpoint,0,9007199254740991)
@@ -318,7 +339,7 @@ function ns.CreateLedgerTracking(journal)
             -- Taxi-map close, the debit and UnitOnTaxi can arrive in either
             -- order. Retry only this candidate, briefly; never poll idle play.
             if self.flightFare==entry and C_Timer and C_Timer.After then
-                for _,delay in ipairs({0.2,1,3}) do C_Timer.After(delay,function() self:ConfirmFlightFare(entry) end) end
+                for _,delay in ipairs({0.2,1,3}) do sectionAfter(delay,function() self:ConfirmFlightFare(entry) end) end
             end
         end
         self.moneyCandidate=not discrepancy and delta>0 and entry or nil
@@ -339,7 +360,7 @@ function ns.CreateLedgerTracking(journal)
             self.candidateRun=precedingRun
         end
         self.pendingLoot=nil
-        if C_Timer and C_Timer.After then C_Timer.After(1,function()
+        if C_Timer and C_Timer.After then sectionAfter(1,function()
             if self.moneyCandidate==entry then self.moneyCandidate=nil;self.moneyCandidateContext=nil;self.candidateRun=nil end
         end) end
         self.moneyContext=nil
@@ -349,10 +370,11 @@ function ns.CreateLedgerTracking(journal)
     -- never overwrite the saved checkpoint during addon construction.
     -- Nearby actions are searchable context, never proof of the change's source.
     function t:MoneyAction(name)
+        if paused() then return end
         if not L.Name(name) then return end
         self.moneyContext=name
         if C_Timer and C_Timer.After then
-            C_Timer.After(1,function() if self.moneyContext==name then self.moneyContext=nil end end)
+            sectionAfter(1,function() if self.moneyContext==name then self.moneyContext=nil end end)
         end
     end
     if type(hooksecurefunc)=="function" then
@@ -373,16 +395,17 @@ function ns.CreateLedgerTracking(journal)
         end end
     end
     function t:Open(kind)
+        if paused() then return end
         local opening={};self.opening[kind]=opening
         self:Begin(kind)
         if not self.visits[kind] and C_Timer and type(C_Timer.After)=="function" then
-            for _,delay in ipairs({0.1,0.5,1.5}) do C_Timer.After(delay,function()
+            for _,delay in ipairs({0.1,0.5,1.5}) do sectionAfter(delay,function()
                 if self.opening[kind]==opening and not self.visits[kind] then self:Begin(kind) end
             end) end
         end
     end
     function t:Begin(kind)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if self.visits[kind] then self.visits[kind].closed=true end
         self.visits[kind]=nil
         local unit=L.Unit("npc");if not unit then return end -- never fall back to a changed target
@@ -393,13 +416,13 @@ function ns.CreateLedgerTracking(journal)
         local visit=journal:Begin(e.id,kind);if not visit then return end
         visit.guid=unit.guid;self.visits[kind]=visit;self:Scan(visit)
         if C_Timer and type(C_Timer.After)=="function" then
-            for _,delay in ipairs({0.5,1.5}) do C_Timer.After(delay,function()
+            for _,delay in ipairs({0.5,1.5}) do sectionAfter(delay,function()
                 if not visit.closed and self.visits[kind]==visit and not visit.complete then self:Scan(visit) end
             end) end
         end
     end
     function t:Scan(visit)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if visit.closed or self.visits[visit.kind]~=visit then return end
         if L.Read(UnitGUID,"npc")~=visit.guid then return end
         local contact=journal:Get(visit.contact)
@@ -455,14 +478,14 @@ function ns.CreateLedgerTracking(journal)
         if visit.closed or visit.queued then return end
         visit.queued=true
         local function run() visit.queued=false;if self.visits[kind]==visit and not visit.closed then self:Scan(visit) end end
-        if C_Timer and type(C_Timer.After)=="function" then C_Timer.After(0.15,run) else run() end
+        if C_Timer and type(C_Timer.After)=="function" then sectionAfter(0.15,run) else run() end
     end
     -- Learning a flight path can happen before the flight map opens.
     local services={BANKFRAME_OPENED="banker",AUCTION_HOUSE_SHOW="auctioneer",PET_STABLE_SHOW="stable",NEW_TAXI_PATH="transport",TAXIMAP_OPENED="transport",CONFIRM_BINDER="innkeeper"}
     local moneyOpen={MAIL_SHOW="Mail",TRADE_SHOW="Player trade",AUCTION_HOUSE_SHOW="Auction house",TAXIMAP_OPENED="Flight transport",BANKFRAME_OPENED="Bank"}
     local moneyClose={MAIL_CLOSED=true,TRADE_CLOSED=true,AUCTION_HOUSE_CLOSED=true,TAXIMAP_CLOSED=true,BANKFRAME_CLOSED=true}
     function t:OnEvent(event,...)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if moneyOpen[event] then
             self.moneyActivity=moneyOpen[event];self.flightFare=nil;self.flightClosedAt=nil
         end

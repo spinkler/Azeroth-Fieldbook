@@ -10,7 +10,7 @@ local MAX_INCOMING, MAX_RECEIPTS, CHUNK = 3, 512, 180
 -- never display arbitrary peer-supplied text as an error message.
 local rejectionReasons = {
     declined="The recipient declined the offer.",
-    blocked="The recipient has Block incoming offers enabled.",
+    blocked="The recipient is not accepting incoming offers.",
     busy="The recipient's incoming queue is full (three reports). Decline pending reports or wait for them to expire.",
     chunks="The recipient received incomplete or inconsistent report chunks.",
     malformed="The recipient could not decode or validate the report data.",
@@ -53,6 +53,9 @@ end
 -- Environment injection keeps protocol/accounting tests independent of WoW.
 function ns.CreateSharing(journal, env)
     local engine={ PREFIX=PREFIX }
+    local function incomingBlocked()
+        return journal:GetBlockIncomingOffers() or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary")
+    end
     journal.sharing=engine
     local store=journal:GetSharingStorage()
     local queue, changed, imported, costAdjusted = {}, nil, nil, nil
@@ -288,7 +291,7 @@ function ns.CreateSharing(journal, env)
     function engine:Accept(item)
         local ready,err=self:Available()
         if not ready then return nil,err or "Addon messaging is unavailable." end
-        if journal:GetBlockIncomingOffers() then return nil,"Incoming offers are blocked in Options." end
+        if incomingBlocked() then return nil,"Incoming offers are unavailable while blocked in Options or the Bestiary is hidden." end
         if env.blocked() then return nil,"Accept outside combat and messaging restrictions." end
         if not item or store.incoming[key(item.sender,item.id)]~=item or item.state~="pending" then return false end
         if item.addonVersion~=env.addonVersion then return nil,"The sender's addon version must match yours before accepting." end
@@ -314,7 +317,7 @@ function ns.CreateSharing(journal, env)
         return true
     end
     function engine:ApplyIncomingOfferSetting()
-        if not journal:GetBlockIncomingOffers() then return end
+        if not incomingBlocked() then return end
         for k,item in pairs(store.incoming) do
             -- Accepted reports may already have cost the sender points. Allow
             -- their commit/receipt exchange to finish, including paid retries.
@@ -325,6 +328,9 @@ function ns.CreateSharing(journal, env)
             end
         end
         notify()
+    end
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("bestiary",function() engine:ApplyIncomingOfferSetting() end)
     end
     function engine:Receive(prefix,message,channel,sender)
         if not schema.Public(prefix) or not schema.Public(channel) or not schema.Public(sender)
@@ -359,7 +365,7 @@ function ns.CreateSharing(journal, env)
             if version~=PROTOCOL then send("I",id,sender,nil,version); return end
             if not validVersion(body) or body~=env.addonVersion then send("I",id,sender,env.addonVersion); return end
             if receipt then send("K",id,sender); return end
-            if journal:GetBlockIncomingOffers() and not (item and item.state=="accepted") then
+            if incomingBlocked() and not (item and item.state=="accepted") then
                 if item then self:ApplyIncomingOfferSetting() else reject(id,sender,"blocked") end
                 return
             end
@@ -385,7 +391,7 @@ function ns.CreateSharing(journal, env)
             if not validVersion(body) or body~=env.addonVersion then incompatible(tx,body); return end
             offer(tx)
         elseif kind=="O" and item and (item.state=="receiving") then
-            if journal:GetBlockIncomingOffers() then self:ApplyIncomingOfferSetting(); return end
+            if incomingBlocked() then self:ApplyIncomingOfferSetting(); return end
             local index,total,data=body:match("^(%d+)~(%d+)~(.*)$")
             index,total=tonumber(index),tonumber(total)
             if not schema.Integer(total,1,46) or not schema.Integer(index,1,total)

@@ -978,6 +978,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         return zone
     end
     function journal:Observe(unit, explicit, sourceGUID)
+        if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary") then return end
         self:UpdateDeletedSelections()
         local id = identify(unit, explicit, sourceGUID)
         if not id or deletedSelections[id] then return end
@@ -1796,7 +1797,9 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local trackingSections,sectionActive=db.accountTrackingSections,db.accountTrackingSectionsActive
         local trackingDefault=db.accountWideTracking
         local autoArchiveLore,loreOnlyOpenedPages=db.autoArchiveLore,db.loreOnlyOpenedPages
+        local sectionVisibility=db.sectionVisibility
         for key in pairs(db) do db[key] = nil end
+        db.sectionVisibility=sectionVisibility
         db.autoArchiveLore,db.loreOnlyOpenedPages=autoArchiveLore,loreOnlyOpenedPages
         db.eventLog=eventLog
         db.bestiaryBackups=savedBackups

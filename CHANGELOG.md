@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.41.0 - 2026-10-14
+
+- Add eight independently enabled journal tabs under Options → Journals → Fieldbook tabs, all on by default and saved per character. Hidden journals pause automatic observation, mapping, capture and history until re-enabled, preserving their saved records and discarding stale interaction context. With only one journal enabled, hide its redundant tab and use its icon in the circular book portrait; restore the book icon and navigation when more journals are enabled. Hiding every tab leaves a blank Fieldbook with Options and Close available. Hidden Bestiary blocks new sharing offers while accepted transfers finish their existing delivery and receipt exchange. Add empty-book, navigation, portrait, persistence, sharing and observer pause/resume regressions.
+
+- Fix a blank-portrait failure path in the observed spell-ID window: a successful native setter no longer hides the question-mark fallback unless it supplies a readable texture. Wait for model readiness when available, retry pending portraits for five seconds and on portrait-update events, and verify the captured creature GUID before and after every render. Preserve loaded portraits through target changes and cancel retries when rows are removed or hidden. Add delayed-loading, restricted-data, pinned-row and identity-race regressions; native confirmation remains pending.
+
 ## v0.40.1 - 2026-10-13
 
 - Redraw the Bestiary padlock at a slightly larger size with a broad arched shackle, rounded corners and a centred round-headed keyhole. Rasterize the approved symmetrical silhouette into one transparent PNG, with a transparent keyhole and pixel-aligned placement, so its details scale together. Preserve its position and grey, red and cyan states.

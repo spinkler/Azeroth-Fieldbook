@@ -69,6 +69,13 @@ end
 function ns.CreateAnnalsTrail(j,options)
     local t={journal=j,options=options or {},reason='session',revision=0};j.trail=t
     local current,points,lastPoll,pending,idlePoint
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("annals",function()
+            -- Detach the current segment without writing a final point from
+            -- before the pause or joining the unobserved journey on resume.
+            current,points,lastPoll,pending,idlePoint=nil,nil,nil,nil,nil
+        end)
+    end
     local function write(p)
         local encoded=A.EncodePoint(p,points[#points] and points[#points].at or current.at)
         if not encoded then return end
@@ -115,6 +122,7 @@ function ns.CreateAnnalsTrail(j,options)
         return true
     end
     function t:Sample(p,anchor)
+        if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("annals") then return end
         if j.readOnly or ns.InitializationBlocked or j.db.settings.trail==false then return end
         if p and A.JourneyInstance(p.instanceType) then self:Break('inside instance');return end
         if not p or not A.Int(p.mapID,1,2147483647) or not A.Int(p.x,0,10000) or not A.Int(p.y,0,10000) then self:Break('position unavailable');return end

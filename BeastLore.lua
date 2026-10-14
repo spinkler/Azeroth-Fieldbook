@@ -46,6 +46,7 @@ function ns.InstallBeastLore(journal,identify)
         if not id or (pending and pending.id==id) then pending=nil end
     end
     function journal:BeastLoreEvent(event,unit,targetOrCast,castOrSpell,spell)
+        if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary") then pending=nil;return end
         if not schema.Public(unit) or unit~="player" then return end
         if event=="UNIT_SPELLCAST_SENT" then
             if not schema.Public(spell) or spell~=SPELL then return end
@@ -73,6 +74,7 @@ function ns.InstallBeastLore(journal,identify)
         end
     end
     function journal:PollBeastLore(elapsed)
+        if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary") then pending=nil;return end
         if not pending then return end
         pending.elapsed=pending.elapsed+elapsed
         if pending.elapsed>5 then pending=nil;return end

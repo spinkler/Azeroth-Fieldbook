@@ -117,6 +117,18 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         if font and type(size)=="number" then heading:SetFont(font,size-2,flags) end
         optionSections[#optionSections+1]={heading=heading,originalY=y,items={}}
     end
+    optionHeading("Fieldbook tabs",-400)
+    label(optionsBody,"Show the journals you use. Hiding a tab pauses its automatic features until you show it again. Recorded data is kept. All tabs start on.",35,370,510,"GameFontHighlightSmall")
+    options.sectionVisibility={}
+    for index,id in ipairs(shell.order) do
+        local sectionID=id
+        local toggle=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
+        toggle:SetPoint("TOPLEFT",30,326-(index-1)*30);toggle:SetSize(24,24)
+        label(optionsBody,shell.sections[id].definition.title,58,320-(index-1)*30,470,"GameFontHighlightSmall")
+        toggle:SetChecked(shell:IsSectionEnabled(id))
+        toggle:SetScript("OnClick",function(self) shell:SetSectionEnabled(sectionID,self:GetChecked()==true) end)
+        options.sectionVisibility[id]=toggle
+    end
     optionHeading("Bestiary entry locking",0)
     optionHeading("Chat notifications",122)
     label(optionsBody,"Events are saved in the Event log even when chat messages are off.",35,-248,510,"GameFontHighlightSmall")
@@ -551,6 +563,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         end
     end
     local categories={
+        ["Fieldbook tabs"]="Journals",
         ["Bestiary entry locking"]="Journals",["Ability recording"]="Journals",["Expected immunities"]="Journals",
         ["Lorekeeper's Chronicle"]="Journals",["Atlas and Almanac maps"]="Journals",
         ["Traveller's Atlas"]="Journals",["Adventurer's Annals"]="Journals",
@@ -604,6 +617,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
         layoutOptions()
         showBookPage(self)
         refreshTrackingOption()
+        for id,toggle in pairs(options.sectionVisibility) do toggle:SetChecked(shell:IsSectionEnabled(id)) end
         options.legacySubzones:SetChecked(ns.AtlasOptions and ns.AtlasOptions.GetLegacy() or false)
         options.legacySubzones:SetEnabled(ns.AtlasOptions and ns.AtlasOptions.Writable() or false)
         options.mapClickNavigation:SetChecked(journal:GetMapClickNavigation())

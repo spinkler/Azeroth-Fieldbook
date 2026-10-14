@@ -1,4 +1,12 @@
 local _, ns = ...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("treasure")
+end
+local function sectionAfter(delay,callback)
+    if paused() then return end
+    if ns.GuardSectionCallback then callback=ns.GuardSectionCallback("treasure",callback) end
+    C_Timer.After(delay,callback)
+end
 local T=ns.Treasure
 local function clock() local n=T.Read(GetTime);return T.Number(n,0,9999999999) and n or T.Now() end
 local function returns(fn,...)
@@ -47,6 +55,13 @@ local function mergeItems(target,items)
 end
 function ns.CreateTreasureTracking(journal)
     local t={journal=journal,bagGUIDs={},recent={},status="Recognized world containers and portable contents record automatically; uncertain sources require Record a find."}
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("treasure",function()
+            t.active,t.pending,t.waiting,t.world,t.interaction,t.cast=nil,nil,nil,nil,nil,nil
+            t.bagQueued,t.pendingReason=nil,nil
+            t.bagGUIDs,t.recent={},{}
+        end)
+    end
     -- Match observed tooltip identity to the actual loot source, never to the
     -- current target or loot-chat text. Unknown object types stay manual.
     local function objectID(guid)
@@ -74,7 +89,7 @@ function ns.CreateTreasureTracking(journal)
         return focus~=nil and (focus==WorldFrame or focus==UIParent)
     end
     function t:ObserveWorldCursor()
-        if ns.InitializationBlocked or journal.readOnly then return end
+        if paused() or journal.readOnly then return end
         local data=T.Read(C_TooltipInfo and C_TooltipInfo.GetWorldCursor)
         local objectType=Enum and Enum.TooltipDataType and Enum.TooltipDataType.Object
         if type(data)~="table" then return end
@@ -131,7 +146,7 @@ function ns.CreateTreasureTracking(journal)
         if self.active and now-self.active.at>60 then self.active=nil end
     end
     function t:ScanBags()
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         self:Expire()
         if journal.readOnly or not C_Container then return end
         local maximum=T.Integer(NUM_BAG_SLOTS,0,5) and NUM_BAG_SLOTS or 4
@@ -267,7 +282,7 @@ function ns.CreateTreasureTracking(journal)
         end
     end
     function t:Event(event,...)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         self:Expire()
         if event=="GLOBAL_MOUSE_DOWN" then
             local button=...
@@ -343,7 +358,7 @@ function ns.CreateTreasureTracking(journal)
         if event=="BAG_UPDATE_DELAYED" or event=="PLAYER_ENTERING_WORLD" then
             if self.bagQueued then return end;self.bagQueued=true
             local function scan() self.bagQueued=false;self:ScanBags() end
-            if C_Timer and type(C_Timer.After)=="function" then C_Timer.After(0.25,scan) else scan() end
+            if C_Timer and type(C_Timer.After)=="function" then sectionAfter(0.25,scan) else scan() end
         elseif event=="LOOT_READY" then
             local previous=self.pending
             local sample,reason,state=self:ReadLoot()
@@ -422,7 +437,7 @@ function ns.CreateTreasureTracking(journal)
     end
     local elapsed=0
     frame:SetScript("OnUpdate",function(_,dt)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         elapsed=elapsed+dt;if elapsed>=0.2 then elapsed=0;t:ObserveWorldCursor();t:UpdateLoot(true) end
     end)
     return t

@@ -1,5 +1,13 @@
 -- Direct presentation of Forever cast IDs. Never read back or measure secret text.
 local _, ns = ...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary")
+end
+local function sectionAfter(delay,callback)
+    if paused() then return end
+    if ns.GuardSectionCallback then callback=ns.GuardSectionCallback("bestiary",callback) end
+    C_Timer.After(delay,callback)
+end
 local function textFont(base) return ns.TextSize and ns.TextSize:Font(base) or base end
 local enabled, panel, idText, stateText, debugEnabled
 local settings
@@ -63,8 +71,8 @@ local function Linger()
     if debugEnabled then stateText:SetText(current) end
     local token = generation
     -- Keep the already-rendered secret text in place; never read it back.
-    C_Timer.After(lingerSeconds, function()
-        if ns.InitializationBlocked then return end
+    sectionAfter(lingerSeconds, function()
+        if paused() then return end
         if token == generation then Clear("linger expired") end
     end)
 end
@@ -159,6 +167,7 @@ local function Present(kind, spellID)
 end
 
 local function Refresh()
+    if paused() then return end
     if not enabled then return end
     if dismissed then return end
     if not Eligible() then Clear("no applicable target"); return end
@@ -204,7 +213,7 @@ local unitEvents = {
     "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_SENT",
 }
 events:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4, arg5)
-    if ns.InitializationBlocked then return end
+    if paused() then return end
     if not enabled then return end
     if event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_ENTERING_WORLD"
         or event == "PLAYER_LOGIN" or event == "PLAYER_REGEN_ENABLED" then
@@ -248,8 +257,8 @@ events:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4, arg5)
             Linger()
             -- One deferred query handles stop/start ordering without a polling loop.
             local token = generation
-            C_Timer.After(0, function()
-                if ns.InitializationBlocked then return end
+            sectionAfter(0, function()
+                if paused() then return end
                 if token == generation then Refresh() end
             end)
         else
@@ -263,7 +272,7 @@ function display:SetEnabled(value)
     if settings then settings.displayCastIDs = value == true end
     enabled = value == true and type(issecretvalue) == "function"
     events:UnregisterAllEvents()
-    if not enabled then
+    if not enabled or paused() then
         Clear("disabled")
     else
         events:RegisterEvent("PLAYER_TARGET_CHANGED")

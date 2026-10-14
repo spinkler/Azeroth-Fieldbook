@@ -58,6 +58,23 @@ Adventurer's Annals, Merchant's Ledger, Treasure Journal, Angler's Almanac,
 then Lorekeeper's Chronicle. This order is independent of initialization order,
 so journals can initialize after the reference adapters they depend on.
 Each section owns its registration, title, icon and content.
+
+`SectionVisibility.lua` stores character-local `AzerothFieldbookDB.sectionVisibility`
+choices; missing keys default on. The shell filters navigation without changing
+the registration order, rejects hidden section opens, and shows blank parchment
+with Options and Close when none remain. With exactly one enabled
+section, hide the navigation strip and remove its outside footprint; use that
+section's icon in the existing masked circular portrait. Zero or multiple enabled
+sections use the shared book icon. Shared Options may build the hidden
+Bestiary content lazily without selecting or opening it. Bestiary resets preserve
+visibility preferences. Whole-Fieldbook reset still resets all character settings.
+Observers consult visibility at automatic entry points. Visibility listeners drop
+transient attribution and journey context; generation-guarded timers cannot finish
+old work after a quick disable/re-enable. Shared Atlas map rendering remains usable
+by enabled journals. Hiding Bestiary blocks new sharing offers and dismisses
+unaccepted offers; accepted transfers retain their existing commit/receipt lifecycle.
+See `test_section_visibility.py` for synthetic coverage;
+native checkbox layout and gameplay capture still require in-client verification.
 `FieldbookSections.lua` retains an empty wishlist extension point; it registers
 no additional section. The Bestiary's icon is in its registration
 in `BestiaryBook.lua`. The shell uses Forever's `LargeSideTabButtonTemplate` for

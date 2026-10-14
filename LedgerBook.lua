@@ -106,6 +106,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         state.detailScroll=0;self.main.details:SetVerticalScroll(0);self:Refresh()
     end
     function c:OpenAtUnit(unit)
+        if not shell:IsSectionEnabled("merchants") then return false end
         local observed=L.Unit(unit);if not observed then return false end
         local e=journal:Get(journal.db.aliases[observed.guid])
         if not e then

@@ -1,7 +1,7 @@
 # Spell-window creature portraits
 
 The LOC portrait was accepted by the operator on 2026-10-03. This follow-up
-extends that interaction to every other row without new polling or saved fields.
+extends that interaction to every other row without saved observation fields.
 
 | Row | Captured creature |
 | --- | --- |
@@ -22,7 +22,14 @@ back or attempts to convert secret IDs.
 with the existing startup and wipe holds. `SpellIDWindow.lua` snapshots target
 identity before aura/cast reads, then rejects a candidate if that GUID changes.
 Portrait rendering checks the captured token/GUID before and after the native
-call; no later target event refreshes historical textures. Each row owns its
+call, waits for public model readiness when that API is available, and hides
+the question-mark fallback only after receiving public texture metadata. Empty,
+failed or restricted renders keep the fallback. Pending portraits retry through
+the existing quarter-second window update for five seconds and on
+`UNIT_PORTRAIT_UPDATE` for the captured unit, including pinned rows. Loaded
+portraits remain frozen; no later target event refreshes historical textures.
+Clearing a row, resetting the window or disabling it cancels pending work.
+Each row owns its
 candidate and action, so simultaneous rows can refer to different NPCs.
 
 Clicks use captured IDs, work in combat with automatic recording off, respect
@@ -74,3 +81,24 @@ Ctrl+Click follow-up: the portrait, window, LOC and root-initialization checks
 passed again, along with all 87 Lua compilation checks. Coverage includes all
 five row buttons, saved and restricted-ID rows, locked-page navigation and
 opening the captured identity after retargeting without assigning a spell.
+
+## Blank-portrait follow-up — 2026-10-14
+
+The operator's screenshot shows a pinned Forlorn Spirit cast with a blank circle
+and no question mark. The window treated a native setter returning without an
+error as a finished portrait, unlike the Bestiary's texture check. A regression
+reproduces this failure with a setter that returns normally without supplying a
+texture. The readiness check and identity-checked retry path above address this
+loading gap without reading pixels or restricted values.
+
+Focused coverage includes empty/failed/restricted textures, delayed model
+readiness, bounded polling, portrait-event recovery, frozen loaded portraits,
+pinned pending casts, target switches before and during rendering, and cleanup
+on dismissal and hiding. The spell-window, portrait-binding and LOC checks pass.
+This is automated evidence; the native cause of the screenshot is still an
+inference. After `/reload`, check Forlorn Spirit and other enemy casts, pin a row
+while its portrait loads, and change targets. The portrait should appear when
+available or retain **?**, and must never show the newly selected creature.
+
+Version remains 0.40.1. Recommended next version for this correction:
+0.40.2 (Release), with native confirmation before publication.

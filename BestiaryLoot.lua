@@ -1,4 +1,7 @@
 local _, ns = ...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary")
+end
 local function read(fn,...)
     if type(fn)~="function" then return end
     local v={pcall(fn,...)}
@@ -31,6 +34,12 @@ function ns.StartBestiaryLoot(journal)
     local frame=CreateFrame("Frame")
     journal.lootObserver=frame
     local pending, buffered, moneyContext
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("bestiary",function()
+            if moneyContext then moneyContext.invalid=true end
+            pending,buffered,moneyContext=nil,nil,nil
+        end)
+    end
     -- Runtime-only evidence: Cash Flow still owns amounts and balance changes.
     local function clock() return read(GetTime) or 0 end
     local function discardMoney()
@@ -164,7 +173,7 @@ function ns.StartBestiaryLoot(journal)
     for _,event in ipairs({"UNIT_SPELLCAST_SENT","UNIT_SPELLCAST_SUCCEEDED","UNIT_SPELLCAST_FAILED",
         "UNIT_SPELLCAST_INTERRUPTED","LOOT_CLOSED","PLAYER_ENTERING_WORLD"}) do frame:RegisterEvent(event) end
     frame:SetScript("OnEvent",function(_,event,unit,a,b,c)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if event~="GET_ITEM_INFO_RECEIVED" then
             diagnostics:Log(event,unit,a,b,c)
             diagnostics:Log("state: pending/succeeded/guid/context",pending and pending.cast,

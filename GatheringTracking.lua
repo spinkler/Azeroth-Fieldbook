@@ -1,4 +1,7 @@
 local _, ns = ...
+local function paused()
+    return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("gathering")
+end
 
 local function public(v) return not (issecretvalue and issecretvalue(v)) end
 local function read(fn,...)
@@ -111,6 +114,11 @@ end
 function ns.CreateGatheringTracking(journal)
     local controller={}
     local pending,lastFinished,clicked,hovered,lastRejected,blockedUntil,lootContext
+    if ns.RegisterSectionVisibilityListener then
+        ns.RegisterSectionVisibilityListener("gathering",function()
+            pending,lastFinished,clicked,hovered,lastRejected,blockedUntil,lootContext=nil,nil,nil,nil,nil,nil,nil
+        end)
+    end
     local function clock()
         local now=read(GetTime)
         if type(now)=="number" and now>=0 and now<math.huge then return now end
@@ -128,7 +136,7 @@ function ns.CreateGatheringTracking(journal)
             and read(C_TooltipInfo and C_TooltipInfo.GetWorldCursor)==nil)
     end
     function controller:ObserveWorldCursor()
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if journal.readOnly then return end
         local resource=worldResource()
         if resource then
@@ -178,7 +186,7 @@ function ns.CreateGatheringTracking(journal)
         journal:ObserveLoot(lootContext.id,items,read(time))
     end
     function controller:OnEvent(event,unit,a,b,c)
-        if ns.InitializationBlocked then return end
+        if paused() then return end
         if journal.readOnly then return end
         if event=="LOOT_READY" or event=="LOOT_OPENED" or event=="LOOT_SLOT_CHANGED" then snapshotLoot();return end
         if event=="LOOT_CLOSED" then lootContext=nil;return end
@@ -288,6 +296,7 @@ function ns.CreateGatheringTracking(journal)
     end
     local elapsed=0
     frame:SetScript("OnUpdate",function(_,dt)
+        if paused() then return end
         elapsed=elapsed+dt
         if elapsed>=0.2 then elapsed=0;controller:ObserveWorldCursor() end
     end)

@@ -31,6 +31,7 @@ function methods:StopMovingOrSizing() self.moving=false end
 function methods:SetAllPoints() end
 function methods:SetColorTexture(r,g,b,a) self.alpha=a end
 function methods:SetTexture(value) self.image=value end
+function methods:GetTexture() return self.image end
 function methods:AddMaskTexture(value) self.mask=value end
 function methods:SetJustifyH() end
 function methods:SetPoint(...) self.point={...} end
@@ -872,3 +873,85 @@ window:SetAssignmentCapture(nil);window:SetCreatureLockedCheck(nil)
 auras={player={},target={}};window:Initialize({})
 ''')
 print('PASS: verified buff/debuff lock suppression, fallback isolation, aura retries and temporary target status')
+
+lua.execute(r'''
+-- Native setters can succeed before supplying any portrait texture. Loading
+-- must retain the fallback and retry without borrowing a different creature.
+ns.SpellIDWindow:SetAssignmentCapture(nil)
+ns.SpellIDWindow:SetCreatureLockedCheck(nil)
+ns.SpellIDWindow:SetRecordedAbilityCheck(nil)
+auras={player={},target={}};casting,channel=false,false
+controlled,enemy,exists,targetPlayer=false,true,true,false
+local settings={spellIDWindowIndefinite=true}
+ns.SpellIDWindow:Initialize(settings)
+local guid='Creature-0-1-2-3-26-spirit'
+local current=guid
+function UnitGUID() return current end
+local loc,portrait=frames[9],frames[16]
+local candidate={id=26,guid=guid,unit='target',name='Forlorn Spirit',level=26}
+local calls,mode=0,'empty'
+function SetPortraitTexture(texture)
+    calls=calls+1
+    if mode=='error' then error('not loaded') end
+    if mode=='secret' then texture.image=secret
+    elseif mode=='loaded' then texture.image=guid
+    elseif mode=='race' then texture.image='wrong creature';current='Creature-0-1-2-3-99-other' end
+end
+local function observe(token)
+    assert(ns.SpellIDWindow:ObserveLossOfControl(3105,'Curse of Stalvan',nil,nil,token,candidate))
+end
+observe('load:empty')
+assert(calls==1 and portrait.strings[1].shown and not portrait.texture.shown,
+    'successful empty setter must leave a visible question mark')
+mode='loaded';advance(0.25)
+assert(calls==2 and portrait.texture.image==guid and portrait.texture.shown and not portrait.strings[1].shown)
+current='Creature-0-1-2-3-99-other';advance(1);fire('UNIT_PORTRAIT_UPDATE','target')
+assert(calls==2 and portrait.texture.image==guid,'completed portraits stay frozen')
+
+current=guid;mode='empty';observe('load:late')
+advance(6);local exhausted=calls;advance(1)
+assert(calls==exhausted,'loading polls stop after a bounded interval')
+assert(portrait.strings[1].shown)
+mode='loaded';fire('UNIT_PORTRAIT_UPDATE',secret)
+assert(calls==exhausted,'restricted event units are ignored')
+fire('UNIT_PORTRAIT_UPDATE','target')
+assert(calls==exhausted+1 and portrait.texture.image==guid and not portrait.strings[1].shown,
+    'portrait-ready event recovers loads after polling has stopped')
+
+for _,failure in ipairs({'empty','error','secret'}) do
+    mode=failure;observe('load:'..failure..':retry')
+    assert(portrait.strings[1].shown and not portrait.texture.shown and portrait.texture.image==nil)
+    local before=calls;current='Creature-0-1-2-3-99-other';mode='loaded'
+    advance(0.25);fire('UNIT_PORTRAIT_UPDATE','target')
+    assert(calls==before and portrait.strings[1].shown,'retargeting cannot supply another portrait')
+    current=guid;advance(0.25)
+    assert(calls==before+1 and not portrait.strings[1].shown)
+end
+
+local ready=false
+function IsUnitModelReadyForUI() return ready end
+observe('load:readiness');local before=calls
+assert(portrait.strings[1].shown and not portrait.texture.shown)
+advance(0.25);ready=secret;advance(0.25)
+assert(calls==before,'false and restricted model readiness never reveal a blank render')
+ready=true;advance(0.25)
+assert(calls==before+1 and not portrait.strings[1].shown)
+IsUnitModelReadyForUI=nil
+mode='race';observe('load:race')
+assert(portrait.strings[1].shown and portrait.texture.image==nil and not portrait.texture.shown)
+
+-- Pending retries belong to a row's current observation and include pins.
+current=guid;mode='empty'
+ns.SpellIDWindow:SetAssignmentCapture(function() return candidate end)
+casting,castID=true,3105;fire('UNIT_SPELLCAST_START','target');casting=false
+local cast,castPortrait=frames[3],frames[10]
+cast.scripts.OnMouseUp(cast,'LeftButton');mode='loaded';advance(0.25)
+assert(cast.strings[5].text:find('[Pinned]',1,true) and not castPortrait.strings[1].shown)
+mode='empty';observe('load:dismiss');portrait.scripts.OnClick(portrait,'RightButton')
+local before=calls;mode='loaded';advance(1);fire('UNIT_PORTRAIT_UPDATE','target')
+assert(calls==before and not portrait.shown,'dismissed rows cannot retry')
+mode='empty';observe('load:hide');settings.displaySpellIDWindow=false;ns.SpellIDWindow:ApplySettings()
+local before=calls;mode='loaded';advance(1);fire('UNIT_PORTRAIT_UPDATE','target')
+assert(calls==before and not portrait.shown and not castPortrait.shown)
+''')
+print('PASS: empty/failed/restricted portraits, delayed loading, frozen pins, identity races and retry cleanup')
