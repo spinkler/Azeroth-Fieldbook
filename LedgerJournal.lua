@@ -239,6 +239,22 @@ function ns.CreateLedgerJournal(saved)
         end
         return candidate
     end
+    function j:TravellingContact(v,p,roles)
+        if not (roles and roles.merchant) or p.zone=="Unknown zone" then return end
+        local candidate
+        for _,e in pairs(db.contacts) do
+            if e.travelling==true and e.personal and e.roles.merchant and e.npcID==v.npcID and e.name==v.name
+                and (not L.Name(v.sublabel) or not L.Name(e.sublabel) or v.sublabel==e.sublabel) then
+                for _,old in ipairs(e.sightings) do
+                    if old.zone==p.zone and old.mapID==p.mapID then
+                        if candidate and candidate~=e then return end
+                        candidate=e;break
+                    end
+                end
+            end
+        end
+        return candidate
+    end
     function j:Encounter(v,roles,near,selected)
         if self.readOnly or not v or not L.Name(v.name) or not L.Text(v.guid,160) or not L.Integer(v.npcID,1,10000000) then return end
         local e=self:Get(db.aliases[v.guid]);local at=L.Now()
@@ -247,6 +263,7 @@ function ns.CreateLedgerJournal(saved)
             if not e or (e.npcID and e.npcID~=v.npcID) then return nil,"NPC template does not match the selected contact." end
         end
         local location=L.Location(v.location,near)
+        if not e then e=self:TravellingContact(v,location,roles) end
         if not e then e=self:NearbyContact(v,location,roles) end
         local newlyAdded=not e
         if not e then
@@ -272,7 +289,7 @@ function ns.CreateLedgerJournal(saved)
         if self.onContactDiscovered then self.onContactDiscovered(e) end
         return e
     end
-    function j:Annotate(id,note,role,speciality)
+    function j:Annotate(id,note,role,speciality,travelling)
         local e=self:Get(id);if self.readOnly or not e or not L.Text(note,4000,true) then return nil,"Use plain notes, up to 4,000 bytes." end
         if e.note~=note then e.note=note;e.noteOrigin=self:Origin(e,"notes",L.Now(),"recorded") end
         if type(role)=="table" then
@@ -284,6 +301,7 @@ function ns.CreateLedgerJournal(saved)
             end
         elseif role and L.roles[role] then e.manualRoles[role]=self:Origin(e,"manual-role:"..role,L.Now(),"recorded") end
         if L.Name(speciality) and (e.specialities[speciality] or L.Count(e.specialities)<32) then e.specialities[speciality]=self:Origin(e,"speciality:"..speciality,L.Now(),"recorded") end
+        if travelling~=nil then e.travelling=travelling==true or nil end
         self:Changed(id);return true
     end
     function j:Favourite(id) local e=self:Get(id);if e and not self.readOnly then e.favourite=not e.favourite;self:Changed(id) end end
@@ -343,6 +361,7 @@ function ns.CreateLedgerJournal(saved)
         if a.first then out.first=math.min(a.first,b.first or a.first) end
         if a.last then out.last=math.max(a.last,b.last or a.last) end
         out.favourite=a.favourite or b.favourite;out.ambiguous=nil;out.linkedAt=L.Now()
+        out.travelling=a.travelling or b.travelling
         if a.migrationEvidence then
             out.migrationEvidence=out.migrationEvidence or {}
             for key,original in pairs(a.migrationEvidence) do if not out.migrationEvidence[key] then out.migrationEvidence[key]=L.Copy(original) end end
@@ -451,8 +470,10 @@ function ns.CreateLedgerJournal(saved)
         local locations=self:Locations(e);for _,p in ipairs(locations) do fields[#fields+1]=p.zone;fields[#fields+1]=p.subzone end
         local function add(store,kind,reported)
             for key,v in pairs(store) do
-                offerings[#offerings+1]={text=string.lower((v.name or "").." "..(v.profession or "")),name=v.name or "Unknown offering",key=v.key or key,kind=kind,reported=reported}
-                recipe=recipe or v.recipe==true
+                if not (reported and kind=="training" and e.lessons[v.key]) then
+                    offerings[#offerings+1]={text=string.lower((v.name or "").." "..(v.profession or "")),name=v.name or "Unknown offering",key=v.key or key,kind=kind,reported=reported}
+                    recipe=recipe or v.recipe==true
+                end
             end
         end
         add(e.goods,"goods");add(e.lessons,"training")
@@ -465,6 +486,12 @@ function ns.CreateLedgerJournal(saved)
     end
     function j:List(f)
         f=f or {};local q=string.lower(f.query or "");local rows={};local total=0
+        local duplicates={}
+        if f.duplicates then
+            for _,e in pairs(db.contacts) do if e.npcID then
+                local key=L.Key(e.npcID,e.name);duplicates[key]=(duplicates[key] or 0)+1
+            end end
+        end
         local zone,subzone=f.zone,f.subzone;local currentOnly=f.currentZone==true
         if currentOnly then zone=L.Name(ns.Atlas.CurrentLocation().zone);subzone=nil end
         for _,e in pairs(db.contacts) do
@@ -473,6 +500,7 @@ function ns.CreateLedgerJournal(saved)
             local zoneOK=not zone and not currentOnly
             for _,p in ipairs(ix.locations) do if p.zone==zone and (not subzone or p.subzone==subzone) then zoneOK=true end end
             if roleOK and zoneOK and (not f.favourites or e.favourite) and (not f.recipes or ix.recipe)
+                and (not f.duplicates or (e.npcID and (duplicates[L.Key(e.npcID,e.name)] or 0)>1))
                 and (f.knowledge~="personal" or e.personal) and (f.knowledge~="reported" or (not e.personal and not e.recorded and #e.reports>0)) then
                 local match=ix.text:find(q,1,true)~=nil;local why
                 if q~="" then for _,o in ipairs(ix.offerings) do if o.text:find(q,1,true) then why=o;match=true;break end end end

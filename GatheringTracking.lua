@@ -69,6 +69,17 @@ local function requirementKind(value,errorMessage)
     end
     return result
 end
+-- Verified starter resource identities can identify a live object even when
+-- its skill line is absent or uses a label the client spell API does not expose.
+-- This is not a spawn list: discovery still requires a fresh world tooltip.
+local starterObjects={
+    [1618]="herb",[3724]="herb", -- Peacebloom
+    [1617]="herb",[3725]="herb", -- Silverleaf
+    [1619]="herb",[3726]="herb", -- Earthroot
+    [657454]="herb",[657455]="herb", -- Wilted Peacebloom / Stunted Silverleaf
+    [1731]="mineral",[2055]="mineral",[3763]="mineral",[103713]="mineral", -- Copper
+    [562111]="mineral", -- Poor Copper Vein (Wowhead Forever object record)
+}
 local function worldResource()
     if not GameTooltip or read(GameTooltip.IsShown,GameTooltip)~=true then return end
     local info=read(GameTooltip.GetPrimaryTooltipInfo,GameTooltip)
@@ -93,6 +104,9 @@ local function worldResource()
                 end
             end
         end
+    end
+    if not kind and public(data.id) and type(data.id)=="number" then
+        kind=starterObjects[data.id]
     end
     if kind then return {name=name,kind=kind,modelFileID=ns.GatheringModel(kind,name,data.id)} end
 end

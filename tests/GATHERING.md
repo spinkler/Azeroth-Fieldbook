@@ -157,3 +157,40 @@ positions; latest seenAt is preserved. Map width and height are applied separate
 and cached per journal. Missing dimensions preserve points and retry cleanup on
 interaction. Tests cover exact thresholds, asymmetric dimensions, resource/map
 isolation, reload cleanup, unavailable APIs and preserved interaction totals.
+
+## Starter-resource investigation — 2026-10-16
+
+The CurseForge screenshot reports Silverleaf and Peacebloom failing on hover/use,
+with Peacebloom specifically in Tirisfal Glades; ore discovery works. The user
+reports both an herbalist dwarf and a miner undead. Client locale, exact tooltip
+data and the collapsed comment text are unavailable, so the cause is unconfirmed.
+
+The catalog already contains Wilted Peacebloom (657454), Stunted Silverleaf
+(657455), and Poor Copper Vein. The latter lacked an object-ID association;
+[Wowhead’s Forever object record](https://www.wowhead.com/forever/object=562111/poor-copper-vein)
+identifies it as 562111 and lists Mulgore, Durotar, Elwynn, Tirisfal and Dun Morogh.
+[Wowhead’s herbalism guide](https://www.wowhead.com/forever/guide/professions/herbalism/overview-leveling)
+identifies the two starter herb variants, including Northshire. No additional
+starter node type was established by this search; this is not an exhaustive
+server spawn audit. Model lookup data never restricts which names can be recorded.
+
+A confirmed code limitation was that known resource object IDs could not discover
+a node without recognized profession text. GatheringTracking now has an explicit
+starter-object fallback, independent of model presentation. It requires the same
+fresh world-cursor Object tooltip and readable name. Recognized profession text
+retains precedence; conflicting herb/mineral lines still reject the tooltip.
+Unknown IDs continue to require recognized skill text. No name-only guessing,
+preloaded discoveries, coordinates or spawn locations are introduced.
+
+The regression checks ordinary herbs/copper and all three starter variants with
+missing skill lines and localized names, unknown/restricted IDs, bag/unit tooltip
+exclusions, zero hover coordinates, and skill-rejected interaction recording.
+Live acceptance: reload and hover/use Peacebloom and Silverleaf in Tirisfal or
+Dun Morogh, plus the starter variants and ordinary Copper. Verify hover creates
+a zone entry only; a gathering cast or matched skill rejection adds coordinates.
+If herbs still fail, capture the exact tooltip, client language, object ID and
+spell/error event details. This fallback is a tested robustness fix, not proof
+that the reporter’s underlying client behavior has been reproduced.
+
+Validation: all 46 tests in `test_gathering.py` pass under Lua 5.1 with pinned
+Lupa 2.8; `git diff --check` passes. Native client acceptance remains pending.

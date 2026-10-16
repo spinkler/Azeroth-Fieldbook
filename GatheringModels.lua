@@ -14,8 +14,8 @@ local models={
     {"herb","Briarthorn",219502,{1621,3729}},
     {"herb","Bruiseweed",219440,{1622,3730}},
     {"mineral","Copper Vein",219514,{1731,2055,3763,103713}},
-    -- Starter variant uses the Copper Vein presentation asset; object ID unverified.
-    {"mineral","Poor Copper Vein",219514,{}},
+    -- Wowhead Forever object 562111; retain the existing Copper Vein presentation.
+    {"mineral","Poor Copper Vein",219514,{562111}},
     {"mineral","Dark Iron Deposit",189103,{165658}},
     {"herb","Dreamfoil",219444,{176584,176639}},
     {"herb","Earthroot",219489,{1619,3726}},

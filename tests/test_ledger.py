@@ -5,6 +5,82 @@ from ui_test_harness import ROOT
 
 
 class LedgerTests(unittest.TestCase):
+    def test_travelling_merchants_require_annotation_and_match_within_zone(self):
+        lua=new_ledger()
+        lua.execute('''
+            local function encounter(journal,guid,x,zone,map,title,id,label)
+                return journal:Encounter({guid=guid,npcID=id or 42,name=label or 'Traveller',sublabel=title or 'Merchant',
+                    location={zone=zone or 'Road',subzone='Stop '..x,mapID=map or 101,x=x,y=2500,precision='npc'}},
+                    {merchant=true},true)
+            end
+            local a=encounter(j,'A',1000)
+            assert(encounter(j,'B',5000)~=a,'Unmarked individuals remain separate')
+            assert(j:Annotate(a.id,'',nil,nil,true))
+            local b=encounter(j,'C',9000)
+            assert(b==a and #a.sightings==2,'Marked merchant follows travel across subzones')
+            assert(encounter(j,'D',8000,'Other zone',102)~=a)
+            assert(encounter(j,'E',8000,nil,102)~=a,'Different maps do not match')
+            assert(encounter(j,'F',8000,nil,nil,'Other title')~=a)
+            assert(encounter(j,'G',8000,nil,nil,nil,43)~=a)
+            assert(encounter(j,'H',8000,nil,nil,nil,nil,'Other name')~=a)
+            local loaded=ns.CreateLedgerJournal(saved)
+            assert(encounter(loaded,'I',7000)==a,'Annotation survives reload')
+            local unknown=encounter(loaded,'J',6000,'Unknown zone')
+            assert(unknown~=a,'Unknown zone cannot establish identity')
+            -- Multiple marked candidates are unresolved; do not choose one.
+            local second=j:Get(j.db.aliases.B)
+            assert(j:Annotate(second.id,'',nil,nil,true))
+            assert(encounter(loaded,'K',4000)~=a)
+            assert(j:Annotate(a.id,'',nil,nil,false) and not a.travelling)
+            local linked=assert(j:Link(second.id,a.id))
+            assert(linked.travelling,'Explicit identity linking preserves the annotation')
+            local report=reportFor(linked)
+            assert(report.travelling==nil,'Local identity preference is not a shared claim')
+        ''')
+
+    def test_observed_training_supersedes_reports_without_erasing_provenance(self):
+        lua=new_ledger(ui=True)
+        lua.execute('''
+            local e=visit()
+            trainer={{name='Blink',status='used',level=20,rank='',category='',price=2000},
+                {name='Blizzard',status='available',level=20,rank='Rank 1',category='',price=2000},
+                {name='Blizzard',status='unavailable',level=28,rank='Rank 2',category='',price=7000}}
+            fire('TRAINER_SHOW');flush()
+            local report=reportFor(e);report.goods={}
+            import(j,report,e.id);flush()
+            local retained=snapshot(e.reports)
+            -- A report-only lesson remains visible until personally inspected.
+            e.lessons={};j:Changed(e.id);c:Select(e.id)
+            local text=c:Details(e,false,'training')
+            local _,count=text:gsub('REPORTED:','');assert(count==3)
+            assert(#j:Index(e).offerings==4) -- Three lessons and one merchant item.
+            trainer[3]=nil;fire('TRAINER_UPDATE');flush()
+            local function check(book,journal,entry)
+                local text=book:Details(entry,false,'training')
+                local _,count=text:gsub('REPORTED:','');assert(count==1,text)
+                assert(text:find('REPORTED: Blizzard (Rank 2)',1,true))
+                assert(not text:find('REPORTED: Blink',1,true))
+                assert(not text:find('REPORTED: Blizzard (Rank 1)',1,true))
+                local _,blocks=book:Details(entry,true,'training');local headings=0
+                for _,block in ipairs(blocks) do if block.heading then headings=headings+1 end end
+                assert(headings==3,'Only one row per observed lesson and the distinct reported rank')
+                local personal,reported=0,0
+                for _,v in ipairs(journal:Index(entry).offerings) do if v.kind=='training' then
+                    if v.reported then reported=reported+1 else personal=personal+1 end
+                end end
+                assert(personal==2 and reported==1,'Search uses the same source precedence')
+                assert(snapshot(entry.reports)==retained,'Reports remain unchanged')
+            end
+            check(c,j,e)
+            GetNumSpellTabs=function() return 1 end
+            GetSpellTabInfo=function() return 'Mage',123,0,1 end
+            GetSpellBookItemName=function() return 'Blink','' end
+            fire('SPELLS_CHANGED');check(c,j,e)
+            assert(c:Details(e,false,'training'):find('Learned by this character',1,true))
+            local loaded=ns.CreateLedgerJournal(saved)
+            check(ns.CreateLedgerBook(loaded,t,ns.CreateFieldbookShell()),loaded,loaded:Get(e.id))
+        ''')
+
     def test_pickpocket_cash_uses_confirmed_capture_and_separate_runs(self):
         lua=new_ledger()
         lua.execute((ROOT/'BestiaryLoot.lua').read_text(encoding='utf-8'),'AzerothFieldbook',lua.globals().ns)
@@ -1381,6 +1457,31 @@ class LedgerTests(unittest.TestCase):
 
 
 class LedgerUITests(unittest.TestCase):
+    def test_duplicates_filter_and_travelling_annotation_controls(self):
+        self.lua.execute('''
+            local a=visit();local v=L.Unit('npc')
+            v.guid='Creature-0-1-2-3-42-DEF';local b=j:Encounter(v,{merchant=true},true)
+            v.npcID=43;v.guid='Creature-0-1-2-3-43-AAA';j:Encounter(v,{merchant=true},true);flush()
+            assert(a~=b and #c.rows==3)
+            local option=choose(openMenu(m.filters),'Duplicates')
+            assert(option.selected() and option.response==MenuResponse.Refresh)
+            assert(#c.rows==2 and m.filters.afbSelected)
+            assert(ns.CreateLedgerJournal(saved).state.duplicates==true)
+            j:Favourite(a.id);choose(openMenu(m.filters),'Favourites')
+            assert(#c.rows==1 and c.rows[1].contact==a)
+            choose(openMenu(m.filters),'Clear');assert(not c.state.duplicates and #c.rows==3)
+            c:Select(a.id);c:Notes();local p=c.panels.notes
+            click(p.travellingButton);assert(p.travelling and not a.travelling)
+            c:ClosePanel();c:Notes();assert(p.travelling,'Unsaved annotation draft survives reopening')
+            click(p.save);assert(a.travelling and not c.panel)
+            c:Notes();assert(p.travellingButton:GetText()=='Travelling merchant: Yes')
+            click(p.travellingButton);click(p.save);assert(not a.travelling)
+            choose(openMenu(m.filters),'Duplicates');assert(#c.rows==2)
+            assert(j:Link(b.id,a.id));flush();assert(#c.rows==0,'Linked duplicate leaves the filter')
+            local noID=j:Manual({name=a.name});flush()
+            assert(#c.rows==0,'Name alone does not invent duplicate identity')
+        ''')
+
     def setUp(self):
         self.lua = new_ledger(ui=True)
         self.lua.execute('''

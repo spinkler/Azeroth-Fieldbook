@@ -22,6 +22,24 @@ Current Zone. This filters historical sightings; it does not discover NPCs or
 establish their current presence.
 **Link identity** sits between Search and the contact list in the left pane.
 
+**Duplicates** in the filter menu shows all contacts sharing an NPC template ID
+and exact name with another stored contact. Counts use the complete directory;
+the result combines with search, role, source, favourites and location filters.
+Missing IDs and matching names alone do not qualify. This flags candidates for
+review, including separate individuals, rather than confirming shared identity.
+The checkbox is saved, highlights the active filter button, and resets with Clear.
+
+Personal / access notes includes **Travelling merchant: Yes/No**, saved with the
+notes draft. It is an explicit local identity preference, preserved across reload
+and identity linking, and excluded from reports. A new merchant GUID can reuse
+exactly one marked personal merchant with the same NPC ID, name, compatible title,
+and a personal sighting in the same known zone and map. Subzone, distance and
+earlier session GUIDs do not block this deliberate matching policy. Unknown zones,
+conflicting titles and multiple marked candidates cannot qualify. Existing GUID
+bindings remain authoritative; existing duplicate contacts require Link identity.
+Unmarked merchants retain ordinary nearby matching. Locations remain bounded
+historical sightings; this does not record or predict a live travel route.
+
 ## Ownership and files
 
 | File | Responsibility |
@@ -132,7 +150,10 @@ visit. Unsupported metadata cannot create a recurring inventory poll.
 Observed Training uses the Known Goods heading/icon layout. Its top sort arrow
 chooses required level (ascending, unknown last) or name (A–Z), remembered in
 `state.trainingSort`. The chosen order spans personal and reported lessons;
-rank and stable source/key ties keep repeated refreshes consistent. Green means
+personally observed lessons supersede reports with the same name, rank and
+category in details and catalogue search. Reports remain stored for provenance
+and forwarding; different ranks and report-only lessons remain visible.
+Rank and stable source/key ties keep repeated refreshes consistent. Green means
 available when inspected, red unavailable, grey already known and gold unknown.
 Required levels use gold, categories/report labels blue and dates/source details grey.
 These labels remain historical; viewing a lesson does not recheck availability.

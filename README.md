@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.41.0 (Release)
+# Azeroth Fieldbook 0.42.0 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of

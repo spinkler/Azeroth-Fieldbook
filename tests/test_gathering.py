@@ -109,6 +109,39 @@ class GatheringTrackingTests(unittest.TestCase):
     def setUp(self):
         self.lua = client()
 
+    def test_starter_object_ids_discover_without_profession_line(self):
+        self.lua.execute('''
+            function GetLocale() return 'frFR' end
+            for _,row in ipairs({
+                {1618,'Fleur de paix','herb',219481},
+                {1617,'Feuillargent','herb',219487},
+                {1619,'Terrestrine','herb',219489},
+                {657454,'Wilted Peacebloom','herb',219481},
+                {657455,'Stunted Silverleaf','herb',219487},
+                {1731,'Filon de cuivre','mineral',219514},
+                {562111,'Poor Copper Vein','mineral',219514},
+            }) do
+                hover(row[2]);cursorData.id=row[1];cursorData.lines[2]=nil;discover()
+                local e=entry(row[3]..':'..string.lower(row[2]))
+                assert(e and e.modelFileID==row[4])
+                assert(e.interactions==0 and e.completed==0 and positionReads==0)
+            end
+            -- A known identity still needs a live readable world object.
+            for _,id in ipairs({999999,secret}) do
+                hover('Unknown');cursorData.id=id;cursorData.lines[2]=nil;discover()
+            end
+            hover('Bag');cursorData.id=1618;cursorData.lines[2]=nil
+            cursorInfo.getterName='GetBagItem';discover()
+            hover('Unit',nil,2);cursorData.id=1618;cursorData.lines[2]=nil;discover()
+            hover(secret);cursorData.id=1618;cursorData.lines[2]=nil;discover()
+            assert(count(journal.entries)==7 and positionReads==0)
+            function GetLocale() return 'enUS' end
+            hover('Peacebloom');cursorData.id=1618;cursorData.lines[2]=nil;discover()
+            clickNode();assert(positionReads==0);skillError()
+            assert(entry('herb:peacebloom').interactions==1)
+            assert(entry('herb:peacebloom').completed==0 and positionReads==1)
+        ''')
+
     def test_mouseover_opens_live_herbs_and_minerals_without_gathering(self):
         lua=client(ui=True)
         lua.execute(r'''

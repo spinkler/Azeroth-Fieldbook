@@ -89,7 +89,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
     end
     function c:Filter() state.offset=0;state.contactScroll=0;self:Refresh() end
     function c:Reset()
-        for _,k in ipairs({"currentZone","zone","subzone","knowledge","favourites","recipes","sort"}) do state[k]=nil end
+        for _,k in ipairs({"currentZone","zone","subzone","knowledge","favourites","recipes","duplicates","sort"}) do state[k]=nil end
         state.roles={};state.query="";state.offset=0;state.contactScroll=0;self.main.search:SetText("");self:Refresh()
     end
     function c:DefaultDetail(e)
@@ -144,6 +144,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                 if #names>0 then lines[#lines+1]=group[2]..": "..table.concat(names,", ") end
             end
             if e.note~="" then lines[#lines+1]="Personal notes: "..e.note end
+            if e.travelling then lines[#lines+1]="Travelling merchant: reuse this contact within the same zone (your annotation)." end
             local retained=journal:ImportedNotes(e);if retained~="" then lines[#lines+1]=retained end
             if e.migrationIssue then lines[#lines+1]=e.migrationIssue end
             for speciality,o in pairs(e.specialities) do
@@ -170,8 +171,12 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         local rows={};local headings={};local trainingHeadings={};local offeringHeadings={};local muted={};local prices={};local styled={}
         for key,v in pairs(e[kind]) do rows[#rows+1]={value=v,key=key} end
         for _,report in ipairs(e.reports) do for _,v in ipairs(report[kind]) do
-            local receipt=report.factReceipts and report.factReceipts[L.Key(v.origin.source,v.origin.key)]
-            rows[#rows+1]={value=v,key=v.key,reported=true,received=receipt and receipt.received or report.received}
+            -- Personal observations supersede identical reported training.
+            -- Retain the report itself for provenance and forwarding.
+            if not training or not e.lessons[v.key] then
+                local receipt=report.factReceipts and report.factReceipts[L.Key(v.origin.source,v.origin.key)]
+                rows[#rows+1]={value=v,key=v.key,reported=true,received=receipt and receipt.received or report.received}
+            end
         end end
         local query=self.panel and self.panel==self.panels.catalogue and self.panel.query or ""
         if query~="" then
@@ -558,14 +563,17 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         p.back:SetText("Back")
         if not p.edit then
             p.edit,p.scroll=U.TextArea(p,9,-32,217,322,4000);p.inputs={p.edit}
-            function p:Matches(note,roles)
+            function p:Matches(note,roles,travelling)
                 if note~=self.baselineNote then return false end
+                if (travelling==true)~=(self.baselineTravelling==true) then return false end
                 for role in pairs(roles) do if not self.baselineRoles[role] then return false end end
                 for role in pairs(self.baselineRoles) do if not roles[role] then return false end end
                 return true
             end
             function p:Load(e)
                 self.contact=e.id;self.baselineEntry=e;self.baselineNote=e.note;self.baselineRoles={};self.roles={}
+                self.baselineTravelling=e.travelling;self.travelling=e.travelling
+                self.travellingButton:SetText(self.travelling and "Travelling merchant: Yes" or "Travelling merchant: No")
                 for role in pairs(e.manualRoles) do self.baselineRoles[role]=true;self.roles[role]=true end
                 self.edit:SetText(e.note);self.speciality:SetText("");self:RefreshRoles()
             end
@@ -587,19 +595,29 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             end)
             p.speciality=U.Edit(p,10,-438,230,160);p.inputs[#p.inputs+1]=p.speciality
             U.Label(p,"Optional speciality; explicitly your annotation.",4,-466,245,"GameFontDisableSmall")
-            U.Button(p,"Save",4,-514,122,function()
+            p.travellingButton=U.Button(p,"Travelling merchant: No",4,-488,250,function()
+                p.travelling=not p.travelling or nil
+                p.travellingButton:SetText(p.travelling and "Travelling merchant: Yes" or "Travelling merchant: No")
+            end)
+            p.travellingButton:SetScript("OnEnter",function(self)
+                GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText("Travelling merchant")
+                GameTooltip:AddLine("Mark a recognized travelling merchant to reuse this contact for new spawns anywhere in the same zone. Save to apply. Review existing duplicates with Filters > Duplicates and Link identity.",1,1,1,true)
+                GameTooltip:Show()
+            end)
+            p.travellingButton:SetScript("OnLeave",function() GameTooltip:Hide() end)
+            p.save=U.Button(p,"Save",4,-514,122,function()
                 local current=journal:Get(p.contact)
-                if current~=p.baselineEntry or not current or not p:Matches(current.note,current.manualRoles) then
+                if current~=p.baselineEntry or not current or not p:Matches(current.note,current.manualRoles,current.travelling) then
                     c:Message("Saved notes changed. Your draft is retained; copy it before reloading saved notes.");return
                 end
-                local ok,err=journal:Annotate(p.contact,p.edit:GetText(),p.roles,p.speciality:GetText())
+                local ok,err=journal:Annotate(p.contact,p.edit:GetText(),p.roles,p.speciality:GetText(),p.travelling==true)
                 c:Message(ok and "Personal notes saved." or err);if ok then p:Load(current);c:ClosePanel() end
             end)
             U.Button(p,"Reload saved notes",132,-514,122,function()
                 local current=journal:Get(p.contact);if current then p:Load(current) end
             end)
         end
-        if p.contact~=e.id or p:Matches(p.edit:GetText(),p.roles) and p.speciality:GetText()=="" then p:Load(e) end
+        if p.contact~=e.id or p:Matches(p.edit:GetText(),p.roles,p.travelling) and p.speciality:GetText()=="" then p:Load(e) end
     end
     function c:Manual()
         local p=self:Panel("manual","Record a contact manually")
@@ -1068,7 +1086,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         end
         m.rumourKey:SetShown(hasGreen)
         m.filters:SetSelected(next(state.roles)~=nil or state.currentZone==true or state.zone~=nil or state.subzone~=nil
-            or state.knowledge~=nil or state.favourites==true or state.recipes==true)
+            or state.knowledge~=nil or state.favourites==true or state.recipes==true or state.duplicates==true)
         local e=journal:Get(state.selected)
         if not e and rows[1] then
             state.selected=rows[1].contact.id;state.sighting=1;state.sightingKey=nil;e=rows[1].contact;if m.rows[1].id==e.id then m.rows[1]:SetSelected(true) end
@@ -1211,7 +1229,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                     local value=choice[1]~="" and choice[1] or nil
                     checkbox(knowledge,choice[2],function() return state.knowledge==value end,function() state.knowledge=value end)
                 end
-                for _,choice in ipairs({{"favourites","Favourites"},{"recipes","Recipes"}}) do local key=choice[1]
+                for _,choice in ipairs({{"favourites","Favourites"},{"recipes","Recipes"},{"duplicates","Duplicates"}}) do local key=choice[1]
                     checkbox(root,choice[2],function() return state[key]==true end,function() state[key]=not state[key] or nil end)
                 end
                 root:CreateDivider()
@@ -1359,7 +1377,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
     shell:RegisterSection("merchants",{title="Merchant’s Ledger",icon="Interface\\Icons\\INV_Misc_Coin_01",frameName="AzerothFieldbookLedgerSection",build=build,
         help=L.VISION.."\n\n|cffffd100Directory|r\nFind remembered merchants, trainers and services by name, goods, training, zone or notes. Use role, location and recipe filters to narrow the directory. Tick Current Zone to combine searches such as repair with sightings in your current zone; it follows zone changes. Choosing a fixed zone or Filters > Clear turns it off. Record contact adds a contact manually. Known Goods and Observed Training sit below Search, above the contact list; both always share the row equally and are greyed out when no offerings are recorded. Link identity sits in the contact header.\n\n"..
             "|cffffd100Observation|r\nOpen a merchant or trainer to record readable offerings without buying. Supported service interactions also record contacts; recognizable class-trainer titles can reveal a trainer before you open its services.\n\nGoods, prices and stock describe past inspections, not live availability. A partial or filtered view may miss offerings. Something absent from the latest inspection is not proof it is no longer sold.\n\n"..
-            "|cffffd100Locations and identity|r\nLocations shows remembered encounters. Encountered near means your approximate position during an interaction, not the NPC's exact position. Distant targeting does not add your position as the contact's location.\n\nContacts with the same name may be different individuals. Use Link identity only when you recognize two entries as the same contact; their goods and history are combined after confirmation.\n\n"..
+            "|cffffd100Locations and identity|r\nLocations shows remembered encounters. Encountered near means your approximate position during an interaction, not the NPC's exact position. Distant targeting does not add your position as the contact's location.\n\nFilters > Duplicates shows entries sharing an NPC ID and name. It combines with your other filters. These are candidates for review: contacts with the same identity may be different individuals. Use Link identity only when you recognize two entries as the same contact; their goods and history are combined after confirmation.\n\nIn Personal / access notes, set Travelling merchant to Yes and Save to recognize new spawns of that merchant anywhere in the same zone. Matching requires the same NPC ID, name and compatible title, and a unique marked contact. Existing duplicate entries still need Link identity.\n\n"..
             "|cffffd100Access notes and details|r\nUse Edit for entrances, floors, personal notes or a manual role annotation. Known Goods and Observed Training open offering lists; click the same button again to return to the directory.\n\n"..
             "|cffffd100Share|r\nSelect a contact and open Share. Choose what to include, then Prepare text for copying. When preparing your own observations, the current search limits included offerings. Notes start excluded. To import, use Preview pasted data, review it, then Accept reported facts. Received facts remain Reported with their original source and observation dates; receiving them is not a personal encounter. Reports use copy and paste and cost no Knowledge.\n\n"..
             "|cffffd100Your journal|r\nContacts, notes and browsing settings follow the global Account-wide tracking option. It starts on in Options; turn it off to use this character's separate journal after /reload. Existing character records import once; later changes in the two scopes stay separate.",

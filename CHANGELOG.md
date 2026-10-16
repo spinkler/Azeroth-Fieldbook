@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.42.0 - 2026-10-16
+
+- Add Merchant's Ledger > Filters > Duplicates to review contacts sharing an NPC ID and name. Add a saved Travelling merchant annotation in Personal / access notes: marked merchants can reuse a unique matching personal contact across the same zone and map, preserving sightings instead of creating a record at each stop. Existing duplicates remain available for explicit Link identity review. Add filter, annotation, identity-boundary and reload regression coverage.
+
+- Hide identical reported training when the contact has a personal observation of that lesson. Observed and learned abilities no longer show a duplicate REPORTED row; retain report provenance and distinct ranks.
+
+- Recognize verified starter herb and copper object IDs when a live world tooltip has no recognized gathering requirement. Cover Peacebloom, Silverleaf, Earthroot, Copper Vein and the Forever starter variants; preserve interaction-only coordinates. Add Poor Copper Vein object 562111 to the model lookup and regression coverage for localized names, missing skill lines and non-world exclusions. The reported Tirisfal herb failure still needs in-game confirmation.
+
 ## v0.41.0 - 2026-10-14
 
 - Add eight independently enabled journal tabs under Options → Journals → Fieldbook tabs, all on by default and saved per character. Hidden journals pause automatic observation, mapping, capture and history until re-enabled, preserving their saved records and discarding stale interaction context. With only one journal enabled, hide its redundant tab and use its icon in the circular book portrait; restore the book icon and navigation when more journals are enabled. Hiding every tab leaves a blank Fieldbook with Options and Close available. Hidden Bestiary blocks new sharing offers while accepted transfers finish their existing delivery and receipt exchange. Add empty-book, navigation, portrait, persistence, sharing and observer pause/resume regressions.
