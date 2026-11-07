@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.42.1 - 2026-11-07
+
+- Default Traveller's Atlas sub-zone controls to Shading on, Points off, Labels on and Hide zone-name areas on, preserving saved checkbox choices. Add default and persistence regression coverage and give existing overlay tests explicit control settings.
+
+- Use the native WoW quest-title typeface, Morpheus, for the top-left headings in all eight journals, increasing heading size by two points and preserving colour and placement.
+
+- Align the Traveller's Atlas sub-zone tooltip's bottom-left corner with the map's bottom-right corner so it appears to the right of the map, aligned along the bottom.
+
 ## v0.42.0 - 2026-10-16
 
 - Add Merchant's Ledger > Filters > Duplicates to review contacts sharing an NPC ID and name. Add a saved Travelling merchant annotation in Personal / access notes: marked merchants can reuse a unique matching personal contact across the same zone and map, preserving sightings instead of creating a record at each stop. Existing duplicates remain available for explicit Link identity review. Add filter, annotation, identity-boundary and reload regression coverage.

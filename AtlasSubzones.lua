@@ -140,8 +140,10 @@ end
 function S.Attach(j)
     if not j.readOnly then
         j.saved.subzones=type(j.saved.subzones)=="table" and j.saved.subzones or {}
-        if j.state.showSubzoneLabels==nil then j.state.showSubzoneLabels=j.state.showSubzones==true end
-        if j.state.showSubzonePoints==nil then j.state.showSubzonePoints=j.state.showSubzones==true end
+        if j.state.showSubzones==nil then j.state.showSubzones=true end
+        if j.state.showSubzoneLabels==nil then j.state.showSubzoneLabels=true end
+        if j.state.showSubzonePoints==nil then j.state.showSubzonePoints=false end
+        if j.state.hideZoneNameSubzones==nil then j.state.hideZoneNameSubzones=true end
     end
     local store=not j.readOnly and j.saved.subzones or {}
     local s={store=store,revision=0,revisions={},index={}}
@@ -1782,7 +1784,9 @@ function S.InstallMap(map,journal,cursorPoint)
         if x==hoverX and y==hoverY and hoverModel==model and GameTooltip:IsOwned(self) and GameTooltip:IsShown() then return end
         hoverX,hoverY,hoverModel=x,y,model
         local a=model:At(x,y);local nearest=self:NearestSubzoneSample()
-        GameTooltip:SetOwner(self,"ANCHOR_LEFT");GameTooltip:SetText(a and A.Safe(a.name) or "Sub-zone observations")
+        GameTooltip:SetOwner(self,"ANCHOR_NONE")
+        GameTooltip:ClearAllPoints();GameTooltip:SetPoint("BOTTOMLEFT",self,"BOTTOMRIGHT",0,0)
+        GameTooltip:SetText(a and A.Safe(a.name) or "Sub-zone observations")
         GameTooltip:AddLine("Estimated from your crossings and interior observations; unexplored boundaries are unknown.",1,1,1,true)
         if nearest then
             if nearest.kind=="interior" then

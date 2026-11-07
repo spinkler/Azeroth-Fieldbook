@@ -64,14 +64,15 @@ ENV = r'''
 '''
 
 
-def new_atlas(ui=False):
+def new_atlas(ui=False, settings=None):
     lua = new_ui_client([
         'Scrollbars.lua', 'CreatureLocations.lua', 'FieldbookShell.lua',
         'GatheringJournal.lua', 'GatheringModels.lua', *ATLAS_MODULES,
     ])
     lua.execute(ENV)
+    lua.globals().atlas_test_settings = lua.table_from(settings or {})
     lua.execute('''
-        saved={};j=ns.CreateAtlasJournal(saved);A=ns.Atlas;R=ns.AtlasReports
+        saved={settings=atlas_test_settings};j=ns.CreateAtlasJournal(saved);A=ns.Atlas;R=ns.AtlasReports
         shell=ns.CreateFieldbookShell()
         shell:RegisterSection('test',{title='Other',build=function() end})
         source={entries={['herb:synthetic herb']={id='herb:synthetic herb',name='Synthetic herb',kind='herb',note='secret source note'}}}

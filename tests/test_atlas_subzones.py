@@ -4,6 +4,20 @@ from atlas_test_harness import new_atlas
 
 
 class SubzoneTests(unittest.TestCase):
+    def test_default_controls_and_saved_choices(self):
+        self.lua.execute('''
+            local fresh=ns.CreateAtlasJournal({})
+            assert(fresh.state.showSubzones and fresh.state.showSubzoneLabels)
+            assert(not fresh.state.showSubzonePoints and fresh.state.hideZoneNameSubzones)
+            local saved={settings={showSubzones=false,showSubzoneLabels=false,
+                showSubzonePoints=true,hideZoneNameSubzones=false}}
+            for i=1,2 do
+                local reload=ns.CreateAtlasJournal(saved)
+                assert(not reload.state.showSubzones and not reload.state.showSubzoneLabels)
+                assert(reload.state.showSubzonePoints and not reload.state.hideZoneNameSubzones)
+            end
+        ''')
+
     def test_portal_waits_for_matching_stable_map_and_label_without_crossings(self):
         self.lua.execute('''
             C_Map.GetMapWorldSize=function() return 1000,1000 end
@@ -405,7 +419,10 @@ class SubzoneTests(unittest.TestCase):
         ''')
 
     def setUp(self):
-        self.lua = new_atlas(ui=True)
+        self.lua = new_atlas(ui=True, settings={
+            'showSubzones': False, 'showSubzoneLabels': False,
+            'showSubzonePoints': False, 'hideZoneNameSubzones': False,
+        })
         self.lua.execute('''
             S=ns.AtlasSubzones;s=j.subzones
             function settle()
@@ -934,7 +951,7 @@ class SubzoneTests(unittest.TestCase):
             local reload=ns.CreateAtlasJournal(saved)
             assert(reload.state.showSubzonePoints==false and reload.state.showSubzones and reload.state.showSubzoneLabels)
             local old=ns.CreateAtlasJournal({settings={showSubzones=true}})
-            assert(old.state.showSubzonePoints,'Existing visible points survive upgrade')
+            assert(not old.state.showSubzonePoints,'Unset points default off')
             local optedOut=ns.CreateAtlasJournal({settings={showSubzones=true,showSubzonePoints=false}})
             assert(not optedOut.state.showSubzonePoints,'A saved opt-out survives reload')
             S.Build=build
