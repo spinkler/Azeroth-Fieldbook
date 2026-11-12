@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.42.1 (Release)
+# Azeroth Fieldbook 0.43.0 (Release)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -742,7 +742,14 @@ character that started them, using the active journal's knowledge balance.
 
 Target or mouse over an attackable NPC to record its readable name, creature
 type, level range, location and model. Players, pets, vehicles and
-player-controlled creatures are excluded.
+player-controlled creatures are excluded. NPCs with an explicitly readable Alliance
+or Horde affiliation are also excluded from automatic discovery and live ability
+recording. Existing entries are hidden from the Bestiary list and count when a
+later target or mouseover observation explicitly identifies that affiliation;
+their notes, loot and earned knowledge are retained. The hidden status survives
+reloads and Bestiary backups. Older entries have no saved faction information,
+so they remain visible until identified again. Neutral or unavailable faction
+results keep the normal eligibility rules.
 
 The index supports creature-type, location, rank, review-state, text and A-Z filters.
 Earned stars and crowns appear beside creature names. Personally encountered

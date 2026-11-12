@@ -453,7 +453,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     end
     function journal:GetTotals()
         local count = 0
-        for id in pairs(self.entries) do if self:GetCreatureName(id) then count = count + 1 end end
+        for id in pairs(self.entries) do if self:GetCreatureName(id) and not self:IsFactionAffiliated(id) then count = count + 1 end end
         return count, ledger.earned
     end
     function journal:GetSharingBalance()
@@ -495,6 +495,20 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         return trackingDB.bestiary.sharing
     end
     function journal:Touch() self.revision = self.revision + 1 end
+    function journal:IsFactionAffiliated(id)
+        local entry=self.entries[id]
+        return entry~=nil and (entry.factionAffiliation=="Alliance" or entry.factionAffiliation=="Horde")
+    end
+    function journal:MarkFactionAffiliation(id, faction)
+        if faction~="Alliance" and faction~="Horde" then return end
+        local entry=self.entries[id]
+        -- Retain the page and its knowledge; only live, explicit affiliation
+        -- hides it. Historical entries without this evidence remain visible.
+        if entry and entry.factionAffiliation~=faction then
+            entry.factionAffiliation=faction
+            self:Touch()
+        end
+    end
     function journal:GetFirstEncounteredAt(id)
         if not number(id) then return end
         local entry=self.entries[id]
@@ -1734,7 +1748,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
             local name = self:GetCreatureName(id)
             -- Keep unresolved old records for later identification, without
             -- exposing placeholder pages or counting them as usable entries.
-            if name then
+            if name and not self:IsFactionAffiliated(id) then
                 local basic = self.GetBasicInfo and self:GetBasicInfo(id) or entry
                 local review = not entry.confirmed
                 for _, ability in pairs(entry.abilities) do if ability.state == "pending" then review = true end end

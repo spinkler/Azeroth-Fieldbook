@@ -659,8 +659,9 @@ class LedgerTests(unittest.TestCase):
             ITEM_QUALITY_COLORS={[3]={hex='|cff0070dd'}}
             local text,blocks=c:Details(e,true)
             assert(text:find('|cff0070dd',1,true))
-            assert(blocks[2].heading)
-            c:Catalogue('goods');assert(c.panels.catalogue.read.blocks[2]:GetText():find('|cff0070dd',1,true))
+            assert(blocks[1].catalogueTitle and blocks[1].text=='Known goods')
+            assert(blocks[3].heading)
+            c:Catalogue('goods');assert(c.panels.catalogue.read.blocks[3]:GetText():find('|cff0070dd',1,true))
             C_Item.GetItemInfo=function() return nil end
             assert(c:Details(e,true):find('|cffffffff',1,true))
         ''')
@@ -727,7 +728,7 @@ class LedgerTests(unittest.TestCase):
             local text=c:Details(e,false,'training')
             assert(text:find('Sword lesson',1,true) and not text:find('Axe lesson',1,true))
             m.search:SetText('no such offering')
-            assert(c:Details(e,false,'training'):find('No offerings match your search.',1,true))
+            assert(c:Details(e,false,'training'):find('No offerings match your search and filters.',1,true))
             m.search:SetText('');text=c:Details(e,false,'training')
             assert(text:find('Sword lesson',1,true) and text:find('Axe lesson',1,true))
             c:Catalogue('goods');local name
@@ -735,7 +736,7 @@ class LedgerTests(unittest.TestCase):
             assert(name);m.search:SetText(name)
             assert(c:Details(e,false,'goods'):find(name,1,true))
             m.search:SetText('no such offering')
-            assert(c:Details(e,false,'goods'):find('No offerings match your search.',1,true))
+            assert(c:Details(e,false,'goods'):find('No offerings match your search and filters.',1,true))
             c:ClosePanel();assert(m.search:GetText()==e.name and m.contactList:IsShown())
         ''')
 
@@ -832,12 +833,12 @@ class LedgerTests(unittest.TestCase):
             c.panels.notes.edit:SetText('Unsaved draft')
             m.detailButtons.services.scripts.OnClick();assert(c.panel==nil and not m.detailButtons.services.afbSelected)
             m.detailButtons.services.scripts.OnClick();assert(c.panels.notes.edit:GetText()=='Unsaved draft')
-            c:Catalogue('goods');local area=c.panels.catalogue.read;local label=area.blocks[2]
+            c:Catalogue('goods');local area=c.panels.catalogue.read;local label=area.blocks[3]
             GameFontNormal={GetFont=function() return 'font',14,'' end}
             label.SetFont=function(_,_,size) headingSize=size end
             label.GetUnboundedStringWidth=function() return 500 end
             c:Refresh();assert(headingSize==17)
-            local view=area.headingViews[2];assert(view.contentWidth==501)
+            local view=area.headingViews[3];assert(view.contentWidth==501)
             local tooltipLink
             GameTooltip={IsOwned=function() return false end,SetOwner=function() end,SetHyperlink=function(_,link) tooltipLink=link end,
                 AddLine=function() end,Show=function() end,Hide=function() tooltipLink=nil end}
@@ -867,7 +868,7 @@ class LedgerTests(unittest.TestCase):
             GameFontNormal={GetFont=function() return 'font',14,'' end}
             GameFontHighlightSmall={GetFont=function() return 'font',12,'' end}
             local e=visit();shell:ShowSection('merchants');c:Select(e.id);c:Catalogue('goods')
-            local area=c.panels.catalogue.read;local label=area.blocks[2];local size=17
+            local area=c.panels.catalogue.read;local label=area.blocks[3];local size=17
             label.GetFont=function() return 'font',size,'' end
             label.SetFont=function(_,_,value) size=value end
             for i=1,20 do
@@ -1555,7 +1556,8 @@ class LedgerUITests(unittest.TestCase):
             local area=c.panels.catalogue.read;local lesson=one(e.lessons)
             local before=snapshot(e)
             local text,blocks=c:Details(e,true,'training')
-            assert(blocks[2].heading and blocks[2].text:find('|T123:18:18:0:0|t ',1,true))
+            assert(blocks[1].catalogueTitle and blocks[1].text=='Observed Training')
+            assert(blocks[3].heading and blocks[3].text:find('|T123:18:18:0:0|t ',1,true))
             assert(text:find('|cff80e680Sword lesson|r',1,true) and text:find('(Rank 2)',1,true))
             assert(text:find('|cffffd100Required: Level 20|r',1,true))
             assert(select(2,text:gsub('Required:', ''))==1)
@@ -1567,7 +1569,7 @@ class LedgerUITests(unittest.TestCase):
             assert(not text:find('First:',1,true) and not text:find('Last: '..L.Date(lesson.last),1,true))
             assert(text:match('Price: ([^\n]+)')=='1|cffffd100g|r 23|cffc7c7cfs|r 45|cffb87333c|r')
             assert(c:Details(e,false,'training'):match('Price: ([^\n]+)')=='1g 23s 45c')
-            local view=area.headingViews[2]
+            local view=area.headingViews[3]
             assert(view.icon.texture==123 and view.icon:GetWidth()==40 and view.icon:IsShown())
             local tooltipLink
             C_Spell={GetSpellLink=function(identifier)
@@ -1582,8 +1584,8 @@ class LedgerUITests(unittest.TestCase):
             view.iconHover.scripts.OnEnter(view.iconHover);assert(GameTooltip:GetText()=='Sword lesson (Rank 2)')
             view.iconHover.scripts.OnLeave()
 
-            assert(area.blocks[3].point[2]==46 and area.blocks[3]:GetWidth()==182)
-            assert(not area.blocks[2]:GetText():find('|T',1,true))
+            assert(area.blocks[4].point[2]==46 and area.blocks[4]:GetWidth()==182)
+            assert(not area.blocks[3]:GetText():find('|T',1,true))
             assert(snapshot(e)==before,'Display must not change observations')
             for status,color in pairs({unavailable='ff80e680',used='ff999999',unknown='ff80e680'}) do
                 lesson.availability=status
@@ -1613,7 +1615,7 @@ class LedgerUITests(unittest.TestCase):
             for i=1,20 do trainer[i]={name='Lesson '..i,status='available',level=i,rank='',category='',price=100} end
             fire('TRAINER_SHOW');flush();c:Select(e.id);c:Catalogue('training')
             local area=c.panels.catalogue.read;local body=area.blocks[1].parent
-            local view=area.headingViews[2];local mapZoom=m.map.zoom
+            local view=area.headingViews[3];local mapZoom=m.map.zoom
             assert(body:GetHeight()>area:GetHeight() and area.ScrollBar:IsShown() and area.mouseWheel)
             for _,surface in ipairs({area,body,view,view.hover,view.iconHover}) do
                 area:SetVerticalScroll(0);surface.scripts.OnMouseWheel(surface,-1)

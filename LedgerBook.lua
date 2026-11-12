@@ -81,6 +81,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
     state.offset=L.Integer(state.offset,0,L.MAX_CONTACTS) and state.offset or 0
     state.detail=({goods=true,training=true,services=true})[state.detail] and state.detail or "services"
     state.trainingSort=state.trainingSort=="name" and "name" or "level"
+    state.trainingHidden=type(state.trainingHidden)=="table" and state.trainingHidden or {}
     local c={journal=journal,tracking=tracking,shell=shell,state=state,panels={}}
     c.mapPins=ns.CreateLedgerWorldPins(journal)
     function c:Message(text) self.main.message:SetText(L.Safe(text or "")) end
@@ -166,7 +167,8 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         end
         local training=detail=="training";local kind=training and "lessons" or "goods"
         local inspection=e[training and "trainerInspection" or "merchantInspection"]
-        local lines={training and "Observed Training" or "Known goods — historical observations"}
+        local lines={training and "Observed Training" or "Known goods"}
+        if not training then lines[#lines+1]="Historical observations" end
         if inspection then lines[#lines+1]="Latest inspection: "..date(inspection.at).." • "..(inspection.complete and "Readable, unfiltered" or inspection.reason) end
         local rows={};local headings={};local trainingHeadings={};local offeringHeadings={};local muted={};local prices={};local styled={}
         for key,v in pairs(e[kind]) do rows[#rows+1]={value=v,key=key} end
@@ -186,6 +188,15 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             end
             local filtered={}
             for _,row in ipairs(rows) do if matches[row.key] then filtered[#filtered+1]=row end end
+            rows=filtered
+        end
+        if training then
+            local filtered={}
+            for _,row in ipairs(rows) do
+                local availability=trainingAvailability(row.value,self.currentPlayerLevel)
+                local category=availability=="used" and "known" or (availability=="available" and "available" or "unknown")
+                if not state.trainingHidden[category] then filtered[#filtered+1]=row end
+            end
             rows=filtered
         end
         table.sort(rows,function(a,b)
@@ -283,7 +294,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                 if row.reported then lines[#lines+1]="Report received: "..date(row.received);muted[#lines]=training end
             end
         end
-        if #rows==0 then lines[#lines+1]=query~="" and "No offerings match your search." or (training and "No training recorded. Open a trainer to remember readable lessons." or "No goods recorded. Open this merchant to remember visible offerings.") end
+        if #rows==0 then lines[#lines+1]=(query~="" or (training and next(state.trainingHidden)~=nil)) and "No offerings match your search and filters." or (training and "No training recorded. Open a trainer to remember readable lessons." or "No goods recorded. Open this merchant to remember visible offerings.") end
         local blocks={};local pending={}
         local function flush()
             if #pending>0 then blocks[#blocks+1]={text=table.concat(pending,"\n")};pending={} end
@@ -295,7 +306,9 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                 safe=safe:gsub("(%d+%.?%d*)([gsc])",function(amount,unit) return amount.."|c"..colors[unit]..unit.."|r" end)
             end
             lines[i]=headings[i] or (muted[i] and "|cff888888"..safe.."|r" or safe)
-            if headings[i] then flush();blocks[#blocks+1]={text=headings[i]:gsub("^\n",""),heading=true,lesson=trainingHeadings[i],offering=offeringHeadings[i]}
+            if i==1 then
+                flush();blocks[#blocks+1]={text=safe,catalogueTitle=true}
+            elseif headings[i] then flush();blocks[#blocks+1]={text=headings[i]:gsub("^\n",""),heading=true,lesson=trainingHeadings[i],offering=offeringHeadings[i]}
             else pending[#pending+1]=lines[i] end
         end;flush() end
         return table.concat(lines,'\n'),blocks
@@ -424,7 +437,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             for i,block in ipairs(blocks) do
                 local label=self.blocks[i]
                 if not label then label=U.Label(body,"",0,0,width,"GameFontHighlightSmall");self.blocks[i]=label end
-                local fontName=block.heading and "GameFontNormal" or "GameFontHighlightSmall"
+                local fontName=block.catalogueTitle and "GameFontNormalLarge" or (block.heading and "GameFontNormal" or "GameFontHighlightSmall")
                 label:SetFontObject(textFont(fontName))
                 -- SetFont overrides survive SetFontObject. Always size from the
                 -- shared base font, never from this reused label's current size.
@@ -432,10 +445,13 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
                 if base and type(base.GetFont)=="function" then
                     local path,size,flags=base:GetFont()
                     if type(path)=="string" and type(size)=="number" then
-                        label:SetFont(path,size+(block.heading and 2 or 0)+(rich and 1 or 0),flags)
+                        label:SetFont(path,block.catalogueTitle and 20 or (size+(block.heading and 2 or 0)+(rich and 1 or 0)),flags)
                     end
                 end
+                -- Leave the header's right edge clear for the training filters.
+                label:SetWidth(i==1 and detail=="training" and width-30 or width)
                 label:SetTextColor(1,1,1);label:SetWordWrap(not block.heading);label:SetSpacing(3)
+                if block.catalogueTitle then label:SetTextColor(1,0.82,0);label:SetWordWrap(false) end
                 label:SetText(block.text);label:Show()
                 if block.heading then
                     finishRow()
@@ -853,7 +869,7 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
         self.switchingSearch=true;self.main.search:SetText(query);self.switchingSearch=nil
         if not p.read then
             p.read=self:GoodsReadArea(p,0,-4,228,524)
-            -- Reserve the scrollbar's top corner for the training sort button.
+            -- Reserve the scrollbar's top corner for the training controls.
             if p.read.ScrollBar then
                 p.read.ScrollBar:ClearAllPoints()
                 p.read.ScrollBar:SetPoint("TOPLEFT",p.read,"TOPRIGHT",4,-40)
@@ -892,6 +908,39 @@ function ns.CreateLedgerBook(journal,tracking,shell,eventJournal)
             local function hide() if GameTooltip then GameTooltip:Hide() end end
             p.sort:SetScript("OnLeave",hide);p.sort:SetScript("OnHide",hide)
         end
+        if not p.filters then
+            local function refreshTraining()
+                p.filters:SetSelected(next(state.trainingHidden)~=nil)
+                p.read:SetContact(journal:Get(state.selected),true,"training")
+            end
+            p.filters=ns.FieldbookUI.FilterButton(p,202,-4,function(button)
+                c:Menu(button,function(_,root)
+                    root:CreateTitle("Show training")
+                    for _,choice in ipairs({{"known","Known"},{"available","Available"},{"unknown","Unknown"}}) do
+                        local key,label=choice[1],choice[2]
+                        root:CreateCheckbox(label,function() return not state.trainingHidden[key] end,function()
+                            state.trainingHidden[key]=not state.trainingHidden[key] or nil
+                            refreshTraining()
+                        end)
+                    end
+                    root:CreateDivider()
+                    root:CreateButton("Clear",function() state.trainingHidden={};refreshTraining() end)
+                end)
+            end)
+            p.filters.ResetFilters=function() state.trainingHidden={};refreshTraining() end
+            U.StyleSelection(p.filters)
+            p.filters:SetScript("OnEnter",function(button)
+                if GameTooltip then
+                    GameTooltip:SetOwner(button,"ANCHOR_RIGHT");GameTooltip:SetText("Filter training")
+                    GameTooltip:AddLine("Known: already learned. Available: current level eligibility met. Unknown: not learned and unavailable or eligibility uncertain.",1,1,1,true)
+                    GameTooltip:AddLine("Right-click to reset filters.",1,1,1,true);GameTooltip:Show()
+                end
+            end)
+            local function hide() if GameTooltip then GameTooltip:Hide() end end
+            p.filters:SetScript("OnLeave",hide);p.filters:SetScript("OnHide",hide)
+        end
+        p.filters:SetShown(kind=="training")
+        p.filters:SetSelected(next(state.trainingHidden)~=nil)
         p.sort:SetShown(kind=="training")
         p.read:SetContact(journal:Get(state.selected),true,kind)
         self:UpdateDetailToggles()

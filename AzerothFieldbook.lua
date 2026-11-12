@@ -120,6 +120,16 @@ local function watchedEnemy(unit, explicit, sourceGUID)
     ok, reason = booleanCheck("UnitCanAttack", UnitCanAttack, true, "player", unit)
     if not ok then return nil, reason end
     local id, identityReason, identityGUID = npcID(unit)
+    -- Faction quest givers, guards and other Alliance/Horde NPCs can be
+    -- attackable without being Bestiary creatures. Exclude only an explicit,
+    -- readable affiliation; neutral/missing/restricted results prove nothing.
+    if id and type(UnitFactionGroup) == "function" then
+        local success, faction = pcall(UnitFactionGroup, unit)
+        if success and public(faction) and (faction == "Alliance" or faction == "Horde") then
+            if journal then journal:MarkFactionAffiliation(id, faction) end
+            return nil, "Alliance/Horde-affiliated NPC excluded."
+        end
+    end
     if effectSource then
         local success, guid = pcall(UnitGUID, unit)
         if identityGUID ~= sourceGUID or not success or not publicString(guid) or guid ~= sourceGUID then
@@ -680,7 +690,7 @@ local function initializeImpl()
         encounters = ns.CreateBestiaryEncounterReader(function(id, spellID, creatureName)
             -- Historical combat records can enrich an observed creature, but
             -- cannot discover or restore an entry without a live observation.
-            if not journal or not journal.entries[id] or not journal:GetCreatureName(id) then return false end
+            if not journal or not journal.entries[id] or journal:IsFactionAffiliated(id) or not journal:GetCreatureName(id) then return false end
             return storeObserved(id, spellID, nil, creatureName)
         end)
     end

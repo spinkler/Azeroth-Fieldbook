@@ -483,6 +483,7 @@ local ink = { 0.75, 0.8, 0.8 }
         return count>0 and ("Effects ("..count..")") or "Choose effects"
     end
     local function choose(id,clearBlockingFilters)
+        if journal:IsFactionAffiliated(id) then id=nil end
         if id~=selected and book.notesForm then book.notesForm:Hide() end
         if book.titleHover then book.titleHover:StopNameScroll() end
         if book.deleteForm then book.deleteForm:Hide() end
@@ -515,6 +516,7 @@ local ink = { 0.75, 0.8, 0.8 }
     end
     refresh = function(revealSelected,clearBlockingFilters)
         if not book then return end
+        if selected and journal:IsFactionAffiliated(selected) then choose(nil); return end
         local available, observedLocations = {}, {}
         for id in pairs(journal.entries) do
             local e=basicInfo(id)

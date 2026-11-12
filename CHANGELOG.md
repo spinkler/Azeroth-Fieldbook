@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.43.0 - 2026-11-12
+
+- Hide existing Bestiary entries from the list and entry count after a live target or mouseover identifies an explicit Alliance/Horde affiliation. Preserve their notes, loot and earned knowledge, retain the affiliation across reloads and Bestiary backups, and skip combat-history enrichment of hidden entries. Older entries remain visible until identified again because they have no saved faction data.
+
+- Exclude explicitly Alliance- or Horde-affiliated NPCs from automatic Bestiary discovery and live ability recording, including opposing-faction quest givers and guards. Preserve existing entries and normal handling of neutral or unavailable faction results.
+
+- Fix reload-reminder controls being grouped into Account-wide journals and overlapping its text and checkboxes. Keep all Annals options together on Journals with extra space for wrapped descriptions.
+
+- Add an optional reload-to-save reminder popup with Reload now and Remind me later (10-minute snooze). Keep popups off by default and defer them during combat. Settings, popup and chat wording explain that reloading saves all addon data, including every Fieldbook journal and settings, to help protect recent data from crashes or network outages. New Annals data triggers the reminder.
+
+- Add an Annals reload reminder under Options > Journals, defaulting to 60 minutes with Off, 30, 45 and 90-minute alternatives. Reminders appear in chat for new session data, wait until combat ends and never reload automatically.
+
+- Give Observed Training and Known goods matching yellow, 20-point headings. Move historical observations below Known goods, retaining normal-sized inspection details.
+
+- Add a matching filter button beside the Merchant's Ledger Training sort control, with Known, Available and Unknown ability toggles, an active highlight and right-click reset. Filters combine with search and sorting for personal and reported lessons.
+
+- Update Ledger catalogue regression checks for the separate titles and revised empty-filter message, retaining item quality, hover sizing, tooltips and scrolling coverage.
+
 ## v0.42.1 - 2026-11-07
 
 - Default Traveller's Atlas sub-zone controls to Shading on, Points off, Labels on and Hide zone-name areas on, preserving saved checkbox choices. Add default and persistence regression coverage and give existing overlay tests explicit control settings.

@@ -532,12 +532,45 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     end
     -- Keep each section's existing rows together, then space sections from
     -- their measured content instead of accumulating hard-coded blank gaps.
-    optionHeading("Adventurer's Annals",2450)
-    options.rebuildTimelineData=button(optionsBody,"Rebuild timeline data",30,-2480,230,function()
+    -- This whole range must follow Bestiary backup and reset (3100..3134):
+    -- controls are assigned to sections by their original Y coordinates.
+    optionHeading("Adventurer's Annals",3500)
+    options.rebuildTimelineData=button(optionsBody,"Rebuild timeline data",30,-3530,230,function()
         local controller=ns.AnnalsController
         if controller then controller:RebuildTimelineData() end
     end)
-    label(optionsBody,"Rebuild the current timeline and journey view from recorded history. New events appear automatically; this preserves your filters, timeline page and playback position.",35,-2520,510,"GameFontHighlightSmall")
+    label(optionsBody,"Rebuild the current timeline and journey view from recorded history. New events appear automatically; this preserves your filters, timeline page and playback position.",35,-3570,510,"GameFontHighlightSmall")
+    local function refreshReloadReminder()
+        local controller=ns.AnnalsController
+        local minutes=controller and controller.tracking:GetReloadReminderMinutes() or 60
+        options.annalsReloadReminder:SetText("Reload reminder: "..(minutes==0 and "Off" or minutes.." minutes"))
+        if options.annalsReloadPopup then
+            options.annalsReloadPopup:SetChecked(controller and controller.tracking and controller.journal.db.settings.reloadReminderPopup==true or false)
+        end
+    end
+    options.annalsReloadReminder=button(optionsBody,"Reload reminder: 60 minutes",30,-3650,260,function()
+        local controller=ns.AnnalsController
+        if not controller then return end
+        local nextValue={[0]=30,[30]=45,[45]=60,[60]=90,[90]=0}
+        controller.tracking:SetReloadReminderMinutes(nextValue[controller.tracking:GetReloadReminderMinutes()])
+        refreshReloadReminder()
+    end)
+    label(optionsBody,"Click to cycle Off, 30, 45, 60 or 90 minutes (default: 60). New Annals data triggers reminders after combat. Reloading or logging out normally saves all addon data to disk, including every Fieldbook journal.",35,-3690,510,"GameFontHighlightSmall")
+    options.annalsReloadPopup=CreateFrame("CheckButton",nil,optionsBody,"UICheckButtonTemplate")
+    options.annalsReloadPopup:SetPoint("TOPLEFT",30,-3790);options.annalsReloadPopup:SetSize(24,24)
+    label(optionsBody,"Show a popup for reload-to-save reminders",58,-3796,460,"GameFontHighlightSmall")
+    options.annalsReloadPopup:SetScript("OnClick",function(self)
+        local controller=ns.AnnalsController
+        if controller then controller.journal.db.settings.reloadReminderPopup=self:GetChecked()==true end
+    end)
+    options.annalsReloadPopup:SetScript("OnEnter",function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Save addon data to disk")
+        GameTooltip:AddLine("Reloading commits all addon data to SavedVariables files, including every Fieldbook journal and settings. This helps protect recent data from a game crash or network outage. Normal logout also saves it. Data since the last save may otherwise be lost.",1,1,1,true)
+        GameTooltip:AddLine("Adds Reload now and Remind me later buttons. Remind me later snoozes for 10 minutes. Uses the reminder interval above; Off disables all reminders. Popups wait until combat ends.",1,1,1,true)
+        GameTooltip:Show()
+    end)
+    options.annalsReloadPopup:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
     table.sort(optionSections,function(a,b) return a.originalY<b.originalY end)
     for _,control in ipairs(optionItems) do
         local point,relative,relativePoint,x,y=control:GetPoint()
@@ -614,6 +647,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     end
     layoutOptions()
     options:SetScript("OnShow",function(self)
+        refreshReloadReminder()
         layoutOptions()
         showBookPage(self)
         refreshTrackingOption()

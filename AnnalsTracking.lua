@@ -716,8 +716,52 @@ function ns.CreateAnnalsTracking(j)
             later(0.2,function() t:Flush(id) end)
         end
     end
+    function t:GetReloadReminderMinutes()
+        local value=db.settings.reloadReminderMinutes
+        if value==0 or value==30 or value==45 or value==60 or value==90 then return value end
+        return 60
+    end
+    function t:SetReloadReminderMinutes(value)
+        db.settings.reloadReminderMinutes=value
+        self.reminderAt=A.Now()
+    end
+    function t:PollReloadReminder()
+        local minutes=self:GetReloadReminderMinutes()
+        if minutes==0 or not self.reminderAt or A.Now()-self.reminderAt<minutes*60 then return end
+        local trailRevision=j.trail and j.trail.revision or 0
+        if j.revision==self.savedRevision and trailRevision==self.savedTrailRevision then return end
+        if A.Read(InCombatLockdown) or A.Read(UnitAffectingCombat,'player') then return end
+        if db.settings.reloadReminderPopup==true and StaticPopupDialogs and StaticPopup_Show then
+            if StaticPopup_Visible and StaticPopup_Visible('AZEROTHFIELDBOOK_ANNALS_SAVE') then return end
+            StaticPopupDialogs.AZEROTHFIELDBOOK_ANNALS_SAVE={
+                text="Reload to save addon data?\n\nReloading writes all addon data to disk, including every Fieldbook journal and settings. This helps protect recent data if the game crashes or your connection drops. Logging out normally also saves it.\n\nRemind me later snoozes this reminder for 10 minutes.",
+                button1="Reload now",button2="Remind me later",
+                OnAccept=function()
+                    if ns.InitializationBlocked or paused() then return end
+                    if A.Read(InCombatLockdown) or A.Read(UnitAffectingCombat,'player') then
+                        t.reminderAt=A.Now()-t:GetReloadReminderMinutes()*60+600
+                        return
+                    end
+                    ReloadUI()
+                end,
+                OnCancel=function()
+                    t.reminderAt=A.Now()-t:GetReloadReminderMinutes()*60+600
+                end,
+                timeout=0,whileDead=true,hideOnEscape=true,preferredIndex=3,
+            }
+            if StaticPopup_Show('AZEROTHFIELDBOOK_ANNALS_SAVE') then
+                self.reminderAt=A.Now()
+                return
+            end
+        end
+        if DEFAULT_CHAT_FRAME then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffffd100Azeroth Fieldbook:|r Reload your UI when convenient (/reload) to save all addon data to disk, including every Fieldbook journal and settings. This helps protect recent data from crashes or disconnects. Logging out normally also saves it.")
+            self.reminderAt=A.Now()
+        end
+    end
     function t:Poll()
         if t.loading or j.readOnly or paused() then return end
+        t:PollReloadReminder()
         local now=A.Now()
         t:CheckWorldTransfer()
         t.travelContext=travelContext()
@@ -752,6 +796,9 @@ function ns.CreateAnnalsTracking(j)
         if j.readOnly then return end
         if not paused() then self.travelContext=travelContext() end
         for id in pairs(db.pending) do t:Flush(id) end -- persisted provisional records survive reload
+        self.reminderAt=A.Now()
+        self.savedRevision=j.revision
+        self.savedTrailRevision=j.trail and j.trail.revision or 0
         self.frame=CreateFrame('Frame')
         for _,event in ipairs({'QUEST_ACCEPTED','QUEST_REMOVED','QUEST_TURNED_IN','QUEST_DETAIL','QUEST_ITEM_UPDATE','QUEST_COMPLETE','QUEST_FINISHED',
             'QUEST_LOG_UPDATE','QUEST_DATA_LOAD_RESULT','GET_ITEM_INFO_RECEIVED',

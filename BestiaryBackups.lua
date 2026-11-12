@@ -127,6 +127,7 @@ local locationSamples=boundedMap(positive,record({name=names,width=positive,heig
             y=function(v) return integer(v,0,10000) end,approximate=boolean,seenAt=natural},
             {"x","y","approximate","seenAt"}),256)},{"name","points"}),64)
 local entry=record({id=positive,name=names,category=names,rank=names,levelMin=positive,levelMax=positive,
+    factionAffiliation=enum({Alliance=true,Horde=true}),
     disposition=enum({Hostile=true,Neutral=true}),
     killLocations=locationSamples,observationLocations=locationSamples,
     firstEncounteredAt=timestamp,
