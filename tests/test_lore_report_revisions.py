@@ -106,6 +106,7 @@ class LoreReportRevisionTests(unittest.TestCase):
 
     def test_selections_expansion_and_meaningful_revision_fields(self):
         self.lua.execute('''
+            e.lastPage=nil;e.pages[1].last=false;source:EndCapture('book') -- reopen this expanded fixture
             for n=2,5 do assert(source:CapturePage({sessionID='book',title='F5 book'},
                 {number=n,raw='Page '..n,method='displayed'})) end
             local options={pages={[1]=true,[2]=true,[3]=true}}

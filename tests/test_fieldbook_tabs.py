@@ -8,7 +8,7 @@ from angling_test_harness import ANGLING_MODULES
 from ledger_test_harness import LEDGER_MODULES
 from treasure_test_harness import TREASURE_MODULES
 
-LORE_MODULES = ['LoreJournal.lua', 'LoreSettings.lua', 'LoreTracking.lua', 'LoreReports.lua',
+LORE_MODULES = ['LoreJournal.lua', 'LoreSettings.lua', 'LoreTracking.lua', 'LoreTooltips.lua', 'LoreReports.lua',
                 'LoreReportUI.lua', 'LoreReferences.lua', 'LoreMap.lua', 'LoreEditors.lua',
                 'LoreBook.lua', 'LoreIntegration.lua']
 
@@ -65,7 +65,8 @@ class FieldbookTabsTests(unittest.TestCase):
             function ItemTextGetText() return words[page] end
             function ItemTextHasNextPage() return page<2 end
             function ItemTextGetCreator() return nil end
-            local t=lore.tracking;t:Event('ITEM_TEXT_BEGIN');t:Event('ITEM_TEXT_READY')
+            local t=lore.tracking;assert(t.tooltips)
+            t:Event('ITEM_TEXT_BEGIN');t:Event('ITEM_TEXT_READY')
             assert(not shell:GetFrame() and not lore.main,'Automatic capture never opens the archive')
             local e=assert(lore.journal:List({kind='writing'})[1])
             local expected="|cffffd100[Recorded]|r |cff80d0ffLorekeeper's Chronicle:|r |cffffffffCaptured book |cff80d0ff[A]|r|r |cff999999(Writing)|r"

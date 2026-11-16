@@ -93,9 +93,14 @@ function ns.InitializeAnnals(shell,sources)
                     local shared=account and account.sections and account.sections.lore==journal.db
                     if not shared then personal=journal.db end
                     local original=type(personal)=='table' and type(personal.entries)=='table' and personal.entries[link.key]
-                    if not original or original.legacyAnnalsIdentity~=reference then return end
-                    reference=original.reference or ns.Lore.RecordReference(personal,original)
+                    local alias=type(personal)=='table' and type(personal.aliases)=='table' and personal.aliases[link.key]
+                    if original and original.legacyAnnalsIdentity==reference then
+                        reference=original.reference or ns.Lore.RecordReference(personal,original)
+                    elseif type(alias)=='table' and type(alias.metadata)=='table' and alias.metadata.legacyAnnalsIdentity==reference then
+                        reference=alias.reference
+                    else return end
                 end
+                if id=='lore' and journal.Reference then return journal:Reference(reference) end
                 local found
                 for _,record in pairs(journal.entries or journal.kinds or {}) do
                     local matches=record.reference==reference

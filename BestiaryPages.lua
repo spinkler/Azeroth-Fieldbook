@@ -249,7 +249,7 @@ function ns.CreateBestiaryPages(journal,shell,book,callbacks)
     options.tooltips:SetScript("OnEnter",function(self)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("AFB tooltips")
-        GameTooltip:AddLine("On by default. Controls creature abilities, behaviours, kills and spell IDs. Disabling also turns off the client-wide aura spell-ID preference. Individual tooltip choices are retained.",1,1,1,true)
+        GameTooltip:AddLine("On by default. Controls creature abilities, behaviours, kills, Chronicle lore hints and spell IDs. Disabling also turns off the client-wide aura spell-ID preference. Individual tooltip choices are retained.",1,1,1,true)
         GameTooltip:Show()
     end)
     options.tooltips:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)

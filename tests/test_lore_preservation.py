@@ -26,8 +26,13 @@ class LorePreservationTests(unittest.TestCase):
             function fixture(destinationLocations,sourceLocations)
                 saved={};j=ns.CreateLoreJournal(saved)
                 old=assert(j:CapturePage(ctx('older',1000),page(2,true)));j:EndCapture('older')
-                target=assert(j:CapturePage(ctx('newer',2000),page(1,false)))
-                assert(j:CapturePage(ctx('newer',2000),page(2,false)).id==target.id);j:EndCapture('newer')
+                -- Reproduce independent historical records without the new
+                -- capture-time reuse combining them while building the fixture.
+                local other=ns.CreateLoreJournal({})
+                target=assert(other:CapturePage(ctx('newer',2000),page(1,false)))
+                assert(other:CapturePage(ctx('newer',2000),page(2,false)).id==target.id)
+                target=L.Copy(target);target.id='lore:historic';target.reference=L.RecordReference(saved,target)
+                saved.entries[target.id]=target;j.entries[target.id]=target
                 assert(old.id~=target.id,'fixture must reach consolidation with distinct IDs')
                 for i=1,destinationLocations-1 do assert(j:AddLocation(target.id,location(2000+i))) end
                 for i=1,sourceLocations-1 do assert(j:AddLocation(old.id,location(1000+i))) end
@@ -96,8 +101,20 @@ class LorePreservationTests(unittest.TestCase):
             completeAndCheck('locations')
         ''')
 
-    def test_identity_unsafe_merge_is_skipped_even_when_all_data_fits(self):
-        self.lua.execute("fixture(1,1);completeAndCheck('identit')")
+    def test_fitting_merge_preserves_both_export_identities_through_aliases(self):
+        self.lua.execute(r'''
+            fixture(1,1)
+            local oldKey=assert(R.Build(j,old.id)).sourceKey
+            local targetKey=assert(R.Build(j,target.id)).sourceKey
+            j:CollapseDuplicateWritings()
+            local merged=j:Get(old.id)
+            assert(merged==j:Get(target.id) and #j:List({kind='writing'})==1)
+            assert(j:WritingSummary(merged).complete and merged.pages[2].personallyViewed)
+            assert(R.Build(j,old.id).sourceKey==oldKey and R.Build(j,target.id).sourceKey==targetKey)
+            local reloaded=ns.CreateLoreJournal(saved)
+            assert(reloaded:Get(old.id)==reloaded:Get(target.id))
+            assert(R.Build(reloaded,target.id).sourceKey==targetKey)
+        ''')
 
     def test_reload_staging_cannot_exceed_real_archive_limit_with_annotations(self):
         self.lua.execute(r'''
@@ -145,14 +162,19 @@ class LorePreservationTests(unittest.TestCase):
             assert(j:AddLink(question.id,{section='lore',id=old.id,label='Original identity'}))
             local before=snapshot(saved)
             local reloaded=ns.CreateLoreJournal(saved)
-            assert(reloaded:Get(old.id) and reloaded:Get(target.id),'reload retired distinct saved identities')
-            assert(snapshot(saved)==before,'reload changed annotations, reading state, flags or references')
+            local merged=reloaded:Get(old.id)
+            assert(merged==reloaded:Get(target.id) and #reloaded:List({kind='writing'})==1)
+            assert(merged.notes=='Second private note' and merged.pages[1].personallyViewed)
+            local private={};for _,p in ipairs(merged.passages) do private[p.raw]=p.private end
+            assert(private['First private note'] and private['Private interpretation'] and private['Separate private annotation'])
+            assert(saved.state.selected==old.id and saved.state.reading[old.id]==2 and saved.state.reading[target.id]==1)
             assert(reloaded:Get(question.id).links[1].id==old.id)
             assert(reloaded:Get(question.id).variantOf==old.id)
             assert(R.Build(reloaded,old.id).sourceKey==originalKey and R.Build(reloaded,target.id).sourceKey==targetKey)
+            local mergedSave=snapshot(saved);ns.CreateLoreJournal(saved);assert(snapshot(saved)==mergedSave)
         ''')
 
-    def test_selected_edited_and_referenced_sources_stay_protected(self):
+    def test_selected_edited_and_referenced_sources_merge_without_losing_content(self):
         for protection in ('selected', 'edited', 'referenced'):
             with self.subTest(protection=protection):
                 self.lua.execute("fixture(1,1)")
@@ -165,9 +187,12 @@ class LorePreservationTests(unittest.TestCase):
                         assert(j:AddLink(q.id,{section='lore',id=old.id,label='KEEP'}))
                     end
                     local before=snapshot(target)
-                    assert(j:CapturePage(ctx('revisit',1000),page(2,true)).id==old.id)
-                    assert(j:CapturePage(ctx('revisit',1000),page(1,true)).id==old.id)
-                    assert(j:Get(old.id)==old and snapshot(target)==before,'protected source was consolidated')
+                    local e=assert(j:CapturePage(ctx('revisit',1000),page(2,true)))
+                    assert(j:CapturePage(ctx('revisit',1000),page(1,true)).id==e.id)
+                    assert(j:Get(old.id)==j:Get(target.id) and j:WritingSummary(e).complete)
+                    if protection=='selected' then assert(saved.state.selected==e.id)
+                    elseif protection=='edited' then assert(e.notes=='KEEP')
+                    else assert(j:Get(j:List({kind='mystery'})[1].links[1].id)==e) end
                 ''')
 
     def test_new_page_at_location_101_is_archived_without_changing_any_locations(self):
@@ -255,7 +280,10 @@ class LorePreservationTests(unittest.TestCase):
         lua.execute(r'''
             book.identity=nil;book.pages={'First page','Second page'}
             begin(2);step(1);local source=writing();close()
-            begin(1);step(1);turn(2);step(1);local destination=j:Get(t.active.entryID);close()
+            local destination=ns.Lore.Copy(source);destination.id='lore:historic'
+            destination.pages[1]=assert(ns.Lore.Page({number=1,raw='First page',origin='captured',first=true}))
+            destination.firstPage=1;destination.lastPage=2
+            j.db.entries[destination.id]=destination;j.entries[destination.id]=destination
             assert(source.id~=destination.id,'fixture must use distinct captured entries')
             for i=1,99 do assert(j:AddLocation(destination.id,{meaning='observation',zone='Zone',mapID=37,x=2000+i,y=4000,precision='manual'})) end
             begin(2);step(1);turn(1);step(1)

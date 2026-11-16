@@ -1,5 +1,68 @@
 # Point-funded sharing: implementation and live checkpoint
 
+## Recipient directory and appearance — 2026-11-16
+
+Share now includes **Save name**, **Names & history** and a last-report summary
+for the captured creature and entered recipient. The directory has Saved names,
+Recent names and Sent history tabs; selecting **Use name** only fills the field.
+Saved names require explicit action, retain full surnames and use the existing
+recipient normalization/self-offer validation. Removal preserves report history.
+
+The focused Recipient character field also accepts Shift-clicked chat names.
+The initial insertion-helper-only implementation failed the operator's live
+check on 2026-11-16. Player-link left-clicks now enter through a narrow
+`SetItemRef` wrapper before native chat processing can bypass the insertion
+helper or change focus. A valid Shift-click into the focused recipient consumes
+that click; every other case delegates with the original arguments and return
+values. Secure post-hooks on `ChatFrameUtil.InsertLink` and the legacy
+`ChatEdit_InsertLink` remain for callers that insert names directly.
+Only visible, enabled, focused recipient fields outside an active transfer are
+updated. Plain full names and player hyperlinks use the existing name parser;
+player links use their character identity, never their decorated display label.
+Other links and unreadable values are ignored. Selecting a name neither sends
+an offer nor saves a contact. The field tooltip explains the interaction.
+The entry points were checked against the
+[Forever chat link dispatch](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrame.lua),
+[item-reference handler](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/ItemRef.lua)
+and [chat insertion implementation](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameUtilOverrides.lua).
+The regression test dispatches raw player-link clicks through a native-handler
+stand-in that clears focus and never calls InsertLink. Live acceptance of the
+revised route remains pending.
+
+The character's existing sharing store retains up to 50 saved names, 20 recent
+recipients and 100 report attempts. Recent names are deduplicated without case
+or extra-space distinctions. History has one row per transaction with creation
+time, recipient, creature, rumour count/report kind, outcome and actual spent
+knowledge. Acknowledgements mark delivery; acceptance alone does not. Reloads
+and retries update the same row, including discounted/free costs and uncertain
+delivery. The last pre-update outgoing transaction seeds history on upgrade;
+older Event log entries are not replayed. Bestiary resets clear the directory
+and history, including when account tracking is active; the preserved Event log
+cannot repopulate them. Live transfer accounting and protocols are unchanged.
+
+The composer, recipient directory and incoming report use the book's light tint
+and dark-mode desaturation/dimming at every UI background brightness setting.
+Appearance is applied during construction and refreshed while windows are open.
+Recipient rows scroll, wrap long names and reports, and disable reuse while a
+transfer is active. The composer and directory footer grow to fit wrapped text.
+
+Automated checks: `test_sharing.py`, `test_sharing_directory.py` and
+`test_sharing_ui.py` cover names, persistence, caps, character isolation,
+outcomes, retries, discounted costs, resets, recipient controls, dynamic layout
+and light/dark brightness combinations. These are simulated widgets/transports;
+in-game visual acceptance remains pending:
+
+- [ ] Change dark mode and UI background brightness with Share, Names & history
+  and an incoming report open; compare their parchment with the main book.
+- [ ] Save, reuse and remove full names; confirm persistence after `/reload`.
+- [ ] Click Recipient character, then Shift-click a chat name; check surname
+  preservation, replacing existing text, and no field changes when unfocused,
+  closed or sending. Confirm ordinary chat and item/spell links still work.
+- [ ] Inspect confirmed, declined, failed and uncertain reports; retry an
+  uncertain delivery and confirm its entry updates without another charge.
+- [ ] Inspect long names, wrapped report details and scrolling at small/large
+  UI and text scales; ensure footers remain accessible.
+
 ## Current verification — Beast Lore update 2026-10-11
 
 On 2026-09-27, the operator confirmed that the Forever SavedVariables bug is fixed and data

@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.43.0 (Release)
+# Azeroth Fieldbook 0.44.0-beta.1 (Beta)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -56,16 +56,34 @@ pages remain distinct from pages you personally opened. Partial captures retain
 their text, and unavailable sources can be transcribed manually.
 Rereading matching captured pages reuses the archive; different source text is
 retained separately. Delete a selected record through **Sources / manage →
-Delete entry…**. Deleted books can be archived again. Distinct saved writings
-remain separate, even when their captured text matches, so their IDs, annotations,
-links and previously exported report identities survive. Optional consolidation
-is checked on detached data and reports why records were kept separate; a skipped
-consolidation does not undo a successfully captured page. Ordinary matching
-rereads still reuse their existing record.
+Delete entry…**. Deleted books can be archived again. Compatible partial captures
+of the same writing combine across visits, and existing duplicates consolidate
+on reload. Source title, language, source kind and any source ID must agree;
+conflicting text or page boundaries keep versions separate. Notes, passages,
+locations and reports survive, with differing annotations kept as private passages.
+Old IDs and references remain usable through saved aliases. Merges are staged
+against all capacity limits; a declined merge never undoes a captured page.
 Object dialogue readers such as **Draconic for Dummies** also archive their
 displayed text as writings. Draconic for Dummies is a complete single-page reader;
 other object readers retain unconfirmed page boundaries.
 **Record… > Capture / retry current text** works when automatic archiving is disabled.
+
+Recognized world lore and predefined readable item tooltips show
+**[AFB] Chronicle: Unread** when no matching source text is stored, or
+**[AFB] Chronicle: Missing pages (2, 4, 5)** for known numbered gaps in an entry.
+The prefix and section label use AFB cyan; the hint uses tooltip gold. Complete
+sources add no line. Unknown later pages are never guessed. The master AFB
+tooltip switch controls these hints. Hovering never records a source or marks
+it personally read; ordinary items and player-written letters do not qualify.
+
+With **Spoken**, **Spoken Readables** and a matching voice pack enabled, a **Play**
+button appears beside the selected writing's title for a matching preserved page.
+It becomes **Stop** while that book is queued or speaking. Spoken's discovery
+locks and whole-book setting apply; playback can continue through later pages.
+From **Entry & personal notes**, playback starts at the first matching preserved
+page. Personal notes and translations are not narrated. Archive playback leaves
+the original book's found/read history unchanged. Native playback and layout
+still need in-game verification.
 
 Record people and deliberately save displayed gossip or quest passages; record
 landmarks, private thoughts, related evidence and a mystery's next step. Entry
@@ -1009,6 +1027,27 @@ Options includes **Block incoming offers**, off by default and saved per charact
 Enable it to automatically decline new offers and close unaccepted offers, with
 no knowledge spent by the sender. Outgoing sharing and already accepted deliveries
 continue normally. Turn it off to receive offers again.
+
+The Share, incoming-report and recipient windows follow **Dark mode** and
+**UI background brightness**, including changes while they are open. Use
+**Save name** beside the recipient field to keep common recipients. **Names &
+history** opens saved names, the 20 most recent recipients and the latest 100
+report attempts. **Use name** fills the recipient field; press **Send offer**
+separately. Remove saved names from the address book without removing their
+history. Names and history persist in this character's sharing store; resetting
+the Bestiary clears them.
+
+To fill **Recipient character** from chat, click inside the field, then
+**Shift-click a character name in chat**. This replaces the field with their
+full name; sending and saving remain separate actions. Active transfers keep
+their recipient locked.
+
+Each history entry shows the creature, recipient, date, outcome and actual
+knowledge spent. Only **Delivered** confirms receipt; pending, declined, failed
+and uncertain deliveries remain distinct. Retries update the same entry. The
+Share window also shows the last report for its captured creature and typed
+recipient. Existing last-transfer data is retained when upgrading; older Event
+log entries remain in the Event log.
 
 Select a creature, press **Share**, enter one recipient's **full character name**
 (including their surname if they have one), and select any existing traits you

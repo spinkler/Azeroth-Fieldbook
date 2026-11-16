@@ -192,11 +192,12 @@ local function pageCopy(p,originalSource)
 end
 function R.Build(journal,id,options)
     local e=journal:Get(id);if not e then return nil,'Select an entry.' end;options=options or {}
+    local alias=journal.db.aliases and journal.db.aliases[id]
     local base=options.report and e.reports and e.reports[options.report]
     if options.report and not base then return nil,'Select an existing received report.' end
     local out={format='AFB-LORE',version=R.VERSION,addonVersion=version(),sender=player(),created=L.Now(),
-        sourceKey=base and base.sourceKey or e.exportKey or (tostring(journal.db.exportOrigin or journal.db.archiveID or player())..':'..tostring(e.id)..':'..tostring(e.created)),
-        originalSource=base and base.originalSource or e.exportSource or player(),kind=e.kind,title=base and base.title or journal:Title(e),sourceTitle=base and base.sourceTitle or e.sourceTitle or '',
+        sourceKey=base and base.sourceKey or (type(alias)=='table' and alias.exportKey) or e.exportKey or (tostring(journal.db.exportOrigin or journal.db.archiveID or player())..':'..tostring(e.id)..':'..tostring(e.created)),
+        originalSource=base and base.originalSource or (type(alias)=='table' and alias.exportSource) or e.exportSource or player(),kind=e.kind,title=base and base.title or journal:Title(e),sourceTitle=base and base.sourceTitle or e.sourceTitle or '',
         subtype=base and base.subtype or e.subtype or '',pages={},passages={},locations={},annotations={},references={}}
     local pages={}
     for key,p in pairs(base and base.pages or e.pages or {}) do pages[#pages+1]={key=key,page=p} end

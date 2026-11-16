@@ -111,6 +111,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
     end
     function c:Select(id)
         local e=journal:Get(id);if not e then return end
+        id=e.id
         self:Remember()
         if state.selected~=id then
             state.selected=id;state.location=1;local locations=L.VisibleLocations(e);state.mapID=locations[1] and locations[1].mapID
@@ -225,6 +226,31 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         for i,row in ipairs(rows) do if row.id==r.source then index=i;break end end
         index=math.max(1,math.min(#rows,index+(delta or 0)));r.source=id or rows[index].id;r.scroll=0;self.main.readerKey=nil;self:Refresh()
     end
+    function c:UpdateSpokenButton()
+        local m=self.main;if not m or not m.spoken then return end
+        local available,playing=false,false
+        if ns.LoreSpoken then available,playing=ns.LoreSpoken:Status(self.spokenTarget) end
+        m.spoken:SetShown(available);m.spoken:SetText(playing and "Stop" or "Play")
+        m.name:ClearAllPoints();m.name:SetPoint("TOPLEFT",342,-60)
+        if available then
+            local width=math.max(0,m:GetWidth()-342-24-104-16-44)
+            m.name:SetWidth(math.min(m.name:GetStringWidth(),width))
+        else
+            m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.locationView,"TOPLEFT",-8,0)
+        end
+    end
+    function c:RefreshSpoken(e,row)
+        self.spokenTarget=nil
+        if ns.LoreSpoken and e then
+            if row and row.overview then
+                for _,source in ipairs(self:Sources(e)) do
+                    self.spokenTarget=ns.LoreSpoken:Resolve(e,source)
+                    if self.spokenTarget then break end
+                end
+            else self.spokenTarget=ns.LoreSpoken:Resolve(e,row) end
+        end
+        self:UpdateSpokenButton()
+    end
     function c:Refresh()
         if not self.main then return end
         local m=self.main;self:Remember()
@@ -262,6 +288,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         m.locationView:SetSelected(state.view=="location")
         for _,control in ipairs({m.reader,m.sourceMenu,m.pagePrevious,m.pageNext}) do control:SetShown(state.view=="entry") end
         for _,control in ipairs({m.map,m.locationMenu,m.addLocation,m.place,m.locationDescription,m.mapZone}) do control:SetShown(state.view=="location") end
+        local spokenRow
         if state.view=="entry" then
             local content,key,scroll,metadata,lore,blocks
             if e then
@@ -271,6 +298,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
                 local selected,index
                 for i,v in ipairs(sources) do if v.id==r.source then selected=v;index=i;break end end
                 if not selected then index=e.kind=="writing" and #sources>1 and 2 or 1;selected=sources[index];r.source=selected.id;r.scroll=0 end
+                spokenRow=selected
                 content,metadata,lore,blocks=self:SourceText(e,selected);key=e.id..":"..selected.id;scroll=type(r.scroll)=="number" and r.scroll or 0
                 m.sourceMenu:SetText(L.Safe(selected.label));m.pagePrevious:SetEnabled(index>1);m.pageNext:SetEnabled(index<#sources)
             else
@@ -286,6 +314,7 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
             m.mapZone:SetText(state.mapID and "Map "..state.mapID or "Choose map")
             m.map:Render();m.place:SetText(m.map.placing and "Cancel placement" or "Place landmark on map")
         end
+        self:RefreshSpoken(e,spokenRow)
         if journal.readOnly then self:Message("Unsupported Lore save: read-only view. Original saved data is untouched.")
         elseif journal.invalid>0 then self:Message(journal.invalid.." malformed saved entries are preserved but excluded from this view.") end
     end
@@ -496,6 +525,33 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         end);U.StyleSelection(m.locationView)
         m.locationView:ClearAllPoints();m.locationView:SetPoint("TOPRIGHT",m,"TOPRIGHT",-24,-60)
         m.name:SetWidth(0);m.name:SetPoint("TOPRIGHT",m.locationView,"TOPLEFT",-8,0)
+        m.spoken=U.Button(m,"Play",0,0,44,function()
+            local ok,err
+            if ns.LoreSpoken then ok,err=ns.LoreSpoken:Toggle(c.spokenTarget) end
+            if not ok then c:Message(err) end
+            c:UpdateSpokenButton()
+        end)
+        m.spoken:ClearAllPoints();m.spoken:SetPoint("LEFT",m.name,"RIGHT",8,0)
+        m.spoken:SetScript("OnEnter",function(self)
+            if GameTooltip then
+                GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText("Spoken narration")
+                GameTooltip:AddLine("Play or stop this writing's recording from the selected page. Spoken's whole-book setting may continue through later pages. Archive playback does not mark the original book found or read.",1,1,1,true)
+                GameTooltip:Show()
+            end
+        end)
+        m.spoken:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        -- Poll only this small control while the page is visible. Matching archived
+        -- text happens on refresh, never on every frame or against ItemText globals.
+        local spokenElapsed=0
+        m:SetScript("OnUpdate",function(_,elapsed)
+            spokenElapsed=spokenElapsed+elapsed
+            if spokenElapsed>=0.5 then spokenElapsed=0;c:UpdateSpokenButton() end
+        end)
+        m:HookScript("OnSizeChanged",function() c:UpdateSpokenButton() end)
+        m:RegisterEvent("ADDON_LOADED")
+        m:SetScript("OnEvent",function(_,_,addon)
+            if type(addon)=="string" and addon:find("^Spoken") and m:IsVisible() then c:Refresh() end
+        end)
         m.edit=U.Button(m,"Edit",566,-99,76,function() c:Edit(nil,state.selected) end)
         m.revisit=U.Button(m,"Revisit: No",652,-99,128,function() local e=journal:Get(state.selected);if e then journal:Update(e.id,{revisit=not e.revisit});c:Refresh() end end)
         m.related=U.Button(m,"Related",790,-99,120,function() c:Relationships() end)

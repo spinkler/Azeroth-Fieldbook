@@ -294,7 +294,7 @@ bytesOf=function(e)
 end
 function L.SupportsStore(saved)
     if not plainTable(saved) or (saved.schema~=nil and not L.Integer(saved.schema,0,L.SCHEMA)) then return false end
-    for _,key in ipairs({'entries','state'}) do if saved[key]~=nil and not plainTable(saved[key]) then return false end end
+    for _,key in ipairs({'entries','state','aliases'}) do if saved[key]~=nil and not plainTable(saved[key]) then return false end end
     return true
 end
 function L.RecordReference(db,e)
@@ -323,7 +323,31 @@ function ns.CreateLoreJournal(saved)
         local valid=L.ValidateEntry(e,id)
         if valid then for key,v in pairs(valid) do e[key]=v end;j.entries[id]=e else j.invalid=j.invalid+1 end
     end
-    function j:Get(id) return self.entries[id] end
+    function j:Get(id)
+        local seen={}
+        while id and not seen[id] do
+            if self.entries[id] then return self.entries[id] end
+            seen[id]=true
+            local alias=db.aliases and db.aliases[id]
+            id=plainTable(alias) and L.Text(alias.target,64) and alias.target or nil
+        end
+    end
+    function j:Reference(reference)
+        if not L.Text(reference,500) then return end
+        local found
+        for _,e in pairs(self.entries) do if e.reference==reference then
+            if found and found~=e then return end
+            found=e
+        end end
+        for id,alias in pairs(db.aliases or {}) do
+            if plainTable(alias) and alias.reference==reference then
+                local e=self:Get(id)
+                if e and found and found~=e then return end
+                found=e or found
+            end
+        end
+        return found
+    end
     function j:Title(e) if type(e)~='table' then e=self:Get(e) end;return e and e.title or 'Missing record' end
     function j:Changed(e)
         self.revision=self.revision+1
@@ -333,10 +357,14 @@ function ns.CreateLoreJournal(saved)
         if self.onChange then self.onChange(type(e)=='table' and e.id or e) end
     end
     function j:Next(prefix)
-        repeat db.serial=db.serial+1 until not db.entries[(prefix or 'lore:')..db.serial]
+        local reserved={}
+        for id,alias in pairs(db.aliases or {}) do
+            reserved[id]=true;if plainTable(alias) and L.Text(alias.target,64) then reserved[alias.target]=true end
+        end
+        repeat db.serial=db.serial+1 until not db.entries[(prefix or 'lore:')..db.serial] and not reserved[(prefix or 'lore:')..db.serial]
         return (prefix or 'lore:')..db.serial
     end
-    function j:ArchiveBytes() local n=0;for _,e in pairs(self.entries) do n=n+bytesOf(e) end;return n end
+    function j:ArchiveBytes() local n=itemBytes(db.aliases);for _,e in pairs(self.entries) do n=n+bytesOf(e) end;return n end
     -- Requested by the visible catalogue only; uses the capture/import byte
     -- model, not serialized file size. Never normalizes or writes saved data.
     function j:StorageStatus()
@@ -383,6 +411,7 @@ function ns.CreateLoreJournal(saved)
     function j:ReplaceEntry(id,candidate,dryRun)
         if self.readOnly then return nil,'Archive is read-only.' end
         local old=self:Get(id);if not old then return nil,'Entry no longer exists.' end
+        id=old.id
         local replacement,err=L.ValidateEntry(candidate,id);if not replacement then return nil,err end
         if replacement.kind~=old.kind then return nil,'An entry cannot change kind.' end
         if bytesOf(replacement)>L.MAX_WORK_BYTES or self:ArchiveBytes()-bytesOf(old)+bytesOf(replacement)>L.MAX_ARCHIVE_BYTES then return nil,'Archive is full (32 MiB); nothing was changed.' end
@@ -412,7 +441,7 @@ function ns.CreateLoreJournal(saved)
     end
     function j:Delete(id)
         if self.readOnly then return nil,'Archive is read-only.' end
-        if not self.entries[id] then return nil,'Entry no longer exists.' end
+        local entry=self:Get(id);if not entry then return nil,'Entry no longer exists.' end;id=entry.id
         db.entries[id]=nil;self.entries[id]=nil
         for key,s in pairs(self.sessions) do if s.id==id then self.sessions[key]=nil end end
         self:Changed();return true
@@ -484,8 +513,11 @@ function ns.CreateLoreJournal(saved)
     function j:WritingSummary(e)
         if type(e)~='table' then e=self:Get(e) end
         if not e or e.kind~='writing' then return {status='partial',captured=0,missing={},first=nil,last=nil} end
-        local captured,missing=0,{};for _ in pairs(e.pages) do captured=captured+1 end
-        if e.firstPage and e.lastPage then for n=e.firstPage,e.lastPage do if not e.pages[n] then missing[#missing+1]=n end end end
+        local captured,missing,highest=0,{},0
+        for n in pairs(e.pages) do captured=captured+1;if type(n)=='number' then highest=math.max(highest,n) end end
+        -- Numbered pages establish earlier gaps even before the last page has
+        -- been encountered. Never invent pages beyond the known extent.
+        for n=e.firstPage or 1,e.lastPage or highest do if not e.pages[n] then missing[#missing+1]=n end end
         local complete=e.firstPage==1 and e.lastPage~=nil and #missing==0
         local status=e.captureStatus
         if status=='complete' and not complete then status='partial' end
@@ -500,22 +532,45 @@ function ns.CreateLoreJournal(saved)
         e.captureStatus=status;e.captureReason=reason or '';self:Changed(e);return true
     end
     function j:EndCapture(sessionID) self.sessions[sessionID]=nil end
-    -- Preflight on detached data only. Distinct saved IDs also appear in exported
-    -- source keys, which we cannot rewrite or redirect without durable aliases.
-    -- Until that identity policy exists, even a capacity-valid merge is skipped.
-    local function consolidationReason(source,target,archiveBytes)
+    local function compatible(source,target)
+        if source.kind~='writing' or target.kind~='writing' or source.origin~='captured' or target.origin~='captured'
+            or not next(source.pages) or not next(target.pages) then return false end
+        for _,key in ipairs({'sourceTitle','sourceKind','identity','locale'}) do if source[key]~=target[key] then return false end end
+        if source.firstPage and target.firstPage and source.firstPage~=target.firstPage
+            or source.lastPage and target.lastPage and source.lastPage~=target.lastPage then return false end
+        for _,entry in ipairs({source,target}) do for n,p in pairs(entry.pages) do
+            if type(n)~='number' or p.origin~='captured' then return false end
+        end end
+        for n,p in pairs(source.pages) do if target.pages[n] and target.pages[n].raw~=p.raw then return false end end
+        local last=source.lastPage or target.lastPage
+        if last then
+            for n in pairs(source.pages) do if n>last then return false end end
+            for n in pairs(target.pages) do if n>last then return false end end
+        end
+        return true
+    end
+    local function mergeWriting(source,target)
         local merged=L.Copy(target)
-        for _,key in ipairs({'title','subtype','description','notes','theory','nextStep'}) do
+        if not merged then return nil,'The work could not be staged safely.' end
+        local serial=db.serial
+        local function childID()
+            serial=serial+1;return 'merged:'..serial
+        end
+        for _,key in ipairs({'title','subtype','description','notes','theory','nextStep','status','captureReason'}) do
             if source[key]~='' and source[key]~=target[key] then
                 local p=L.Passage({raw=source[key],origin='manual',nature='annotation',method='manual',
-                    source='Duplicate entry '..key,private=true,at=source.updated})
-                p.id='merged:'..source.id..':'..key;merged.passages[#merged.passages+1]=p
+                    source='Merged entry '..source.id..' '..key,private=true,at=source.updated})
+                if not p then return nil,'An annotation could not be preserved.' end
+                p.id=childID();merged.passages[#merged.passages+1]=p
             end
         end
         for _,key in ipairs({'passages','locations','links','reports'}) do
-            for index,value in ipairs(source[key]) do
+            local ids={};for _,old in ipairs(merged[key]) do if old.id then ids[old.id]=true end end
+            for _,value in ipairs(source[key]) do
                 local item=L.Copy(value)
-                if key=='passages' or key=='locations' then item.id='merged:'..source.id..':'..key..':'..index end
+                if not item then return nil,'Source metadata could not be preserved.' end
+                if item.id and ids[item.id] then item.id=childID() end
+                if item.id then ids[item.id]=true end
                 merged[key][#merged[key]+1]=item
             end
         end
@@ -524,22 +579,43 @@ function ns.CreateLoreJournal(saved)
             if not found then merged.tags[#merged.tags+1]=tag end
         end
         merged.revisit=merged.revisit or source.revisit
-        merged.created=math.min(merged.created,source.created);merged.updated=math.max(merged.updated,source.updated)
-        for _,at in ipairs({source.firstEncounter,source.lastEncounter}) do j:Encounter(merged,at) end
-        for key,page in pairs(source.pages) do if page.personallyViewed then merged.pages[key].personallyViewed=true end end
-        local valid,reason=L.ValidateEntry(merged,target.id)
-        if valid and (archiveBytes or j:ArchiveBytes())-bytesOf(source)-bytesOf(target)+bytesOf(merged)>L.MAX_ARCHIVE_BYTES then
-            reason='Archive is full (32 MiB).'
+        merged.updated=math.max(merged.updated,source.updated)
+        if source.firstEncounter then j:Encounter(merged,source.firstEncounter) end
+        if source.lastEncounter then j:Encounter(merged,source.lastEncounter) end
+        for key,page in pairs(source.pages) do
+            if not merged.pages[key] then merged.pages[key]=L.Copy(page)
+            elseif page.personallyViewed then merged.pages[key].personallyViewed=true end
         end
-        return reason or 'Their saved identities and existing report references must be preserved.'
-    end
-    local function consolidationNotice(source,target,archiveBytes)
-        -- Optional preflight must never turn a saved page into a failed capture,
-        -- including if bounded copying cannot represent an unusually large work.
-        local ok,reason=pcall(consolidationReason,source,target,archiveBytes)
-        if not ok then reason='The complete merge could not be validated; original records were preserved.' end
-        j.consolidationNotice='Duplicate writings kept separate: '..reason
-        return j.consolidationNotice
+        merged.firstPage=merged.firstPage or source.firstPage;merged.lastPage=merged.lastPage or source.lastPage
+        if merged.variantOf and (j:Get(merged.variantOf)==source or j:Get(merged.variantOf)==target) then merged.variantOf=nil end
+        merged.captureStatus=j:WritingSummary(merged).complete and 'complete' or 'partial'
+        local alias={target=target.id,reference=source.reference,
+            exportKey=source.exportKey or tostring(db.exportOrigin or db.archiveID)..':'..source.id..':'..source.created,
+            exportSource=source.exportSource,created=source.created}
+        -- Preserve extension metadata even when another module owns its meaning.
+        local owned={id=true,reference=true,exportKey=true,exportSource=true,created=true,updated=true,
+            firstEncounter=true,lastEncounter=true,kind=true,origin=true,revisit=true,status=true,captureStatus=true,
+            firstPage=true,lastPage=true,pages=true,passages=true,locations=true,links=true,reports=true,tags=true}
+        for key in pairs(fieldLimits) do owned[key]=true end
+        for key,v in pairs(source) do if not owned[key] then
+            alias.metadata=alias.metadata or {};alias.metadata[key]=L.Copy(v)
+            if alias.metadata[key]==nil and v~=nil then return nil,'Extension metadata could not be preserved.' end
+        end end
+        local valid,reason=L.ValidateEntry(merged,target.id)
+        if not valid then return nil,reason end
+        if j:ArchiveBytes()-bytesOf(source)-bytesOf(target)+bytesOf(merged)+itemBytes(alias)>L.MAX_ARCHIVE_BYTES then
+            return nil,'Archive is full (32 MiB).'
+        end
+        -- Publish only after every collection, annotation and byte limit passes.
+        for key in pairs(target) do target[key]=nil end
+        for key,v in pairs(merged) do target[key]=v end
+        db.aliases=db.aliases or {};db.aliases[source.id]=alias;db.serial=serial
+        db.entries[source.id]=nil;j.entries[source.id]=nil
+        for _,old in pairs(db.aliases) do if plainTable(old) and old.target==source.id then old.target=target.id end end
+        for _,s in pairs(j.sessions) do if s.id==source.id then s.id=target.id end end
+        if j.state.selected==source.id then j.state.selected=target.id end
+        j:Changed(target)
+        return target
     end
     function j:CapturePage(context,value)
         if self.readOnly then return nil,'Archive is read-only.' end
@@ -568,28 +644,38 @@ function ns.CreateLoreJournal(saved)
         local e=self:Get(s.id)
         local function match(candidate)
             if candidate.kind~='writing' or candidate.identity~=meta.identity or candidate.sourceTitle~=meta.sourceTitle
-                or candidate.locale~=meta.locale or candidate.sourceKind~=meta.sourceKind then return false end
+                or candidate.locale~=meta.locale or candidate.sourceKind~=meta.sourceKind or candidate.origin~='captured' then return false end
             local page=candidate.pages[key]
-            if not page or page.raw~=p.raw or page.origin~='captured' then return false end
+            if page and (page.raw~=p.raw or page.origin~='captured') then return false end
+            for n,old in pairs(candidate.pages) do if type(n)~='number' or old.origin~='captured' then return false end end
             for n,seen in pairs(s.pages) do
-                if n~=key and (not candidate.pages[n] or candidate.pages[n].raw~=seen.raw) then return false end
+                if n~=key and candidate.pages[n] and candidate.pages[n].raw~=seen.raw then return false end
             end
+            local first=context.firstPage or (value.first and p.number)
+            local last=context.lastPage or (value.last and p.number)
+            if first and candidate.firstPage and first~=candidate.firstPage or last and candidate.lastPage and last~=candidate.lastPage then return false end
+            if candidate.lastPage and p.number and p.number>candidate.lastPage then return false end
+            if last then for n in pairs(candidate.pages) do if n>last then return false end end end
             return true
         end
-        -- Match exact page evidence as well as source metadata, never title alone.
-        -- A subsequent conflict forks using this session's evidence only.
+        -- Compatible numbered captures may extend a partial work across visits.
+        -- Conflicting versions still fork using only this session's evidence.
         if not e and p.number then
+            local candidates={};local overlaps=false
             for _,candidate in pairs(self.entries) do
-                if match(candidate) and (not e or candidate.id<e.id) then e=candidate;s.borrowed=true end
+                if match(candidate) then candidates[#candidates+1]=candidate;if candidate.pages[key] then overlaps=true end end
             end
+            local ambiguous=false
+            for _,candidate in ipairs(candidates) do if not overlaps or candidate.pages[key] then
+                if e and not compatible(candidate,e) and not overlaps then ambiguous=true end
+                if not e or candidate.id<e.id then e=candidate end
+            end end
+            if ambiguous then e=nil end
+            if e then s.borrowed=true end
         end
         local old=e and e.pages[key]
         local fork=e and old and old.raw~=p.raw
-        if e and s.borrowed and not old then
-            for n,page in pairs(e.pages) do
-                if not s.pages[n] or s.pages[n].raw~=page.raw then fork=true;break end
-            end
-        end
+        if e and not old and p.number and e.lastPage and p.number>e.lastPage then fork=true end
         if fork then
             s.variantOf=e.id;e=nil;s.borrowed=false
             for _,candidate in pairs(self.entries) do
@@ -642,29 +728,11 @@ function ns.CreateLoreJournal(saved)
         e.firstPage=first or e.firstPage;e.lastPage=last or e.lastPage
         self:Encounter(e,L.Now())
         s.id=e.id;s.pages=pending;s.first=first;s.last=last;self.sessions[context.sessionID]=s
-        -- Capture succeeds independently of this optional consolidation preflight.
-        -- Keep the existing protections for selected, referenced and edited works.
-        local notice
-        if meta.identity=='' and first==1 and last and self:WritingSummary(e).complete then
-            for _,candidate in pairs(self.entries) do
-                if candidate.id~=e.id and candidate.kind=='writing' and candidate.identity=='' and candidate.sourceTitle==meta.sourceTitle
-                    and candidate.locale==meta.locale and candidate.sourceKind==meta.sourceKind and candidate.firstPage==first and candidate.lastPage==last
-                    and L.Count(candidate.pages)==L.Count(e.pages) and self:WritingSummary(candidate).complete then
-                    local same=true
-                    for n,page in pairs(e.pages) do if not candidate.pages[n] or candidate.pages[n].raw~=page.raw or candidate.pages[n].origin~='captured' then same=false;break end end
-                    local referenced=false
-                    for _,owner in pairs(self.entries) do for _,link in ipairs(owner.links) do
-                        if link.section=='lore' and link.id==e.id then referenced=true;break end
-                    end;if referenced then break end end
-                    if same and self.state.selected~=e.id and not referenced and e.title==meta.title and e.subtype==''
-                        and e.notes=='' and e.description=='' and e.theory=='' and e.nextStep=='' and #e.passages==0 and #e.reports==0 and #e.links==0 and #e.tags==0 and not e.revisit then
-                        notice=consolidationNotice(e,candidate)
-                        break
-                    end
-                end
-            end
-        end
         self:Changed(e)
+        -- A failed optional merge never rolls back a successfully captured page.
+        self:CollapseDuplicateWritings(meta)
+        e=self:Get(e.id);s.id=e.id
+        local notice=self.consolidationNotice
         if createdID==e.id then self:Recorded(e) end
         if locationNotice then notice=locationNotice..(notice and (' '..notice) or '') end
         return e,nil,notice
@@ -720,30 +788,42 @@ function ns.CreateLoreJournal(saved)
         end)
         return out
     end
-    -- Inspect exact duplicates left by older readers using the same detached
-    -- preflight. Reload must not undo capture-time preservation of saved IDs.
-    function j:CollapseDuplicateWritings()
+    -- Group historical partial captures at load and after successful capture.
+    -- An ambiguous group with conflicting text/boundaries is never combined.
+    function j:CollapseDuplicateWritings(meta)
         if self.readOnly then return end
-        local groups={};local archiveBytes=self:ArchiveBytes()
+        self.consolidationNotice=nil
+        local groups={}
         local rows=self:List({kind='writing'})
         for _,e in ipairs(rows) do
-            local parts={};local eligible=next(e.pages)~=nil
+            local parts={};local eligible=e.origin=='captured' and next(e.pages)~=nil
             local function part(v) v=tostring(v or '');parts[#parts+1]=#v..':'..v end
-            for _,key in ipairs({'sourceTitle','sourceKind','identity','locale','firstPage','lastPage'}) do part(e[key]) end
-            local keys={};for key in pairs(e.pages) do keys[#keys+1]=key end
-            table.sort(keys,function(a,b) return tostring(a)<tostring(b) end)
-            for _,key in ipairs(keys) do
-                local page=e.pages[key];if page.origin~='captured' then eligible=false end
-                part(key);part(page.raw)
+            for _,key in ipairs({'sourceTitle','sourceKind','identity','locale'}) do
+                part(e[key]);if meta and e[key]~=meta[key] then eligible=false end
             end
+            for n,page in pairs(e.pages) do if type(n)~='number' or page.origin~='captured' then eligible=false end end
             if eligible then
-                local signature=table.concat(parts);local target=groups[signature]
-                if not target then groups[signature]=e
-                else
-                    consolidationNotice(e,target,archiveBytes)
-                end
+                local signature=table.concat(parts);local group=groups[signature]
+                if not group then
+                    local probe=L.EntryCandidate(e);probe.pages={};group={probe=probe,rows={}};groups[signature]=group
+                elseif not compatible(e,group.probe) then group.conflict=true end
+                for n,p in pairs(e.pages) do group.probe.pages[n]=p end
+                group.probe.firstPage=group.probe.firstPage or e.firstPage;group.probe.lastPage=group.probe.lastPage or e.lastPage
+                group.rows[#group.rows+1]=e
             end
         end
+        for _,group in pairs(groups) do if not group.conflict and #group.rows>1 then
+            table.sort(group.rows,function(a,b)
+                if (a.id==self.state.selected)~=(b.id==self.state.selected) then return a.id==self.state.selected end
+                if a.created~=b.created then return a.created<b.created end
+                return a.id<b.id
+            end)
+            local target=group.rows[1]
+            for i=2,#group.rows do
+                local ok,result,reason=pcall(mergeWriting,group.rows[i],target)
+                if not ok or not result then self.consolidationNotice='Duplicate writings kept separate: '..(reason or 'The complete merge could not be validated; original records were preserved.') end
+            end
+        end end
     end
     j:CollapseDuplicateWritings()
     return j

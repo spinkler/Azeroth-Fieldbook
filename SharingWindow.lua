@@ -4,8 +4,25 @@ local schema=ns.SharingReport
 
 function ns.CreateSharingWindow(journal,engine,getBook)
     local controller={}
-    local composer,receiver,captured,candidates,chosen,transaction,incoming
+    local composer,receiver,names,captured,candidates,chosen,transaction,incoming
     local refreshing=false
+    local outcomes={offered="Checking compatibility",preflight="Checking compatibility",offering="Awaiting acceptance",
+        accepted="Awaiting receipt",committed="Awaiting receipt",complete="Delivered",received="Delivered",
+        declined="Declined",failed="Failed",cancelled="Cancelled",unknown="Delivery unknown",
+        ["delivery unknown"]="Delivery unknown",retrying="Retrying receipt",unresolved="Delivery unresolved"}
+    local function dateText(value)
+        return date and date("%d %b %Y %H:%M",value) or tostring(value)
+    end
+    local function outcomeText(item)
+        return (outcomes[item.stage] or "Delivery unknown") .. " • " .. item.knowledge .. " knowledge spent"
+    end
+    local function applyAppearance(frame)
+        if not frame then return end
+        local dark=journal:GetDarkMode()
+        local brightness=journal:GetBackgroundBrightness()*(dark and 0.34 or 1)
+        frame.paper:SetDesaturated(dark)
+        frame.paper:SetVertexColor(0.504*brightness,0.504*brightness,(dark and 0.504 or 0.48888)*brightness)
+    end
     local function label(parent,text,x,y,width,font)
         local value=parent:CreateFontString(nil,"OVERLAY",textFont(font or "GameFontHighlightSmall"))
         value:SetPoint("TOPLEFT",x,y); value:SetWidth(width); value:SetJustifyH("LEFT")
@@ -29,6 +46,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         frame.paper=frame:CreateTexture(nil,"BACKGROUND")
         frame.paper:SetPoint("TOPLEFT",6,-6); frame.paper:SetPoint("BOTTOMRIGHT",-6,6)
         frame.paper:SetTexture("Interface\\AddOns\\AzerothFieldbook\\Artwork\\ParchmentBook.png")
+        applyAppearance(frame)
         label(frame,title,22,-22,width-70,"GameFontNormalLarge")
         frame.close=CreateFrame("Button",nil,frame,"UIPanelCloseButton")
         frame.close:SetSize(24,24); frame.close:SetPoint("TOPRIGHT",-3,-3)
@@ -70,7 +88,9 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         local basicHeight=headingHeight+6+composer.details:GetStringHeight()+6
         composer.basicBody:SetHeight(basicHeight)
         composer.basicArea:SetHeight(math.min(112,basicHeight))
-        local y=124+composer.basicArea:GetHeight()+16
+        local basicTop=148+composer.lastSent:GetStringHeight()+12
+        place(composer.basicArea,24,basicTop)
+        local y=basicTop+composer.basicArea:GetHeight()+16
         place(composer.rumourHeading,24,y)
         y=y+composer.rumourHeading:GetStringHeight()+12
         place(composer.rumourArea,24,y)
@@ -112,6 +132,48 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         composer.recipient:SetPoint("TOPLEFT",30,-82); composer.recipient:SetSize(390,24)
         composer.recipient:SetAutoFocus(false); composer.recipient:SetMaxLetters(100)
         composer.recipient:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
+        -- Some chat-name handlers bypass InsertLink or change keyboard focus
+        -- before calling it. Handle the player link before native processing;
+        -- retain the insertion hooks for callers that insert a name directly.
+        local function insertRecipient(text)
+            if not composer:IsShown() or busy() or not composer.recipient:IsEnabled()
+                or not composer.recipient:HasFocus() or not IsShiftKeyDown or not IsShiftKeyDown() then return end
+            if not schema.Public(text) or type(text)~="string" then return end
+            local name=schema.Character(text) or schema.Character(text:match("|Hplayer:([^:|]+)"))
+            if not name then return end
+            if composer.recipient:GetText()~=name then composer.recipient:SetText(name) end
+            return true
+        end
+        if type(SetItemRef)=="function" then
+            local originalSetItemRef=SetItemRef
+            SetItemRef=function(link,text,button,...)
+                if button=="LeftButton" and schema.Public(link) and type(link)=="string" then
+                    local name=link:match("^player:([^:|]+)")
+                    if name and insertRecipient(name) then return end
+                end
+                return originalSetItemRef(link,text,button,...)
+            end
+        end
+        if hooksecurefunc then
+            if ChatFrameUtil and type(ChatFrameUtil.InsertLink)=="function" then
+                hooksecurefunc(ChatFrameUtil,"InsertLink",insertRecipient)
+            end
+            if type(ChatEdit_InsertLink)=="function" then hooksecurefunc("ChatEdit_InsertLink",insertRecipient) end
+        end
+        composer.recipient:SetScript("OnEnter",function(self)
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(self,"ANCHOR_TOP")
+            GameTooltip:SetText("Click here, then Shift-click a character name in chat.")
+            GameTooltip:Show()
+        end)
+        composer.recipient:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        composer.names=button(composer,"Names & history",24,-112,156,function() controller:OpenDirectory() end)
+        composer.saveName=button(composer,"Save name",190,-112,120,function()
+            local ok,err=engine:SaveRecipient(composer.recipient:GetText())
+            composer.notice=ok and "Recipient saved in your address book." or err
+            controller:Refresh()
+        end)
+        composer.lastSent=label(composer,"",24,-148,390)
         composer.basicArea,composer.basicBody=scroll(composer,24,-124,390,88)
         composer.basic=label(composer.basicBody,"",0,0,376,"GameFontNormalLarge")
         composer.basic:SetTextColor(1,0.82,0.14)
@@ -144,6 +206,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         composer.inbox=button(composer,"Incoming reports",296,-60,140,function() controller:OpenIncoming() end)
         composer:SetScript("OnHide",function()
             composer.recipient:ClearFocus(); composer:StopMovingOrSizing()
+            if names then names:Hide() end
             if transaction and not transaction.spent then engine:Cancel() end
         end)
         composer:HookScript("OnShow",function() if controller.visibilityCallback then controller.visibilityCallback(true) end end)
@@ -153,6 +216,75 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             controller:Refresh()
         end)
         if ns.WindowPositions then ns.WindowPositions:Register(composer,"AzerothFieldbookShare") end
+    end
+    local function buildDirectory()
+        if names then return end
+        names=window("AzerothFieldbookRecipients","Names & sent history",460,460)
+        names:ClearAllPoints();names:SetPoint("TOPRIGHT",composer,"TOPLEFT",-6,0)
+        names.tab="saved";names.rows={};names.tabs={}
+        for i,spec in ipairs({{"saved","Saved names"},{"recent","Recent names"},{"history","Sent history"}}) do
+            local tab=spec[1]
+            names.tabs[tab]=button(names,spec[2],24+(i-1)*136,-58,128,function()
+                names.tab=tab;names.notice=nil;names.area:SetVerticalScroll(0);controller:Refresh()
+            end)
+        end
+        names.area,names.body=scroll(names,24,-100,390,260)
+        names.empty=label(names.body,"",0,0,370)
+        names.status=label(names,"",24,-374,410)
+        names.done=button(names,"Done",324,-416,112,function() names:Hide() end)
+        names:SetScript("OnHide",function() names:StopMovingOrSizing() end)
+        if ns.WindowPositions then ns.WindowPositions:Register(names,"AzerothFieldbookRecipients") end
+    end
+    local function refreshDirectory()
+        if not names or not names:IsShown() then return end
+        local history=names.tab=="history"
+        local saved=names.tab=="saved"
+        local items=history and engine:GetSentHistory() or (saved and engine:GetSavedRecipients() or engine:GetRecentRecipients())
+        for tab,control in pairs(names.tabs) do control:SetEnabled(tab~=names.tab) end
+        names.empty:SetShown(#items==0)
+        names.empty:SetText(history and "No sent reports yet. New offers and their outcomes will appear here."
+            or (saved and "No saved names. Enter a recipient in Share, then choose Save name."
+                or "No recent recipients. Names appear here when you start an offer."))
+        local y=0
+        for i,item in ipairs(items) do
+            local row=names.rows[i]
+            if not row then
+                row=CreateFrame("Frame",nil,names.body);row:SetWidth(376)
+                row.text=label(row,"",0,0,264)
+                row.use=button(row,"Use name",282,0,88,function()
+                    if busy() then return end
+                    composer.recipient:SetText(row.recipient);composer.recipient:ClearFocus();names:Hide()
+                end)
+                row.save=button(row,"",282,-30,88,function()
+                    local ok,err
+                    if names.tab=="saved" then ok=engine:RemoveRecipient(row.recipient)
+                    else ok,err=engine:SaveRecipient(row.recipient) end
+                    names.notice=ok and (names.tab=="saved" and "Name removed." or "Name saved.") or err
+                    controller:Refresh()
+                end)
+                names.rows[i]=row
+            end
+            row.recipient=history and item.recipient or item
+            local text=row.recipient
+            if history then
+                text=text .. "\n" .. item.name .. (item.beastLore and " • Beast Lore" or (" • " .. item.rumours .. " rumour(s)"))
+                    .. "\n" .. dateText(item.created) .. "\n" .. outcomeText(item)
+            end
+            row.text:SetText(text)
+            row.save:SetText(saved and "Remove" or "Save")
+            row.save:SetEnabled(saved or not engine:IsSavedRecipient(row.recipient))
+            row.use:SetEnabled(not busy())
+            local height=math.max(60,row.text:GetStringHeight()+12)
+            place(row,0,y);row:SetHeight(height);row:Show();y=y+height+8
+        end
+        for i=#items+1,#names.rows do names.rows[i]:Hide() end
+        names.body:SetHeight(math.max(260,y,names.empty:GetStringHeight()+8))
+        names.area:UpdateScrollChildRect();names.area:RefreshScrollBar()
+        names.status:SetText(names.notice or (history and "Latest 100 reports, newest first. Only Delivered confirms receipt."
+            or (saved and (#items .. " / 50 saved names. Removing a name preserves its sent history.")
+                or "Latest 20 recipients, newest first. Save common names for easy reuse.")))
+        local footerTop=374+names.status:GetStringHeight()+14
+        place(names.done,324,footerTop);names:SetHeight(footerTop+48)
     end
     local function buildReceiver()
         if receiver then return end
@@ -179,9 +311,8 @@ function ns.CreateSharingWindow(journal,engine,getBook)
     function controller:Refresh()
         if refreshing then return end
         refreshing=true
-        local brightness=journal:GetBackgroundBrightness()
+        applyAppearance(composer);applyAppearance(receiver);applyAppearance(names)
         if composer then
-            composer.paper:SetVertexColor(0.504*brightness,0.504*brightness,0.48888*brightness)
             local n=countChosen()
             local isLore=captured and captured.beastLore~=nil
             local cost=busy() and transaction.cost or (isLore and 0 or math.floor((1+n)*journal:GetKnowledgeMultiplier(captured and captured.creatureID)))
@@ -195,7 +326,17 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             local ready,unavailable=engine:Available()
             local blocked,restriction=engine:Blocked()
             local recipient=composer.recipient:GetText()
-            local _,recipientError=engine:ValidateRecipient(recipient)
+            local validRecipient,recipientError=engine:ValidateRecipient(recipient)
+            local saved=engine:IsSavedRecipient(recipient)
+            composer.saveName:SetEnabled(validRecipient~=nil and not saved)
+            composer.saveName:SetText(saved and "Name saved" or "Save name")
+            local previous
+            for _,item in ipairs(engine:GetSentHistory()) do
+                if captured and item.creatureID==captured.creatureID and
+                    (recipient=="" or schema.SameCharacter(item.recipient,recipient)) then previous=item;break end
+            end
+            composer.lastSent:SetText(previous and ("Last report to " .. previous.recipient .. " • " .. dateText(previous.created)
+                .. "\n" .. outcomeText(previous)) or "No previous reports for this creature and recipient.")
             local disabled
             if not captured then disabled=composer.notice or "Select a creature with valid basic information."
             elseif busy() or engine:HasActiveOutgoing() then disabled=transaction and transaction.message or "An outgoing report is already active. Reopen Share to view its status."
@@ -240,7 +381,6 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             elseif receiver then receiver:Hide() end
         end
         if incoming and receiver then
-            receiver.paper:SetVertexColor(0.504*brightness,0.504*brightness,0.48888*brightness)
             local value=incoming.report
             local preview,err=journal:PreviewReport(value,incoming.sender)
             receiver.from:SetText("Offered by " .. incoming.sender)
@@ -273,7 +413,13 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             receiver.status:SetText(receiver.notice or (pending and "Accept to add this report. Declining or closing this offer is free."
                 or "Accepted; waiting for the sender's commit. You can close this window. No information is imported yet."))
         end
+        refreshDirectory()
         refreshing=false
+    end
+    function controller:OpenDirectory()
+        buildDirectory()
+        composer.recipient:ClearFocus()
+        names:Show();self:Refresh()
     end
     function controller:OpenIncoming()
         incoming=nil; self:Refresh()

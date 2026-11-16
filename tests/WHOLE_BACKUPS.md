@@ -29,7 +29,7 @@ Options, shared shell and resets before implementation.
 | Angling, schema 1 | Waters/pools/items/spots, merged identities, aggregates and contributor partitions, bounded history/sessions/replay guards, notes, reports, claims, receipts, origin indexes, Event log and state |
 | Ledger, schema 1 | Contacts, goods/lessons/services, sightings, private annotations, migration originals, durable references, contact aliases, received reports and report indexes |
 | Treasure, schema 1 | Kinds, all retained encounters/contents, historical origins, reports/receipts, annotations/bookmarks, browsing state and preserved invalid records |
-| Lore, schema 1 | All writings/pages/passages, mysteries/people/landmarks, private annotations, tags, variants, internal and cross-section links, reader state, original report identities, revisions/receipts and preserved invalid records |
+| Lore, schema 1 | All writings/pages/passages, mysteries/people/landmarks, private annotations, tags, variants, internal and cross-section links, reader state, merge aliases and original report identities, revisions/receipts and preserved invalid records |
 
 The six additional per-character globals are `AzerothFieldbookGatheringDB`,
 `AzerothFieldbookAtlasDB`, `AzerothFieldbookAnglingDB`, `AzerothFieldbookLedgerDB`,

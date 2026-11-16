@@ -210,7 +210,7 @@ local collections={
     angling={"waters","spots","pools","items","aggregates","history","sessions","recent","recentOrder","waterKeys",
         "poolKeys","itemKeys","aggregateKeys","reported","claims","reportOrigins","state","merged","hoverKeys","eventLog"},
     ledger={"contacts","state","aliases","reportKeys","references","contactAliases"},
-    treasure={"kinds","encounters","state"},lore={"entries","state"},
+    treasure={"kinds","encounters","state"},lore={"entries","state","aliases"},
 }
 local function tables(root,names)
     for _,name in ipairs(names) do need(root[name]==nil or plain(root[name]),"Malformed saved collection: "..name..".") end

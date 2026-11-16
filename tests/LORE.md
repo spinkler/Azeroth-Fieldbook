@@ -1,7 +1,7 @@
 # Lorekeeper's Chronicle — 0.16.0
 
 Lore remembers what you found out and what you still do not understand. Atlas
-continues to own its existing geography. No lore database, canonical answers,
+continues to own its existing geography. No bundled lore text, canonical answers,
 quest walkthrough, automatic relationship inference or rewards are added.
 
 ## Implemented interaction
@@ -39,6 +39,113 @@ as transcribed; observations and interpretations remain distinct.
 Captured pages are not marked “read.” Page labels distinguish normal display
 from automatic retrieval; no dwell-time inference is made. A source's claim
 does not become established truth because it was preserved.
+
+## World and item lore tooltip status
+
+`LoreTooltips.lua` appends **[AFB] Chronicle: Unread** to a live world-object
+`GameTooltip` or item-link tooltip when the source has no matching stored text.
+Known gaps instead show **[AFB] Chronicle: Missing pages (1, 3, 5)**, ordered
+by page number. The prefix and
+section label use AFB cyan (`80d0ff`); the hint uses native tooltip gold
+(`1, 0.82, 0.14`). A colour reset keeps the status colour off the prefix.
+The existing master `showTooltips` preference controls the line immediately.
+Its recognition metadata contains only readable game-object/item IDs and English
+source titles, referenced from the installed Spoken Readables owner index,
+plus the existing Draconic for Dummies object. Spoken is not a dependency.
+The 269 predefined readable item IDs qualify bag and chat-link item tooltips
+without treating every item or every player-written letter as recordable lore.
+An item's name alone, or a generic readable flag, is not sufficient. Unlisted
+custom items remain unlabelled until reliable eligibility metadata is available.
+Known IDs recognize localized tooltips; English title fallback works without
+an exposed ID. Archived custom source titles are also recognized. Unlisted,
+unarchived custom sources without a known ID/title have no status line.
+
+Lookup uses the active character/account journal and immutable source titles,
+so entry renames, deletion and reload are respected. A matching writing must
+contain saved pages or a source passage; notes and empty placeholders do not
+count. Received source pages count under the report's own title, including
+when attached to a differently titled entry. Complete sources have no hint.
+Partial sources enumerate gaps from the known beginning (normally page 1) to
+the known last page or highest captured page; unknown trailing pages are never
+invented. A partial source without any known numbered gaps also adds no hint.
+“Unread” is shorthand for not stored; no personal reading or understanding is
+inferred. Matching report snapshots are checked separately: pages from distinct
+versions are never combined by tooltip lookup. This
+title-level hint is not a new capture identity and never merges same-titled writings.
+Explicit differing GameObject identities and differing local capture locales
+do not match. No capture, discovery, traversal or saved-data mutation occurs
+on hover; the lookup index rebuilds only when the journal revision changes.
+
+Only live world objects and positively identified readable items qualify:
+creatures, ordinary items, player correspondence, missing/restricted identities
+and unrelated resources/containers are excluded. Hidden
+Lore, blocked initialization and incomplete/read-only archive views suppress
+the line. Native rebuilds and repeated callbacks do not duplicate it. The
+Object and Item TooltipDataProcessor callbacks use the native tooltip data.
+World tooltips are checked against a fresh cursor snapshot. Guarded
+SetWorldCursor / OnTooltipSetItem hooks are fallbacks where the required
+tooltip-data APIs are available. Status text wraps through the native tooltip.
+
+`python -B -X utf8 tests/test_lore_tooltips.py` covers Unread and missing-page hints,
+capture/rename/delete/reload, reports, partial/manual source text, localized and
+custom sources, GameObject GUIDs, duplicate callbacks, scope isolation,
+restricted/missing data, paused/read-only archives, cyan/gold styling, the
+master tooltip switch, readable item IDs, item-link tooltips, player-letter
+exclusions and the fallback hook.
+Native acceptance remains pending: after `/reload`, hover a new known world
+book, archive it, then hover again; repeat after deletion and another reload.
+Check a localized source, Draconic for Dummies, an incomplete book, a chest,
+herb, NPC, eligible readable bag item, ordinary bag item and a linked readable.
+Capture nonconsecutive pages, confirm their ordered gap list, then fill the gaps.
+Confirm one cyan/gold hint only for missing writings/pages,
+immediate master-toggle behavior and no hover recording or source opening.
+
+On 2026-11-16, 150 focused tooltip, merge, capture/model, reader, report,
+translation, account, Annals, backup and integration checks passed. The 14
+preservation checks also passed against the actual work/archive/location
+limits. All 98 runtime Lua files compiled under Lua 5.1; manifest checks and
+`git diff --check` passed. The Annals remapped-link audit also passed.
+
+On 2026-11-17, the required `python -B -X utf8 tests/run_tests.py` runner
+completed with **132 test files, 0 failed**, including navigation/widget reuse,
+capacity preservation and lifecycle stress checks. All 98 runtime Lua files,
+manifest, bindings and version consistency passed. Full validation exposed and
+fixed ambiguous durable-reference lookup: distinct record owners are refused,
+while aliases of one canonical entry remain valid. A focused regression now
+covers both cases. The standalone protected-action test uses the shared Lua 5.1
+harness so the normal runner finds the locally installed pinned dependency.
+Native hover/merge acceptance remains pending.
+
+## Optional Spoken narration
+
+`LoreSpoken.lua` detects the loaded `Spoken` API (compatible with version 1) and
+`SpokenReadables` capabilities without a required dependency. Preserved writing
+pages match the Readables corpus or same-locale pack indexes using Spoken's
+normal and legacy HTML checksums, with its unique-checksum fallback. Title-only
+matches, live ItemText state, missing pages, personal notes, passages and player
+translations are excluded. No missing archive text is filled from Spoken.
+
+The title's Play/Stop control follows the selected page; the overview uses the
+first matching preserved page. It hides for unavailable recordings, discovery
+locks, disabled parts and Location view. Before playback it rechecks
+`CompendiumHas(book)` and `HasAudio(page)`, then calls
+`PlayFrom(page, true, true)` so archive playback is deliberate browsing and does
+not mark the book found/read. Spoken's whole-book option can narrate later pages,
+including pages absent from the archive. Stop removes only that book's narration.
+
+Focused synthetic checks: `python -B -X utf8 tests/test_lore_spoken.py` and
+`python -B -X utf8 tests/test_lore_ui.py`. Native acceptance remains pending:
+test absent/disabled Spoken and Readables, missing voice packs, a found voiced
+book away from its source, page changes, Play/Stop and external queue completion,
+long titles, discovery locks, and unchanged found/read history after `/reload`.
+
+On 2026-11-16, all 8 Spoken tests, 18 Lore UI tests and 2 focused Fieldbook
+integration tests passed; all 97 runtime Lua files compiled under Lua 5.1 and
+manifest/version checks passed. A local smoke check also matched 451 nonempty
+pages from the installed Spoken corpus whose captions retain the indexed source
+checksum, using Spoken's actual checksum implementation. These are synthetic
+checks, not observed native playback. The broader navigation stress run was
+stopped; the full suite was not run for this change.
 
 ## Player translations
 
@@ -127,26 +234,39 @@ before recovery, and a false no-creator result. The Westfall report of
 “Aegwynn and the Dragon Hunt” still needs a live reread to verify the client path;
 the deterministic fixture uses synthetic page text, not a bundled book database.
 
-The native adapter has no established stable work/object/item identifier. It
-does not pretend the observed title is one. Rereads match exact numbered source
-text plus title, locale, kind and any available identity. Disjoint partial reads
-remain separate. Extending a reused partial work requires its existing pages to
-have been seen in the active session; conflicts fork only that session's evidence.
-Reliable optional source identities are supported by the model, with overlapping
-content checks and conservative variants. Conflicts never overwrite preserved
-pages or combine unobserved pieces into a fictional book. Repeated events in one
-session are idempotent. Read-here is always the interaction location, including
-for a carried item; found-here is never inferred from opening it.
+The ItemText adapter has no established stable work/object/item identifier.
+Compatible numbered captures with the same source title, locale, kind and
+optional identity can extend one writing across separate visits, including
+disjoint partial reads. Overlapping pages must have identical raw source text,
+and known page boundaries must agree. Conflicting versions remain separate;
+ambiguous disjoint pages never choose between conflicting existing versions.
+Unnumbered, manual and received text is not promoted into local captured pages.
+Repeated events in one session remain idempotent. Read-here is always the
+interaction location, including for a carried item; found-here is never
+inferred from opening it.
 
 Version 0.16.3 keeps same-source adjacent page BEGIN events in one session and
-handles READY delivered before a post-call navigation hook. Starting in 0.17.0,
-exact saved page-set duplicates remain separate on capture and reload. A detached
-candidate checks collection and byte limits, but retiring distinct IDs would also
-change existing export identities without durable aliases. That destructive step
-is deferred. Original annotations, locations, reports, links, read flags, selection
-and reading positions stay with their original IDs. A skipped-consolidation notice
-is independent of successful page capture; it does not turn a complete archive
-into a failed capture. Ordinary exact rereads still reuse the same record. Delete an entry using
+handles READY delivered before a post-call navigation hook. Earlier builds kept
+separate saved captures because durable aliases were unavailable. The current
+implementation consolidates compatible historical captures at load and after
+capture. Each merge stages a detached union and validates every collection and
+the 4 MiB/32 MiB limits before publishing. Failure leaves both records intact
+and never turns a successfully captured page into a failed capture.
+
+The selected record survives when present; otherwise the oldest record survives
+with deterministic ID ordering for equal dates. Differing annotations become
+private annotation passages; original pages, passages, locations, reports, tags,
+read flags and reading positions survive. The additive schema-1 `aliases` table
+retains retired IDs, durable references, export keys and extension metadata.
+Alias bytes count toward archive capacity. Get/open/update/delete paths resolve
+aliases, IDs remain reserved after deletion, and links never retarget a newly
+recaptured book. Annals resolves both durable and historical timestamp links.
+Distinct records claiming the same durable reference are treated as ambiguous
+and unavailable; multiple aliases pointing to one canonical record remain valid.
+Account imports remap alias destinations and retain their original export keys;
+whole-Fieldbook backups preserve the complete alias table. Report wire format
+and version gates are unchanged. Reloading a consolidated archive is idempotent
+and emits no new capture announcements. Delete an entry using
 **Sources / manage → Delete entry…**, then confirm. Deletion sets no blacklist;
 opening the source again can archive it normally. Reopen pages missing from old
 captures: text never received cannot be reconstructed. Live verification remains
@@ -188,8 +308,10 @@ known label for manual navigation rather than changing that section's API.
 Schema 1 uses `AzerothFieldbookLoreDB` in character mode or
 `AzerothFieldbookAccountDB.sections.lore` with Account-wide tracking enabled.
 Other sections' resets/backups remain independent. Existing entries import once
-per character without consolidation; original export keys, reader positions and
-Atlas reference ownership survive. See [ACCOUNT_TRACKING.md](ACCOUNT_TRACKING.md).
+per character with collision-safe IDs and alias destinations. Compatible captured
+writings may then consolidate in the selected store; original export keys,
+reader positions and Atlas reference ownership survive. The original character
+store remains intact. See [ACCOUNT_TRACKING.md](ACCOUNT_TRACKING.md).
 Missing fields initialize additively. Unsupported saves use a detached read-only view; malformed entries
 remain in the saved store and are omitted with a notice. Lore option values
 survive Bestiary reset. No migrations repurpose another journal.
@@ -284,8 +406,9 @@ Implementation ownership:
 
 | Files | Purpose |
 | --- | --- |
-| `LoreJournal.lua` | Separate archive schema, source identity/variants, notes, queries, limits and provenance. |
+| `LoreJournal.lua` | Archive schema, compatible writing merges, durable aliases, source variants, notes, queries, limits and provenance. |
 | `LoreTracking.lua` | Guarded item-text lifecycle/traversal and deliberate NPC/quest passage capture. |
+| `LoreTooltips.lua` | Read-only, tagged Unread/missing-page hints for recognized world lore and eligible readable items. |
 | `LoreSettings.lua`, `LoreIntegration.lua` | Character option defaults, background startup and read-only references to known other-section records. |
 | `LoreBook.lua`, `LoreEditors.lua`, `LoreMap.lua`, `LoreReferences.lua` | Catalogue, stored reader, four-kind editing, relationships and independent Atlas-style location view. |
 | `LoreReports.lua`, `LoreReportUI.lua` | Selected-source reports, exact previews, bounded literal validation and atomic import. |

@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.44.0-beta.1 - 2026-11-17
+
+Beta prerelease covering the complete batch since v0.43.0 and verified previous-push baseline `a4d3a3e395fb27b1a75a82773350de62ec3652ff`.
+
+- Combine compatible partial Chronicle captures across visits and consolidate historical duplicates on reload. Preserve conflicting versions, pages, read flags, private annotations, locations, reports and reader state. Keep old entry IDs, Annals links, cross-references and export identities usable through saved aliases, including account imports and whole-Fieldbook backup recovery. Refuse references claimed by distinct records while accepting multiple aliases of one merged record. Stage merges against all collection/work/archive limits so a refused merge leaves both records and accepted pages intact.
+
+- Show "[AFB] Chronicle: Unread" for missing writings and "[AFB] Chronicle: Missing pages (x, y, z)" for known numbered gaps on recognized world lore and eligible readable items, including bag and chat-link tooltips. Use standard cyan labels, gold hints and the master AFB tooltip switch. Match the active archive and original source titles, exclude ordinary items/player-written correspondence, and never guess unknown trailing pages or record text on hover.
+
+- Add optional Spoken narration beside a Chronicle writing's title when a preserved page matches an available Readables recording. Respect Spoken's discovery locks and playback settings, provide Play/Stop state, and leave archive contents and found/read history unchanged.
+
+- Add a per-character sharing address book with 50 explicitly saved names, 20 recent recipients and the latest 100 report attempts. Retain dates, recipients, creatures, delivery outcomes and actual knowledge costs across reloads; update retries in place and show the last matching report in Share. Make the Share, incoming-report and recipient windows follow dark mode and background brightness.
+
+- Populate the focused Recipient character field from Shift-clicked chat names while preserving full surnames and normal recipient validation. Handle player links before native processing, including paths that bypass the insertion helper or change focus. Ignore unrelated links, hidden/unfocused fields and active transfers; add a concise field tooltip and preserve native fallthrough.
+
+- Support numbered Alpha/Beta release tags when preparing version-specific publication notes. Add extraction/recovery regression coverage, and use the shared Lua 5.1 harness for the standalone protected-action test so the normal suite finds its pinned dependency.
+
+- Validation: all 132 test files passed, including navigation/widget reuse, capacity preservation, account migration, reference lifecycle, reports and backup recovery. All 98 runtime Lua files compiled; manifest, bindings and version checks passed. Add focused merge, tooltip, narration, recipient/history, appearance and release-note regressions. Native Chronicle merging/tooltips, Spoken playback and sharing-window visual acceptance remain pending, so this build uses the Beta channel.
+
 ## v0.43.0 - 2026-11-12
 
 - Hide existing Bestiary entries from the list and entry count after a live target or mouseover identifies an explicit Alliance/Horde affiliation. Preserve their notes, loot and earned knowledge, retain the affiliation across reloads and Bestiary backups, and skip combat-history enrichment of hidden entries. Older entries remain visible until identified again because they have no saved faction data.

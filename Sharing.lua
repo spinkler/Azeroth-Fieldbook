@@ -6,6 +6,7 @@ local PREFLIGHT_SECONDS = 20
 -- Schema 1 keeps paid retries intact; schema 2 carries free, locked Beast Lore.
 local PROTOCOL = "4"
 local MAX_INCOMING, MAX_RECEIPTS, CHUNK = 3, 512, 180
+local MAX_CONTACTS, MAX_RECENT, MAX_HISTORY = 50, 20, 100
 -- Optional bounded decline reasons. Empty replies from older builds still work;
 -- never display arbitrary peer-supplied text as an error message.
 local rejectionReasons = {
@@ -64,6 +65,36 @@ function ns.CreateSharing(journal, env)
     local nextSend, nextHello, helloWindow, helloCount = 0, {}, 0, 0
     local receiveWindow, receiveCount = 0, 0
     local function notify(reason) if changed then changed(reason) end end
+    local function directory()
+        store.contacts=store.contacts or {}
+        store.recentRecipients=store.recentRecipients or {}
+        store.sentHistory=store.sentHistory or {}
+        return store.contacts,store.recentRecipients,store.sentHistory
+    end
+    local function rememberRecipient(name)
+        name=schema.Character(name)
+        if not name then return end
+        local _,recent=directory()
+        for i=#recent,1,-1 do
+            if schema.SameCharacter(recent[i],name) then table.remove(recent,i) end
+        end
+        table.insert(recent,1,name)
+        while #recent>MAX_RECENT do table.remove(recent) end
+    end
+    local function rememberReport(tx,stage)
+        local value=schema.Decode(tx.payload)
+        if not value then return end
+        local _,_,history=directory()
+        local row
+        for _,item in ipairs(history) do if item.id==tx.id then row=item;break end end
+        if not row then
+            row={id=tx.id,recipient=tx.recipient,creatureID=value.creatureID,name=value.name,
+                created=tx.created,rumours=#value.rumours,beastLore=value.beastLore~=nil}
+            table.insert(history,1,row)
+            while #history>MAX_HISTORY do table.remove(history) end
+        end
+        row.stage,row.updated,row.spent,row.knowledge=stage,env.now(),tx.spent==true,tx.spent and tx.cost or 0
+    end
     local function purge(id,target)
         for i=#queue,1,-1 do
             if queue[i].id==id and schema.SameCharacter(queue[i].target,target) then table.remove(queue,i) end
@@ -93,6 +124,8 @@ function ns.CreateSharing(journal, env)
                 creatureID=value.creatureID,creatureName=value.name,peer=peer,rumours=rumours,knowledge=cost})
     end
     local function recordOutgoing(tx,stage,message)
+        rememberReport(tx,stage)
+        if stage=="offered" then rememberRecipient(tx.recipient) end
         recordTransfer("sent",stage,tx.recipient,schema.Decode(tx.payload),message,tx.spent and tx.cost or 0)
     end
     local function finish(tx,stage,message)
@@ -153,6 +186,7 @@ function ns.CreateSharing(journal, env)
                 return
             end
         end
+        rememberReport(tx,tx.spent and "retrying" or "offering")
         notify()
     end
     local function commit(tx,basicCost)
@@ -193,6 +227,12 @@ function ns.CreateSharing(journal, env)
         if item.state~="accepted" then store.incoming[k]=nil end
     end
     prune()
+    -- Retain the last pre-update transaction too, without replaying Event log
+    -- entries (the Event log survives a deliberate Bestiary reset).
+    if store.outgoing then
+        rememberReport(store.outgoing,store.outgoing.stage)
+        rememberRecipient(store.outgoing.recipient)
+    end
     function engine:SetChangedCallback(callback) changed=callback end
     function engine:SetImportedCallback(callback) imported=callback end
     function engine:SetCostAdjustedCallback(callback) costAdjusted=callback end
@@ -214,6 +254,53 @@ function ns.CreateSharing(journal, env)
         if not recipient then return nil,"Enter another character's full name, including their surname if they have one." end
         if schema.SameCharacter(recipient,env.character) then return nil,"You cannot send an offer to yourself." end
         return recipient
+    end
+    function engine:GetSavedRecipients()
+        local contacts=directory()
+        local result={}
+        for _,name in pairs(contacts) do result[#result+1]=name end
+        table.sort(result,function(a,b) return a:lower()<b:lower() end)
+        return result
+    end
+    function engine:IsSavedRecipient(name)
+        name=schema.Character(name)
+        local contacts=directory()
+        return name~=nil and contacts[name:lower()]~=nil
+    end
+    function engine:SaveRecipient(name)
+        local err
+        name,err=self:ValidateRecipient(name)
+        if not name then return nil,err end
+        local contacts=directory()
+        if not contacts[name:lower()] and size(contacts)>=MAX_CONTACTS then
+            return nil,"Your address book is full (50 names). Remove a name before saving another."
+        end
+        contacts[name:lower()]=name
+        notify()
+        return true
+    end
+    function engine:RemoveRecipient(name)
+        name=schema.Character(name)
+        if not name then return false end
+        local contacts=directory()
+        contacts[name:lower()]=nil
+        notify()
+        return true
+    end
+    function engine:GetRecentRecipients()
+        local _,recent=directory()
+        local result={}
+        for i,name in ipairs(recent) do result[i]=name end
+        return result
+    end
+    function engine:GetSentHistory()
+        local _,_,history=directory()
+        local result={}
+        for i,item in ipairs(history) do
+            local copy={};for k,v in pairs(item) do copy[k]=v end
+            result[i]=copy
+        end
+        return result
     end
     function engine:GetIncoming()
         local list={}

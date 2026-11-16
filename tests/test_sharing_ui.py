@@ -245,7 +245,8 @@ local composer=AzerothFieldbookShare
 assert(composer.shown and composer.clamped)
 local function checkShareLayout()
     local function top(widget) return -widget.point[3] end
-    assert(top(composer.rumourHeading)>=124+composer.basicArea:GetHeight()+12)
+    assert(top(composer.basicArea)>=top(composer.lastSent)+composer.lastSent:GetStringHeight()+12)
+    assert(top(composer.rumourHeading)>=top(composer.basicArea)+composer.basicArea:GetHeight()+12)
     assert(top(composer.cost)>=top(composer.rumourArea)+composer.rumourArea:GetHeight()+12)
     assert(top(composer.balance)>=top(composer.cost)+composer.cost:GetStringHeight()+8)
     assert(top(composer.status)>=top(composer.balance)+composer.balance:GetStringHeight()+12)
@@ -623,7 +624,8 @@ eq(db.windowPositions.AzerothFieldbookBestiary.left,360*window:GetEffectiveScale
 npcID=43;book:OpenAtUnit('target');main.shareButton.scripts.OnClick()
 checkShareLayout()
 local compactHeight=composer:GetHeight()
-assert(compactHeight<500,'an empty report no longer reserves a full-height rumour list')
+local recipientHeight=-composer.basicArea.point[3]-124
+assert(compactHeight-recipientHeight<500,'an empty report no longer reserves a full-height rumour list')
 assert(composer.empty:IsShown())
 local shortLocations=j.entries[43].locations
 j.entries[43].locations={}

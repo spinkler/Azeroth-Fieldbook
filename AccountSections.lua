@@ -278,6 +278,10 @@ end
 -- Only well-formed identities are rewritten; malformed evidence stays invalid.
 local function journalIDs(target,fields,key)
     local ids,reserved={},{};local serial=0
+    for id,alias in pairs(type(target.aliases)=='table' and target.aliases or {}) do
+        reserved[id]=true
+        if type(alias)=='table' and alias.target then reserved[alias.target]=true end
+    end
     for _,field in ipairs(fields) do for id,e in pairs(target[field] or {}) do
         reserved[id]=true
         if type(e)=="table" then
@@ -302,13 +306,16 @@ local function mergeLore(target,source,key,first)
     target.entries=target.entries or {}
     local idFor=first and function(id) return id end or journalIDs(target,{"entries"},key)
     for id in pairs(source.entries or {}) do idFor(id) end
+    for id,alias in pairs(type(source.aliases)=='table' and source.aliases or {}) do
+        idFor(id);if type(alias)=='table' and ns.Lore.Text(alias.target,64) then idFor(alias.target) end
+    end
     for id,e in pairs(source.entries or {}) do
         local out=copy(e)
         if type(out)=="table" then
             if ns.Lore.Text(id,64) and out.id==id then out.id=idFor(id) end
             -- R.Build used archive + local ID + created before account storage.
             -- Freeze that key on the imported copy; new account entries use a
-            -- separate export origin. Never consolidate similar writings.
+            -- separate export origin. Retired keys remain durable aliases.
             local origin=source.exportOrigin or source.archiveID
             if not out.exportKey and origin then out.exportKey=tostring(origin)..":"..tostring(id)..":"..tostring(e.created) end
             if not out.exportSource then out.exportSource=ns.Lore.Player() end
@@ -325,6 +332,12 @@ local function mergeLore(target,source,key,first)
             end end
         end
         target.entries[idFor(id)]=out
+    end
+    for id,alias in pairs(type(source.aliases)=='table' and source.aliases or {}) do
+        target.aliases=target.aliases or {}
+        local out=copy(alias)
+        if type(out)=='table' and ns.Lore.Text(out.target,64) then out.target=idFor(out.target) end
+        target.aliases[idFor(id)]=out
     end
     local state=copy(source.state or {})
     if state.selected then state.selected=idFor(state.selected) end

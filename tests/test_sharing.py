@@ -794,3 +794,84 @@ for _,case in ipairs({{'Elite',1.5},{'Rare',2},{'Rare Elite',2}}) do
 end
 ''')
 print('PASS: rank-based sharing reservations, integer rounding, waivers and captured pricing')
+
+lua.execute(r'''
+-- Names are local conveniences, never sent as part of another report or used
+-- to bypass recipient validation. Saving is explicit; recent attempts are not
+-- silently promoted into the address book.
+setup()
+local before=a.j:GetSharingBalance()
+assert(a.engine:SaveRecipient('  Bob   Stonewell  '))
+assert(a.engine:SaveRecipient('bob stonewell'))
+assert(a.engine:SaveRecipient("Élan O'Connor-Smith"))
+eq(#a.engine:GetSavedRecipients(),2)
+assert(a.engine:IsSavedRecipient(' BOB STONEWELL '))
+for _,name in ipairs({'Alice Sunstrider','not|a name','Bad123',secret,''}) do
+    assert(not a.engine:SaveRecipient(name))
+end
+eq(a.j:GetSharingBalance(),before,'address book changes are free')
+eq(#a.engine:GetRecentRecipients(),0);eq(#a.engine:GetSentHistory(),0)
+local tx,item=start({fire});eq(a.engine:GetRecentRecipients()[1],'Bob Stonewell')
+local row=a.engine:GetSentHistory()[1]
+eq(row.id,tx.id);eq(row.stage,'offering');eq(row.knowledge,0);assert(not row.spent)
+assert(b.engine:Accept(item));pump(12)
+row=a.engine:GetSentHistory()[1]
+eq(row.stage,'complete');eq(row.knowledge,2);assert(row.spent)
+eq(row.name,'Defias Pillager');eq(row.rumours,1);eq(#a.engine:GetSentHistory(),1)
+row.stage='forged';eq(a.engine:GetSentHistory()[1].stage,'complete','callers receive detached history')
+local first=tx.id
+local declined,nextItem=start();assert(b.engine:Decline(nextItem));pump(8)
+eq(#a.engine:GetSentHistory(),2);eq(#a.engine:GetRecentRecipients(),1)
+eq(a.engine:GetSentHistory()[1].stage,'declined');eq(a.engine:GetSentHistory()[1].knowledge,0)
+eq(a.engine:GetSentHistory()[2].id,first)
+assert(a.engine:RemoveRecipient('BOB STONEWELL'))
+assert(not a.engine:IsSavedRecipient('Bob Stonewell'))
+eq(#a.engine:GetSentHistory(),2,'removing a contact preserves reports')
+a=endpoint('Alice Sunstrider',a.db)
+eq(#a.engine:GetSavedRecipients(),1);eq(#a.engine:GetSentHistory(),2)
+eq(a.engine:GetRecentRecipients()[1],'Bob Stonewell','names and history survive reload')
+-- Recover the last transaction from a pre-update store with no directory.
+local store=a.j:GetSharingStorage()
+store.sentHistory=nil;store.recentRecipients=nil
+a=endpoint('Alice Sunstrider',a.db)
+eq(a.engine:GetSentHistory()[1].id,declined.id);eq(#a.engine:GetRecentRecipients(),1)
+
+setup();tx,item=start()
+drop=function(m) return m.text:find('~K~',1,true) end
+assert(b.engine:Accept(item));pump(75)
+eq(a.engine:GetSentHistory()[1].stage,'delivery unknown')
+local spent=a.engine:GetSentHistory()[1].knowledge
+a=endpoint('Alice Sunstrider',a.db)
+eq(a.engine:GetSentHistory()[1].stage,'unknown')
+drop=nil;assert(a.engine:Retry());pump(15)
+eq(a.engine:GetSentHistory()[1].stage,'complete')
+eq(a.engine:GetSentHistory()[1].knowledge,spent);eq(#a.engine:GetSentHistory(),1,'retry updates the same report')
+
+-- Bound retained data without evicting explicitly saved names.
+setup()
+local function name(i) return 'Contact '..string.char(65+math.floor((i-1)/26))..string.char(65+(i-1)%26) end
+for i=1,50 do assert(a.engine:SaveRecipient(name(i))) end
+local ok,err=a.engine:SaveRecipient(name(51));assert(not ok and err:find('full',1,true))
+assert(a.engine:SaveRecipient(name(1)),'updating an existing name works at capacity')
+assert(a.engine:RemoveRecipient(name(1)));assert(a.engine:SaveRecipient(name(51)))
+for i=1,105 do
+    local attempt=assert(a.engine:Start(capture,name(i),{}))
+    assert(a.engine:Cancel())
+    pump(1)
+end
+eq(#a.engine:GetSavedRecipients(),50);eq(#a.engine:GetRecentRecipients(),20);eq(#a.engine:GetSentHistory(),100)
+eq(a.engine:GetRecentRecipients()[1],name(105));eq(a.engine:GetSentHistory()[100].recipient,name(6))
+assert(not b.engine:IsSavedRecipient(name(51)),'another character keeps its own names')
+a.j:Reset()
+eq(#a.engine:GetSavedRecipients(),0);eq(#a.engine:GetRecentRecipients(),0);eq(#a.engine:GetSentHistory(),0)
+a=endpoint('Alice Sunstrider',a.db)
+eq(#a.engine:GetSentHistory(),0,'a reset never reimports preserved Event log history')
+local account={}
+local alice=ns.CreateBestiaryJournal({accountTrackingKey='alice'},identify,account)
+local bob=ns.CreateBestiaryJournal({accountTrackingKey='bob'},identify,account)
+local aliceEngine=ns.CreateSharing(alice,a.env)
+local bobEngine=ns.CreateSharing(bob,b.env)
+assert(aliceEngine:SaveRecipient('Carol Riverwind'))
+eq(#bobEngine:GetSavedRecipients(),0,'shared Bestiary journals keep character-specific address books')
+''')
+print('PASS: saved recipients, recent names, bounded sent outcomes, reload recovery, retries and reset')

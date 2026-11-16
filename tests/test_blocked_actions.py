@@ -1,7 +1,7 @@
 """Early protected-action diagnostics stay bounded and ignore other addons."""
 from pathlib import Path
 import unittest
-from lupa import LuaRuntime
+from ui_test_harness import LuaRuntime
 
 
 class BlockedActionsTests(unittest.TestCase):

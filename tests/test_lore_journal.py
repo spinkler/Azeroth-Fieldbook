@@ -102,7 +102,7 @@ class LoreJournalTests(unittest.TestCase):
             assert(capture('e',nil,2,'Different ending',false,true).id==c.id and count(j.entries)==2)
         ''')
 
-    def test_reload_retains_duplicate_identities_notes_and_links_without_aliases(self):
+    def test_reload_merges_duplicates_and_retains_notes_links_and_aliases(self):
         self.lua.execute('''
             local a=assert(capture('a',nil,1,'Original page',true,false));a.notes='First private note'
             local b=L.Copy(a);b.id='lore:99';b.notes='Second private note';b.revisit=true
@@ -110,13 +110,12 @@ class LoreJournalTests(unittest.TestCase):
             local mystery=assert(j:Create('mystery',{title='Question'}))
             assert(j:AddLink(mystery.id,{section='lore',id=b.id,label=b.title}))
             local reload=ns.CreateLoreJournal(saved);local rows=reload:List({kind='writing'})
-            -- A duplicate's ID/creation stamp can already be in an exported
-            -- report. Keep both identities until persistent aliases are defined.
-            assert(#rows==2 and reload:Get(a.id).notes=='First private note')
-            assert(reload:Get(b.id).notes=='Second private note' and reload:Get(b.id).revisit)
-            assert(#reload:Get(a.id).passages==0 and #reload:Get(b.id).passages==0)
+            assert(#rows==1 and reload:Get(a.id)==reload:Get(b.id))
+            local merged=reload:Get(b.id)
+            assert(merged.notes=='Second private note' and merged.revisit)
+            assert(#merged.passages==1 and merged.passages[1].raw=='First private note' and merged.passages[1].private)
             assert(mystery.links[1].id==b.id and saved.state.selected==b.id)
-            assert(#ns.CreateLoreJournal(saved):List({kind='writing'})==2)
+            assert(#ns.CreateLoreJournal(saved):List({kind='writing'})==1)
         ''')
 
     def test_conflicting_later_page_forks_session_evidence_without_composite(self):
@@ -132,14 +131,14 @@ class LoreJournalTests(unittest.TestCase):
             assert(c.id~=a.id and c.id~=b.id and c.pages[1]==nil and c.pages[2]==nil)
         ''')
 
-    def test_missing_page_requires_overlapping_evidence_to_resume(self):
+    def test_disjoint_partial_reads_combine_compatible_numbered_pages(self):
         self.lua.execute('''
             local a=assert(capture('a','item:2',1,'Page one',true,false))
             local b=assert(capture('b','item:2',2,'Page two',false,true))
-            assert(a.id~=b.id and not j:WritingSummary(a).complete and not j:WritingSummary(b).complete)
+            assert(a.id==b.id and j:WritingSummary(a).complete)
             local c=assert(capture('c','item:2',1,'Page one',true,false));assert(c.id==a.id)
             local d=assert(capture('c','item:2',2,'Page two',false,true))
-            assert(d.id==a.id and d.id~=b.id and d.pages[1] and d.pages[2])
+            assert(d.id==a.id and d.id==b.id and d.pages[1] and d.pages[2] and count(j.entries)==1)
         ''')
 
     def test_partial_rereads_without_source_id_reuse_and_delete_allows_recapture(self):

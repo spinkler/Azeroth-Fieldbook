@@ -9,7 +9,7 @@ def new_lore_ui():
     lua = new_ui_client([
         'Scrollbars.lua', 'CreatureLocations.lua', 'FieldbookShell.lua',
         'AtlasJournal.lua', 'AtlasUI.lua', 'AtlasMap.lua', 'LoreJournal.lua',
-        'LoreReferences.lua', 'LoreMap.lua', 'LoreEditors.lua', 'LoreBook.lua',
+        'LoreReferences.lua', 'LoreMap.lua', 'LoreEditors.lua', 'LoreSpoken.lua', 'LoreBook.lua',
     ])
     lua.execute(ENV)
     lua.execute(r'''

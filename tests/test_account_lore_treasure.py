@@ -169,19 +169,21 @@ class AccountLoreTreasureTests(unittest.TestCase):
             local keyB=assert(LR.Build(l,two.id)).sourceKey
             local original=snapshot(b)
             l=init(1,true,a,ta);l=init(2,true,b,tb)
-            assert(size(l.entries)==4,'similar writings collapsed')
-            local imported
-            for _,e in pairs(l.entries) do if e.notes=='Second annotations' then imported=e end end
-            assert(imported and imported.id~=one.id)
+            assert(size(l.entries)==3,'compatible captures should combine while manual variants remain separate')
+            local question=find(l,'Question');local aliasID=question.links[1].id
+            local imported=l:Get(aliasID)
+            assert(imported and imported==l:Get(one.id))
             assert(imported.pages[1].raw=='Preserved source' and imported.pages[1].personallyViewed)
-            assert(imported.passages[1].id==passage.id and imported.locations[1].id==place.id)
-            assert(imported.theory=='Keep this theory' and imported.tags[1]=='Private tag')
-            assert(l.state.reading[imported.id].scroll==27)
-            assert(find(l,'Separate variant').variantOf==imported.id)
-            local question=find(l,'Question');assert(question.links[1].id==imported.id)
+            local texts={[imported.notes]=true,[imported.theory]=true};local foundPassage=false
+            for _,p in ipairs(imported.passages) do texts[p.raw]=p.private;if p.id==passage.id then foundPassage=true end end
+            assert(foundPassage and imported.locations[1].id==place.id)
+            assert(texts['Second annotations'] and texts['Keep this theory'] and imported.tags[1]=='Private tag')
+            assert(l.state.reading[aliasID].scroll==27)
+            assert(l:Get(find(l,'Separate variant').variantOf)==imported)
+            assert(l:Get(question.links[1].id)==imported)
             assert(not l:Get(question.links[2].id) and question.links[2].id~='lore:999')
             assert(assert(LR.Build(l,one.id)).sourceKey==keyA)
-            assert(assert(LR.Build(l,imported.id)).sourceKey==keyB)
+            assert(assert(LR.Build(l,aliasID)).sourceKey==keyB)
             assert(snapshot(b)==original,'local identity/evidence changed')
             local before=snapshot(l.db)
             l=init(1,true,a,ta);assert(snapshot(l.db)==before)

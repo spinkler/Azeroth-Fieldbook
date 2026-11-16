@@ -29,7 +29,7 @@ def release_notes(tag, toc, changelog):
 
 
 def main(tag, destination):
-    if not re.fullmatch(r'v\d+\.\d+\.\d+(?:-alpha|-beta)?', tag):
+    if not re.fullmatch(r'v\d+\.\d+\.\d+(?:-(?:alpha|beta)(?:\.(?:0|[1-9]\d*))?)?', tag):
         raise ValueError('Expected a versioned release tag')
     ref = f'refs/tags/{tag}'
     def read_file(name):

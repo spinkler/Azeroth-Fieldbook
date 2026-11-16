@@ -104,6 +104,7 @@ function ns.InitializeLore(shell,settings,sources)
         if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r "..message) end
     end
     local tracking=ns.CreateLoreTracking(journal,ns.LoreSettings.db)
+    if ns.CreateLoreTooltips then tracking.tooltips=ns.CreateLoreTooltips(journal,ns.LoreSettings.db) end
     ns.LoreSettings.tracking=tracking
     local controller=ns.CreateLoreBook(journal,tracking,shell)
     ns.RegisterLoreReferences(controller,shell,sources)

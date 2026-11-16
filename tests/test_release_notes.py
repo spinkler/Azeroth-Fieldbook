@@ -50,9 +50,25 @@ class ReleaseNotesTests(unittest.TestCase):
                 call(['git', 'show', f'refs/tags/{self.tag}:CHANGELOG.md']),
             ])
 
+    def test_numbered_prerelease_tag_matches_full_toc_version(self):
+        for channel in ('beta', 'alpha'):
+            with self.subTest(channel=channel), tempfile.TemporaryDirectory() as directory:
+                version = f'0.44.0-{channel}.1'
+                tag = f'v{version}'
+                toc = f'## Version: {version}\n'
+                notes = f'## {tag} - 2026-11-17\n\n- Complete batch summary.\n'
+                with patch.object(module.subprocess, 'check_output', side_effect=[toc.encode(), notes.encode()]) as read:
+                    destination = Path(directory) / 'notes.md'
+                    module.main(tag, destination)
+                    self.assertEqual(destination.read_text(encoding='utf-8'), notes)
+                    self.assertEqual(read.call_args_list, [
+                        call(['git', 'show', f'refs/tags/{tag}:AzerothFieldbook.toc']),
+                        call(['git', 'show', f'refs/tags/{tag}:CHANGELOG.md']),
+                    ])
+
     def test_rejects_branch_or_option_instead_of_tag(self):
         with patch.object(module.subprocess, 'check_output') as read:
-            for tag in ['main', '--help', 'v0.11.0-beta:README.md']:
+            for tag in ['main', '--help', 'v0.11.0-beta:README.md', 'v0.44.0-beta.01', 'v0.44.0-beta.1:README.md']:
                 with self.assertRaises(ValueError):
                     module.main(tag, 'unused.md')
             read.assert_not_called()
