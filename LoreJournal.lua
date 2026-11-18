@@ -621,6 +621,7 @@ function ns.CreateLoreJournal(saved)
         if self.readOnly then return nil,'Archive is read-only.' end
         if not plainTable(context) or not plainTable(value) or not L.Text(context.sessionID,160) then return nil,'Readable source needs a valid session identity.' end
         local meta,err=fields({title=context.title or 'Untitled writing',sourceTitle=context.title or '',sourceKind=context.sourceKind or 'readable',
+            subtype=context.subtype or '',
             identity=context.identity or '',locale=context.locale or '',origin='captured'},'writing');if not meta then return nil,err end
         local incoming=L.Copy(value);incoming.origin='captured';incoming.nature='source';incoming.method=value.method or context.method or 'displayed'
         incoming.source=context.source or context.title or '';incoming.sourceTitle=context.title or '';incoming.locale=context.locale or ''

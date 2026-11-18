@@ -62,6 +62,8 @@ end
 local ranks = { Rare = 1, Elite = 2, ["Rare Elite"] = 3, ["World Boss"] = 4 }
 local function mergeEntry(target, source)
     ns.MigrateDisposition(target);ns.MigrateDisposition(source)
+    target.factionAffiliation=target.factionAffiliation or source.factionAffiliation
+    target.factionQuestObjective=target.factionQuestObjective or source.factionQuestObjective
     target.firstEncounteredAt=ns.EarliestEncounterTime(target.firstEncounteredAt,source.firstEncounteredAt)
     for _,field in ipairs({"loot","pickpocketLoot"}) do
     if source[field] then

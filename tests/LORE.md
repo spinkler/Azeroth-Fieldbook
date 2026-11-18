@@ -222,11 +222,40 @@ an announced translation up to 30 seconds. At most 768 navigation requests and
 180 seconds are allowed per traversal. There is one active traversal and no
 per-frame lore scan. Delayed callbacks carry their session/generation identity.
 
-Automatic capture requires a successfully readable creator accessor returning
-no player creator (nil, false or an empty string). A nonempty creator, unavailable creator capability, active
-mail session or visible mail reader excludes automatic capture. This conservative
-rule may exclude some world sources until Forever's behaviour is tested. It is
-not based on guessing titles. Explicit capture/transcription remains available.
+The generic automatic path requires a successfully readable creator accessor
+returning no player creator (nil, false or an empty string). Item sources can
+instead establish game-lore eligibility through a native Item GUID on the reader's
+`npc` unit, resolved with `C_Item.GetItemIDByGUID` / `GetItemIDByGUID`, or a secure
+post-hook on `C_Container.UseContainerItem` / `UseContainerItem`. Bag candidates
+expire after ten seconds. Native item info must confirm both ID and the displayed
+title; neither hover nor a title-only lookup qualifies. Quest-class items and
+the tooltip's predefined lore item IDs qualify even when the creator accessor
+is absent, restricted, fails or provides an author. Mail sessions and visible
+mail readers still exclude every automatic path. Unidentified or player-letter
+item IDs retain the generic creator rule. Explicit capture/transcription remains
+available.
+
+Quest writings save `subtype = "Quest item"` through the existing entry/report
+field, and item captures save `identity = "item:<id>"`. The overview and page
+metadata show the source type; local pages also show the item ID. Reports retain
+the source type without adding protocol fields or asserting a local encounter.
+Closing/leaving clears pending item context. Late bag post-hooks can enrich a
+synchronous READY before stabilization; confirmed identities are then rechecked.
+`test_lore_items.py` covers these paths using synthetic text, including the
+Translated Letter from The Embalmer item ID (3248). The user's screenshot and
+reader description confirm the quest label and normal parchment reader, but the exact native creator result
+was not observed. Live acceptance: `/reload`, reopen that letter and another quest
+writing, confirm saved text/type/ID, close and reread, then reload and check the
+archive and tooltip. Check player letters and mail remain excluded. The reader
+must stay open until the text settles.
+
+On 2026-11-17, 132 focused capture, tooltip, reader, report, merge, translation,
+account and background-integration tests passed, and all 98 runtime Lua files,
+manifest, bindings and version checks passed. The previous tracking adapter
+reproduced the ambiguous-correspondence refusal for the same synthetic quest-item
+fixture. Native client inspection timed out, so this is not a live confirmation
+of the letter's creator signal or capture. The broader section-navigation stress
+run was stopped; the full suite was not run for this correction.
 
 Regression coverage includes stale BEGIN metadata followed by a different world
 book, READY without BEGIN, reader visibility after event dispatch, cancellation
@@ -234,7 +263,8 @@ before recovery, and a false no-creator result. The Westfall report of
 “Aegwynn and the Dragon Hunt” still needs a live reread to verify the client path;
 the deterministic fixture uses synthetic page text, not a bundled book database.
 
-The ItemText adapter has no established stable work/object/item identifier.
+World ItemText sources still have no established stable object identifier;
+positively identified carried items use the item identity described above.
 Compatible numbered captures with the same source title, locale, kind and
 optional identity can extend one writing across separate visits, including
 disjoint partial reads. Overlapping pages must have identical raw source text,

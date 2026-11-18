@@ -495,17 +495,26 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         return trackingDB.bestiary.sharing
     end
     function journal:Touch() self.revision = self.revision + 1 end
+    function journal:GetFactionQuestObjective(id)
+        local entry=self.entries[id]
+        return entry and number(entry.factionQuestObjective) and entry.factionQuestObjective or nil
+    end
     function journal:IsFactionAffiliated(id)
         local entry=self.entries[id]
         return entry~=nil and (entry.factionAffiliation=="Alliance" or entry.factionAffiliation=="Horde")
+            and not self:GetFactionQuestObjective(id)
     end
-    function journal:MarkFactionAffiliation(id, faction)
+    function journal:MarkFactionAffiliation(id, faction, questObjective, service)
         if faction~="Alliance" and faction~="Horde" then return end
         local entry=self.entries[id]
-        -- Retain the page and its knowledge; only live, explicit affiliation
-        -- hides it. Historical entries without this evidence remain visible.
-        if entry and entry.factionAffiliation~=faction then
+        -- Keep personal kill-objective evidence after quest completion. It can
+        -- also restore a previously hidden page without losing its knowledge.
+        -- A later explicit civilian/service identification removes the exception.
+        if entry and (entry.factionAffiliation~=faction or (service and entry.factionQuestObjective~=nil)
+            or (number(questObjective) and not self:GetFactionQuestObjective(id))) then
             entry.factionAffiliation=faction
+            if service then entry.factionQuestObjective=nil
+            elseif number(questObjective) then entry.factionQuestObjective=questObjective end
             self:Touch()
         end
     end
@@ -994,7 +1003,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
     function journal:Observe(unit, explicit, sourceGUID)
         if ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("bestiary") then return end
         self:UpdateDeletedSelections()
-        local id = identify(unit, explicit, sourceGUID)
+        local id, _, affiliation, questObjective = identify(unit, explicit, sourceGUID)
         if not id or deletedSelections[id] then return end
         -- Match Blizzard's target-frame level/skull decision. Never fall back
         -- to the raw level when the effective value is hidden or unknown.
@@ -1041,6 +1050,7 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local unclassified = not self.entries[id] or self.entries[id].category == "Unclassified"
         local entry, discovered = self:Ensure(id, false, name, observation)
         if not entry then return end
+        self:MarkFactionAffiliation(id, affiliation, questObjective)
         observation.entryAnnouncement=not wasNamed or not wasPersonal
         self:ObserveTameability(unit)
         local zone=prototypeObservation(self,entry,unit,liveGUID,observation)

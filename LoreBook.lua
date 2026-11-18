@@ -205,6 +205,12 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
         if row.page then
             local p=row.page
             local metadata=provenance(p,row.report)
+            local source=row.report or e
+            if source.subtype and source.subtype~="" then metadata=metadata.."\nSource type: "..source.subtype end
+            if not row.report then
+                local itemID=(e.identity or ""):match('^item:(%d+)$')
+                if itemID then metadata=metadata.."\nSource item ID: "..itemID end
+            end
             local lore=p.raw=="" and "[This source page was empty.]" or L.Plain(p.raw or "")
             return metadata.."\n\n"..lore,metadata,lore
         end

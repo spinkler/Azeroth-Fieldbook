@@ -386,7 +386,9 @@ local items={
     [23016]="Sealed Research Report",
 }
 local titles={}
+function L.IsReadableItem(id) return L.Public(id) and items[id]~=nil end
 for _,title in pairs(objects) do titles[title]=true end
+function L.IsReadableObjectTitle(title) return titles[title]==true end
 
 local function objectID(guid)
     if not L.Text(guid,160) then return end

@@ -90,6 +90,130 @@ local function npcID(unit)
     return id, id and "NPC identity readable." or "Not a Creature GUID.", guid
 end
 
+local function publicTable(value)
+    return public(value) and type(value) == "table" and not (issecrettable and issecrettable(value))
+end
+
+local function npcLabel(text)
+    if not publicString(text) or #text > 200 then return end
+    text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):match("^%s*(.-)%s*$")
+    return (text:match("^<(.-)>$") or text):match("^%s*(.-)%s*$"):gsub("%s+", " "):lower()
+end
+
+local serviceTitles = {
+    ["flight master"]=true, ["flightmaster"]=true, ["gryphon master"]=true,
+    ["wind rider master"]=true, ["hippogryph master"]=true, ["bat handler"]=true,
+    ["dragonhawk master"]=true, ["wyvern master"]=true, ["innkeeper"]=true,
+    ["banker"]=true, ["auctioneer"]=true, ["stable master"]=true, ["stablemaster"]=true,
+    ["battlemaster"]=true, ["battle master"]=true, ["spirit healer"]=true,
+    ["spirit guide"]=true, ["guild master"]=true, ["guildmaster"]=true,
+    ["weapon master"]=true, ["weapons master"]=true, ["trainer"]=true,
+    ["vendor"]=true, ["merchant"]=true, ["repair"]=true, ["repairs"]=true,
+    ["reagents"]=true, ["ammunition"]=true, ["poisons"]=true, ["food & drink"]=true,
+    ["weapons"]=true, ["armor"]=true, ["cloth armor"]=true, ["leather armor"]=true,
+    ["mail armor"]=true, ["plate armor"]=true, ["bags"]=true,
+    ["light armor"]=true, ["heavy armor"]=true, ["weapons & armor"]=true,
+    ["armorer"]=true, ["weaponsmith"]=true, ["gunsmith"]=true, ["bowyer"]=true,
+    ["fishmonger"]=true, ["butcher"]=true, ["baker"]=true,
+}
+local serviceTitleGlobals = {
+    "INNKEEPER", "MINIMAP_TRACKING_FLIGHTMASTER", "MINIMAP_TRACKING_INNKEEPER",
+    "MINIMAP_TRACKING_BANKER", "MINIMAP_TRACKING_AUCTIONEER", "MINIMAP_TRACKING_STABLEMASTER",
+    "MINIMAP_TRACKING_BATTLEMASTER", "MINIMAP_TRACKING_TRAINER_CLASS", "MINIMAP_TRACKING_TRAINER_PROFESSION",
+    "MINIMAP_TRACKING_VENDOR_AMMO", "MINIMAP_TRACKING_VENDOR_FOOD", "MINIMAP_TRACKING_VENDOR_POISON",
+    "MINIMAP_TRACKING_VENDOR_REAGENT", "MINIMAP_TRACKING_REPAIR",
+}
+local serviceTitleSuffixes = {
+    " trainer", " vendor", " merchant", " supplies", " goods", " repairs",
+    " flight master", " gryphon master", " wind rider master", " hippogryph master",
+    " bat handler", " dragonhawk master", " wyvern master", " banker", " auctioneer",
+    " stable master", " battlemaster",
+}
+local function factionServiceTitle(text)
+    local label = npcLabel(text)
+    if not label then return end
+    for _, key in ipairs(serviceTitleGlobals) do
+        if label == npcLabel(_G[key]) then return true end
+    end
+    if label == npcLabel(PVP_RANK_CIVILIAN) then return true end
+    local locale = type(GetLocale) == "function" and GetLocale() or nil
+    if not public(locale) or (locale ~= "enUS" and locale ~= "enGB") then return end
+    if serviceTitles[label] or label == "civilian" then return true end
+    for _, suffix in ipairs(serviceTitleSuffixes) do
+        if label:sub(-#suffix) == suffix then return true end
+    end
+    return false
+end
+
+-- Quest relevance alone includes interactions and item objectives. Require a
+-- native tooltip row matching this character's active kill objective instead.
+-- A subtitle can name a quest enemy's rank or clan; exclude service roles,
+-- rather than every title. Explicit service evidence overrides saved eligibility.
+local function factionQuestObjective(unit, guid, knownQuest)
+    local ok, questID, service = pcall(function()
+        if type(UnitIsCivilian) == "function" then
+            if readTrue(UnitIsCivilian, unit) then return nil, true end
+            if not booleanCheck("UnitIsCivilian", UnitIsCivilian, false, unit) then return end
+        end
+        if not knownQuest and not readTrue(C_QuestLog and C_QuestLog.UnitIsRelatedToActiveQuest, unit) then return end
+        local types = Enum and Enum.TooltipDataLineType
+        if not types or not types.UnitName or not types.UnitLevel
+            or not C_TooltipInfo or type(C_TooltipInfo.GetUnit) ~= "function" then return end
+        local data = C_TooltipInfo.GetUnit(unit)
+        if not publicTable(data) or not publicTable(data.lines) then return end
+        if not public(data.guid) or (data.guid ~= nil and data.guid ~= guid) then return end
+        local afterName, afterLevel, title
+        for index, line in ipairs(data.lines) do
+            if index > 128 or not publicTable(line) or not public(line.type) then return end
+            local kind, text = line.type, line.leftText
+            if kind == types.UnitName and not afterName then afterName = true
+            elseif kind == types.UnitLevel then afterLevel = afterName
+            elseif afterName and not afterLevel and kind ~= types.Blank then
+                -- An unreadable subtitle cannot prove the absence of a role.
+                if not public(text) then return end
+                if text ~= nil and text ~= "" then
+                    if kind ~= types.None and kind ~= nil and kind ~= types.UnitName then return end
+                    local role = factionServiceTitle(text)
+                    if role == true then return nil, true end
+                    if role == nil or title then return end
+                    title = true
+                end
+            end
+            local label = npcLabel(text)
+            if label and label == npcLabel(PVP_RANK_CIVILIAN) then return nil, true end
+        end
+        if not afterLevel then return end
+        if knownQuest then return knownQuest end
+        if not types.QuestTitle or not types.QuestObjective or not C_QuestLog
+            or type(C_QuestLog.GetLogIndexForQuestID) ~= "function"
+            or type(C_QuestLog.GetQuestObjectives) ~= "function" then return end
+        local ownQuest, matchedQuest
+        for _, line in ipairs(data.lines) do
+            local kind, text = line.type, line.leftText
+            if kind == types.QuestTitle then
+                ownQuest = nil
+                if positiveID(line.id) and positiveID(C_QuestLog.GetLogIndexForQuestID(line.id)) then ownQuest = line.id end
+            elseif kind == types.QuestPlayer then
+                ownQuest = nil -- Party members' objectives never grant personal eligibility.
+            elseif kind == types.QuestObjective and ownQuest and publicString(text) then
+                local objectives = C_QuestLog.GetQuestObjectives(ownQuest)
+                if publicTable(objectives) then
+                    for objectiveIndex, objective in ipairs(objectives) do
+                        if objectiveIndex > 64 then return end
+                        if publicTable(objective) and public(objective.type) and objective.type == "monster"
+                            and public(objective.finished) and objective.finished == false
+                            and publicString(objective.text) and objective.text == text then matchedQuest = ownQuest end
+                    end
+                end
+            end
+        end
+        return matchedQuest
+    end)
+    if ok and service then return nil, true end
+    -- Preserve earlier personal proof when combat restrictions hide new data.
+    return knownQuest or (ok and positiveID(questID) and questID or nil)
+end
+
 local function watchedEnemy(unit, explicit, sourceGUID)
     if not publicString(unit) then return nil, "Unit token unavailable/restricted." end
     -- Effect sources and manual portrait snapshots supply an exact, public GUID.
@@ -120,14 +244,21 @@ local function watchedEnemy(unit, explicit, sourceGUID)
     ok, reason = booleanCheck("UnitCanAttack", UnitCanAttack, true, "player", unit)
     if not ok then return nil, reason end
     local id, identityReason, identityGUID = npcID(unit)
-    -- Faction quest givers, guards and other Alliance/Horde NPCs can be
-    -- attackable without being Bestiary creatures. Exclude only an explicit,
-    -- readable affiliation; neutral/missing/restricted results prove nothing.
+    if effectSource and identityGUID ~= sourceGUID then return nil, "Aura source identity changed/unavailable." end
+    local affiliation, questObjective
+    -- Faction alone also describes genuine quest enemies. Only a verified kill
+    -- objective (or its saved personal evidence) overrides the faction filter.
     if id and type(UnitFactionGroup) == "function" then
         local success, faction = pcall(UnitFactionGroup, unit)
         if success and public(faction) and (faction == "Alliance" or faction == "Horde") then
-            if journal then journal:MarkFactionAffiliation(id, faction) end
-            return nil, "Alliance/Horde-affiliated NPC excluded."
+            affiliation = faction
+            local service
+            questObjective, service = factionQuestObjective(unit, identityGUID, journal and journal:GetFactionQuestObjective(id))
+            local same, guid = pcall(UnitGUID, unit)
+            if not same or not publicString(guid) or guid ~= identityGUID then return nil, "Faction NPC identity changed/unavailable." end
+            if journal then journal:MarkFactionAffiliation(id, faction, questObjective, service) end
+            if service then return nil, "Faction civilian/service NPC excluded." end
+            if not questObjective then return nil, "Alliance/Horde-affiliated NPC excluded; no verified kill objective." end
         end
     end
     if effectSource then
@@ -136,7 +267,7 @@ local function watchedEnemy(unit, explicit, sourceGUID)
             return nil, "Aura source identity changed/unavailable."
         end
     end
-    return id, identityReason
+    return id, identityReason, affiliation, questObjective
 end
 
 local function say(message)

@@ -53,6 +53,17 @@ def new_lore_ui():
 
 
 class LoreUITests(unittest.TestCase):
+    def test_quest_item_type_is_shown_with_local_and_reported_source_text(self):
+        lua = new_lore_ui()
+        lua.execute('''
+            local e=writing();e.subtype='Quest item';e.identity='item:3248'
+            assert(c:Overview(e):find('Quest item',1,true))
+            local _,meta=c:SourceText(e,{page=e.pages[1]})
+            assert(meta:find('Source type: Quest item',1,true) and meta:find('Source item ID: 3248',1,true))
+            local _,reported=c:SourceText(e,{page=e.pages[1],report={subtype='Quest item'}})
+            assert(reported:find('Source type: Quest item',1,true) and not reported:find('Source item ID',1,true))
+        ''')
+
     def setUp(self):
         self.lua = new_lore_ui()
 

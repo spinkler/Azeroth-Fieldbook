@@ -5,7 +5,7 @@ from atlas_test_harness import ENV
 
 
 def client(settings='{}'):
-    lua = new_ui_client(['AtlasJournal.lua', 'LoreJournal.lua', 'LoreTracking.lua'])
+    lua = new_ui_client(['AtlasJournal.lua', 'LoreJournal.lua', 'LoreTooltips.lua', 'LoreTracking.lua'])
     lua.execute(ENV)
     lua.execute(r'''
         function GetLocale() return 'enUS' end
@@ -92,6 +92,9 @@ class LoreTrackingTests(unittest.TestCase):
             saved={};j=ns.CreateLoreJournal(saved);t=ns.CreateLoreTracking(j,settings)
             t:Event('GOSSIP_SHOW');assert(not writing())
             assert(t:CaptureCurrent());assert(writing().title==title)
+            settings.autoArchiveLore=true;title='Charge of the Dragonflights'
+            t:Event('GOSSIP_SHOW');assert(#j:List({kind='writing'})==2)
+            t:Event('GOSSIP_UPDATE');assert(#j:List({kind='writing'})==2)
             title='Unknown dialogue';t:Event('GOSSIP_SHOW');assert(not t.dialogue.writing)
         """)
 

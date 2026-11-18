@@ -36,6 +36,45 @@ end
 local function defaultAdapter()
     local a={}
     function a.Now() return read(GetTime) or L.Now() end
+    -- Item-text events carry no item ID. Prefer the reader's Item GUID on
+    -- Forever; older clients can supply the bag slot that was actually used.
+    -- A hover or a title lookup alone never establishes an item source.
+    local function itemContext(id,title)
+        if not number(id,1,2147483647) or not title then return end
+        local fn=C_Item and C_Item.GetItemInfo or GetItemInfo
+        if type(fn)~="function" then return end
+        local ok,name,link,_,_,_,_,_,_,_,_,_,classID=pcall(fn,id)
+        if not ok or not public(name) or name~=title or not public(link) or type(link)~="string"
+            or tonumber(link:match('item:(%d+)'))~=id then return end
+        local questItem=public(classID) and classID==12
+        return {id=id,title=title,questItem=questItem,
+            loreItem=questItem or L.IsReadableItem and L.IsReadableItem(id)==true}
+    end
+    function a.BeginSource() a.item=nil end
+    function a.EndSource() a.item=nil;a.usedItem=nil end
+    function a.HookSource()
+        if type(hooksecurefunc)~="function" then return end
+        local function used(bag,slot)
+            a.item=nil
+            local id=read(C_Container and C_Container.GetContainerItemID or GetContainerItemID,bag,slot)
+            a.usedItem=number(id,1,2147483647) and {id=id,at=a.Now()} or nil
+        end
+        if C_Container and type(C_Container.UseContainerItem)=="function" then
+            pcall(hooksecurefunc,C_Container,"UseContainerItem",used)
+        elseif type(UseContainerItem)=="function" then pcall(hooksecurefunc,"UseContainerItem",used) end
+    end
+    local function sourceItem(title)
+        local guid=read(UnitGUID,"npc")
+        local id=type(guid)=="string" and guid:match('^Item%-')
+            and read(C_Item and C_Item.GetItemIDByGUID or GetItemIDByGUID,guid)
+        local item=itemContext(id,title)
+        if number(id,1,2147483647) and not item then return end
+        if not item and a.item and a.item.title==title then return a.item end
+        local used=a.usedItem
+        if not item and used and a.Now()>=used.at and a.Now()-used.at<=10 then item=itemContext(used.id,title) end
+        if item then a.item=item end
+        return item
+    end
     function a.After(delay,fn)
         if C_Timer and type(C_Timer.After)=="function" then C_Timer.After(delay,fn);return true end
         return false
@@ -54,12 +93,15 @@ local function defaultAdapter()
         local nextOK,hasNext=value(ItemTextHasNextPage)
         local raw=read(ItemTextGetText)
         local page=read(ItemTextGetPage)
-        return {title=label(read(ItemTextGetItem)),raw=type(raw)=="string" and raw or nil,
+        local title=label(read(ItemTextGetItem))
+        local item=sourceItem(title)
+        return {title=title,raw=type(raw)=="string" and raw or nil,
             page=number(page,0,1000000) and page or nil,
             hasNext=hasNext==true or hasNext==1,
             nextKnown=nextOK and (hasNext==nil or type(hasNext)=="boolean" or hasNext==1),
             creator=label(creator),creatorKnown=creatorOK and (creator==nil or creator==false or type(creator)=="string"),
             playerAuthored=creatorOK and type(creator)=="string" and creator~="",
+            identity=item and "item:"..item.id,questItem=item and item.questItem,loreItem=item and item.loreItem,
             sourceKind="readable",material=label(read(ItemTextGetMaterial)),locale=read(GetLocale) or "unknown"}
     end
     function a.CanTraverse()
@@ -113,8 +155,8 @@ local function defaultAdapter()
             title=title or (nameFrame and label(read(nameFrame.GetText,nameFrame)))
             local objectID=type(guid)=="string" and tonumber(guid:match('^GameObject%-%d+%-%d+%-%d+%-%d+%-(%d+)%-%x+$'))
             -- Some object readers expose a title but no unit GUID. Limit that
-            -- fallback to the observed book, never an unrelated target unit.
-            if title and (number(objectID,1,2147483647) or (guid==nil and title=="Draconic for Dummies")) then
+            -- fallback to recognized world-book titles.
+            if title and (number(objectID,1,2147483647) or (guid==nil and L.IsReadableObjectTitle(title))) then
                 d.writing=true;d.sourceTitle=title
                 d.identity=objectID and "gameobject:"..objectID or "gossip-book:"..title
             end
@@ -152,6 +194,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         ns.RegisterSectionVisibilityListener("lore",function()
             serial=serial+1
             if t.active then release(t.active);t.active=nil end
+            if a.EndSource then a.EndSource() end
             if a.Progress then a.Progress(nil) end
         end)
     end
@@ -189,7 +232,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         return v.nextKnown==true and v.hasNext==false
     end
     local function private(s,v)
-        return t.mailOpen or (a.IsMail and a.IsMail()) or v.playerAuthored or not v.creatorKnown
+        return t.mailOpen or (a.IsMail and a.IsMail()) or not v.loreItem and (v.playerAuthored or not v.creatorKnown)
     end
     local advance,ready
     local function request(s,direction,restore)
@@ -247,6 +290,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     local function store(s,v,method,atEnd)
         local n=pageNumber(v)
         local context={sessionID=s.sessionID,title=v.title or "Untitled readable source",sourceKind=v.sourceKind or "readable",
+            subtype=v.questItem and "Quest item" or nil,
             locale=v.locale or "unknown",identity=v.identity,location=s.location,method=method,
             firstPage=n==1 and 1 or nil,lastPage=atEnd and n or nil}
         local e,err,notice=journal:CapturePage(context,{number=n,sourcePage=v.page,raw=v.raw,method=method,
@@ -299,6 +343,9 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         local function sample()
             if not s.ready or generation~=s.generation then return end
             local v=snapshot(s);if not v then return end
+            -- Bag-use post-hooks may run after synchronous READY delivery.
+            -- Bind their confirmed identity before the second sample too.
+            if not s.identity and v.identity then s.identity=v.identity end
             if type(v.raw)~="string" then
                 retries=retries+1
                 if retries<=12 and after(s,0.25,sample) then return end
@@ -421,8 +468,8 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     function t:Event(event,...)
         if paused() then return end
         if event=="ITEM_TEXT_BEGIN" then
-            local v=a.Read and a.Read() or {}
             local active=self.active
+            local v=active and a.Read and a.Read() or {}
             -- BEGIN also accompanies page loads in clients using the classic
             -- item-text lifecycle. It is not necessarily a new book.
             if active and same(active,v) and active.currentPage and number(v.page,1,1000000)
@@ -430,6 +477,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
                 active.ready=false;active.generation=active.generation+1;return
             end
             if self.active then finish(self.active,"Capture interrupted: another reading interaction began.");release(self.active) end
+            if a.BeginSource then a.BeginSource() end
             serial=serial+1
             -- BEGIN announces a load; its accessors may still describe the
             -- previous book. Bind source identity only when READY arrives.
@@ -474,6 +522,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
                 release(self.active);self.active=nil
             end
             if a.Progress then a.Progress(nil) end
+            if a.EndSource then a.EndSource() end
             if event=="PLAYER_LEAVING_WORLD" then self.dialogue=nil end
         elseif event=="MAIL_SHOW" then
             self.mailOpen=true
@@ -493,6 +542,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         end
     end
     t.navigationHooked=a.HookNavigation and a.HookNavigation(function(direction) t:OnNavigation(direction) end)==true
+    if a.HookSource then a.HookSource() end
     if type(CreateFrame)=="function" then
         local frame=CreateFrame("Frame");t.frame=frame
         for _,event in ipairs({"ITEM_TEXT_BEGIN","ITEM_TEXT_READY","ITEM_TEXT_TRANSLATION","ITEM_TEXT_CLOSED","PLAYER_LEAVING_WORLD",

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.44.0-beta.2 - 2026-11-18
+
+- Lorekeeper's Chronicle now archives displayed gossip text from recognized world books such as Charge of the Dragonflights when the reader supplies a title without an object GUID.
+
+- Admit Alliance/Horde-affiliated quest enemies, including enemies with rank/clan subtitles, when their native tooltip matches an unfinished personal kill objective. Retain the faction exclusion for ordinary NPCs, readable civilians and recognized service roles such as flight masters, vendors and trainers; later explicit civilian/service evidence overrides saved quest eligibility. Use localized native service labels and English role names/suffixes, conservatively excluding unrecognized subtitles on other locales. Preserve verified eligibility after quest completion, reloads, account imports and Bestiary backups; restore previously hidden pages without losing notes or knowledge. Add focused discovery, title classification, capture, privacy, identity, persistence and exclusion regressions. Native quest-enemy and service-exclusion acceptance remains pending.
+
+- Recognize the item that opens a Chronicle reader through its native Item GUID or a recent bag use, checking its ID and displayed title. Allow positively identified quest writings and known game lore items when the generic creator signal is ambiguous; continue excluding personal mail and unidentified player correspondence. Preserve quest writings with a "Quest item" source type, show their item ID in the reader, and retain the type across reloads and reports. Add focused capture, privacy, lifecycle, reader and report regressions. Native acceptance remains pending.
+
 ## v0.44.0-beta.1 - 2026-11-17
 
 Beta prerelease covering the complete batch since v0.43.0 and verified previous-push baseline `a4d3a3e395fb27b1a75a82773350de62ec3652ff`.

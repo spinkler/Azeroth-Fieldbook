@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.44.0-beta.1 (Beta)
+# Azeroth Fieldbook 0.44.0-beta.2 (Beta)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -761,13 +761,24 @@ character that started them, using the active journal's knowledge balance.
 Target or mouse over an attackable NPC to record its readable name, creature
 type, level range, location and model. Players, pets, vehicles and
 player-controlled creatures are excluded. NPCs with an explicitly readable Alliance
-or Horde affiliation are also excluded from automatic discovery and live ability
-recording. Existing entries are hidden from the Bestiary list and count when a
-later target or mouseover observation explicitly identifies that affiliation;
-their notes, loot and earned knowledge are retained. The hidden status survives
-reloads and Bestiary backups. Older entries have no saved faction information,
-so they remain visible until identified again. Neutral or unavailable faction
-results keep the normal eligibility rules.
+or Horde affiliation are excluded unless personally identified as a quest enemy:
+the native tooltip must match an unfinished kill objective in your current quest
+log. Quest relevance, a quest title, party progress, item drops or interaction
+objectives alone do not qualify. A subtitle such as a rank or clan is allowed;
+recognized service titles (including flight masters, vendors and trainers) and
+readable civilian labels/flags remain excluded, even for matching kill objectives.
+Service recognition uses native localized labels and English role names/suffixes.
+Unrecognized subtitles on clients other than enUS/enGB remain conservatively
+excluded. Missing or restricted evidence cannot grant a new exception; try
+observing outside combat.
+Once verified, that creature remains eligible after quest completion or abandonment,
+including across reloads, account imports and Bestiary backups. Previously hidden
+pages become visible again when verified, retaining their notes, loot and knowledge.
+Later explicit civilian/service evidence removes the exception and hides the page
+again without deleting its contents.
+Other faction entries are hidden from the list and count after live identification;
+older entries without faction evidence remain visible until identified again.
+Neutral or unavailable faction results keep the normal eligibility rules.
 
 The index supports creature-type, location, rank, review-state, text and A-Z filters.
 Earned stars and crowns appear beside creature names. Personally encountered

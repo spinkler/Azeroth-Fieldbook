@@ -7,6 +7,16 @@ MODULES = ['Scrollbars.lua', 'FieldbookShell.lua', 'AtlasJournal.lua', 'AtlasUI.
 
 
 class LoreReportTests(unittest.TestCase):
+    def test_quest_item_classification_is_shared_without_new_protocol_fields(self):
+        self.lua.execute('''
+            e=assert(j:CapturePage({sessionID='quest-letter',title='Quest letter',identity='item:3248',subtype='Quest item'},
+                {number=1,raw='Synthetic source',first=true,last=true,method='displayed'}))
+            local received=assert(receive(build()))
+            assert(received.subtype=='Quest item' and received.reports[1].subtype=='Quest item')
+            local id=received.id;recipient=ns.CreateLoreJournal(recipient.db)
+            assert(recipient:Get(id).subtype=='Quest item')
+        ''')
+
     def test_only_new_imported_entries_emit_recorded_callback(self):
         self.lua.execute('''
             local recorded=0
