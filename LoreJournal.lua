@@ -129,7 +129,7 @@ function L.Page(value)
     local out={raw=value.raw,nature='source'}
     if value.number~=nil then if not L.Integer(value.number,1,L.MAX_PAGES) then return nil,'Page number is outside 1–256.' end;out.number=value.number end
     if value.sourcePage~=nil then if not L.Integer(value.sourcePage,0,100000) then return nil,'Invalid original page number.' end;out.sourcePage=value.sourcePage end
-    for _,key in ipairs({'first','last'}) do
+    for _,key in ipairs({'first','last','hasNext'}) do
         if value[key]~=nil and type(value[key])~='boolean' then return nil,'Invalid page boundary evidence.' end
         if value[key]~=nil then out[key]=value[key] end
     end
@@ -514,10 +514,13 @@ function ns.CreateLoreJournal(saved)
         if type(e)~='table' then e=self:Get(e) end
         if not e or e.kind~='writing' then return {status='partial',captured=0,missing={},first=nil,last=nil} end
         local captured,missing,highest=0,{},0
-        for n in pairs(e.pages) do captured=captured+1;if type(n)=='number' then highest=math.max(highest,n) end end
+        for n,page in pairs(e.pages) do
+            captured=captured+1
+            if type(n)=='number' then highest=math.max(highest,n+(page.hasNext and 1 or 0)) end
+        end
         -- Numbered pages establish earlier gaps even before the last page has
         -- been encountered. Never invent pages beyond the known extent.
-        for n=e.firstPage or 1,e.lastPage or highest do if not e.pages[n] then missing[#missing+1]=n end end
+        for n=e.firstPage or 1,math.max(e.lastPage or 0,highest) do if not e.pages[n] then missing[#missing+1]=n end end
         local complete=e.firstPage==1 and e.lastPage~=nil and #missing==0
         local status=e.captureStatus
         if status=='complete' and not complete then status='partial' end
@@ -585,6 +588,7 @@ function ns.CreateLoreJournal(saved)
         for key,page in pairs(source.pages) do
             if not merged.pages[key] then merged.pages[key]=L.Copy(page)
             elseif page.personallyViewed then merged.pages[key].personallyViewed=true end
+            if page.hasNext then merged.pages[key].hasNext=true end
         end
         merged.firstPage=merged.firstPage or source.firstPage;merged.lastPage=merged.lastPage or source.lastPage
         if merged.variantOf and (j:Get(merged.variantOf)==source or j:Get(merged.variantOf)==target) then merged.variantOf=nil end
@@ -724,6 +728,7 @@ function ns.CreateLoreJournal(saved)
             for _,previous in ipairs(s.locations) do self:AddLocation(e.id,previous) end
         elseif not old then e.pages[key]=p
         elseif p.personallyViewed and not old.personallyViewed and old.origin=='captured' then old.personallyViewed=true end
+        if p.hasNext then e.pages[key].hasNext=true end
         if loc then self:AddLocation(e.id,loc) end
         s.locations=sessionLocations
         e.firstPage=first or e.firstPage;e.lastPage=last or e.lastPage

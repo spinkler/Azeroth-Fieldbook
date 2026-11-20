@@ -162,6 +162,127 @@ local function addNameScroller(row,heading)
     row:StopNameScroll()
 end
 
+local function setupSpellLookup(book,journal,message,save)
+    local ui,editor,input=ns.FieldbookUI,book.abilityEditor,book.spellLink
+    local picker=CreateFrame("Frame",nil,editor,"BackdropTemplate")
+    picker:SetSize(480,207)
+    picker:SetPoint("BOTTOMLEFT",input,"TOPLEFT",-4,5)
+    picker:SetFrameStrata("DIALOG")
+    picker:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize=12,insets={left=2,right=2,top=2,bottom=2}})
+    picker:SetBackdropColor(0.07,0.05,0.03,1)
+    picker:EnableMouse(true)
+    picker:Hide()
+    book.spellPicker=picker
+    picker.heading=ui.Label(picker,"",12,-10,405,"GameFontNormal")
+    ui.Close(picker)
+    local matches,page,search,filledName
+    local pageSize=6
+    local function cancel()
+        editor:SetScript("OnUpdate",nil)
+        if search or matches then message("") end
+        search,matches=nil,nil
+        picker:Hide()
+    end
+    local function selectSpell(reference)
+        local spellID,name,err=journal:ResolveSpell(reference)
+        if not spellID then message(err or "Enter a spell name, ID, or link."); return end
+        local link
+        if C_Spell and type(C_Spell.GetSpellLink)=="function" then
+            local ok,value=pcall(C_Spell.GetSpellLink,spellID)
+            if ok and not (issecretvalue and issecretvalue(value)) and type(value)=="string"
+                and tonumber(value:match("|Hspell:(%d+)[:|]"))==spellID then link=value end
+        end
+        input:SetText(link or tostring(spellID))
+        if book.manualName:GetText()=="" or book.manualName:GetText()==filledName then
+            book.manualName:SetText(name)
+            filledName=name
+        end
+        message(name.." (ID "..spellID.."). Confirm this ability to save.")
+        return true
+    end
+    local function showPage(nextPage)
+        page=nextPage
+        local first=(page-1)*pageSize+1
+        local last=math.min(first+pageSize-1,#matches)
+        picker.heading:SetText("Choose a spell  ("..first.."–"..last.." of "..#matches..")")
+        for i,row in ipairs(picker.rows) do
+            local match=matches[first+i-1]
+            row.spellID=match and match.id
+            if match then
+                local rank
+                if C_Spell and type(C_Spell.GetSpellSubtext)=="function" then
+                    local ok,value=pcall(C_Spell.GetSpellSubtext,match.id)
+                    if ok and not (issecretvalue and issecretvalue(value)) and type(value)=="string" and value~="" then rank=value end
+                end
+                row:SetText(match.name..(rank and (" • "..rank) or "").."  (ID "..match.id..")")
+            end
+            row:SetShown(match~=nil)
+        end
+        picker.prev:SetEnabled(first>1)
+        picker.next:SetEnabled(last<#matches)
+        picker:Show()
+    end
+    picker.rows={}
+    for i=1,pageSize do
+        local row=ui.Button(picker,"",10,-30-(i-1)*24,460,function(self)
+            local id=self.spellID
+            cancel()
+            selectSpell(tostring(id))
+        end)
+        row:SetScript("OnEnter",function(self)
+            if self.spellID and GameTooltip then
+                GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+                if pcall(GameTooltip.SetSpellByID,GameTooltip,self.spellID) then GameTooltip:Show() end
+            end
+        end)
+        row:SetScript("OnLeave",function() if GameTooltip then GameTooltip:Hide() end end)
+        picker.rows[i]=row
+    end
+    picker.prev=ui.Button(picker,"Previous matches",10,-176,136,function() showPage(page-1) end)
+    picker.next=ui.Button(picker,"Next matches",334,-176,136,function() showPage(page+1) end)
+    picker.closeButton:SetScript("OnClick",cancel)
+    ui.DismissOnOutsideClick(picker,input)
+    picker:HookScript("OnHide",function() matches=nil end)
+    editor:HookScript("OnHide",cancel)
+    editor:RegisterEvent("PLAYER_REGEN_DISABLED")
+    editor:SetScript("OnEvent",function()
+        if search or matches then cancel();message("Spell linking is available outside combat.") end
+    end)
+    input:HookScript("OnTextChanged",cancel)
+    input:HookScript("OnEscapePressed",cancel)
+    book.manualName:HookScript("OnTextChanged",function() filledName=nil end)
+
+    local function resolve(confirm)
+        cancel()
+        local reference=input:GetText()
+        local err
+        search,err=journal:SearchSpellNames(reference)
+        if err then message(err); return end
+        if not search then
+            if confirm then save() else selectSpell(reference) end
+            return
+        end
+        message("Searching spell names…")
+        editor:SetScript("OnUpdate",function()
+            local found,problem=search()
+            if not found and not problem then return end
+            cancel()
+            if problem then message(problem)
+            elseif #found==0 then message("No readable spell matches. Try a shorter name, an ID, or a spell link.")
+            elseif #found==1 then
+                if selectSpell(tostring(found[1].id)) and confirm then save() end
+            else
+                matches=found
+                showPage(1)
+            end
+        end)
+    end
+    input:SetScript("OnEnterPressed",function(self) self:ClearFocus();resolve(false) end)
+    book.resolveButton=ui.Button(editor,"Resolve",640,-656,92,function() resolve(false) end)
+    book.confirmAbilityButton=ui.Button(editor,"Confirm this ability",740,-656,195,function() resolve(true) end)
+end
+
 function ns.CreateBestiaryBook(journal,shell)
     shell=shell or ns.CreateFieldbookShell({getBrightness=function() return journal:GetBackgroundBrightness() end, getDarkMode=function() return journal:GetDarkMode() end})
     local ui=ns.FieldbookUI
@@ -596,8 +717,17 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.unknownMark:SetShown(unknown)
                 row.skullMark:SetShown(skull)
                 local hasMarker=unknown or skull or reward~=nil
-                if row.text:GetWidth()~=(hasMarker and 184 or 203) then row:StopNameScroll() end
-                row.text:SetWidth(hasMarker and 184 or 203)
+                local faction=journal.entries[data.id].factionAffiliation
+                local hasFaction=faction=="Alliance" or faction=="Horde"
+                row.factionIcon:SetShown(hasFaction)
+                local nameWidth=hasMarker and 184 or 203
+                if hasFaction then
+                    row.factionIcon:SetTexture("Interface\\PVPFrame\\PVP-Currency-"..faction)
+                    row.factionIcon:SetPoint("RIGHT",row,"RIGHT",hasMarker and -24 or -5,0)
+                    nameWidth=nameWidth-19
+                end
+                if row.text:GetWidth()~=nameWidth then row:StopNameScroll() end
+                row.text:SetWidth(nameWidth)
                 -- Native alpha gradients suppress the font's drop shadow.
                 -- The narrower text width already reserves space for markers.
                 row.text:ClearAlphaGradient()
@@ -848,10 +978,16 @@ local ink = { 0.75, 0.8, 0.8 }
         book.abilityScrollBar:SetValue(abilityOffset)
         book.abilityScrollBar:SetShown(maxAbilityOffset > 0)
         book.updatingAbilityScroll = false
-        local abilityHeight=e.confirmed and 344 or 184
-        book.abilityEditor:SetShown(not e.confirmed)
-        book.abilityScrollBar:SetHeight(e.confirmed and 310 or 150)
-        if e.confirmed then
+        local editorOpen=not e.confirmed and not journal:IsAbilityEditorCollapsed()
+        -- Unlocked entries reserve a clickable divider between the list and
+        -- the editor (or the footer when the editor is collapsed).
+        local abilityHeight=e.confirmed and 344 or (editorOpen and 168 or 328)
+        book.abilityEditorToggle:SetShown(not e.confirmed)
+        book.abilityEditorToggle:SetPoint("TOPLEFT",342,-360-abilityHeight)
+        book.abilityEditorToggle.caption:SetText(editorOpen and "Hide ability editor" or "Show ability editor")
+        book.abilityEditor:SetShown(editorOpen)
+        book.abilityScrollBar:SetHeight(abilityHeight-34)
+        if not editorOpen then
             book.manualName:ClearFocus(); book.manualNote:ClearFocus(); book.spellLink:ClearFocus()
             book.effectPicker:Hide()
         end
@@ -919,7 +1055,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 row:ClearAllPoints()
                 row:SetPoint("TOPLEFT",342,-360-abilityY)
                 row:SetHeight(rowHeight-4)
-                if not abilityFull and (e.confirmed or i<=3) and (abilityY+rowHeight<=abilityHeight or i==1) then
+                if not abilityFull and (not editorOpen or i<=3) and (abilityY+rowHeight<=abilityHeight or i==1) then
                     abilityY=abilityY+rowHeight;visibleAbilities=visibleAbilities+1
                 else abilityFull=true;row:Hide() end
                 for _,line in ipairs(row.divider) do line:SetShown(i>1) end
@@ -948,7 +1084,7 @@ local ink = { 0.75, 0.8, 0.8 }
             else row:Hide() end
         end
         book.abilityScrollBar:SetShown(abilityOffset>0 or #names>visibleAbilities)
-        book.abilityCount:SetText(#names == 0 and (e.confirmed and "No abilities recorded." or "No abilities recorded. Add what you experienced below.") or (#names .. " recorded abilities" .. (#names > visibleAbilities and " - scroll to review" or "")))
+        book.abilityCount:SetText(#names == 0 and (editorOpen and "No abilities recorded. Add what you experienced below." or "No abilities recorded.") or (#names .. " recorded abilities" .. (#names > visibleAbilities and " - scroll to review" or "")))
         if #names == 0 then book.abilityCount:SetTextColor(0.55,0.58,0.58)
         else book.abilityCount:SetTextColor(unpack(ink)) end
         local levels = {}
@@ -1333,6 +1469,8 @@ local ink = { 0.75, 0.8, 0.8 }
             row.text:SetWordWrap(false)
             addNameScroller(row)
             row.killReward=createKillReward(row,1)
+            row.factionIcon=row:CreateTexture(nil,"OVERLAY")
+            row.factionIcon:SetSize(16,16)
             row.killReward:SetPoint("RIGHT",row,"RIGHT",-5,0)
             row.unknownMark=row:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
             row.unknownMark:SetPoint("CENTER",row.killReward,"CENTER",0,0)
@@ -1925,7 +2063,11 @@ local ink = { 0.75, 0.8, 0.8 }
                     message("Ability loaded below. Edit its details, then confirm.")
                 else
                     book.spellLink:SetText("")
-                    message("Ability loaded below. Add an optional spell ID, link, or exact name, then confirm.")
+                    message("Ability loaded below. Add an optional spell ID, link, or name, then confirm.")
+                end
+                if journal:IsAbilityEditorCollapsed() then
+                    journal:SetAbilityEditorCollapsed(false)
+                    refresh()
                 end
             end)
             row.accept = CreateFrame("Button",nil,row,"UIPanelCloseButton")
@@ -2010,6 +2152,18 @@ local ink = { 0.75, 0.8, 0.8 }
         local abilityEditor=CreateFrame("Frame",nil,abilityPanel)
         abilityEditor:SetAllPoints(abilityPanel)
         book.abilityEditor=abilityEditor
+        local editorToggle=CreateFrame("Button",nil,abilityPanel)
+        book.abilityEditorToggle=editorToggle
+        editorToggle:SetSize(593,20)
+        ui.EntryDivider(editorToggle,-10,448,{0.52,0.40,0.24})
+        editorToggle.caption=label(editorToggle,"",451,-3,142,"GameFontHighlightSmall")
+        editorToggle.caption:SetJustifyH("RIGHT")
+        editorToggle.caption:SetTextColor(1,0.82,0.14)
+        editorToggle:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight","ADD")
+        editorToggle:SetScript("OnClick",function()
+            journal:SetAbilityEditorCollapsed(not journal:IsAbilityEditorCollapsed())
+            refresh()
+        end)
         label(abilityEditor,"Ability name you experienced",342,-549,251,"GameFontHighlightSmall")
         label(abilityEditor,"Effects |cff999999(optional)|r",608,-549,268,"GameFontHighlightSmall")
         book.manualName=edit(abilityEditor,348,-567,244,100)
@@ -2017,25 +2171,13 @@ local ink = { 0.75, 0.8, 0.8 }
         book.effectButton=button(abilityEditor,"Choose effects",614,-567,321,function() book.effectPicker:SetShown(not book.effectPicker:IsShown()); book.refreshEffectPicker() end)
         label(abilityEditor,"Field note |cff999999(optional)|r",342,-590,559,"GameFontHighlightSmall")
         book.manualNote=edit(abilityEditor,348,-609,587,300)
-        label(abilityEditor,"Optional spell ID, link, or exact name |cff999999(out of combat)|r",342,-637,559,"GameFontHighlightSmall")
+        label(abilityEditor,"Optional spell ID, link, or partial name |cff999999(out of combat)|r",342,-637,559,"GameFontHighlightSmall")
         book.spellLink=edit(abilityEditor,348,-656,284,255)
         if ns.CreateDetectedAbilityHint then
             book.detectedAbility=ns.CreateDetectedAbilityHint(abilityEditor,journal)
             book.detectedAbility:SetPoint("TOPLEFT",342,-684)
         end
-        local function resolveSpellLink()
-            local spellID,spellName,errorMessage=journal:ResolveSpell(book.spellLink:GetText())
-            if errorMessage then message(errorMessage); return end
-            if not spellID then message("No exact readable spell match. Enter an ID or paste a spell link."); return end
-            local ok,link=false,nil
-            if C_Spell and type(C_Spell.GetSpellLink)=="function" then ok,link=pcall(C_Spell.GetSpellLink,spellID) end
-            if ok and not (issecretvalue and issecretvalue(link)) and type(link)=="string" then book.spellLink:SetText(link) else book.spellLink:SetText(tostring(spellID)) end
-            if book.manualName:GetText()=="" then book.manualName:SetText(spellName) end
-            message("Exact match: "..spellName.." (ID "..spellID..").")
-        end
-        book.spellLink:SetScript("OnEnterPressed",function(self) resolveSpellLink(); self:ClearFocus() end)
-        book.resolveButton=button(abilityEditor,"Resolve",640,-656,92,resolveSpellLink)
-        book.confirmAbilityButton=button(abilityEditor,"Confirm this ability",740,-656,195,function()
+        setupSpellLookup(book,journal,message,function()
             local ok,msg=journal:AddManual(selected,book.manualName:GetText(),book.manualNote:GetText(),book.spellLink:GetText(),book.manualEffects)
             message(msg)
             if ok then book.manualName:SetText(""); book.manualNote:SetText(""); book.spellLink:SetText(""); book.manualEffects={}; book.effectButton:SetText("Choose effects"); refresh() end

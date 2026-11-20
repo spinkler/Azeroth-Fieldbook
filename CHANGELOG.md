@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.44.0-beta.3 - 2026-11-20
+
+Beta prerelease covering changes since v0.44.0-beta.2. Live in-game verification of the spell chooser and collapsible editor remains pending.
+
+- The Bestiary ability editor starts open and remembers each character's open or collapsed choice across reloads and logins. Click its divider to collapse it and show more recorded abilities, or reopen it with the current draft intact.
+
+- The Bestiary ability editor searches full or partial localized spell names outside combat. Matching ranks and NPC variants appear in a paged chooser with spell IDs and tooltips.
+
+- Bestiary list rows show the recorded Horde or Alliance crest alongside kill milestones. Blademaster Kaijo can be discovered without an active kill objective.
+
+- Faction quest enemies can be recorded when the native tooltip starts its quest section without a separate level row.
+
+- Bestiary quest verification now checks the text of typed tooltip rows between the NPC name and level, so their row type alone cannot exclude a quest enemy.
+
+- The Bestiary recognises faction quest enemies with multiple readable non-service subtitles when their tooltip confirms a personal kill objective.
+
+- `/fieldbook debug` reports the first failed faction quest check for the current target and mouseover, including unreadable quest IDs and objective text mismatches.
+
+- Lorekeeper's Chronicle remembers when a numbered book page offered Next. The reader and lore tooltip show the following page as missing until it is captured.
+
 ## v0.44.0-beta.2 - 2026-11-18
 
 - Lorekeeper's Chronicle now archives displayed gossip text from recognized world books such as Charge of the Dragonflights when the reader supplies a title without an object GUID.

@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.44.0-beta.2 (Beta)
+# Azeroth Fieldbook 0.44.0-beta.3 (Beta)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -826,7 +826,7 @@ creature types share the **Other** filter.
 Each creature entry can contain:
 
 - Confirmed and pending observed abilities, optional field notes and effect tags.
-- Optional exact spell IDs, hyperlinks or names resolved through the client.
+- Optional spell IDs, hyperlinks or case-insensitive searches by full or partial spell name.
 - Personal damage observations with separate player and creature levels. Equal-level records are recommended; other levels are supported.
 - Observed offensive spell schools, resistances and immunities.
 - Observed disposition, combat style and behavioural traits. A separate Tameable portrait badge records explicit game tooltip information (English clients, when revealed by the game, such as Beast Lore). Missing or unreadable data remains unknown; previous manual marks do not establish this badge.
@@ -940,6 +940,18 @@ Known defenses appear below abilities as compact **Resists: Fire, Frost** and
 **Immune: Fear, Stun** lists, without holding Ctrl. Only recorded school and
 effect marks appear; empty categories, expected immunities and unverified rumours
 are omitted. The main tooltip toggle also controls these lines.
+
+The ability editor starts open and remembers each character's last choice across
+`/reload` and login. Click the thin divider labeled **Hide ability
+editor** to give recorded abilities more room. **Show ability editor** restores
+your draft. Clicking **Edit** on a recorded ability also opens the editor.
+
+In the ability editor, enter a full or partial localized spell name, such as
+`power word: shield`, and press **Enter** or **Resolve** outside combat. The
+Bestiary searches the Forever spell catalog, including spells your character
+has never learned. Exact names appear first. If several spells match, choose
+by name, rank (when available), or ID. Hover a match for its spell tooltip.
+**Confirm this ability** saves the selected spell to the creature.
 
 The **Last detected spells** footer beneath the optional spell ID field keeps
 four numbered cast IDs for each creature, oldest first. A fifth cast replaces

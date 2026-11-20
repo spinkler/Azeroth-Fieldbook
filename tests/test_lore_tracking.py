@@ -103,8 +103,10 @@ class LoreTrackingTests(unittest.TestCase):
         lua.execute('''
             assert(settings.autoArchiveLore and settings.loreOnlyOpenedPages)
             begin();step(2);assert(#requests==0 and pageCount(writing())==1)
+            assert(table.concat(j:WritingSummary(writing()).missing,',')=='2' and writing().lastPage==nil)
             assert(writing().pages[1].personallyViewed and writing().pages[1].method=='displayed')
             turn(2);step(1);assert(#requests==0 and pageCount(writing())==2)
+            assert(table.concat(j:WritingSummary(writing()).missing,',')=='3')
             settings.autoArchiveLore=false;settings.loreOnlyOpenedPages=false
             close();t=ns.CreateLoreTracking(j,settings,adapter);begin(3);step(1)
             assert(not settings.autoArchiveLore and not settings.loreOnlyOpenedPages)

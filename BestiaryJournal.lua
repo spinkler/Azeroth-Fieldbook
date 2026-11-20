@@ -499,10 +499,14 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local entry=self.entries[id]
         return entry and number(entry.factionQuestObjective) and entry.factionQuestObjective or nil
     end
+    -- Kaijo's bounty asks for his banner, so it supplies no monster objective.
+    function journal:IsFactionBountyEnemy(id)
+        return id == 263071
+    end
     function journal:IsFactionAffiliated(id)
         local entry=self.entries[id]
         return entry~=nil and (entry.factionAffiliation=="Alliance" or entry.factionAffiliation=="Horde")
-            and not self:GetFactionQuestObjective(id)
+            and not self:IsFactionBountyEnemy(id) and not self:GetFactionQuestObjective(id)
     end
     function journal:MarkFactionAffiliation(id, faction, questObjective, service)
         if faction~="Alliance" and faction~="Horde" then return end
@@ -1535,13 +1539,15 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         log.text = text; entry.idNotes = log; self:Touch()
         return true
     end
+    local function explicitSpellID(identifier)
+        return tonumber(identifier:match("^(%d+)$")) or tonumber(identifier:match("|Hspell:(%d+)[:|]"))
+    end
     function journal:ResolveSpell(reference)
         if not str(reference) or not reference:match("%S") then return end
         local identifier = reference:match("^%s*(.-)%s*$")
         local combat = read(InCombatLockdown)
         if combat ~= false then return nil, nil, "Spell linking is available outside combat." end
-        local spellID = tonumber(identifier:match("^(%d+)$"))
-            or tonumber(identifier:match("|Hspell:(%d+)[:|]"))
+        local spellID = explicitSpellID(identifier)
         if not number(spellID) and C_Spell then
             spellID=read(C_Spell.GetSpellIDForSpellIdentifier, identifier)
         end
@@ -1557,6 +1563,52 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local name = C_Spell and read(C_Spell.GetSpellName, spellID)
         if not str(name) then return nil, nil, "That spell is not readable/cached. Try again, or save the name without a link." end
         return spellID, name
+    end
+    -- Name lookup by identifier can return only one spell, or none for an
+    -- unlearned ability. Check localized names by ID in small batches while
+    -- the editor is open. Keep only this query's matches in memory.
+    function journal:SearchSpellNames(reference)
+        if not str(reference) then return end
+        local query = reference:match("^%s*(.-)%s*$")
+        if query == "" or explicitSpellID(query) then return end
+        if read(InCombatLockdown) ~= false then return nil, "Spell linking is available outside combat." end
+        if not C_Spell or type(C_Spell.GetSpellName) ~= "function" then return nil, "Spell names are unavailable." end
+        local lower = strlower or string.lower
+        local needle = lower(query)
+        local matches = {}
+        local function consider(id, name)
+            if not str(name) then return end
+            local key = lower(name)
+            if key:find(needle, 1, true) then
+                matches[#matches+1] = {id=id, name=name, key=key}
+            end
+        end
+        -- A direct client match can also cover a spell added after the catalog build.
+        local directID, directName = self:ResolveSpell(query)
+        if directID then consider(directID, directName) end
+        local ranges = ns.BestiarySpellIDRanges:gmatch("(%d+)%-?(%d*)")
+        local id, last = 1, 0
+        return function()
+            if read(InCombatLockdown) ~= false then return nil, "Spell linking is available outside combat." end
+            for i=1,512 do
+                if id > last then
+                    local first, finish = ranges()
+                    if not first then
+                        table.sort(matches, function(a,b)
+                            if a.key == b.key then return a.id < b.id end
+                            if a.key == needle then return true end
+                            if b.key == needle then return false end
+                            return a.key < b.key
+                        end)
+                        return matches
+                    end
+                    id = tonumber(first)
+                    last = tonumber(finish) or id
+                end
+                if id ~= directID then consider(id, read(C_Spell.GetSpellName, id)) end
+                id = id + 1
+            end
+        end
     end
     function journal:ResolveAbility(id, name)
         local entry = self.entries[id]
@@ -1737,6 +1789,12 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         if category == "Unclassified" or category == "Not specified"
             or category == "Totem" or category == "Gas Cloud" then return "Other" end
         return category
+    end
+    function journal:IsAbilityEditorCollapsed()
+        return db.abilityEditorCollapsed == true
+    end
+    function journal:SetAbilityEditorCollapsed(collapsed)
+        db.abilityEditorCollapsed = collapsed == true
     end
     local sortFields={name=true,kills=true,maxLevel=true,minLevel=true,firstEncountered=true}
     function journal:GetListSort()

@@ -35,6 +35,35 @@ def quest_client():
 
 
 class FactionQuestEnemies(unittest.TestCase):
+    def test_kaijo_banner_bounty_without_active_kill_objective(self):
+        lua = quest_client()
+        lua.execute("""
+            related=false
+            units.target.guid='Creature-0-1-2-3-263071-kaijo'
+            fire('PLAYER_TARGET_CHANGED')
+            local entry=assert(journal.entries[263071])
+            assert(entry.factionAffiliation=='Horde' and not entry.factionQuestObjective)
+            assert(not journal:IsFactionAffiliated(263071) and #journal:List()==1)
+        """)
+
+    def test_debug_reports_first_failure_only_for_rejected_unit(self):
+        lua = quest_client()
+        lua.execute("""
+            units.mouseover=units.target
+            C_QuestLog.UnitIsRelatedToActiveQuest=function(unit) return unit~='mouseover' end
+            lines[4].leftText='different progress text'
+            SlashCmdList.AZEROTHFIELDBOOK('debug')
+            local report=table.concat(messages,' ')
+            assert(report:find('target first failed quest check: Tooltip and quest-log objective text differ.',1,true))
+            assert(report:find('mouseover first failed quest check: UnitIsRelatedToActiveQuest: false',1,true))
+            messages={}
+            table.insert(lines,{type=8,leftText=objectiveText})
+            SlashCmdList.AZEROTHFIELDBOOK('debug')
+            report=table.concat(messages,' ')
+            assert(report:find('target: eligible NPC',1,true))
+            assert(not report:find('target first failed quest check',1,true))
+        """)
+
     def test_nonservice_titles_are_allowed_for_verified_kill_targets(self):
         for title in ("<Rog'mar Clan>", '<Chief Poacher>', '<Master of the Hunt>',
                       "<Vendor's Bane>", 'Clan Chieftain',
@@ -163,8 +192,7 @@ class FactionQuestEnemies(unittest.TestCase):
     def test_titled_enemies_still_need_objectives_and_a_readable_supported_title(self):
         for setup in ('related=false', 'inLog=false', "objectives[1].type='item'",
                       'lines[2].leftText=secret', 'lines[2].leftText=123',
-                      'locale="frFR"', 'locale=secret', 'GetLocale=nil',
-                      "table.insert(lines,3,{type=0,leftText='<Second Title>'})"):
+                      'locale="frFR"', 'locale=secret', 'GetLocale=nil'):
             with self.subTest(setup=setup):
                 lua = quest_client()
                 lua.execute('''
@@ -183,12 +211,44 @@ class FactionQuestEnemies(unittest.TestCase):
             'lines[3].id=999',
             'table.insert(lines,4,{type=18,guid="Player-1-party"})',
             'lines[3]=lines[4];lines[4]=nil',
-            'lines[2]={type=0,leftText=""}',  # No native level/header boundary.
         ):
             with self.subTest(setup=setup):
                 lua = quest_client()
                 lua.execute(setup)
                 lua.execute("fire('PLAYER_TARGET_CHANGED');assert(not journal.entries[42])")
+
+    def test_quest_title_can_end_header_without_level(self):
+        for subtitle, active, eligible in (
+            ('Trainee', True, True), ('Mage Trainer', True, False),
+            ('Trainee', False, False),
+        ):
+            with self.subTest(subtitle=subtitle, active=active):
+                lua = quest_client()
+                lua.globals().subtitle = subtitle
+                lua.globals().inLog = active
+                lua.execute("""
+                    lines[2]={type=48,leftText=subtitle}
+                    fire('PLAYER_TARGET_CHANGED')
+                """)
+                self.assertEqual(lua.eval("journal.entries[42] ~= nil"), eligible)
+
+    def test_multiple_subtitles_still_check_each_role_and_require_kill_proof(self):
+        for last, objective_type, eligible in (
+            ('Trainee', 'monster', True), ('Mage Trainer', 'monster', False),
+            ('Trainee', 'item', False),
+        ):
+            with self.subTest(last=last, objective_type=objective_type):
+                lua = quest_client()
+                lua.globals().last = last
+                lua.globals().objectiveType = objective_type
+                lua.execute("""
+                    table.insert(lines,2,{type=0,leftText='<Clan Member>'})
+                    table.insert(lines,3,{type=2,leftText='<Recruit>'})
+                    table.insert(lines,4,{type=Enum.TooltipDataLineType.UnitType,leftText=last})
+                    objectives[1].type=objectiveType
+                    fire('PLAYER_TARGET_CHANGED')
+                """)
+                self.assertEqual(lua.eval("journal.entries[42] ~= nil"), eligible)
 
     def test_restricted_missing_and_failing_data_never_grant_an_exception(self):
         for setup in (

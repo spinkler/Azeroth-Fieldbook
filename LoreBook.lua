@@ -125,14 +125,11 @@ function ns.CreateLoreBook(journal,tracking,shell,references)
     function c:Sources(e)
         local rows={{id="overview",label="Entry & personal notes",overview=true}}
         local keys={};for key in pairs(e.pages or {}) do keys[#keys+1]=key end
+        for _,number in ipairs(journal:WritingSummary(e).missing) do keys[#keys+1]=number end
         table.sort(keys,function(a,b) if type(a)==type(b) then return a<b end;return type(a)=="number" end)
-        local seen={}
-        if e.firstPage and e.lastPage then for n=e.firstPage,e.lastPage do
-            seen[n]=true;rows[#rows+1]={id="page:"..n,label="Page "..n..(not e.pages[n] and " — missing" or ""),page=e.pages[n],missing=not e.pages[n],number=n}
-        end end
-        for _,key in ipairs(keys) do if not seen[key] then
-            rows[#rows+1]={id="page:"..key,label=type(key)=="number" and "Page "..key or "Page order unknown",page=e.pages[key],number=type(key)=="number" and key}
-        end end
+        for _,key in ipairs(keys) do
+            rows[#rows+1]={id="page:"..key,label=type(key)=="number" and ("Page "..key..(not e.pages[key] and " — missing" or "")) or "Page order unknown",page=e.pages[key],missing=not e.pages[key],number=type(key)=="number" and key}
+        end
         local function passage(p,id,label,report)
             rows[#rows+1]={id=id,label=p.translation and L.TranslationLabel(p.translation) or label,page=p,report=report}
             if p.translation then rows[#rows+1]={id=id..':original',label='Original for '..L.TranslationLabel(p.translation),translationOriginal=p.translation,report=report} end

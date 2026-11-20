@@ -294,7 +294,8 @@ function ns.CreateLoreTracking(journal,settings,adapter)
             locale=v.locale or "unknown",identity=v.identity,location=s.location,method=method,
             firstPage=n==1 and 1 or nil,lastPage=atEnd and n or nil}
         local e,err,notice=journal:CapturePage(context,{number=n,sourcePage=v.page,raw=v.raw,method=method,
-            personallyViewed=method~="automatic",first=n==1,last=atEnd and n~=nil})
+            personallyViewed=method~="automatic",first=n==1,last=atEnd and n~=nil,
+            hasNext=v.nextKnown and v.hasNext or nil})
         if not e then finish(s,"Partial archive: "..(type(err)=="string" and err or "the page could not be preserved."),"partial");return end
         s.entryID=e.id;s.currentPage=v.page;s.consolidationNotice=notice or s.consolidationNotice
         return e

@@ -26,6 +26,7 @@ db = {bestiary={creatures={[42]={spells={[123]={name='Test Trap'}},names={}}},en
 function check(v,msg) assert(v,msg) end
 ''')
 root = Path(__file__).resolve().parents[1]
+lua.execute(root.joinpath('BestiarySpellIDs.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(root.joinpath('BestiaryJournal.lua').read_text(), 'AzerothFieldbook', lua.globals().ns)
 lua.execute(r'''
 journal = ns.CreateBestiaryJournal(db,identify)
@@ -492,6 +493,70 @@ local savedLock=journal.entries[42].confirmed
 journal:SetEntryConfirmed(42,false)
 journal.entries[42].abilities={['Observed Counterspell']={state='pending',origin='Automatic observation',spellID=2139}}
 controller:Refresh()
+do
+    local book,original=abilityBook,C_Spell
+    local picker,input,editor=book.spellPicker,book.spellLink,book.abilityEditor
+    local names={[17]='Power Word: Shield',[592]='Power Word: Shield',[600]='Power Word: Shield',
+        [3747]='Power Word: Shield',[6065]='Power Word: Shield',[6066]='Power Word: Shield',
+        [1226566]='Power Word: Shield',[1236154]='Greater Power Word: Shield'}
+    C_Spell={
+        GetSpellIDForSpellIdentifier=function(q) if q=='Power Word: Shield' then return 17 end end,
+        GetSpellName=function(id)
+            if id==5 then return secret elseif id==7 then error('unreadable') end
+            return names[id]
+        end,
+        GetSpellSubtext=function(id) if id==17 then return 'Rank 1' else return secret end end
+    }
+    local function finish()
+        for i=1,100 do
+            if not editor.scripts.OnUpdate then return end
+            editor.scripts.OnUpdate(editor)
+        end
+        error('spell search did not finish')
+    end
+    input:SetText('  power word: shield  ')
+    input.scripts.OnEnterPressed(input)
+    check(editor.scripts.OnUpdate and not picker:IsShown(),'name search runs in batches')
+    finish()
+    check(picker:IsShown() and picker.rows[1].text:find('Rank 1',1,true),'unlearned exact names show ranks')
+    check(picker.heading.text:find('of 8',1,true),'all readable variants available')
+    picker.next.scripts.OnClick()
+    check(picker.rows[1].spellID==1226566 and picker.rows[2].spellID==1236154,'exact before substring, high IDs included')
+    picker.rows[1].scripts.OnClick(picker.rows[1])
+    check(not picker:IsShown() and input:GetText()=='1226566' and book.manualName:GetText()==names[17],'select fills chosen ID')
+    check(not journal.entries[42].abilities[names[17]],'choosing waits for confirmation')
+    book.manualNote:SetText('Observed shield')
+    book.confirmAbilityButton.scripts.OnClick()
+    local saved=journal.entries[42].abilities[names[17]]
+    check(saved.spellID==1226566 and saved.note=='Observed shield','confirm saves selected variant')
+    input:SetText('Power Word: Shield')
+    book.confirmAbilityButton.scripts.OnClick()
+    finish()
+    check(picker:IsShown() and picker.heading.text:find('of 8',1,true) and saved==journal.entries[42].abilities[names[17]],
+        'direct client hit is deduplicated and confirm cannot bypass ambiguity')
+    input:SetText('GREATER POWER')
+    check(not picker:IsShown(),'changing query closes choices')
+    book.resolveButton.scripts.OnClick()
+    finish()
+    check(input:GetText()=='1236154','unique partial match fills immediately')
+    input:SetText('%[]')
+    book.resolveButton.scripts.OnClick()
+    finish()
+    check(book.message.text:find('No readable spell matches',1,true),'no-match search treats pattern characters literally')
+    input:SetText('shield')
+    book.resolveButton.scripts.OnClick()
+    input:SetText('changed during search')
+    check(not editor.scripts.OnUpdate and not picker:IsShown(),'stale search discarded')
+    book.resolveButton.scripts.OnClick()
+    combat=true
+    finish()
+    check(not picker:IsShown() and book.message.text:find('outside combat',1,true),'combat interrupts search')
+    combat=false
+    input:SetText('')
+    book.manualName:SetText('')
+    journal.entries[42].abilities[names[17]]=nil
+    C_Spell=original
+end
 local resolvedRow=abilityBook.abilities[1]
 resolvedRow.resolve.scripts.OnClick()
 check(resolvedRow.name=='Counterspell' and resolvedRow.text.text=='Counterspell','row Resolve saves canonical name and removes pending label: '..tostring(abilityBook.message.text))
@@ -524,6 +589,37 @@ controller:Refresh()
 check(not abilityBook.abilityScrollBar:IsShown(),'three abilities fit without scrollbar')
 journal.entries[42].abilities['Ability 4']={state='confirmed',spellID=4}; controller:Refresh()
 check(abilityBook.abilityScrollBar:IsShown(),'fourth ability enables scrollbar')
+do
+    local book,toggle=abilityBook,abilityBook.abilityEditorToggle
+    local function savedEditorCollapsed()
+        -- Read the character preference using a fresh journal store.
+        return ns.CreateBestiaryJournal(db,identify,{}):IsAbilityEditorCollapsed()
+    end
+    check(book.abilityEditor:IsShown() and toggle:IsShown(),'unlocked editor starts open')
+    local compactHeight=book.abilityScrollBar:GetHeight()
+    book.manualName:SetText('Draft ability');book.manualNote:SetText('Draft note')
+    book.spellLink:SetText('shield');book.manualEffects.Shield=true
+    book.resolveButton.scripts.OnClick()
+    book.effectPicker:Show()
+    toggle.scripts.OnClick()
+    controller:Refresh()
+    check(toggle:IsShown() and toggle.caption:GetText()=='Show ability editor' and not book.abilityEditor:IsShown(),'divider stays available after collapse')
+    check(book.abilities[4]:IsShown() and not book.abilityScrollBar:IsShown() and book.abilityScrollBar:GetHeight()>compactHeight,'collapse gives the list more room')
+    check(not book.effectPicker:IsShown() and not book.abilityEditor.scripts.OnUpdate,'collapse dismisses editor popups and cancels pending spell search')
+    journal:SetEntryConfirmed(42,true);controller:Refresh()
+    check(not toggle:IsShown(),'locked entries hide the divider')
+    journal:SetEntryConfirmed(42,false);controller:Refresh()
+    check(toggle:IsShown() and not book.abilityEditor:IsShown(),'unlock restores the collapsed preference')
+    check(savedEditorCollapsed(),'collapsed choice survives reload')
+    toggle.scripts.OnClick()
+    check(book.abilityEditor:IsShown() and book.abilityScrollBar:GetHeight()==compactHeight,'divider reopens editor')
+    check(not savedEditorCollapsed(),'reopened choice survives reload')
+    check(book.manualName:GetText()=='Draft ability' and book.manualNote:GetText()=='Draft note' and book.spellLink:GetText()=='shield' and book.manualEffects.Shield,'draft survives collapse and reopen')
+    toggle.scripts.OnClick()
+    book.abilities[4].link.scripts.OnClick()
+    check(book.abilityEditor:IsShown() and book.manualName:GetText()=='Ability 4','Edit opens the correct ability even when its row no longer fits')
+    check(not savedEditorCollapsed(),'opening via Edit also survives reload')
+end
 journal:SetEntryConfirmed(42,true);controller:Refresh()
 check(not abilityBook.abilityEditor:IsShown() and abilityBook.abilities[4]:IsShown(),'lock replaces the editor with additional abilities')
 journal:SetEntryConfirmed(42,false);controller:Refresh()

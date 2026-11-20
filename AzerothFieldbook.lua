@@ -149,72 +149,98 @@ end
 -- native tooltip row matching this character's active kill objective instead.
 -- A subtitle can name a quest enemy's rank or clan; exclude service roles,
 -- rather than every title. Explicit service evidence overrides saved eligibility.
-local function factionQuestObjective(unit, guid, knownQuest)
+local function factionQuestObjective(unit, guid, knownQuest, trace)
+    local function failed(reason)
+        if trace and not trace.reason then trace.reason = reason end
+    end
     local ok, questID, service = pcall(function()
         if type(UnitIsCivilian) == "function" then
-            if readTrue(UnitIsCivilian, unit) then return nil, true end
-            if not booleanCheck("UnitIsCivilian", UnitIsCivilian, false, unit) then return end
+            if readTrue(UnitIsCivilian, unit) then failed("UnitIsCivilian returned true."); return nil, true end
+            local valid, reason = booleanCheck("UnitIsCivilian", UnitIsCivilian, false, unit)
+            if not valid then return failed(reason) end
         end
-        if not knownQuest and not readTrue(C_QuestLog and C_QuestLog.UnitIsRelatedToActiveQuest, unit) then return end
+        if not knownQuest then
+            local related, reason = booleanCheck("UnitIsRelatedToActiveQuest", C_QuestLog and C_QuestLog.UnitIsRelatedToActiveQuest, true, unit)
+            if not related then return failed(reason) end
+        end
         local types = Enum and Enum.TooltipDataLineType
-        if not types or not types.UnitName or not types.UnitLevel
-            or not C_TooltipInfo or type(C_TooltipInfo.GetUnit) ~= "function" then return end
+        if not types or not types.UnitName then return failed("Tooltip unit name type unavailable.") end
+        if not C_TooltipInfo or type(C_TooltipInfo.GetUnit) ~= "function" then return failed("GetUnit tooltip API unavailable.") end
+        if trace then trace.stage = "reading the unit tooltip" end
         local data = C_TooltipInfo.GetUnit(unit)
-        if not publicTable(data) or not publicTable(data.lines) then return end
-        if not public(data.guid) or (data.guid ~= nil and data.guid ~= guid) then return end
-        local afterName, afterLevel, title
+        if not publicTable(data) or not publicTable(data.lines) then return failed("Tooltip lines unavailable or restricted.") end
+        if not public(data.guid) or (data.guid ~= nil and data.guid ~= guid) then return failed("Tooltip GUID restricted or mismatched.") end
+        local afterName, headerEnded
         for index, line in ipairs(data.lines) do
-            if index > 128 or not publicTable(line) or not public(line.type) then return end
+            if index > 128 then return failed("Tooltip exceeded 128 lines.") end
+            if not publicTable(line) or not public(line.type) then return failed("Tooltip row or type unreadable.") end
             local kind, text = line.type, line.leftText
             if kind == types.UnitName and not afterName then afterName = true
-            elseif kind == types.UnitLevel then afterLevel = afterName
-            elseif afterName and not afterLevel and kind ~= types.Blank then
+            elseif afterName and kind ~= nil and (kind == types.UnitLevel or kind == types.QuestTitle) then
+                -- Forever can start the quest section without a typed level row.
+                headerEnded = true
+            elseif afterName and not headerEnded and kind ~= types.Blank then
                 -- An unreadable subtitle cannot prove the absence of a role.
-                if not public(text) then return end
+                if not public(text) then return failed("Restricted NPC subtitle.") end
                 if text ~= nil and text ~= "" then
-                    if kind ~= types.None and kind ~= nil and kind ~= types.UnitName then return end
+                    -- Forever can supply typed rows between name and level.
+                    -- Check their text for service roles regardless of row type.
                     local role = factionServiceTitle(text)
-                    if role == true then return nil, true end
-                    if role == nil or title then return end
-                    title = true
+                    if role == true then failed("Service NPC subtitle."); return nil, true end
+                    if role == nil then return failed("Cannot classify NPC subtitle text for the current locale.") end
                 end
             end
             local label = npcLabel(text)
-            if label and label == npcLabel(PVP_RANK_CIVILIAN) then return nil, true end
+            if label and label == npcLabel(PVP_RANK_CIVILIAN) then failed("Civilian tooltip label."); return nil, true end
         end
-        if not afterLevel then return end
+        if not afterName then return failed("Missing tooltip unit name row.") end
+        if not headerEnded then return failed("Missing level or quest title row after unit name.") end
         if knownQuest then return knownQuest end
         if not types.QuestTitle or not types.QuestObjective or not C_QuestLog
             or type(C_QuestLog.GetLogIndexForQuestID) ~= "function"
-            or type(C_QuestLog.GetQuestObjectives) ~= "function" then return end
+            or type(C_QuestLog.GetQuestObjectives) ~= "function" then return failed("Quest tooltip types or quest-log APIs unavailable.") end
         local ownQuest, matchedQuest
         for _, line in ipairs(data.lines) do
             local kind, text = line.type, line.leftText
             if kind == types.QuestTitle then
                 ownQuest = nil
-                if positiveID(line.id) and positiveID(C_QuestLog.GetLogIndexForQuestID(line.id)) then ownQuest = line.id end
+                if trace then trace.stage = "looking up the tooltip quest ID" end
+                if not positiveID(line.id) then failed("Quest title has no readable positive quest ID.")
+                elseif positiveID(C_QuestLog.GetLogIndexForQuestID(line.id)) then ownQuest = line.id
+                else failed("Tooltip quest ID has no readable active quest-log index.") end
             elseif kind == types.QuestPlayer then
                 ownQuest = nil -- Party members' objectives never grant personal eligibility.
-            elseif kind == types.QuestObjective and ownQuest and publicString(text) then
+            elseif kind == types.QuestObjective and not ownQuest then
+                failed("Objective row has no active personal quest title.")
+            elseif kind == types.QuestObjective and not publicString(text) then
+                failed("Objective row text unreadable.")
+            elseif kind == types.QuestObjective then
+                if trace then trace.stage = "reading quest-log objectives" end
                 local objectives = C_QuestLog.GetQuestObjectives(ownQuest)
                 if publicTable(objectives) then
                     for objectiveIndex, objective in ipairs(objectives) do
-                        if objectiveIndex > 64 then return end
-                        if publicTable(objective) and public(objective.type) and objective.type == "monster"
-                            and public(objective.finished) and objective.finished == false
-                            and publicString(objective.text) and objective.text == text then matchedQuest = ownQuest end
+                        if objectiveIndex > 64 then return failed("Quest exceeded 64 objectives.") end
+                        if not publicTable(objective) or not public(objective.type) then failed("Quest-log objective or type unreadable.")
+                        elseif objective.type ~= "monster" then failed("Quest-log objective is not a monster objective.")
+                        elseif not public(objective.finished) or objective.finished ~= false then failed("Objective completion is not readable as false.")
+                        elseif not publicString(objective.text) then failed("Quest-log objective text unreadable.")
+                        elseif objective.text ~= text then failed("Tooltip and quest-log objective text differ.")
+                        else matchedQuest = ownQuest end
                     end
-                end
+                    if trace and #objectives == 0 then failed("Quest log returned no objectives.") end
+                else failed("Quest-log objective list unavailable or restricted.") end
             end
         end
+        if not matchedQuest then failed(ownQuest and "Missing personal quest objective row." or "Missing active personal quest title.") end
         return matchedQuest
     end)
+    if not ok and trace then failed("API error while " .. (trace.stage or "checking NPC quest eligibility") .. ".") end
     if ok and service then return nil, true end
     -- Preserve earlier personal proof when combat restrictions hide new data.
     return knownQuest or (ok and positiveID(questID) and questID or nil)
 end
 
-local function watchedEnemy(unit, explicit, sourceGUID)
+local function watchedEnemy(unit, explicit, sourceGUID, trace)
     if not publicString(unit) then return nil, "Unit token unavailable/restricted." end
     -- Effect sources and manual portrait snapshots supply an exact, public GUID.
     -- Keep ordinary target/mouseover discovery limits unchanged.
@@ -253,12 +279,14 @@ local function watchedEnemy(unit, explicit, sourceGUID)
         if success and public(faction) and (faction == "Alliance" or faction == "Horde") then
             affiliation = faction
             local service
-            questObjective, service = factionQuestObjective(unit, identityGUID, journal and journal:GetFactionQuestObjective(id))
+            questObjective, service = factionQuestObjective(unit, identityGUID, journal and journal:GetFactionQuestObjective(id), trace)
             local same, guid = pcall(UnitGUID, unit)
             if not same or not publicString(guid) or guid ~= identityGUID then return nil, "Faction NPC identity changed/unavailable." end
             if journal then journal:MarkFactionAffiliation(id, faction, questObjective, service) end
             if service then return nil, "Faction civilian/service NPC excluded." end
-            if not questObjective then return nil, "Alliance/Horde-affiliated NPC excluded; no verified kill objective." end
+            if not questObjective and not (journal and journal:IsFactionBountyEnemy(id)) then
+                return nil, "Alliance/Horde-affiliated NPC excluded; no verified kill objective."
+            end
         end
     end
     if effectSource then
@@ -1143,8 +1171,10 @@ SlashCmdList.AZEROTHFIELDBOOK = function(message)
             say("Last tooltip: " .. tooltipStatus)
             if encounters then say("Encounter learning: " .. encounters.status .. " (/fieldbook encounters for details)") end
             for _, unit in ipairs({ "target", "mouseover" }) do
-                local id, reason = watchedEnemy(unit)
+                local trace = {}
+                local id, reason = watchedEnemy(unit, nil, nil, trace)
                 say(unit .. ": " .. (id and "eligible NPC" or reason))
+                if not id and trace.reason then say(unit .. " first failed quest check: " .. trace.reason) end
             end
             local keys = {}
             for key in pairs(probes) do keys[#keys + 1] = key end
