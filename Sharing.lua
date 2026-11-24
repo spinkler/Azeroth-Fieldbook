@@ -6,6 +6,7 @@ local PREFLIGHT_SECONDS = 20
 -- Schema 1 keeps paid retries intact; schema 2 carries free, locked Beast Lore.
 local PROTOCOL = "4"
 local MAX_INCOMING, MAX_RECEIPTS, CHUNK = 3, 512, 180
+local COMPARE_RATE, MIN_INTERVAL = 800, 0.1
 local MAX_CONTACTS, MAX_RECENT, MAX_HISTORY = 50, 20, 100
 -- Optional bounded decline reasons. Empty replies from older builds still work;
 -- never display arbitrary peer-supplied text as an error message.
@@ -64,6 +65,7 @@ function ns.CreateSharing(journal, env)
     local preflightDeadline
     local nextSend, nextHello, helloWindow, helloCount = 0, {}, 0, 0
     local receiveWindow, receiveCount = 0, 0
+    local lastPrune
     local function notify(reason) if changed then changed(reason) end end
     local function directory()
         store.contacts=store.contacts or {}
@@ -100,11 +102,37 @@ function ns.CreateSharing(journal, env)
             if queue[i].id==id and schema.SameCharacter(queue[i].target,target) then table.remove(queue,i) end
         end
     end
+    local function packetSession(kind,id,peer,body)
+        local s=engine.comparison and engine.comparison:FastSession(peer)
+        if not s or not id then return end
+        if kind=="B" then
+            if id==s.id then return s end
+        elseif s.stage=="exchanging" then
+            if kind=="J" then
+                if body:match("^([%d%-]+)~")==s.id then return s end
+            elseif kind~="H" then
+                local tx=store.outgoing
+                if id==s.inID or (tx and id==tx.id and tx.comparison==s.id) then return s end
+            end
+        end
+    end
     local function send(kind,id,target,body,version)
         local text=(version or PROTOCOL) .. "~" .. kind .. "~" .. id .. (body and ("~" .. body) or "")
         if #queue>=64 or #text>240 then return false end
-        queue[#queue+1]={text=text,id=id,target=target,attempts=0}
+        -- A full Lore report can occupy 46 send slots. Let replies for the
+        -- opposite direction meet their deadlines while those chunks drain.
+        local at=#queue+1
+        if kind~="O" then
+            for i,packet in ipairs(queue) do
+                if packet.kind=="O" then at=i;break end
+            end
+        end
+        table.insert(queue,at,{kind=kind,text=text,id=id,target=target,attempts=0,session=packetSession(kind,id,target,body)})
         return true
+    end
+    local function newID(suffix)
+        store.sequence=store.sequence+1
+        return env.now().."-"..store.sequence.."-"..(env.nonce and env.nonce() or math.random(100000,999999))..(suffix or "")
     end
     local function reject(id,sender,reason,detail)
         send("D",id,sender,reason)
@@ -159,6 +187,8 @@ function ns.CreateSharing(journal, env)
     end
     local function prune()
         local now=env.now()
+        if now==lastPrune then return end
+        lastPrune=now
         for k,receipt in pairs(store.receipts) do
             if now-receipt.received>2*DAY then store.receipts[k]=nil end
         end
@@ -179,9 +209,13 @@ function ns.CreateSharing(journal, env)
         if not tx.spent then tx.stage="offering"; preflightDeadline=nil end
         tx.deadline=env.now()+OFFER_SECONDS
         tx.message="Waiting for " .. tx.recipient .. " to accept or decline."
-        local count=math.ceil(#tx.payload/CHUNK)
+        -- Keep the original report in SavedVariables for history and paid retries.
+        local payload=tx.payload
+        local encoding=tx.comparison and not tx.spent and engine.comparison and engine.comparison:ReportEncoding(tx.comparison,tx.recipient)
+        if encoding then payload=ns.ComparisonCodec.Pack(encoding,payload,CHUNK) end
+        local count=math.ceil(#payload/CHUNK)
         for i=1,count do
-            if not send("O",tx.id,tx.recipient,i .. "~" .. count .. "~" .. tx.payload:sub((i-1)*CHUNK+1,i*CHUNK)) then
+            if not send("O",tx.id,tx.recipient,i .. "~" .. count .. "~" .. payload:sub((i-1)*CHUNK+1,i*CHUNK)) then
                 if tx.spent then unknown(tx,"Send queue full.") else finish(tx,"failed","Send queue full; no knowledge spent.") end
                 return
             end
@@ -310,19 +344,20 @@ function ns.CreateSharing(journal, env)
         table.sort(list,function(a,b) return a.id<b.id end)
         return list
     end
-    function engine:Start(captured, recipient, claims)
+    function engine:Start(captured, recipient, claims, batch)
         local ready,err=self:Available()
         if not ready then return nil,err or "Addon messaging is unavailable." end
         local blocked,reason=env.blocked()
         if blocked then return nil,reason or "Share outside combat and messaging restrictions." end
         if active(store.outgoing) then return nil,"An outgoing report is already active. Use its status, Cancel or Retry." end
+        local session=self.comparison and self.comparison.session
+        if not batch and session and session.stage=="exchanging" then return nil,"A Bestiary exchange is in progress." end
         recipient,err=self:ValidateRecipient(recipient)
         if not recipient then return nil,err end
         if type(captured)~="table" then return nil,"Select a creature first." end
         local value={}
         for k,v in pairs(captured) do value[k]=v end
-        store.sequence=store.sequence+1
-        local id=env.now() .. "-" .. store.sequence .. "-" .. (env.nonce and env.nonce() or math.random(100000,999999))
+        local id=newID(batch and (batch.host and "1" or "2"))
         value.transaction,value.created,value.recipient=id,env.now(),recipient
         value.rumours=claims or {}
         local payload,err=schema.Encode(value)
@@ -331,13 +366,15 @@ function ns.CreateSharing(journal, env)
         local cost=value.beastLore and 0 or schema.Cost(value.rumours,multiplier)
         if not journal:ReserveShare(id,cost) then return nil,"Insufficient available knowledge." end
         local tx={id=id,recipient=recipient,payload=payload,cost=cost,basicCost=value.beastLore and 0 or 1,
+            comparison=batch and batch.id,costLimit=batch and batch.limit,
             basicDiscount=value.beastLore and 0 or cost-schema.Cost(value.rumours,multiplier,0),created=env.now(),
             stage="preflight",deadline=env.now()+PREFLIGHT_SECONDS,retries=0,
             message="Checking recipient compatibility (up to " .. PREFLIGHT_SECONDS .. " seconds); knowledge reserved."}
         store.outgoing=tx
         recordOutgoing(tx,"offered",cost .. " knowledge reserved pending acceptance.")
         preflightDeadline=clock()+PREFLIGHT_SECONDS
-        if not send("H",id,recipient,env.addonVersion) then finish(tx,"failed","Send queue full; no knowledge spent."); return nil,tx.message end
+        local hello=batch and (batch.id.."~"..env.addonVersion) or env.addonVersion
+        if not send(batch and "J" or "H",id,recipient,hello) then finish(tx,"failed","Send queue full; no knowledge spent."); return nil,tx.message end
         notify()
         return tx
     end
@@ -403,8 +440,18 @@ function ns.CreateSharing(journal, env)
         notify()
         return true
     end
+    function engine:ClearComparisonOffers(sessionID,peer)
+        for k,item in pairs(store.incoming) do
+            if item.comparison==sessionID and schema.SameCharacter(item.sender,peer) and item.state~="accepted" then
+                store.incoming[k]=nil
+                purge(item.id,item.sender)
+                reject(item.id,item.sender,"declined")
+            end
+        end
+    end
     function engine:ApplyIncomingOfferSetting()
         if not incomingBlocked() then return end
+        if self.comparison then self.comparison:Close("blocked") end
         for k,item in pairs(store.incoming) do
             -- Accepted reports may already have cost the sender points. Allow
             -- their commit/receipt exchange to finish, including paid retries.
@@ -426,16 +473,30 @@ function ns.CreateSharing(journal, env)
         sender=schema.Character(sender)
         if not sender or schema.SameCharacter(sender,env.character) then return end
         local now=env.now()
-        if now-receiveWindow>=60 then receiveWindow,receiveCount=now,0 end
-        receiveCount=receiveCount+1
-        if receiveCount>180 then return end
         local version,kind,id,body=message:match("^(%d+)~([A-Z])~([%d%-]+)~?(.*)$")
+        local fast=version==PROTOCOL and packetSession(kind,id,sender,body)
+        local elapsed=clock()
+        if fast then
+            -- A consenting peer can send ten small replies/sec. Keep that traffic
+            -- in its own bounded minute window, clear of unrelated whispers.
+            if not fast.receiveWindow or elapsed-fast.receiveWindow>=60 then fast.receiveWindow,fast.receiveCount=elapsed,0 end
+            fast.receiveCount=fast.receiveCount+1
+            if fast.receiveCount>640 then return end
+        else
+            if elapsed-receiveWindow>=60 then receiveWindow,receiveCount=elapsed,0 end
+            receiveCount=receiveCount+1
+            if receiveCount>180 then return end
+        end
         if not version or #version>2 or not schema.Transaction(id) then return end
+        if kind=="B" then
+            if self.comparison and version==PROTOCOL then self.comparison:Receive(id,sender,body) end
+            return
+        end
         if kind=="D" then
             if body~="" and not rejectionReasons[body] then return end
         elseif kind=="A" then
             if body~="0" and body~="1" then return end
-        elseif kind~="O" and kind~="H" and kind~="R" and kind~="I" and body~="" then return end
+        elseif kind~="O" and kind~="H" and kind~="J" and kind~="R" and kind~="I" and body~="" then return end
         -- A reply arriving after the deadline cannot revive an expired offer,
         -- even if it arrives before the next periodic update.
         expirePreflight()
@@ -443,8 +504,13 @@ function ns.CreateSharing(journal, env)
         local k=key(sender,id)
         local item,receipt,tx=store.incoming[k],store.receipts[k],store.outgoing
         local expected=active(tx) and tx.id==id and schema.SameCharacter(sender,tx.recipient)
-        if kind=="H" then
-            if not item then
+        if kind=="H" or kind=="J" then
+            local sessionID
+            if kind=="J" then
+                sessionID,body=body:match("^([%d%-]+)~(.+)$")
+                if version~=PROTOCOL or body~=env.addonVersion or not self.comparison or incomingBlocked()
+                    or not self.comparison:BindOffer(sessionID,sender,id) then return end
+            elseif not item then
                 if now-helloWindow>=60 then helloWindow,helloCount=now,0; nextHello={} end
                 if helloCount>=8 or now<(nextHello[sender:lower()] or 0) then return end
                 helloCount=helloCount+1; nextHello[sender:lower()]=now+15
@@ -463,7 +529,7 @@ function ns.CreateSharing(journal, env)
                 return
             end
             if size(store.incoming)>=MAX_INCOMING then reject(id,sender,"busy"); return end
-            store.incoming[k]={id=id,sender=sender,addonVersion=body,state="receiving",expires=now+OFFER_SECONDS,chunks={}}
+            store.incoming[k]={id=id,sender=sender,addonVersion=body,comparison=sessionID,state="receiving",expires=now+OFFER_SECONDS,chunks={}}
             send("R",id,sender,env.addonVersion)
             return
         end
@@ -489,6 +555,10 @@ function ns.CreateSharing(journal, env)
             item.total=total; item.chunks[index]=data
             if size(item.chunks)~=total then return end
             local payload=table.concat(item.chunks)
+            if payload:sub(1,1)=="Z" then
+                local encoding=self.comparison and self.comparison:ReportEncoding(item.comparison,sender)
+                payload=encoding and ns.ComparisonCodec.Unpack(encoding,payload,schema.MAX_LORE_BYTES) or nil
+            end
             local value,decodeError=schema.Decode(payload)
             local reason,detail
             if not value then reason,detail="malformed",decodeError
@@ -507,8 +577,15 @@ function ns.CreateSharing(journal, env)
             end
             item.state,item.report,item.payload,item.chunks="pending",value,payload,nil
             recordTransfer("received","offered",sender,value,"Waiting for your decision. No knowledge earned or spent.",0)
-            notify()
+            if item.comparison then
+                if not self.comparison or not self.comparison:AcceptReport(item) then self:Decline(item) end
+            else notify() end
         elseif kind=="A" and expected and (tx.stage=="offering" or tx.stage=="committed" or tx.stage=="unknown") then
+            if not tx.spent and tx.costLimit and tx.cost-(body=="0" and tx.basicDiscount or 0)>tx.costLimit then
+                finish(tx,"failed","The recipient's price exceeds the approved exchange. No knowledge spent.")
+                send("X",tx.id,tx.recipient)
+                return
+            end
             commit(tx,tonumber(body))
         elseif kind=="D" and expected then
             local reason=rejectionReasons[body] or "Offer declined, invalid, or receiver busy."
@@ -528,6 +605,7 @@ function ns.CreateSharing(journal, env)
             recordTransfer("received","received",sender,item.report,"Imported into your Bestiary. Receiving is free; no knowledge earned or spent.",0)
             store.incoming[k]=nil
             send("K",id,sender)
+            if self.comparison and item.comparison then self.comparison:Imported(item) end
             if imported then imported(item.report.creatureID) end
             notify()
         elseif kind=="K" and expected and tx.spent then
@@ -544,24 +622,46 @@ function ns.CreateSharing(journal, env)
             if tx.spent then unknown(tx,"Delivery acknowledgement timed out.")
             else finish(tx,"failed","Offer expired without acceptance; no knowledge spent.") end
         end
-        if env.blocked() or now<nextSend or #queue==0 then return end
-        -- One small packet per second, no catch-up bursts. This is deliberately
-        -- below the library's throughput, but server throttles still take priority.
-        nextSend=now+1
+        if self.comparison then self.comparison:Tick() end
+        local sentAt=clock()
+        if sentAt<nextSend or env.blocked() then return end
+        if #queue==0 and self.comparison then self.comparison:Pump() end
+        if #queue==0 then return end
         local packet=queue[1]
+        local fast=packet.session
+        -- Count the prefix, envelope and estimated chat overhead. Each successful
+        -- whisper pays for its own bytes; idle or stalled frames never bank a burst.
+        local rate=fast and (fast.rate or COMPARE_RATE)
+        nextSend=sentAt+(rate and math.max(MIN_INTERVAL,(#packet.text+#PREFIX+40)/rate) or 1)
+        tx=store.outgoing
         local ok,reason=env.send(PREFIX,packet.text,"WHISPER",packet.target)
         packet.attempts=packet.attempts+1
-        if not ok and reason=="throttle" and packet.attempts<3 then nextSend=now+packet.attempts*2; return end
+        if not ok and reason=="throttle" and packet.attempts<3 then
+            if fast then fast.rate=math.max(200,rate/2) end
+            nextSend=sentAt+packet.attempts*2
+            return
+        end
+        if ok and fast and fast.rate then fast.rate=math.min(COMPARE_RATE,fast.rate+8) end
         table.remove(queue,1)
+        if not ok and self.comparison then self.comparison:SendFailed(packet.id,packet.target) end
         if not ok and active(tx) and packet.id==tx.id and schema.SameCharacter(packet.target,tx.recipient) then
             if tx.spent then unknown(tx,"Transport failed: " .. (reason or "unavailable") .. ".")
             else finish(tx,"failed","Transport failed: " .. (reason or "unavailable") .. "; no knowledge spent.") end
         end
     end
+    function engine:NeedsFastTick()
+        if queue[1] and queue[1].session then return true end
+        local s=self.comparison and self.comparison:FastSession()
+        return s and (#s.streams>0 or s.stage=="exchanging")
+    end
     function engine:Reset()
         store=journal:GetSharingStorage()
         queue={}; nextHello={}; nextSend=0; preflightDeadline=nil
+        if self.comparison then self.comparison:Reset() end
         notify("reset")
+    end
+    if ns.CreateComparisonSession then
+        engine.comparison=ns.CreateComparisonSession(journal,engine,env,send,purge,newID,incomingBlocked)
     end
     return engine
 end
@@ -577,7 +677,7 @@ function ns.InitializeSharing(journal)
     -- Runtime elapsed time bounds the initial check independently of wall-clock
     -- adjustments. Persisted report timestamps still use the calendar clock.
     local runtime=0
-    local env={now=function() return time() end,clock=function() return runtime end}
+    local env={now=function() return time() end,clock=function() return runtime end,encoding=C_EncodingUtil}
     function env.blocked()
         if read(InCombatLockdown)~=false then return true,"Leave combat to send this report." end
         local restrictions=Enum and Enum.AddOnRestrictionType
@@ -593,26 +693,9 @@ function ns.InitializeSharing(journal)
         end
         return false
     end
-    local function playerFullName()
-        -- Forever's Camelot NameUtil joins first name and surname. The shared
-        -- API docs still call the second value a server; discarding it loses
-        -- surnames on characters whose names are returned as separate parts.
-        local getName=UnitNameUnmodified or UnitName
-        if type(getName)~="function" then return end
-        local ok,first,surname=pcall(getName,"player")
-        if not ok or not schema.Public(first) or not schema.Public(surname) then return end
-        if not schema.Character(first) then return end
-        if surname~=nil and surname~="" and not schema.Character(surname) then return end
-        if NameUtil and type(NameUtil.GetFullNameWithoutRealm)=="function" then
-            return schema.Character(read(NameUtil.GetFullNameWithoutRealm,first,surname))
-        end
-        -- A complete single value remains usable if the helper is unavailable.
-        -- Never silently discard a separate surname or infer it from a report.
-        if surname==nil or surname=="" then return schema.Character(first) end
-    end
     local registered=false
     local function initialize()
-        env.character=playerFullName()
+        env.character=schema.UnitCharacter("player")
         env.addonVersion=read(C_AddOns and C_AddOns.GetAddOnMetadata,addonName,"Version")
         env.ready=false
         if not env.character then
@@ -655,12 +738,16 @@ function ns.InitializeSharing(journal)
         if event=="CHAT_MSG_ADDON" then engine:Receive(...)
         elseif event~="UNIT_NAME_UPDATE" or (...)=="player" then initialize() end
     end)
-    local elapsed=0
+    local elapsed,interval=0,0.25
     frame:SetScript("OnUpdate",function(_,delta)
         if ns.InitializationBlocked then return end
         runtime=runtime+delta
         elapsed=elapsed+delta
-        if elapsed>=0.25 then elapsed=0; engine:Tick() end
+        if elapsed>=interval then
+            elapsed=0
+            engine:Tick()
+            interval=engine:NeedsFastTick() and 0.05 or 0.25
+        end
     end)
     return engine
 end

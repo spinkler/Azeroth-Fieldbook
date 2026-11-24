@@ -387,13 +387,15 @@ local items={
 }
 local titles={}
 function L.IsReadableItem(id) return L.Public(id) and items[id]~=nil end
+function L.ReadableItemTitle(id) return items[id] end
 for _,title in pairs(objects) do titles[title]=true end
 function L.IsReadableObjectTitle(title) return titles[title]==true end
 
-local function objectID(guid)
+function L.GameObjectID(guid)
     if not L.Text(guid,160) then return end
     return tonumber(guid:match('^GameObject%-%d+%-%d+%-%d+%-%d+%-(%d+)%-%x+$'))
 end
+function L.ReadableObjectTitle(id) return objects[id] end
 local function paused()
     return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("lore")
 end
@@ -401,15 +403,20 @@ end
 function ns.CreateLoreTooltips(journal,settings)
     settings=settings or AzerothFieldbookDB or {}
     local t={}
-    local revision,index
+    local revision,index,byIdentity
     local function archive()
         if revision==journal.revision then return index end
-        revision=journal.revision;index={}
+        revision=journal.revision;index={};byIdentity={}
         local function add(title,source,summary,hasText)
             if not title or title=="" then return end
             index[title]=index[title] or {}
-            table.insert(index[title],{identity=source.identity,locale=source.locale,
-                complete=summary.complete,missing=summary.missing,hasText=hasText})
+            local record={identity=source.identity,locale=source.locale,
+                complete=summary.complete,missing=summary.missing,hasText=hasText}
+            table.insert(index[title],record)
+            if source.identity then
+                byIdentity[source.identity]=byIdentity[source.identity] or {}
+                table.insert(byIdentity[source.identity],record)
+            end
         end
         for _,e in pairs(journal.entries) do
             if e.kind=="writing" then
@@ -449,12 +456,16 @@ function ns.CreateLoreTooltips(journal,settings)
             -- A book-like name or a generic readable flag alone also matches
             -- player correspondence. Only predefined lore item IDs qualify.
             if not registry[id] then return end
-        elseif not registry[id] and not (english and titles[name]) and not known[name] then return end
+        elseif not registry[id] and not (english and titles[name]) and not known[name]
+            and not (id and byIdentity['gameobject:'..id]) then return end
         local stored,missing=false
-        for _,title in ipairs({name,canonical or name}) do
-            for _,e in ipairs(known[title] or {}) do
-                local sourceID=tonumber((e.identity or ""):match('^'..sourceKind..':(%d+)$'))
-                if (not sourceID or not id or sourceID==id) and (not e.locale or e.locale=="" or e.locale==locale) then
+        for _,records in ipairs({known[name] or {},canonical~=name and known[canonical] or {},
+            id and byIdentity[sourceKind..':'..id] or {}}) do
+            for _,e in ipairs(records) do
+                local kind,sourceID=(e.identity or ""):match('^(%a+):(%d+)$')
+                local typed=kind=='item' or kind=='gameobject'
+                if (not typed or kind==sourceKind and (not id or tonumber(sourceID)==id))
+                    and (not e.locale or e.locale=="" or e.locale==locale) then
                     if e.complete then return nil,true end
                     stored=stored or e.hasText
                     if #e.missing>0 and (not missing or #e.missing<#missing) then missing=e.missing end
@@ -486,7 +497,7 @@ function ns.CreateLoreTooltips(journal,settings)
         local first=data.lines[1]
         local name=L.Public(first) and type(first)=="table" and L.Text(first.leftText,240) and first.leftText
         if not name then return end
-        local id=(sourceKind=='gameobject' and objectID(data.guid)) or (L.Integer(data.id,1,2147483647) and data.id)
+        local id=(sourceKind=='gameobject' and L.GameObjectID(data.guid)) or (L.Integer(data.id,1,2147483647) and data.id)
         local text=self:Status(name,id,sourceKind)
         if not text then return end
         -- Both the data processor and the fallback hook can see one tooltip.

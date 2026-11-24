@@ -71,9 +71,13 @@ class AccountSectionTests(unittest.TestCase):
                 expeditions={trip={id='trip',related={'same','route'}}}}
             a.subzones={[37]={{kind='interior',mapID=37,x=100,y=200,name='Town',at=1}}}
             b.subzones={[37]={{kind='interior',mapID=37,x=100,y=200,name='Town',at=2},{kind='interior',mapID=37,x=300,y=400,name='Farm',at=3}}}
+            a.interiorPointNotices={[37]='shown',[38]='pending'}
+            b.interiorPointNotices={[37]='pending',[38]='shown',[39]='pending'}
             ns.SelectSectionStorage('atlas',a);scope(2)
             local merged=ns.SelectSectionStorage('atlas',b)
             assert(size(merged.records)==3 and merged.records.same.name=='First place')
+            assert(merged.interiorPointNotices[37]=='shown' and merged.interiorPointNotices[38]=='shown')
+            assert(merged.interiorPointNotices[39]=='pending' and b.interiorPointNotices[37]=='pending')
             assert(#merged.subzones[37]==2 and merged.subzones[37][2].name=='Farm')
             local route,place
             for _,r in pairs(merged.records) do if r.name=='Route' then route=r elseif r.name=='Second place' then place=r end end

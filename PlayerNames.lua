@@ -18,23 +18,10 @@ local function read(fn,...)
     local ok,value=pcall(fn,...)
     if ok and schema.Public(value) then return value end
 end
-local function fullName(unit)
-    local getName=UnitNameUnmodified or UnitName
-    if type(getName)~="function" then return end
-    local ok,first,surname=pcall(getName,unit)
-    if not ok or not schema.Public(first) or not schema.Public(surname) then return end
-    if not schema.Character(first) then return end
-    if surname~=nil and surname~="" and not schema.Character(surname) then return end
-    -- Forever returns separate name/surname parts, including for party members.
-    if NameUtil and type(NameUtil.GetFullNameWithoutRealm)=="function" then
-        return schema.Character(read(NameUtil.GetFullNameWithoutRealm,first,surname))
-    end
-    if surname==nil or surname=="" then return schema.Character(first) end
-end
 function names:Observe(unit)
     if ns.InitializationBlocked then return end
     if not schema.Text(unit,20) or read(UnitIsPlayer,unit)~=true then return end
-    local name=fullName(unit)
+    local name=schema.UnitCharacter(unit)
     if not name or type(UnitClass)~="function" then return end
     local ok,_,class=pcall(UnitClass,unit)
     if not ok or not schema.Text(class,40) or not class:match("^[A-Z]+$") then return end

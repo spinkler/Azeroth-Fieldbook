@@ -40,6 +40,122 @@ def item_client():
 
 
 class LoreItemTests(unittest.TestCase):
+    def test_world_tooltip_dismissed_by_click(self):
+        lua = item_client()
+        lua.execute('''
+            openerGUID=nil;book.title='Archbishop Alonsus Faol';Enum.TooltipDataType={Object=4}
+            local cursor
+            C_TooltipInfo={GetWorldCursor=function() return cursor end}
+            TooltipDataProcessor={AddTooltipPostCall=function(_,fn) hover=fn end}
+            t=ns.CreateLoreTracking(j,settings)
+            function point()
+                cursor={type=4,id=177199,lines={{leftText=book.title}}};hover(GameTooltip);cursor=nil
+            end
+            point();step(3);begin();step(1);assert(not writing());close()
+            point();assert(not writing());begin();step(1);assert(writing().identity=='gameobject:177199')
+        ''')
+
+    def test_keyboard_and_title_only_cursor_openers(self):
+        for setup in [
+            """function UnitGUID(token) if token=='softinteract' then
+                return 'GameObject-0-1-2-3-177199-ABC' end end
+                function UnitName(token) if token=='softinteract' then return book.title end end""",
+            """Enum.TooltipDataType={Object=4};C_TooltipInfo={GetWorldCursor=function()
+                return {type=4,lines={{leftText=book.title}}} end}""",
+        ]:
+            lua = item_client()
+            lua.execute(setup + '''
+                openerGUID=nil;book.title='Archbishop Alonsus Faol'
+                local hints=ns.CreateLoreTooltips(j,settings)
+                assert(hints:Status(book.title,177199));begin(0);step(1)
+                assert(writing().pages[1].raw==book.pages[1] and not hints:Status(book.title,177199))
+            ''')
+
+    def test_item_with_distinct_page_heading_or_uncached_name(self):
+        for setup in ["book.title='A different page heading'",
+                      "function C_Item.GetItemInfo() return nil end;book.title=nil"]:
+            lua = item_client()
+            lua.execute(setup + '''
+                local hints=ns.CreateLoreTooltips(j,settings)
+                assert(hints:Status(itemName,itemID,'item'));begin();step(1)
+                assert(writing().identity=='item:3248' and writing().pages[1].raw==book.pages[1])
+                assert(not hints:Status('Localized tooltip heading',itemID,'item'))
+            ''')
+
+    def test_readable_quest_and_gossip_panels(self):
+        for event, accessor in [('QUEST_GREETING','GetGreetingText'), ('QUEST_DETAIL','GetQuestText'),
+                                ('QUEST_PROGRESS','GetProgressText'), ('QUEST_COMPLETE','GetRewardText'),
+                                ('GOSSIP_SHOW','GetGossipText')]:
+            for guid, name, source in [('GameObject-0-1-2-3-177199-ABC','Archbishop Alonsus Faol','gameobject:177199'),
+                                       ('Item-0-12345','Translated Letter from The Embalmer','item:3248')]:
+                with self.subTest(event=event, guid=guid):
+                    lua = item_client()
+                    lua.execute(f"""
+                        openerGUID='{guid}';function UnitName() return '{name}' end
+                        function UnitIsPlayer() return false end
+                        C_GossipInfo={{GetText=function() return '' end}}
+                        function {accessor}() return panel end
+                        function GetTitleText() return 'Quest heading' end
+                        t:Event('{event}');panel='Too late';t:Event('{'GOSSIP_CLOSED' if event=='GOSSIP_SHOW' else 'QUEST_FINISHED'}')
+                        step(1);assert(not writing())
+                        panel=nil;t:Event('{event}');panel='Visible words';step(1)
+                        local e=assert(writing());assert(e.title=='{name}' and e.identity=='{source}')
+                        assert(e.pages[1].raw==panel and t:CaptureCurrent() and #j:List({{kind='writing'}})==1)
+                        local hints=ns.CreateLoreTooltips(j,settings)
+                        assert(not hints:Status('{name}',{source.split(':')[1]},'{source.split(':')[0]}'))
+                        assert(j:Delete(e.id));openerGUID='Creature-0-1-2-3-177199-ABC'
+                        t:Event('{event}');step(1);assert(not writing())
+                    """)
+
+    def test_bag_hook_after_quest_dialogue_and_close(self):
+        lua = item_client()
+        lua.execute('''
+            openerGUID=nil;function UnitName() return itemName end
+            function GetQuestText() return 'Displayed quest page' end
+            t:Event('QUEST_DETAIL');useBag();step(1)
+            assert(writing().identity=='item:3248' and writing().pages[1].raw=='Displayed quest page')
+            assert(j:Delete(writing().id));t:Event('QUEST_FINISHED')
+            t:Event('QUEST_DETAIL');step(1);assert(not writing())
+        ''')
+
+    def test_world_reader_uses_object_identity_and_displayed_text(self):
+        lua = item_client()
+        lua.execute('''
+            book.title='Archbishop Alonsus Faol';book.pages={'Displayed inscription'}
+            openerGUID='GameObject-0-1-2-3-177199-ABC'
+            local hints=ns.CreateLoreTooltips(j,settings)
+            assert(hints:Status(book.title,177199))
+            begin(0);step(1)
+            local e=assert(writing())
+            assert(e.identity=='gameobject:177199' and e.title==book.title)
+            assert(e.pages[1].raw=='Displayed inscription' and j:WritingSummary(e).complete)
+            assert(not hints:Status(book.title,177199))
+            close();begin(0);step(1);assert(#j:List({kind='writing'})==1)
+            close();openerGUID='GameObject-0-1-2-3-900001-ABC';book.title='Another inscription'
+            begin(0);step(1);assert(#j:List({kind='writing'})==2)
+        ''')
+
+    def test_cursor_object_requires_matching_read_and_respects_item_and_mail(self):
+        lua = item_client()
+        lua.execute('''
+            Enum.TooltipDataType={Object=4}
+            openerGUID=nil;book.title='Archbishop Alonsus Faol'
+            local cursor={type=4,id=177199,lines={{leftText=book.title}}}
+            C_TooltipInfo={GetWorldCursor=function() return cursor end}
+            assert(not writing())
+            t:Event('MAIL_SHOW');begin(0);step(1);assert(not writing())
+            close();t:Event('MAIL_CLOSED')
+            function ItemTextGetCreator() return 'Player' end
+            begin(0);step(1);assert(not writing())
+            close();ItemTextGetCreator=nil;openerGUID='Item-0-12345'
+            begin(0);step(1);assert(not writing())
+            close();openerGUID=nil;cursor.lines[1].leftText='Other'
+            begin(0);step(1);assert(not writing())
+            close();cursor.lines[1].leftText=book.title
+            useBag();step(11)
+            begin(0);step(1);assert(writing().identity=='gameobject:177199')
+        ''')
+
     def test_quest_letter_with_missing_creator_is_captured_and_survives_reload(self):
         lua = item_client()
         lua.execute('''

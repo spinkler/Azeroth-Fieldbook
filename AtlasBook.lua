@@ -4,7 +4,7 @@ local A,U=ns.Atlas,ns.AtlasUI
 local ROW_HEIGHT,LIST_HEIGHT=38,462
 local VISIBLE_ROWS=math.ceil(LIST_HEIGHT/ROW_HEIGHT)+1
 local function categoryInfo(id) return A.category[id] or ns.AtlasEntrances.Category(id) end
-function ns.CreateAtlasBook(journal,shell,adapters)
+function ns.CreateAtlasBook(journal,shell,adapters,eventJournal)
     local c={journal=journal,shell=shell,adapters=adapters,pages={}}
     local entries=ns.AtlasEntrances and ns.AtlasEntrances.View(journal) or journal
     entries.borderlessPins=true -- The icon artwork retains its own bevel.
@@ -36,6 +36,28 @@ function ns.CreateAtlasBook(journal,shell,adapters)
     end
     journal:ObserveWeather()
     local state=journal.state
+    local function milestoneText(id)
+        local info=A.Read(C_Map and C_Map.GetMapInfo,id)
+        local name=type(info)=="table" and info.name
+        if not A.Text(name,160) then name=state.mapID==id and state.zone end
+        if not A.Text(name,160) then name="Map "..id end
+        return A.Safe(name).." has reached 1,024 interior survey points. Recording continues. Consider running Clean Redundant Points."
+    end
+    local function showMilestone(id)
+        local m=c.main
+        local notices=journal.saved.interiorPointNotices
+        if journal.readOnly or not id or not m or not m.milestoneNotice or not m:IsVisible()
+            or state.mapID~=id or type(notices)~="table" or notices[id]~="pending" then return end
+        m.milestoneNotice:SetText(milestoneText(id));m.milestoneNotice:Show()
+        m.milestoneMap=id
+        notices[id]="shown"
+    end
+    journal.subzones.onInteriorMilestone=function(id)
+        showMilestone(id)
+        if eventJournal and eventJournal:GetCreatureAnnouncement() and DEFAULT_CHAT_FRAME then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB: Traveller's Atlas:|r "..milestoneText(id))
+        end
+    end
     function c:ListRows()
         local rows={}
         for _,entry in ipairs(entries:List(state.query,state.mapID,state.all)) do
@@ -181,6 +203,13 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         end
         m.scope:SetSelected(not state.all)
         if m.listFilter then m.listFilter:SetSelected(state.listCategory~=nil or state.listOrigin~=nil) end
+        if m.milestoneMap and m.milestoneMap~=state.mapID then
+            m.milestoneNotice:Hide();m.milestoneMap=nil
+        end
+        showMilestone(state.mapID)
+        if state.mapID and m:IsVisible() and journal.subzones.store[state.mapID] and not journal.subzones.index[state.mapID] then
+            journal.subzones:Index(state.mapID,true)
+        end
         m.zone:SetText(state.zone and state.zone~="" and state.zone or "Choose zone")
         for i,row in ipairs(m.rows) do
             local data=rows[first+i];row.id=data and data.id;row:SetShown(data~=nil)
@@ -541,6 +570,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.automaticMapping:SetEnabled(not journal.readOnly)
         U.Tip(m.automaticMapping,"Automatically record sub-zone crossings and interior survey points. Pauses in The Great Sea, on flight paths, while flying, and while dead or a ghost. City mapping is enabled. Loading screens, map changes and large coordinate jumps wait for stable readings; new area labels settle before interior sampling. Manual survey-point keybindings remain available when this is off.")
         m.cleanPoints=U.Button(m,"Clean Redundant Points",754,-60,168,function()
+            m.milestoneNotice:Hide();m.milestoneMap=nil
             local allMaps=A.Read(IsControlKeyDown)==true
             local results={}
             local function done(count,message)
@@ -553,10 +583,10 @@ function ns.CreateAtlasBook(journal,shell,adapters)
                 if message and DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r "..completion..message) end
                 c:Message(message or ("Removed "..count.." redundant interior sample"..(count==1 and "." or "s.")))
             end
-            local function progress(message)
+            local function progress(message,panelOnly)
                 if message and message:find('Removed %d+ of %d+ interior points') then results[#results+1]=message end
                 c:Message(message)
-                if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r "..message) end
+                if not panelOnly and DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff80d0ffAFB:|r |cff80d0ff"..shell.sections.atlas.definition.title..":|r "..message) end
             end
             local started
             if allMaps then started=ns.AtlasSubzones.CleanAllInterior(journal,done,progress)
@@ -616,20 +646,25 @@ function ns.CreateAtlasBook(journal,shell,adapters)
         m.layerMenu:SetPoint("TOPLEFT",m.map,"TOPLEFT",8,-8)
         m.layerMenu:SetFrameLevel(m.map:GetFrameLevel()+25)
         m.map.observedLevelRange=function(mapID) return adapters:ObservedLevelRange(mapID) end
-        m.map.weatherText=U.Label(m.layerMenu,"",0,0,190,"GameFontHighlightSmall")
-        m.map.weatherText:ClearAllPoints()
-        m.map.weatherText:SetPoint("LEFT",m.layerMenu,"RIGHT",8,0)
-        m.map.weatherText:SetWordWrap(false)
-        m.map.weatherText:SetShadowColor(0,0,0,0.85);m.map.weatherText:SetShadowOffset(1,-1)
-        local weatherFont,weatherSize,weatherFlags=m.map.weatherText:GetFont()
-        if weatherFont and weatherSize then m.map.weatherText:SetFont(weatherFont,weatherSize+2,weatherFlags) end
-        m.map.levelText=U.Label(m.layerMenu,"",0,0,270,"GameFontHighlightSmall")
-        m.map.levelText:ClearAllPoints()
-        m.map.levelText:SetPoint("LEFT",m.map.weatherText,"RIGHT",0,0)
-        m.map.levelText:SetWordWrap(false)
-        m.map.levelText:SetShadowColor(0,0,0,0.85);m.map.levelText:SetShadowOffset(1,-1)
-        if weatherFont and weatherSize then m.map.levelText:SetFont(weatherFont,weatherSize+2,weatherFlags) end
+        local observationText=U.Label(m.layerMenu,"",0,0,0,"GameFontHighlightSmall")
+        m.map.observationText=observationText
+        observationText:ClearAllPoints()
+        observationText:SetPoint("TOPLEFT",m.layerMenu,"TOPRIGHT",8,-5)
+        observationText:SetPoint("TOPRIGHT",m.map,"TOPRIGHT",-8,-13)
+        observationText:SetWordWrap(true)
+        observationText:SetShadowColor(0,0,0,0.85);observationText:SetShadowOffset(1,-1)
+        local font,size,flags=observationText:GetFont()
+        if font and size then observationText:SetFont(font,size+2,flags) end
 
+        m.milestoneNotice=U.Label(m.layerMenu,"",0,0,0,"GameFontNormalSmall")
+        m.milestoneNotice:ClearAllPoints()
+        m.milestoneNotice:SetPoint("TOPLEFT",observationText,"BOTTOMLEFT",0,-4)
+        m.milestoneNotice:SetPoint("TOPRIGHT",observationText,"BOTTOMRIGHT",0,-4)
+        m.milestoneNotice:SetWordWrap(true)
+        m.milestoneNotice:SetShadowColor(0,0,0,1);m.milestoneNotice:SetShadowOffset(1,-1)
+        m.milestoneNotice:Hide()
+        m:HookScript("OnShow",function() showMilestone(state.mapID) end)
+        m:HookScript("OnHide",function() m.milestoneNotice:Hide();m.milestoneMap=nil end)
         m.notesOverlay=CreateFrame("Frame",nil,m)
         m.notesOverlay:SetSize(580,113);m.notesOverlay:SetFrameLevel(m:GetFrameLevel()+30)
         m.notesPaper=m.notesOverlay:CreateTexture(nil,"BACKGROUND")
@@ -729,7 +764,7 @@ function ns.CreateAtlasBook(journal,shell,adapters)
             "|cffffd1004. Routes and passages|r\nChoose the Route / Passage category, then Save & route stops. Add recorded places or named waypoints; use Up, Down and Remove to arrange them. Stops can span zones. Map lines connect recorded stops, not guaranteed safe paths.\n\n"..
             "|cffffd1005. Expeditions and connections|r\nUse Expeditions for longer journals and Linked notes to attach them to a discovery. Connections links known Atlas discoveries or records in other supported Fieldbook sections. Removing a link leaves the source record intact.\n\n"..
             "|cffffd1006. Field reports|r\nShare saves a field-report draft for a zone or selected discoveries. Choose what to include, add private notes or expedition excerpts only if wanted, then use Preview report. This page provides drafts and previews only; it cannot send or import reports.\n\n"..
-            "|cffffd1007. Self-discovered sub-zones|r\nAutomatic mapping starts on and records area crossings and survey points as you travel, even with the Atlas closed. Toggle Automatic Mapping pauses it. Automatic recording pauses in The Great Sea, on flight paths, while flying, and while dead or a ghost. Loading screens, map changes and large coordinate jumps wait for stable readings; interior samples also wait for new area labels to settle.\n\nBind Record Atlas survey point in the game's keybinding settings to add a point where you stand, including with automatic mapping off. You must be alive, with a readable position and enough distance from existing samples. Clean Redundant Points simplifies automatic survey points, including edge points, within a 5-yard outline tolerance while recording stays at 25 yards. It protects narrow passages, shared borders, crossings and manual points. Compact coverage prevents repeat sampling at cleaned locations; new observations beyond the simplified boundary or in another area remain eligible. Repeated cleanup uses the original remembered positions so its tolerance does not accumulate. Cleanup skips maps with separated observation groups to preserve their separation. Legacy Fill in Options defaults off; it uses less CPU at the expense of outline detail. Survey points no longer store timestamps.\n\nShading, Points and Labels control the Atlas display. Use the world map Filters dropdown to enable Points, Labels and Zones independently on the main map, alongside Merchants and Nodes. Shading estimates an area from your samples; it is not an exact border survey. Separated observation groups shade independently, keeping distant portal dots from stretching an area across the map. Hover the map to inspect the evidence. Ctrl+Alt+Right Click an observation in the Atlas to delete it. Automatic mapping can record new observations there later. Alt-right-click an observation in the Atlas to exclude it from mapping without deleting it. Enable Points to see excluded observations in grey, and use the same gesture to restore them. Sub-zone samples do not add discovery entries or enter field reports.\n\n"..
+            "|cffffd1007. Self-discovered sub-zones|r\nAutomatic mapping starts on and records area crossings and survey points as you travel, even with the Atlas closed. Toggle Automatic Mapping pauses it. Automatic recording pauses in The Great Sea, on flight paths, while flying, and while dead or a ghost. Loading screens, map changes and large coordinate jumps wait for stable readings; interior samples also wait for new area labels to settle.\n\nBind Record Atlas survey point in the game's keybinding settings to add a point where you stand, including with automatic mapping off. You must be alive, with a readable position and enough distance from existing samples. Clean Redundant Points simplifies automatic survey points, including edge points, within a 5-yard outline tolerance while recording stays at 25 yards. It protects narrow passages, shared borders, crossings and manual points. Compact coverage prevents repeat sampling at cleaned locations; new observations beyond the simplified boundary or in another area remain eligible. Repeated cleanup uses the original remembered positions so its tolerance does not accumulate. Cleanup checks each separated group independently. Interior points and crossings can continue accumulating as you explore. Legacy Fill in Options defaults off; it uses less CPU at the expense of outline detail. Survey points no longer store timestamps.\n\nShading, Points and Labels control the Atlas display. Use the world map Filters dropdown to enable Points, Labels and Zones independently on the main map, alongside Merchants and Nodes. Shading estimates an area from your samples; it is not an exact border survey. Separated observation groups shade independently, keeping distant portal dots from stretching an area across the map. Hover the map to inspect the evidence. Ctrl+Alt+Right Click an observation in the Atlas to delete it. Automatic mapping can record new observations there later. Alt-right-click an observation in the Atlas to exclude it from mapping without deleting it. Enable Points to see excluded observations in grey, and use the same gesture to restore them. Sub-zone samples do not add discovery entries or enter field reports.\n\n"..
             "|cffffd1008. Entrance discovery|r\nAuto-discover entrances starts off and learns from physical indoor / outdoor crossings. Generic Entrances starts hidden in Map Layers; recording and visibility are independent. Grey category ticks are suggestions; explicitly choose a category and Save for a gold player-confirmed tick. Entrance evidence stays separate from deliberate records and field reports.\n\n"..
             "|cffffd1009. Your journal|r\nAtlas records and browsing settings follow Account-wide tracking in Options. It starts on; turn it off to use this character's separate journal after /reload. Bestiary resets, backups and sharing do not include Atlas records.",
         frameName="AzerothFieldbookAtlasSection",build=build,onOpen=function()
@@ -763,5 +798,5 @@ function ns.InitializeAtlas(shell,bestiary)
         return added
     end
     local adapters=ns.CreateAtlasReferences(bestiary,function() return ns.ActiveSectionStores and ns.ActiveSectionStores.gathering or AzerothFieldbookGatheringDB end,shell)
-    return ns.CreateAtlasBook(journal,shell,adapters)
+    return ns.CreateAtlasBook(journal,shell,adapters,bestiary)
 end

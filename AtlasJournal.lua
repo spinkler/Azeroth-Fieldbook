@@ -41,12 +41,20 @@ function A.Copy(v)
     local t={};for k,x in pairs(v) do t[k]=A.Copy(x) end;return t
 end
 function A.Count(t) local n=0;for _ in pairs(t) do n=n+1 end;return n end
-function A.Array(t,max)
+function A.Array(t,max,checkpoint)
     if not A.Public(t) or type(t)~="table" or getmetatable(t) then return false end
-    local n=0;for k in pairs(t) do if not A.Integer(k,1,max) then return false end;n=n+1 end
+    local n=0
+    for k in pairs(t) do
+        if checkpoint then checkpoint() end
+        if not A.Integer(k,1,max) then return false end
+        n=n+1
+    end
     -- Lua 5.1's length operator is undefined for lists with holes. Check every
     -- index so normalization cannot silently truncate a route or report.
-    for i=1,n do if t[i]==nil then return false end end
+    for i=1,n do
+        if checkpoint then checkpoint() end
+        if t[i]==nil then return false end
+    end
     return true
 end
 function A.Now() local v=A.Read(time);return A.Integer(v,0,9999999999) and v or 0 end

@@ -109,7 +109,17 @@ local function mergeAtlas(target,source,key)
             local identity=signature(p)
             if seen[identity] then
                 if p.excluded==true then seen[identity].excluded=true end
-            elseif #saved<4096 then saved[#saved+1]=copy(p);seen[identity]=saved[#saved] end
+            else saved[#saved+1]=copy(p);seen[identity]=saved[#saved] end
+        end
+    end
+    if type(source.interiorPointNotices)=="table" then
+        target.interiorPointNotices=target.interiorPointNotices or {}
+        if type(target.interiorPointNotices)=="table" then
+            for id,status in pairs(source.interiorPointNotices) do
+                if status=="shown" or (status=="pending" and target.interiorPointNotices[id]==nil) then
+                    target.interiorPointNotices[id]=status
+                end
+            end
         end
     end
     -- Merge compact survey coverage independently of sample deduplication.
@@ -121,16 +131,15 @@ local function mergeAtlas(target,source,key)
         for mapID,map in pairs(coverage.maps) do
             local old=targetCoverage.maps[mapID]
             if ns.AtlasSubzones.ValidCoverageMap(map) and (old==nil or ns.AtlasSubzones.ValidCoverageMap(old)) then
-                local merged=copy(old or {});local count=0
-                for _,packed in pairs(merged) do count=count+#packed/8 end
+                local merged=copy(old or {})
                 for name,packed in pairs(map) do
-                    local kept=merged[name] or '';local seen={}
+                    local kept=merged[name] or '';local seen={};local parts={kept}
                     for i=1,#kept,8 do seen[kept:sub(i,i+7)]=true end
                     for i=1,#packed,8 do
                         local token=packed:sub(i,i+7)
-                        if not seen[token] and count<ns.AtlasSubzones.MAX_COVERAGE then kept=kept..token;seen[token]=true;count=count+1 end
+                        if not seen[token] then parts[#parts+1]=token;seen[token]=true end
                     end
-                    if kept~='' then merged[name]=kept end
+                    if #parts>1 then merged[name]=table.concat(parts) end
                 end
                 if ns.AtlasSubzones.ValidCoverageMap(merged) then targetCoverage.maps[mapID]=merged end
             end

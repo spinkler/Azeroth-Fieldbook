@@ -822,15 +822,16 @@ class AtlasUITests(unittest.TestCase):
             assert(snapshot(best)==before,'Atlas ranges never mutate Bestiary records')
             m.map.observedLevelRange=function(id) return adapter:ObservedLevelRange(id) end
             c:SetZone(101,'Synthetic coast')
-            assert(m.map.levelText:GetText()==' |cffffd100Observed level range:|r 10–20')
+            local prefix='|cffffd100Observed Weather:|r No weather observed yet. |cffffd100Observed levels:|r '
+            assert(m.map.observationText:GetText()==prefix..'10–20')
             c:SetZone(102,'Synthetic hills')
-            assert(m.map.levelText:GetText()==' |cffffd100Observed level range:|r 30–32')
+            assert(m.map.observationText:GetText()==prefix..'30–32')
             best.entries[6]=nil;c:Refresh()
-            assert(m.map.levelText:GetText()==' |cffffd100Observed level range:|r Unknown')
+            assert(m.map.observationText:GetText()==prefix..'Unknown')
             best.entries[1].levelMax=24;c:SetZone(101,'Synthetic coast')
-            assert(m.map.levelText:GetText()==' |cffffd100Observed level range:|r 10–24')
+            assert(m.map.observationText:GetText()==prefix..'10–24')
             best.entries[1]=nil;best.entries[2].levelMin=20;c:Refresh()
-            assert(m.map.levelText:GetText()==' |cffffd100Observed level range:|r 20')
+            assert(m.map.observationText:GetText()==prefix..'20')
         """)
 
     def test_weather_history_selected_zone(self):
@@ -840,22 +841,31 @@ class AtlasUITests(unittest.TestCase):
             c.weatherObserver.scripts.OnEvent()
             assert(j:WeatherText(101)=='Rain')
             c:SetZone(102,'Different viewed zone')
-            assert(m.map.weatherText:GetText()=='|cffffd100Observed Weather:|r No weather observed yet.')
+            local header=m.map.observationText
+            local levels=' |cffffd100Observed levels:|r Unknown'
+            assert(header:GetText()=='|cffffd100Observed Weather:|r No weather observed yet.'..levels)
             info={type=0};c.weatherObserver.scripts.OnEvent()
             assert(j:WeatherText(101)=='Clear, Rain')
             shell:ShowSection('test')
             mapID=102;info={type=2};c.weatherObserver.scripts.OnEvent()
             shell:ShowSection('atlas')
-            assert(m.map.weatherText:GetText()=='|cffffd100Observed Weather:|r Snow')
+            assert(header:GetText()=='|cffffd100Observed Weather:|r Snow'..levels)
             c:SetZone(101,'Synthetic coast')
-            assert(m.map.weatherText:GetText()=='|cffffd100Observed Weather:|r Clear, Rain')
+            assert(header:GetText()=='|cffffd100Observed Weather:|r Clear, Rain'..levels)
+            mapID=101
+            for kind=2,4 do
+                info={type=kind};c.weatherObserver.scripts.OnEvent()
+            end
+            assert(header.wordWrap and not header.height and header.points[2][2]==m.map)
+            local allWeather='Clear, Rain, Snow, Sandstorm, Other weather'
+            assert(header:GetText()=='|cffffd100Observed Weather:|r '..allWeather..levels)
             local before=snapshot(saved.weather)
             C_Weather.GetCurrentWeather=function() error('unavailable') end
             c.weatherObserver.scripts.OnEvent()
             C_Weather=nil;c.weatherObserver.scripts.OnEvent()
             assert(snapshot(saved.weather)==before,'Unavailable weather must not record clear skies')
             local restored=ns.CreateAtlasJournal(saved)
-            assert(restored:WeatherText(101)=='Clear, Rain' and restored:WeatherText(102)=='Snow')
+            assert(restored:WeatherText(101)==allWeather and restored:WeatherText(102)=='Snow')
             local future={schema=999};ns.CreateAtlasJournal(future):ObserveWeather()
             assert(not future.weather)
             C_Map.GetMapArtLayers=nil;m.map:Invalidate();c:Refresh()

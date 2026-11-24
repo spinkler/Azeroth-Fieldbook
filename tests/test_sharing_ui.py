@@ -34,8 +34,8 @@ for _,result in ipairs({12,11,9,false,secret}) do
     local j,e=native(0,result);local tx=assert(e:Start(S.Capture(j,42),'Bob Stonewell',{}));now=now+1;e:Tick()
     eq(tx.stage,'failed');eq(j:GetSharingBalance(),2,'API errors release preflight reservation')
 end
-local j,e,calls=native(0,3);local tx=assert(e:Start(S.Capture(j,42),'Bob Stonewell',{}))
-for i=1,12 do now=now+1;e:Tick() end
+local j,e,calls,driver=native(0,3);local tx=assert(e:Start(S.Capture(j,42),'Bob Stonewell',{}))
+for i=1,12 do now=now+1;driver.scripts.OnUpdate(driver,1) end
 eq(calls(),3,'bounded throttle retries');eq(tx.stage,'failed')
 for _,state in ipairs({1,2,secret}) do
     chatState=state;local j,e,calls=native(0,0)

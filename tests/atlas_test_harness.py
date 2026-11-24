@@ -77,7 +77,8 @@ def new_atlas(ui=False, settings=None):
         shell:RegisterSection('test',{title='Other',build=function() end})
         source={entries={['herb:synthetic herb']={id='herb:synthetic herb',name='Synthetic herb',kind='herb',note='secret source note'}}}
         refs=ns.CreateAtlasReferences(nil,function() return source end,shell)
-        c=ns.CreateAtlasBook(j,shell,refs)
+        eventJournal={GetCreatureAnnouncement=function() return discoveryChat==true end}
+        c=ns.CreateAtlasBook(j,shell,refs,eventJournal)
     ''')
     if ui:
         lua.execute("shell:ShowSection('atlas');m=c.main")

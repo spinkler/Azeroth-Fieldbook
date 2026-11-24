@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.45.0 - 2026-11-24
+
+- At 1,024 interior survey points, each map gets a one-time Atlas notice that recording continues and suggests Clean Redundant Points. Players with discovery chat messages enabled also receive the notice in chat.
+
+- Traveller's Atlas continues recording beyond the old per-map point limits at 25-yard spacing. Clean Redundant Points checks each nearby group of samples independently, so a distant outpost or isolated observation no longer prevents cleanup elsewhere on the map. During longer checks the Atlas displays elapsed time, the active area and candidate counts, with periodic chat updates and one completion message for the selected map.
+
+- Compare Bestiaries from the book or a friendly player's portrait. Inspect each player's creature data side by side, bulk-select entries in either direction, and review both senders' knowledge costs and required reservations before approving the exchange.
+- Speed up Bestiary comparison and bulk exchange with automatic compression for large catalogues and reports. Whisper pacing accounts for message size, so short acknowledgements can go out within a fraction of a second. Transfers slow down when the client throttles whispers.
+- The Chronicle can save inscriptions opened with the interact key, object and item quest panels, and gossip whose text arrives after opening. Readable item and object tooltips also recognize saved pages with a different reader heading when the source ID matches.
+
+- Lorekeeper's Chronicle now recognizes world objects in the parchment reader, including the Archbishop Alonsus Faol plaque, when the client provides a source GUID or a matching catalogue object under the cursor as reading begins.
+- Traveller's Atlas wraps long weather lists on the map and shows Observed levels immediately after the weather.
+
+- Atlas cleanup works in either fill mode and can check all maps with Ctrl-click. Account-wide imports retain survey coverage beyond the old limits, and whole-Fieldbook backups preserve the per-map notice state.
+
+- Updated the README and sharing and Chronicle test notes. Expanded regression coverage for comparison, transport, Atlas recording and cleanup, account imports, and Chronicle capture.
+
 ## v0.44.0-beta.3 - 2026-11-20
 
 Beta prerelease covering changes since v0.44.0-beta.2. Live in-game verification of the spell chooser and collapsible editor remains pending.

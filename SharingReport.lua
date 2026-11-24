@@ -32,6 +32,21 @@ function report.SameCharacter(a,b)
     a,b=report.Character(a),report.Character(b)
     return a~=nil and b~=nil and a:lower()==b:lower()
 end
+function report.UnitCharacter(unit)
+    -- Forever returns a first name and surname. Keep both for whisper routing
+    -- and for matching the player behind a portrait or report.
+    local getName=UnitNameUnmodified or UnitName
+    if type(getName)~="function" then return end
+    local ok,first,surname=pcall(getName,unit)
+    if not ok or not report.Character(first) or not report.Public(surname) then return end
+    if surname~=nil and surname~="" and not report.Character(surname) then return end
+    if NameUtil and type(NameUtil.GetFullNameWithoutRealm)=="function" then
+        local joined,name=pcall(NameUtil.GetFullNameWithoutRealm,first,surname)
+        if joined then return report.Character(name) end
+    elseif surname==nil or surname=="" then
+        return report.Character(first)
+    end
+end
 function report.Transaction(value)
     return report.Text(value,40) and value:match("^%d+%-%d+%-%d+$") ~= nil
 end
@@ -67,6 +82,7 @@ local function validClaim(claim)
     end
     return (claim.kind=="offense" or claim.kind=="resistance") and schools[claim.value]==true
 end
+report.ValidClaim=validClaim
 function report.ValidLore(value)
     if not keys(value,{level=true,observed=true,rows=true}) or not integer(value.level,1,255)
         or not integer(value.observed,1,9999999999) then return false end
@@ -258,6 +274,14 @@ end
 local function basicKey(value)
     return table.concat({value.name,value.category,value.levelMin or 0,value.levelMax or 0,table.concat(value.locations,"\n")},"\n")
 end
+local function mergeSharedBasic(basic,shared)
+    if not basic.category or basic.category=="Unclassified" then basic.category=shared.category end
+    if shared.levelMin then
+        basic.levelMin=math.min(basic.levelMin or shared.levelMin,shared.levelMin)
+        basic.levelMax=math.max(basic.levelMax or shared.levelMax,shared.levelMax)
+    end
+    for _,location in ipairs(shared.locations) do basic.locations[location]=true end
+end
 function ns.InstallSharingRecords(journal)
     function journal:GetSharedSources(id)
         local entry=self.entries[id]
@@ -285,14 +309,7 @@ function ns.InstallSharingRecords(journal)
             basic.hasShared=true
             -- A locked personal page keeps exactly its local metadata. Reports
             -- remain separately available in Rumours and after unlocking.
-            if not entry.confirmed then
-                if not basic.category or basic.category=="Unclassified" then basic.category=shared.category end
-                if shared.levelMin then
-                    basic.levelMin=math.min(basic.levelMin or shared.levelMin,shared.levelMin)
-                    basic.levelMax=math.max(basic.levelMax or shared.levelMax,shared.levelMax)
-                end
-                for _,location in ipairs(shared.locations) do basic.locations[location]=true end
-            end
+            if not entry.confirmed then mergeSharedBasic(basic,shared) end
         end
         basic.category=basic.category or "Unclassified"
         basic.personal=entry.personalEncountered==true
@@ -387,24 +404,38 @@ function ns.InstallSharingRecords(journal)
         end
         return true,"Rumour verified and added to your journal."
     end
-    function journal:PreviewReport(value,sender)
+    function journal:CountSharedCreatures()
+        local count=0
+        for _,entry in pairs(self.entries) do if entry.sharedReports then count=count+1 end end
+        return count
+    end
+    function journal:PreviewReport(value,sender,sharedCount,preceding)
         local valid,err=report.Validate(value)
         if not valid or not report.Character(sender) then return nil,err or "Invalid sender." end
         local entry=self.entries[value.creatureID]
         if entry and entry.id~=value.creatureID then return nil,"Creature identity mismatch." end
         local basic=entry and self:GetBasicInfo(value.creatureID)
-        local newBasic=not entry or not basic.name or basic.name~=value.name or basic.category~=value.category
+        -- A bulk quote may include a free Lore report immediately before this
+        -- report. Model its basic record on a detached view, including locks.
+        if preceding and not (entry and entry.confirmed) then
+            basic=basic or {locations={}}
+            basic.name=basic.name or preceding.name
+            mergeSharedBasic(basic,preceding)
+        end
+        local newBasic=not basic or basic.name~=value.name or basic.category~=value.category
         if basic then
             if value.levelMin and (not basic.levelMin or value.levelMin<basic.levelMin or value.levelMax>basic.levelMax) then newBasic=true end
             for _,location in ipairs(value.locations) do if not basic.locations[location] then newBasic=true end end
         end
         local duplicateBasic=false
+        local valueKey=basicKey(value)
         for _,shared in ipairs(entry and entry.sharedReports or {}) do
-            if basicKey(shared)==basicKey(value) then
+            if basicKey(shared)==valueKey then
                 newBasic=false
                 if report.SameCharacter(shared.sender,sender) then duplicateBasic=true end
             end
         end
+        if preceding and basicKey(preceding)==valueKey then newBasic,duplicateBasic=false,true end
         local additions,replacements,newSlots={},{},0
         for _,claim in ipairs(value.rumours) do
             local duplicate
@@ -418,14 +449,13 @@ function ns.InstallSharingRecords(journal)
                 if not duplicate then newSlots=newSlots+1 end
             end
         end
-        if not duplicateBasic and #(entry and entry.sharedReports or {})>=report.MAX_BASIC_REPORTS then
+        local priorSlots=preceding and not preceding.duplicateBasic and 1 or 0
+        if not duplicateBasic and #(entry and entry.sharedReports or {})+priorSlots>=report.MAX_BASIC_REPORTS then
             return nil,"This creature already holds sixteen basic reports."
         end
         if #(entry and entry.rumours or {})+newSlots>report.MAX_STORED_RUMOURS then return nil,"This creature's rumour storage is full." end
         if not entry or not entry.sharedReports then
-            local count=0
-            for _,e in pairs(self.entries) do if e.sharedReports then count=count+1 end end
-            if count>=report.MAX_SHARED_ENTRIES then return nil,"Shared creature storage is full." end
+            if (sharedCount or self:CountSharedCreatures())>=report.MAX_SHARED_ENTRIES then return nil,"Shared creature storage is full." end
         end
         return {newBasic=newBasic==true,newRumours=#additions,rumours=additions,replacements=replacements,duplicateBasic=duplicateBasic,
             newInformation=value.beastLore~=nil or newBasic==true or #additions>0,locked=entry and entry.confirmed==true,

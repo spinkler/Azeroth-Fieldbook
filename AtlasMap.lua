@@ -323,14 +323,12 @@ function ns.CreateAtlasMap(parent,journal,onSelect,onPlace,onNavigate)
 
     end
     function map:UpdateWeather()
-        if self.weatherText then self.weatherText:SetText("|cffffd100Observed Weather:|r "..journal:WeatherText(displayedMapID)) end
-        if self.levelText then
-            local low,high
-            if self.observedLevelRange then low,high=self.observedLevelRange(displayedMapID) end
-            local levels=low and (low==high and string.format("%d",low) or string.format("%d–%d",low,high)) or "Unknown"
-            self.levelText:SetText(" |cffffd100Observed level range:|r "..levels)
-        end
-
+        if not self.observationText then return end
+        local low,high
+        if self.observedLevelRange then low,high=self.observedLevelRange(displayedMapID) end
+        local levels=low and (low==high and string.format("%d",low) or string.format("%d–%d",low,high)) or "Unknown"
+        self.observationText:SetText("|cffffd100Observed Weather:|r "..journal:WeatherText(displayedMapID)
+            .." |cffffd100Observed levels:|r "..levels)
     end
     local player=CreateFrame("Frame",nil,canvas)
     player:SetAllPoints();player:SetFrameLevel(map:GetFrameLevel()+5);player:EnableMouse(false)

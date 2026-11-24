@@ -1,5 +1,74 @@
 # Point-funded sharing: implementation and live checkpoint
 
+## Bestiary comparison and bulk exchange
+
+Comparison is a session between two full character names on the existing
+version-checked whisper transport. An invitation grants catalogue access.
+Each catalogue contains the creature identity, shareable basics and eligible
+traits, rank multiplier and a fingerprint of available Beast Lore. Both
+players compute incoming differences against their own journal, including
+locked basics, held rumours and equivalent ability spell IDs. Received
+unverified rumours stay out of the outgoing catalogue.
+
+Either player can propose a selection in both directions. Selection and
+approval are bound to the peer and session. Each sender validates the selected
+facts and price, then runs the existing reservation, commit and receipt path
+for each report. A tagged preflight binds the next incoming report to the
+approved creature and contents. Free Lore goes first so its basic information
+can qualify for the known-basic waiver. Each side needs enough available
+knowledge for the highest reservation encountered after preceding charges.
+Comparisons and unstarted selections are temporary. Paid transactions retain
+their ordinary receipt, retry and history behaviour across reloads.
+
+The portrait action uses the target unit and rechecks its full name when
+clicked. Blizzard's target frame supplies the player, party and raid-player
+menu tags. [Forever target-frame menu source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_UnitFrame/Mainline/TargetFrame.lua#L574-L625)
+
+On 2026-11-24 the operator confirmed a live comparison with Erna Lionguard.
+The completion screen showed four reports sent for 8 knowledge and one received
+with a 1-knowledge sender cost. Both Beast Lore counts were zero. The operator
+reported that the catalogue transfer was extremely slow.
+
+### Transfer timing
+
+The original queue waited a full second after every whisper. Updated peers
+negotiate byte-based pacing and optional native Deflate/Base64 during the
+invitation. Catalogues, quotes, selections and tagged reports use compression
+only when the result saves at least one packet. The wire format bounds each
+compressed block and checks its decoded length against a 4,096-byte block size
+and the original payload limit. The decoded catalogue or report still goes
+through its usual validation. [Forever encoding API](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated/EncodingUtilDocumentation.lua)
+
+The comparison queue budgets 800 bytes/second per sender, including the whisper
+prefix, envelope and a 40-byte overhead estimate. Short replies can go out
+100 ms apart. A native throttle halves the rate down to 200 bytes/second and
+schedules the existing bounded retry. Successful sends gradually restore the
+budget. Ordinary sharing and the original same-version comparison handshake
+keep their one-packet-per-second pace. Paid retries use the original stored
+report. The initial budget follows the maintained library's published defaults.
+[ChatThrottleLib source](https://github.com/WoWUIDev/Ace3/blob/master/AceComm-3.0/ChatThrottleLib.lua)
+
+`test_comparison_transport.py` drives two addon instances through the native
+whisper adapter and frame callbacks in Lua 5.1. The timed fixture uses 500 and
+497 entries with 496 in common, 50 ms one-way latency, 50 ms frames, immediate
+human approvals and a standard Deflate/Base64 stand-in. Catalogue timing starts
+at invitation acceptance and includes both sets of quotes. Exchange timing starts
+at the second approval and includes all receipts for four reports sent and one
+received. Bytes count message text from both players, including its envelope.
+
+| Transport | Time to select | Catalogue whispers | Catalogue bytes | Five-report exchange |
+| --- | ---: | ---: | ---: | ---: |
+| Original | 235.75 s | 472 | 98,812 | 15.45 s |
+| Byte pacing | 83.25 s | 472 | 98,812 | 2.70 s |
+| Byte pacing and compression | 25.00 s | 141 | 28,729 | 2.65 s |
+
+The five short reports used 31 whispers in each run. Separate cases exercise
+multi-packet paid reports and Beast Lore, native throttle retries, batches
+exceeding 180 packets per minute, original peers and paid recovery after
+reload. `test_bestiary_comparison.py` covers both window entry points and
+exchange pricing. In-game timings for the optimized transport, portrait-menu
+behaviour, text scaling and two-player Beast Lore delivery still need live checks.
+
 ## Recipient directory and appearance — 2026-11-16
 
 Share now includes **Save name**, **Names & history** and a last-report summary
@@ -128,8 +197,9 @@ of combat.
 The API documentation does **not** establish Forever's live WHISPER eligibility
 for every relationship, faction or instance, nor server throttle rates.
 The library ceiling is a conservative implementation reference, not a live
-Forever measurement. This protocol stays at 240 bytes per packet and one packet
-per second, with at most three attempts for a throttled packet. An unavailable
+Forever measurement. All packets stay within 240 bytes. Ordinary sharing sends
+one packet per second, and negotiated comparison traffic uses the byte budget
+above. A throttled packet has at most three attempts. An unavailable
 receiver has a useful timeout but may be offline, disabled, restricted, on an
 older addon, or unreachable under server whisper rules. No claim of cross-faction
 support is made. First verify two same-faction players; record group and ungrouped
@@ -245,20 +315,24 @@ sender attribution are not cryptographic truth or anti-cheat guarantees.
   neither its many effect tags nor freeform note is a selection. ID-log-only
   spells, rejected abilities, sentence-bundled names and unverified received rumours
   are excluded. Explicitly verified journal records become normal sharing candidates.
-- Wire encoding is fixed-order length-prefixed literal fields with strict types,
-  key allowlists and no trailing fields, Lua evaluation or decompression. NPC IDs
+- Report encoding uses fixed-order length-prefixed literal fields with strict types
+  and key allowlists. The comparison transport can compress those fields on the wire.
+  The report parser rejects trailing fields and never evaluates Lua. NPC IDs
   are integer 1–10,000,000; known levels are 1–255 in ordered pairs. Names, types,
   locations and claims are bounded; control codes and WoW `|` markup are rejected.
   Incompatible schemas, malformed arrays and duplicate claims are rejected on the
   receiver too. Claim counts are bounded by the available payload bytes when parsing.
-- There is no per-report rumour quota. One report is at most 2,048 bytes with
-  eight locations; frames at most
-  240 bytes, chunks at most 180 bytes / twelve chunks. Missing chunks expire;
+- There is no per-report rumour quota. An ordinary report can use 2,048 bytes
+  with eight locations. Beast Lore can use 8,192 bytes. Each whisper is at most
+  240 bytes, with up to 180 bytes of payload per chunk. An uncompressed report
+  takes up to twelve chunks for ordinary data or 46 for Beast Lore. Missing chunks expire;
   duplicates and ordering are handled; conflicting duplicate chunks reject the
   entire offer. Unsolicited chunks/commits cannot populate the journal.
 - Limits: 64 queued packets, three staged/accepted incoming transfers, eight new
-  preflights per minute, fifteen seconds between new preflights from one source,
-  180 incoming protocol packets per minute. Accepted consent expires at the
+  ordinary preflights per minute, fifteen seconds between new ordinary preflights from one source,
+  180 incoming protocol packets per minute for ordinary traffic. Packets bound
+  to the negotiated comparison have their own allowance of 640 per minute.
+  Accepted consent expires at the
   report's 24-hour limit. Receipts are capped at 512 and retained for 48 hours;
   new imports fail closed when recent receipt storage is full.
 - At most 500 creatures with shared records; sixteen basic reports and 32 rumour

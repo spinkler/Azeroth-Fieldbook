@@ -263,8 +263,21 @@ before recovery, and a false no-creator result. The Westfall report of
 “Aegwynn and the Dragon Hunt” still needs a live reread to verify the client path;
 the deterministic fixture uses synthetic page text, not a bundled book database.
 
-World ItemText sources still have no established stable object identifier;
-positively identified carried items use the item identity described above.
+World ItemText readers can supply a GameObject GUID through the interaction's
+`npc` unit. The Chronicle then stores `gameobject:<id>` alongside the displayed
+page. When that unit has no GUID, a catalogued world-cursor object sampled at
+BEGIN can supply its ID if the reader title matches, there is no item opener,
+and the reader has no named author. Hovering alone never archives text.
+Other unidentified sources retain the generic creator check. Live acceptance
+for Archbishop Alonsus Faol (177199) is to reopen the plaque, check the saved
+inscription and hover again to verify the Unread hint clears. Repeat with the
+interact key and the mouse. BEGIN samples the soft-interact object and world
+cursor. If the click dismissed the tooltip, its last recognized object is
+available for up to two seconds. These candidates require a matching reader
+title. A title-only object tooltip can corroborate the title without assigning
+an ID. A known item's direct interaction GUID can also identify a reader with a
+different heading or uncached item info. Tooltip lookups include exact source
+identity and locale when the archived heading differs.
 Compatible numbered captures with the same source title, locale, kind and
 optional identity can extend one writing across separate visits, including
 disjoint partial reads. Overlapping pages must have identical raw source text,
@@ -309,11 +322,17 @@ Record current Person uses the actual supported NPC interaction, or a supported
 creature target outside an interaction. A target-only position is an observation
 position, not proof the NPC is standing there. Save Passage is deliberate:
 `GOSSIP_SHOW` / gossip updates use `C_GossipInfo.GetText` or `GetGossipText`;
-`QUEST_DETAIL`, `QUEST_PROGRESS`, and `QUEST_COMPLETE` use the corresponding
+`QUEST_GREETING`, `QUEST_DETAIL`, `QUEST_PROGRESS`, and `QUEST_COMPLETE` use the corresponding
 displayed quest text functions. Capture validates the actual `npc` context,
 never an unrelated target. Missing identity is labelled Unidentified speaker.
 Closing the dialogue invalidates the snapshot. No branches or quest actions are
 selected. Vendor services and combat evidence stay in their original journals.
+
+Recognized readable objects and items opening those quest panels also support
+automatic writing capture and Capture Current. The archive records the displayed
+panel only. If the text or source is late, sampling continues briefly until the
+dialogue closes, changes, or yields the writing. Ordinary NPC quest and gossip
+text remains available through Save Passage.
 
 Record Landmark offers current position as an observation starting point. The
 location editor can distinguish observation, landmark, reading, encounter,

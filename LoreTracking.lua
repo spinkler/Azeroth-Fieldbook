@@ -39,23 +39,69 @@ local function defaultAdapter()
     -- Item-text events carry no item ID. Prefer the reader's Item GUID on
     -- Forever; older clients can supply the bag slot that was actually used.
     -- A hover or a title lookup alone never establishes an item source.
-    local function itemContext(id,title)
-        if not number(id,1,2147483647) or not title then return end
+    local function itemContext(id,title,direct)
+        if not number(id,1,2147483647) then return end
         local fn=C_Item and C_Item.GetItemInfo or GetItemInfo
         if type(fn)~="function" then return end
         local ok,name,link,_,_,_,_,_,_,_,_,_,classID=pcall(fn,id)
-        if not ok or not public(name) or name~=title or not public(link) or type(link)~="string"
+        if not ok or not public(name) or not public(link) then return end
+        local catalog=L.ReadableItemTitle(id)
+        local locale=read(GetLocale)
+        local englishTitle=(locale=="enUS" or locale=="enGB") and catalog
+        local otherOpener=title and (a.cursorObject and a.cursorObject.name==title
+            or a.softObject and a.softObject.name==title)
+        if otherOpener and name~=title then return end
+        if direct and catalog and name==nil and link==nil and (title or englishTitle) then
+            return {id=id,title=title or englishTitle,loreItem=true}
+        end
+        if not label(name) or (name~=title and not (direct and catalog and (not title or name==englishTitle)))
+            or type(link)~="string"
             or tonumber(link:match('item:(%d+)'))~=id then return end
         local questItem=public(classID) and classID==12
-        return {id=id,title=title,questItem=questItem,
+        return {id=id,title=title or name,questItem=questItem,
             loreItem=questItem or L.IsReadableItem and L.IsReadableItem(id)==true}
     end
-    function a.BeginSource() a.item=nil end
-    function a.EndSource() a.item=nil;a.usedItem=nil end
+    local function english()
+        local locale=read(GetLocale)
+        return locale=="enUS" or locale=="enGB"
+    end
+    local function cursorObject()
+        local cursor=read(C_TooltipInfo and C_TooltipInfo.GetWorldCursor)
+        local kind=Enum and Enum.TooltipDataType and Enum.TooltipDataType.Object
+        if not kind or type(cursor)~="table" or not public(cursor.type) or cursor.type~=kind then return end
+        local id=L.GameObjectID(cursor.guid) or (number(cursor.id,1,2147483647) and cursor.id)
+        local lines=cursor.lines
+        local first=public(lines) and type(lines)=="table" and lines[1]
+        local name=public(first) and type(first)=="table" and label(first.leftText)
+        if name and (L.ReadableObjectTitle(id) or english() and L.IsReadableObjectTitle(name)) then
+            return {id=id or nil,name=name}
+        end
+    end
+    function a.BeginSource()
+        a.item=nil;a.cursorObject=cursorObject()
+        if not a.cursorObject and a.hovered then
+            local age=a.Now()-a.hovered.at
+            if age>=0 and age<=2 then a.cursorObject=a.hovered end
+        end
+        a.hovered=nil
+        local id=L.GameObjectID(read(UnitGUID,"softinteract"))
+        local name=id and (label(read(UnitName,"softinteract")) or english() and L.ReadableObjectTitle(id))
+        a.softObject=id and name and L.ReadableObjectTitle(id) and {id=id,name=name} or nil
+    end
+    function a.EndSource() a.item=nil;a.usedItem=nil;a.cursorObject=nil;a.softObject=nil;a.hovered=nil end
+    function a.EndDialogue() a.usedItem=nil end
     function a.HookSource()
+        local kind=Enum and Enum.TooltipDataType and Enum.TooltipDataType.Object
+        if kind and TooltipDataProcessor and type(TooltipDataProcessor.AddTooltipPostCall)=="function" then
+            pcall(TooltipDataProcessor.AddTooltipPostCall,kind,function(tooltip)
+                if tooltip~=GameTooltip or paused() then return end
+                a.hovered=cursorObject()
+                if a.hovered then a.hovered.at=a.Now() end
+            end)
+        end
         if type(hooksecurefunc)~="function" then return end
         local function used(bag,slot)
-            a.item=nil
+            a.item=nil;a.hovered=nil
             local id=read(C_Container and C_Container.GetContainerItemID or GetContainerItemID,bag,slot)
             a.usedItem=number(id,1,2147483647) and {id=id,at=a.Now()} or nil
         end
@@ -63,15 +109,18 @@ local function defaultAdapter()
             pcall(hooksecurefunc,C_Container,"UseContainerItem",used)
         elseif type(UseContainerItem)=="function" then pcall(hooksecurefunc,"UseContainerItem",used) end
     end
-    local function sourceItem(title)
-        local guid=read(UnitGUID,"npc")
+    local function sourceItem(title,guid)
         local id=type(guid)=="string" and guid:match('^Item%-')
             and read(C_Item and C_Item.GetItemIDByGUID or GetItemIDByGUID,guid)
-        local item=itemContext(id,title)
+        local item=itemContext(id,title,true)
         if number(id,1,2147483647) and not item then return end
         if not item and a.item and a.item.title==title then return a.item end
         local used=a.usedItem
-        if not item and used and a.Now()>=used.at and a.Now()-used.at<=10 then item=itemContext(used.id,title) end
+        if used then
+            local age=a.Now()-used.at
+            if age<0 or age>10 then a.usedItem=nil
+            elseif not item then item=itemContext(used.id,title) end
+        end
         if item then a.item=item end
         return item
     end
@@ -94,14 +143,33 @@ local function defaultAdapter()
         local raw=read(ItemTextGetText)
         local page=read(ItemTextGetPage)
         local title=label(read(ItemTextGetItem))
-        local item=sourceItem(title)
+        local guidOK,guid=value(UnitGUID,"npc")
+        local objectID=L.GameObjectID(guid)
+        local item,matchedObject
+        if objectID then
+            title=title or label(read(UnitName,"npc"))
+            if not title then
+                local locale=read(GetLocale)
+                if locale=="enUS" or locale=="enGB" then title=L.ReadableObjectTitle(objectID) end
+            end
+        else
+            item=sourceItem(title,guid)
+            title=title or (item and item.title)
+            -- A cursor object is only corroboration for an opened, matching
+            -- reader. An item opener or named author overrides that hint.
+            local candidate=a.cursorObject
+            if not candidate or candidate.name~=title then candidate=a.softObject end
+            if guidOK and guid==nil and not item and not a.usedItem and candidate and candidate.name==title
+                and (creator==nil or creator==false or creator=="") then objectID=candidate.id;matchedObject=true end
+        end
         return {title=title,raw=type(raw)=="string" and raw or nil,
             page=number(page,0,1000000) and page or nil,
             hasNext=hasNext==true or hasNext==1,
             nextKnown=nextOK and (hasNext==nil or type(hasNext)=="boolean" or hasNext==1),
             creator=label(creator),creatorKnown=creatorOK and (creator==nil or creator==false or type(creator)=="string"),
             playerAuthored=creatorOK and type(creator)=="string" and creator~="",
-            identity=item and "item:"..item.id,questItem=item and item.questItem,loreItem=item and item.loreItem,
+            identity=objectID and "gameobject:"..objectID or item and "item:"..item.id,
+            questItem=item and item.questItem,gameWriting=objectID~=nil or matchedObject or item and item.loreItem,
             sourceKind="readable",material=label(read(ItemTextGetMaterial)),locale=read(GetLocale) or "unknown"}
     end
     function a.CanTraverse()
@@ -143,22 +211,48 @@ local function defaultAdapter()
     function a.Unit(token) return unit(token) end
     function a.Dialogue(kind)
         local fn=kind=="gossip" and (C_GossipInfo and C_GossipInfo.GetText or GetGossipText)
-            or kind=="quest-detail" and GetQuestText or kind=="quest-progress" and GetProgressText
+            or kind=="quest-greeting" and GetGreetingText or kind=="quest-detail" and GetQuestText or kind=="quest-progress" and GetProgressText
             or kind=="quest-complete" and GetRewardText
         local raw=read(fn)
+        if kind=="gossip" and (type(raw)~="string" or raw=="") then raw=read(GetGossipText) end
         if type(raw)~="string" or raw=="" then return end
         local d={raw=raw,speaker=unit("npc"),sourceTitle=kind~="gossip" and label(read(GetTitleText)) or nil}
-        if kind=="gossip" and not d.speaker and read(UnitIsPlayer,"npc")~=true then
-            local guid=read(UnitGUID,"npc")
+        if not d.speaker and read(UnitIsPlayer,"npc")~=true then
+            local guidOK,guid=value(UnitGUID,"npc")
             local title=label(read(UnitName,"npc"))
-            local nameFrame=GossipFrame and GossipFrame.NameFrame and GossipFrame.NameFrame.Name or GossipFrameNpcNameText
+            local frame=QuestFrame
+            if kind=="gossip" then frame=GossipFrame end
+            local nameFrame=frame and frame.NameFrame and frame.NameFrame.Name
+            if not nameFrame then
+                if kind=="gossip" then nameFrame=GossipFrameNpcNameText else nameFrame=QuestFrameNpcNameText end
+            end
             title=title or (nameFrame and label(read(nameFrame.GetText,nameFrame)))
-            local objectID=type(guid)=="string" and tonumber(guid:match('^GameObject%-%d+%-%d+%-%d+%-%d+%-(%d+)%-%x+$'))
-            -- Some object readers expose a title but no unit GUID. Limit that
-            -- fallback to recognized world-book titles.
-            if title and (number(objectID,1,2147483647) or (guid==nil and L.IsReadableObjectTitle(title))) then
+            local objectID=L.GameObjectID(guid)
+            local catalogTitle=L.ReadableObjectTitle(objectID)
+            if guidOK and guid==nil then
+                local cursor=cursorObject()
+                if cursor and cursor.name==title then objectID=cursor.id;catalogTitle=L.ReadableObjectTitle(objectID) end
+            end
+            if guidOK and guid==nil and not objectID and a.usedItem and title then
+                local age=a.Now()-a.usedItem.at
+                local item=age>=0 and age<=10 and itemContext(a.usedItem.id,title)
+                if item and L.IsReadableItem(item.id) then
+                    d.writing=true;d.sourceTitle=title;d.identity="item:"..item.id
+                    return d
+                end
+            end
+            title=title or (english() and catalogTitle)
+            if title and (objectID and (catalogTitle or kind=="gossip")
+                or guidOK and guid==nil and english() and L.IsReadableObjectTitle(title)) then
                 d.writing=true;d.sourceTitle=title
                 d.identity=objectID and "gameobject:"..objectID or "gossip-book:"..title
+            elseif type(guid)=="string" and guid:match("^Item%-") then
+                local id=read(C_Item and C_Item.GetItemIDByGUID or GetItemIDByGUID,guid)
+                if number(id,1,2147483647) and L.IsReadableItem(id) then
+                    local name=label(read(C_Item and C_Item.GetItemInfo or GetItemInfo,id)) or title
+                        or (english() and L.ReadableItemTitle(id))
+                    if name then d.writing=true;d.sourceTitle=name;d.identity="item:"..id end
+                end
             end
         end
         return d
@@ -193,6 +287,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     if ns.RegisterSectionVisibilityListener then
         ns.RegisterSectionVisibilityListener("lore",function()
             serial=serial+1
+            t.dialogueToken=nil;t.dialogue=nil
             if t.active then release(t.active);t.active=nil end
             if a.EndSource then a.EndSource() end
             if a.Progress then a.Progress(nil) end
@@ -232,7 +327,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         return v.nextKnown==true and v.hasNext==false
     end
     local function private(s,v)
-        return t.mailOpen or (a.IsMail and a.IsMail()) or not v.loreItem and (v.playerAuthored or not v.creatorKnown)
+        return t.mailOpen or (a.IsMail and a.IsMail()) or not v.gameWriting and (v.playerAuthored or not v.creatorKnown)
     end
     local advance,ready
     local function request(s,direction,restore)
@@ -347,6 +442,10 @@ function ns.CreateLoreTracking(journal,settings,adapter)
             -- Bag-use post-hooks may run after synchronous READY delivery.
             -- Bind their confirmed identity before the second sample too.
             if not s.identity and v.identity then s.identity=v.identity end
+            if v.raw=="" and retries<2 then
+                retries=retries+1
+                if after(s,0.25,sample) then return end
+            end
             if type(v.raw)~="string" then
                 retries=retries+1
                 if retries<=12 and after(s,0.25,sample) then return end
@@ -393,7 +492,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         serial=serial+1
         -- This observed reader contains one text panel and only Goodbye.
         -- Other object dialogues may have additional branches or pages.
-        local complete=d.sourceTitle=="Draconic for Dummies"
+        local complete=d.kind=="gossip" and d.sourceTitle=="Draconic for Dummies"
         local sessionID="gossip:"..tostring(L.Now())..":"..serial
         local e,err,notice=journal:CapturePage({sessionID=sessionID,title=d.sourceTitle,identity=d.identity,
             sourceKind="object-dialogue",locale=read(GetLocale) or "unknown",location=d.location,
@@ -408,11 +507,12 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     function t:CaptureCurrent()
         if paused() then return end
         if self.dialogue and self.dialogue.writing then
-            local d=a.Dialogue and a.Dialogue("gossip")
+            local d=a.Dialogue and a.Dialogue(self.dialogue.kind)
             if not d or not d.writing or d.identity~=self.dialogue.identity or d.sourceTitle~=self.dialogue.sourceTitle then
                 return nil,"The readable object changed; reopen it before capturing."
             end
             d.location=self.dialogue.location
+            d.kind=self.dialogue.kind
             return captureDialogue(d)
         end
         local s=self.active
@@ -466,9 +566,30 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         if not passage then return nil,err end
         journal:AddLocation(e.id,d.location);return e
     end
+    local function readDialogue(kind)
+        local token={kind=kind}
+        t.dialogueToken=token
+        local opener=read(UnitGUID,"npc")
+        local function sample(attempt)
+            if paused() or t.dialogueToken~=token or opener and read(UnitGUID,"npc")~=opener then return end
+            local d=a.Dialogue and a.Dialogue(kind)
+            t.dialogue=d
+            if d then
+                d.kind=kind;d.location=L.CurrentLocation(d.writing and "read-here" or "encounter")
+                if d.writing and settings.autoArchiveLore==true and not t.mailOpen and not (a.IsMail and a.IsMail()) then
+                    captureDialogue(d)
+                end
+            end
+            if attempt<4 and a.After and (not d or not d.speaker and not d.writing) then
+                a.After(0.15,function() sample(attempt+1) end)
+            end
+        end
+        sample(0)
+    end
     function t:Event(event,...)
         if paused() then return end
         if event=="ITEM_TEXT_BEGIN" then
+            self.dialogueToken=nil;self.dialogue=nil
             local active=self.active
             local v=active and a.Read and a.Read() or {}
             -- BEGIN also accompanies page loads in clients using the classic
@@ -524,22 +645,20 @@ function ns.CreateLoreTracking(journal,settings,adapter)
             end
             if a.Progress then a.Progress(nil) end
             if a.EndSource then a.EndSource() end
-            if event=="PLAYER_LEAVING_WORLD" then self.dialogue=nil end
+            if event=="PLAYER_LEAVING_WORLD" then self.dialogueToken=nil;self.dialogue=nil end
         elseif event=="MAIL_SHOW" then
             self.mailOpen=true
             if self.active and (self.active.traversing or self.active.restoring) then finish(self.active,"Automatic capture unavailable while personal mail is open.","unsupported") end
         elseif event=="MAIL_CLOSED" then self.mailOpen=false
-        elseif event=="GOSSIP_CLOSED" or event=="QUEST_FINISHED" then self.dialogue=nil
+        elseif event=="GOSSIP_CLOSED" or event=="QUEST_FINISHED" then
+            if self.dialogueToken and ((event=="GOSSIP_CLOSED")==(self.dialogueToken.kind=="gossip")) then
+                self.dialogueToken=nil;self.dialogue=nil
+                if a.EndDialogue then a.EndDialogue() end
+            end
         else
             local kind=({GOSSIP_SHOW="gossip",GOSSIP_OPTIONS_REFRESHED="gossip",GOSSIP_UPDATE="gossip",
-                QUEST_DETAIL="quest-detail",QUEST_PROGRESS="quest-progress",QUEST_COMPLETE="quest-complete"})[event]
-            if kind then
-                local d=a.Dialogue and a.Dialogue(kind);self.dialogue=d
-                if d then
-                    d.kind=kind;d.location=L.CurrentLocation(d.writing and "read-here" or "encounter")
-                    if d.writing and settings.autoArchiveLore==true then captureDialogue(d) end
-                end
-            end
+                QUEST_GREETING="quest-greeting",QUEST_DETAIL="quest-detail",QUEST_PROGRESS="quest-progress",QUEST_COMPLETE="quest-complete"})[event]
+            if kind then readDialogue(kind) end
         end
     end
     t.navigationHooked=a.HookNavigation and a.HookNavigation(function(direction) t:OnNavigation(direction) end)==true
@@ -548,7 +667,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         local frame=CreateFrame("Frame");t.frame=frame
         for _,event in ipairs({"ITEM_TEXT_BEGIN","ITEM_TEXT_READY","ITEM_TEXT_TRANSLATION","ITEM_TEXT_CLOSED","PLAYER_LEAVING_WORLD",
             "MAIL_SHOW","MAIL_CLOSED","GOSSIP_SHOW","GOSSIP_OPTIONS_REFRESHED","GOSSIP_UPDATE","GOSSIP_CLOSED",
-            "QUEST_DETAIL","QUEST_PROGRESS","QUEST_COMPLETE","QUEST_FINISHED"}) do pcall(frame.RegisterEvent,frame,event) end
+            "QUEST_GREETING","QUEST_DETAIL","QUEST_PROGRESS","QUEST_COMPLETE","QUEST_FINISHED"}) do pcall(frame.RegisterEvent,frame,event) end
         frame:SetScript("OnEvent",function(_,event,...) t:Event(event,...) end)
     end
     return t

@@ -67,6 +67,12 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         ns.AutoHideScrollBar(area)
         return area,body
     end
+    local comparison=engine.comparison and ns.CreateComparisonWindow and ns.CreateComparisonWindow(
+        journal,engine,{window=window,label=label,button=button,scroll=scroll,appearance=applyAppearance})
+    if comparison then
+        function controller:OpenComparison() comparison:Open() end
+        function controller:SetComparisonVisibilityCallback(fn) comparison:SetVisibilityCallback(fn) end
+    end
     local function basicDetails(value)
         if not value then return "" end
         local level=value.levelMin and (value.levelMin .. (value.levelMax~=value.levelMin and ("–" .. value.levelMax) or "")) or "unknown"
@@ -207,7 +213,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         composer:SetScript("OnHide",function()
             composer.recipient:ClearFocus(); composer:StopMovingOrSizing()
             if names then names:Hide() end
-            if transaction and not transaction.spent then engine:Cancel() end
+            if transaction and transaction==engine:GetOutgoing() and not transaction.spent then engine:Cancel() end
         end)
         composer:HookScript("OnShow",function() if controller.visibilityCallback then controller.visibilityCallback(true) end end)
         composer:HookScript("OnHide",function() if controller.visibilityCallback then controller.visibilityCallback(false) end end)
@@ -312,6 +318,10 @@ function ns.CreateSharingWindow(journal,engine,getBook)
         if refreshing then return end
         refreshing=true
         applyAppearance(composer);applyAppearance(receiver);applyAppearance(names)
+        local list={}
+        for _,item in ipairs(engine:GetIncoming()) do
+            if not (item.comparison and item.state=="accepted") then list[#list+1]=item end
+        end
         if composer then
             local n=countChosen()
             local isLore=captured and captured.beastLore~=nil
@@ -360,14 +370,13 @@ function ns.CreateSharingWindow(journal,engine,getBook)
                     "; its basic-information cost was waived. This report cost " .. transaction.cost .. " knowledge."
             end
             composer.status:SetText(status)
-            composer.inbox:SetShown(#engine:GetIncoming()>0)
+            composer.inbox:SetShown(#list>0)
             for index,row in ipairs(composer.rows) do
                 row:SetChecked(chosen and chosen[index]==true)
                 row:SetEnabled(not busy())
             end
             layoutComposer()
         end
-        local list=engine:GetIncoming()
         local exists,pending=false,nil
         for _,item in ipairs(list) do
             if incoming==item then exists=true end
@@ -423,9 +432,12 @@ function ns.CreateSharingWindow(journal,engine,getBook)
     end
     function controller:OpenIncoming()
         incoming=nil; self:Refresh()
-        if receiver and #engine:GetIncoming()>0 then receiver:Show() end
+        if receiver and incoming then receiver:Show() end
     end
-    function controller:Hide() if composer then composer:Hide() end end
+    function controller:Hide()
+        if composer then composer:Hide() end
+        if comparison then comparison:Hide() end
+    end
     function controller:Open(id)
         buildComposer()
         transaction=engine:GetOutgoing()
@@ -481,6 +493,7 @@ function ns.CreateSharingWindow(journal,engine,getBook)
             captured,candidates,chosen,transaction,incoming=nil,{}, {},nil,nil
             if composer then composer.notice="Journal reset; reopen Share to select a creature."; composer:Hide() end
             if receiver then receiver:Hide() end
+            if comparison then comparison:Hide() end
         end
         controller:Refresh()
     end)

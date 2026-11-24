@@ -18,6 +18,21 @@ class AtlasCleanupTests(unittest.TestCase):
             assert(snapshot(first.subzones)==original and second.subzones[101][1].excluded)
         ''')
 
+    def test_account_merge_continues_beyond_old_map_limit(self):
+        account(self.lua)
+        self.lua.execute("""
+            local rows={}
+            for i=1,4096 do
+                rows[i]={kind='interior',mapID=101,name='River',x=i,y=100}
+            end
+            local shared=ns.SelectSectionStorage('atlas',{schema=1,subzones={[101]=rows}})
+            scope(2)
+            shared=ns.SelectSectionStorage('atlas',{schema=1,subzones={[101]={
+                rows[4096],{kind='interior',manual=true,mapID=101,name='River',x=5000,y=100}}}})
+            assert(#shared.subzones[101]==4097 and shared.subzones[101][4097].manual)
+            assert(#rows==4096)
+        """)
+
     def setUp(self):
         self.lua = new_atlas(ui=True)
         self.lua.execute('''
@@ -97,7 +112,7 @@ class AtlasCleanupTests(unittest.TestCase):
             assert(snapshot(future)==before)
         ''')
 
-    def test_unsupported_coverage_and_full_coverage_are_preserved(self):
+    def test_unsupported_coverage_is_preserved_and_large_coverage_accepts_new_points(self):
         self.lua.execute('''
             j.saved.subzoneCoverage={version=999,maps={}}
             local before=snapshot(j.saved.subzoneCoverage);clean()
@@ -105,8 +120,8 @@ class AtlasCleanupTests(unittest.TestCase):
             j.saved.subzoneCoverage={version=1,maps={[101]={Lake='invalid'}}}
             before=snapshot(j.saved.subzoneCoverage);clean()
             assert(removed==0 and snapshot(j.saved.subzoneCoverage)==before)
-            j.saved.subzoneCoverage={version=1,maps={[101]={Lake=string.rep('00000000',S.MAX_COVERAGE)}}}
-            clean();assert(removed==0,'Never delete samples without room to remember them')
+            j.saved.subzoneCoverage={version=1,maps={[101]={Other=string.rep('00000000',4096)}}}
+            clean();assert(removed==45 and #j.saved.subzoneCoverage.maps[101].Other==8*4096)
         ''')
 
     def test_account_merge_unions_coverage_without_mutating_character_stores(self):
@@ -167,7 +182,7 @@ class AtlasCleanupTests(unittest.TestCase):
             assert(S.CleanInterior(j,101,function(n,msg,t) removed=n;message=msg;stats=t end));settle()
             assert(removed>0,'Real overlap must not veto safe remote points')
             assert(stats.interior==53 and stats.outline+stats.ownership>0)
-            local retained=stats.edge+stats.nearby+stats.outline+stats.ownership+stats.manual+stats.capacity
+            local retained=stats.edge+stats.nearby+stats.outline+stats.ownership+stats.manual
             assert(retained+removed==stats.interior,'Every interior point has a counted outcome')
             for method,model in pairs(before) do
                 local after=S.Build(s:Samples(101),nil,nil,nil,method)
@@ -178,6 +193,41 @@ class AtlasCleanupTests(unittest.TestCase):
             end
             assert(message:find('5%-yard limit') and message:find('protecting overlap borders'))
         ''')
+
+    def test_long_validation_shows_activity_and_reports_completion_once(self):
+        self.lua.execute("""
+            local seconds=0
+            GetTime=function() return seconds end
+            local chat={}
+            DEFAULT_CHAT_FRAME={AddMessage=function(_,text) chat[#chat+1]=text end}
+            local progress={}
+            local setText=m.message.SetText
+            function m.message:SetText(text)
+                setText(self,text)
+                if text:find('checked,') then progress[#progress+1]=text end
+            end
+            click(m.cleanPoints)
+            for step=1,30000 do
+                if not s.cleaning then break end
+                seconds=seconds+1
+                S.Step()
+            end
+            assert(not s.cleaning and #progress>2)
+            local previous,stillChecking
+            for _,text in ipairs(progress) do
+                local state=text:match('pass .+')
+                if state==previous then stillChecking=true end
+                previous=state
+            end
+            assert(stillChecking,'Elapsed time must keep updating within one candidate check')
+            local completions,live=0,0
+            for _,text in ipairs(chat) do
+                if text:find('Removed 45 of 49') then completions=completions+1 end
+                if text:find('checked,') then live=live+1 end
+            end
+            assert(completions==1 and live>0 and live<#progress)
+            assert(m.message:GetText():find('Removed 45 of 49'))
+        """)
 
     def test_cleanup_result_stays_in_button_tooltip(self):
         self.lua.execute('''

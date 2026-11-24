@@ -206,7 +206,7 @@ function B.Capture()
 end
 
 local collections={
-    gathering={"entries"},atlas={"records","expeditions","weather","settings","subzones","subzoneCoverage","loreAliases"},
+    gathering={"entries"},atlas={"records","expeditions","weather","settings","subzones","subzoneCoverage","interiorPointNotices","loreAliases"},
     angling={"waters","spots","pools","items","aggregates","history","sessions","recent","recentOrder","waterKeys",
         "poolKeys","itemKeys","aggregateKeys","reported","claims","reportOrigins","state","merged","hoverKeys","eventLog"},
     ledger={"contacts","state","aliases","reportKeys","references","contactAliases"},

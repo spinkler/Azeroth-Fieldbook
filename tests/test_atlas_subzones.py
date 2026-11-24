@@ -4,6 +4,61 @@ from atlas_test_harness import new_atlas
 
 
 class SubzoneTests(unittest.TestCase):
+    def test_interior_milestone_delivery_and_chat_preference(self):
+        self.lua.execute("""
+            C_Map.GetMapWorldSize=function() return 10000,10000 end
+            local chat={}
+            DEFAULT_CHAT_FRAME={AddMessage=function(_,text) chat[#chat+1]=text end}
+            discoveryChat=true
+            local function seed(id,count)
+                local rows={}
+                for i=1,count do
+                    rows[i]={kind='interior',mapID=id,name='Forest',x=i,y=10}
+                end
+                rows[#rows+1]={kind='interior',mapID=id,name='Forest',x=4000,y=10,excluded=true}
+                rows[#rows+1]={mapID=id,from='Forest',to='Coast',fromX=100,fromY=10,x=110,y=10}
+                s.store[id]=rows;s.index[id]=nil;s:Changed(id)
+            end
+            seed(101,1023)
+            s:Index(101);s:Reset()
+            assert(not j.saved.interiorPointNotices and #chat==0)
+            c:SetZone(102,'Synthetic hills')
+            assert(sample('Forest',.7,.7))
+            assert(#chat==1 and chat[1]:find('Synthetic coast has reached 1,024 interior survey points',1,true))
+            assert(j.saved.interiorPointNotices[101]=='pending' and not m.milestoneNotice:IsShown())
+            assert(sample('Forest',.71,.7) and #chat==1)
+            c:SetZone(101,'Synthetic coast')
+            assert(m.milestoneNotice:IsShown() and m.milestoneNotice:GetText():find('Recording continues.',1,true))
+            assert(m.milestoneNotice:GetText():find('Clean Redundant Points',1,true))
+            assert(j.saved.interiorPointNotices[101]=='shown')
+            c:SetZone(102,'Synthetic hills');c:SetZone(101,'Synthetic coast')
+            assert(not m.milestoneNotice:IsShown())
+            seed(101,1023);s:Index(101);s:Reset()
+            assert(sample('Forest',.7,.7) and #chat==1 and not m.milestoneNotice:IsShown())
+            discoveryChat=false
+            seed(102,1023);mapID=102;s:Index(102)
+            shell:ShowSection('test')
+            assert(s:RecordPoint())
+            assert(#chat==1 and j.saved.interiorPointNotices[102]=='pending')
+            shell:ShowSection('atlas');c:SetZone(102,'Synthetic hills')
+            assert(m.milestoneNotice:IsShown() and m.milestoneNotice:GetText():find('Synthetic hills',1,true))
+            local reload=ns.CreateAtlasJournal(j.saved)
+            reload.subzones.onInteriorMilestone=function() error('repeated on reload') end
+            reload.subzones:Index(101);reload.subzones:Index(102)
+            assert(#chat==1)
+        """)
+
+    def test_existing_map_above_milestone_notifies_on_first_index(self):
+        self.lua.execute("""
+            local rows={}
+            for i=1,1025 do rows[i]={kind='interior',mapID=102,name='Forest',x=i,y=10} end
+            s.store[102]=rows;s.index[102]=nil
+            c:SetZone(102,'Synthetic hills');settle()
+            assert(m.milestoneNotice:IsShown() and j.saved.interiorPointNotices[102]=='shown')
+            c:SetZone(101,'Synthetic coast');c:SetZone(102,'Synthetic hills')
+            assert(not m.milestoneNotice:IsShown())
+        """)
+
     def test_default_controls_and_saved_choices(self):
         self.lua.execute('''
             local fresh=ns.CreateAtlasJournal({})
@@ -58,14 +113,14 @@ class SubzoneTests(unittest.TestCase):
     def test_disconnected_village_and_portal_dot_never_bridge_in_either_fill(self):
         self.lua.execute('''
             local rows={{kind='interior',mapID=101,name="Rut'theran Village",x=2362,y=5554}}
-            for _,p in ipairs({{6500,8200},{6900,8200},{6900,8600},{6500,8600},{6700,8400}}) do
+            for _,p in ipairs({{6500,8200},{6680,8200},{6680,8380},{6500,8380},{6590,8290}}) do
                 rows[#rows+1]={kind='interior',mapID=101,name="Rut'theran Village",x=p[1],y=p[2]}
             end
             local original=snapshot(rows)
             for _,method in ipairs({'traced','convex'}) do
                 local model=S.Build(rows,nil,nil,nil,method)
                 assert(#model.areas["Rut'theran Village"].components==2)
-                assert(model:At(6700,8400) and not model:At(4500,7000) and not model:At(2362,5554))
+                assert(model:At(6590,8290) and not model:At(4500,7000) and not model:At(2362,5554))
                 assert(not model.covered[1] and model.areas["Rut'theran Village"].x>6000)
                 local reversed={};for i=#rows,1,-1 do reversed[#reversed+1]=rows[i] end
                 assert(snapshot(S.Build(reversed,nil,nil,nil,method).areas["Rut'theran Village"].hull)
@@ -76,7 +131,8 @@ class SubzoneTests(unittest.TestCase):
             s.store[101]=rows;s.index={};s:Changed(101)
             local removed,message
             assert(S.CleanInterior(j,101,function(n,t) removed=n;message=t end));settle()
-            assert(removed==0 and snapshot(rows)==original and message:find('Separated observation groups'))
+            assert(removed==1 and #s.store[101]==5 and s.store[101][1].x==2362)
+            assert(j.saved.subzoneCoverage.maps[101]["Rut'theran Village"]==string.format('%04x%04x',6590,8290))
             local reload=ns.CreateAtlasJournal(j.saved)
             assert(not S.Build(reload.subzones:Samples(101)):At(4500,7000))
             -- The same name can have two valid filled islands, sharing a colour.
@@ -837,13 +893,20 @@ class SubzoneTests(unittest.TestCase):
             assert(not m.map.subzoneModel,'Unavailable map art must hide overlay')
         ''')
 
-    def test_bounded_storage_and_invalid_saved_records(self):
+    def test_recording_beyond_old_map_limits_and_invalid_saved_records(self):
         self.lua.execute('''
             s.store[101]={false,{mapID=101,from='bad'}}
             assert(#s:Crossings(101)==0)
-            s.store[101]={};S.MAX_CROSSINGS=1
-            assert(sample('Forest',.401,.4));assert(not sample('Hill',.402,.4))
-            assert(#s:Crossings(101)==1)
+            C_Map.GetMapWorldSize=function() return 10000,10000 end
+            local rows={}
+            for i=0,4095 do
+                rows[i+1]={mapID=101,kind='interior',name='Forest',x=(i%64)*30,y=math.floor(i/64)*30}
+            end
+            s.store[101]=rows;s.index={};s:Reset()
+            assert(sample('Forest',.401,.4));assert(sample('Hill',.402,.4))
+            px=.6;py=.6;assert(s:RecordPoint())
+            local reload=ns.CreateAtlasJournal(j.saved).subzones
+            assert(#reload:Samples(101)==4099 and #reload:Crossings(101)==1)
         ''')
 
     def test_isolated_dots_stay_small_and_disappear_when_incorporated(self):
@@ -1123,18 +1186,18 @@ class SubzoneTests(unittest.TestCase):
             assert(#survey:Samples(101)==5,'The crossing must not also create a nearby interior sample')
         ''')
 
-    def test_interior_capture_is_bounded_continues_hidden_and_has_honest_hover(self):
+    def test_interior_capture_continues_hidden_and_has_honest_hover(self):
         self.lua.execute('''
             C_Map.GetMapWorldSize=function() return 1000,2000 end
             s.index={};s:Reset();name='Mine';px=.1;py=.1
             shell:ShowSection('test')
             c.subzoneObserver.scripts.OnUpdate(c.subzoneObserver,.25)
             assert(#s:Samples(101)==1 and #s:Crossings(101)==0)
-            S.MAX_INTERIORS=1;px=.3;c.subzoneObserver.scripts.OnUpdate(c.subzoneObserver,.25)
-            assert(#s:Samples(101)==1,'Interior sample budget must be bounded')
+            px=.3;c.subzoneObserver.scripts.OnUpdate(c.subzoneObserver,.25)
+            assert(#s:Samples(101)==1,'Large coordinate jump waits for a stable reading')
             tick=tick+1;c.subzoneObserver.scripts.OnUpdate(c.subzoneObserver,.25)
             name='Tunnel';px=.301;c.subzoneObserver.scripts.OnEvent(c.subzoneObserver,'ZONE_CHANGED')
-            assert(#s:Crossings(101)==1,'The interior budget must leave room for border observations')
+            assert(#s:Crossings(101)==1 and #s:Samples(101)==3)
             j.state.showSubzonePoints=true;shell:ShowSection('atlas');settle()
             m.map.left=100;m.map.top=700
             cursorX=(100+.1*m.map:GetWidth())*m.map:GetEffectiveScale()
@@ -1146,7 +1209,7 @@ class SubzoneTests(unittest.TestCase):
             assert(s:Samples(101)[1].name=='Mine','Rendering receives detached copies')
             local invalid=crossing('A','B',1000,1000);invalid.kind='interior'
             s.store[101][#s.store[101]+1]=invalid;s.index={}
-            s:Index(101);assert(#s:Samples(101)==2,'Malformed typed samples must be preserved but ignored')
+            s:Index(101);assert(#s:Samples(101)==3,'Malformed typed samples must be preserved but ignored')
         ''')
 
     def test_checked_points_show_all_samples_over_shading(self):

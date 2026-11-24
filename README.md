@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.44.0-beta.3 (Beta)
+# Azeroth Fieldbook 0.45.0 (Pre-1.0)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -336,12 +336,10 @@ observed automatically.
   an estimate: sparse samples can still bridge unknown space. **Legacy fill**,
   beside Clean Redundant Points, restores the original convex hull on both maps
   without changing saved samples. Switching back re-enables traced fill.
-  Cleanup is paused in traced mode to protect its supporting points.
-  With Legacy fill, **Clean redundant points** removes interior samples strictly
-  inside an area's perimeter on the displayed map. Cross-over points, edge samples
-  and interior evidence needed to separate overlapping regions are retained.
-  Cleanup reports a count and leaves other maps and discoveries untouched;
-  removing those samples can affect a later return to traced fill.
+  **Clean Redundant Points** works in either fill mode. It tests each connected
+  group against both outlines and checks which area owns overlapping ground.
+  It keeps crossings and manual points, packs redundant coordinates, and reports
+  how many points it removed from the selected map. Ctrl-click checks all maps.
   **Hide zone-name areas** hides shading and labels matching the displayed zone
   name (such as Loch Modan in Loch Modan). It defaults off, saves per character,
   and leaves sample points, neighbouring regions and recorded evidence intact.
@@ -362,7 +360,7 @@ observed automatically.
   enabled overlays retain their visible points on upgrade. Hiding points leaves
   recording and saved evidence intact.
   Hover the map for names, from/to labels,
-  coordinates and observation time; interior samples are identified separately
+  coordinates and observation type; interior samples are identified separately
   from crossings. Convex estimates may bridge bays or holes;
   these are personal approximations, not exact game borders. Crossings collect
   with the Atlas closed or the layer hidden, persist per character, and stay out
@@ -377,12 +375,14 @@ observed automatically.
   distinct. If map dimensions are unavailable, the existing same-direction
   0.25% coordinate-cell fallback applies for borders. With readable map dimensions,
   the Atlas also records your initial sub-zone position and further interior
-  samples only when more than 50 yards from every existing sample on that map,
+  samples only when more than 25 yards from every existing sample on that map,
   including other named areas and
-  cross-over points. Cross-over recording keeps its separate ten-yard rule. Up to
-  4,096 total samples per map are retained, with at most 1,024 interior samples
-  to leave room for crossing evidence. Interior samples carry a name, position
-  and time, never an invented from/to transition.
+  cross-over points. Cross-over recording keeps its separate ten-yard rule. The Atlas polls every
+  quarter second and continues recording as the survey grows. At 1,024 interior points,
+  the Atlas suggests cleanup once per map. Discovery chat notifications also show
+  the notice when enabled. Clean Redundant Points
+  stores each compacted coordinate in eight characters and applies a five-yard
+  tolerance to both outlines.
   Recording queues lightweight updates; indexing, geometry and drawing are spread
   across frames. The previous completed shading remains visible while updating,
   and observations on another map do not rebuild the displayed map.
@@ -1045,6 +1045,28 @@ reserves the maximum cost; acceptance commits the adjusted cost. Beast Lore
 remains free.
 
 ## Sharing and Rumours
+
+Choose **Compare** above the Bestiary footer to invite a player by full name.
+A friendly player target fills the name for you. You can also right-click that
+player's portrait and choose **Compare Bestiaries**. Both players need the same
+addon build, with incoming sharing enabled, outside combat and chat restrictions.
+Updated clients automatically compress catalogues and reports when doing so
+saves a whisper. Transfer speed adapts to the client's chat throttle.
+
+After the invitation is accepted, each creature has a **You** column and a
+column for your friend. Select a creature name to inspect both players' basic
+facts, shareable traits and Beast Lore availability. Check individual entries
+to send or receive, or use **Select all to send** and **Select all to receive**
+across all pages of the current search. **Propose exchange** gives the other
+player the checked entries and both cost breakdowns to review together.
+
+Each sender pays for their own outgoing reports. The totals include each
+creature's rank multiplier, known-basic waiver and free Beast Lore. The balance
+needed to reserve can exceed the final cost because each outgoing report
+reserves its maximum until acceptance. Delivery proceeds one report at a time
+in each direction. Received traits appear in **Rumours** with their source.
+Stopping an exchange keeps the reports already delivered. A paid report with
+an uncertain receipt can be retried through **Share**.
 
 Options includes **Block incoming offers**, off by default and saved per character.
 Enable it to automatically decline new offers and close unaccepted offers, with

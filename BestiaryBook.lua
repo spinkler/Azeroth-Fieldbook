@@ -1507,6 +1507,11 @@ local ink = { 0.75, 0.8, 0.8 }
         book.shareButton = ui.ShareButton(book, function()
             if sharingWindow then sharingWindow:Open(selected) end
         end)
+        if sharingWindow and sharingWindow.OpenComparison then
+            book.compareButton=button(book,"Compare",174,-638,118,function() sharingWindow:OpenComparison() end)
+            styleSelection(book.compareButton,nil,true)
+            sharingWindow:SetComparisonVisibilityCallback(function(shown) book.compareButton:SetSelected(shown) end)
+        end
         deleteForm:ClearAllPoints();deleteForm:SetPoint("TOPLEFT",3,-60);deleteForm:SetSize(294,648)
         deleteForm:SetBackdrop(nil)
         deleteForm.paper:Hide()
@@ -1522,7 +1527,7 @@ local ink = { 0.75, 0.8, 0.8 }
         local hiddenForDelete
         local function hideDeleteControls()
             for _,key in ipairs({"pageTitle","search","searchClear","indexButton","listFilterButton",
-                "sortButton","creatureScrollBar","indexCount","shareButton","deleteButton"}) do
+                "sortButton","creatureScrollBar","indexCount","compareButton","shareButton","deleteButton"}) do
                 local control=book[key]
                 if control then
                     if hiddenForDelete[control]==nil then hiddenForDelete[control]=control:IsShown() end
