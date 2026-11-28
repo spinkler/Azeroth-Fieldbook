@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.46.0 - 2026-11-28
+
+- Search the Bestiary by full or partial item name to find creatures with matching observed drops, including items listed under Skinning.
+- Dragging the Bestiary scrollbar updates the visible index rows. Cold loot searches load item names in batches, and item updates refresh the Bestiary only when relevant.
+- Restore gold dragons for Elites and silver dragons for Rares and Rare Elites in the Bestiary list, alongside the existing creature markers.
+- Document loot search and add regression checks for large journals, delayed item details, and rank icon spacing.
+
 ## v0.45.1 - 2026-11-28
 
 - Forsaken Seekers, Herbalists and Thugs at Bathran’s Haunt appear in the Ashenvale Bestiary with the Horde crest, including entries recorded before their faction was identified.

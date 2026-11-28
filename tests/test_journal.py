@@ -669,7 +669,8 @@ for _,sample in ipairs({{24,false,false},{25,true,false},{50,true,false},{100,tr
     for _,row in ipairs(abilityBook.rows) do
         if row.id==42 then
             check(row.killReward:IsShown()==sample[2],'index reward matches the kill counter')
-            check(row.text:GetWidth()==(sample[2] and 184 or 203),'name reserves space only for earned rewards')
+            local widthWithRank=203-(row.rankIcon:IsShown() and 19 or 0)
+            check(row.text:GetWidth()==widthWithRank-(sample[2] and 19 or 0),'only earned rewards reserve an additional slot')
             for _,part in ipairs(row.killReward.crownParts) do check(part:IsShown()==sample[3],'index crown follows the same milestone') end
         end
     end

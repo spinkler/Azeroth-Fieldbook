@@ -100,6 +100,44 @@ class BestiaryModelTests(unittest.TestCase):
             assert(not section.portrait:IsShown())
         ''')
 
+    def test_index_rank_icons_share_space_with_existing_markers(self):
+        lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
+            'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',
+            'FieldbookShell.lua', 'BestiaryPages.lua', 'BestiaryBook.lua'])
+        lua.execute('''
+            local j=ns.CreateBestiaryJournal({},function() return nil end)
+            local elite=j:Ensure(1,false,'An elite with a name long enough to scroll')
+            elite.rank,elite.levelMin,elite.levelMax,elite.kills='Elite',10,10,25
+            local rare=j:Ensure(3732,false,'B Rare')
+            rare.rank='Rare'
+            local rareElite=j:Ensure(3,false,'C Rare Elite')
+            rareElite.rank,rareElite.levelMin,rareElite.levelMax='Rare Elite',10,10
+            local normal=j:Ensure(4,false,'D Normal')
+            normal.levelMin,normal.levelMax=10,10
+            local book=ns.CreateBestiaryBook(j);book:Toggle()
+            local section=AzerothFieldbookBestiarySection
+            local row=section.rows[1]
+            assert(row.rankIcon:IsShown() and row.rankIcon.atlas=='nameplates-icon-elite-gold')
+            assert(row.killReward:IsShown() and row.rankIcon.point[4]==-24)
+            eq(row.text:GetWidth(),165)
+            row.scripts.OnEnter(row)
+            eq(row.nameViewport:GetWidth(),165,'hover scroll leaves room for both icons')
+
+            local rareRow=section.rows[2]
+            assert(rareRow.rankIcon:IsShown() and rareRow.rankIcon.atlas=='nameplates-icon-elite-silver')
+            assert(rareRow.skullMark:IsShown() and rareRow.factionIcon:IsShown())
+            eq(rareRow.factionIcon.point[4],-24)
+            eq(rareRow.rankIcon.point[4],-43)
+            eq(rareRow.text:GetWidth(),146)
+            assert(section.rows[3].rankIcon:IsShown() and section.rows[3].rankIcon.atlas=='nameplates-icon-elite-silver')
+
+            section.search:SetText('D Normal')
+            eq(row.id,4)
+            assert(not row.rankIcon:IsShown() and not row.killReward:IsShown())
+            assert(not row.nameViewport:IsShown(),'reused rows end the previous name scroll')
+            eq(row.text:GetWidth(),203,'normal creatures get the full name width')
+        ''')
+
     def test_index_letters_scroll_without_filtering(self):
         lua = new_ui_client(['SharingReport.lua', 'BestiaryJournal.lua', 'Scrollbars.lua',
             'ActionButtons.lua', 'WindowFocus.lua', 'WindowPositions.lua', 'UIScale.lua',

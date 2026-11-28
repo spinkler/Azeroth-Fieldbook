@@ -70,6 +70,12 @@ function ns.GroupPropertyLines(groups,width,measure)
     return lines
 end
 
+local rankIconAtlases = {
+    Elite = "nameplates-icon-elite-gold",
+    Rare = "nameplates-icon-elite-silver",
+    ["Rare Elite"] = "nameplates-icon-elite-silver",
+}
+
 local function createKillReward(parent,crownOffset)
     crownOffset=crownOffset or 2
     local reward=CreateFrame("Frame",nil,parent)
@@ -295,6 +301,7 @@ function ns.CreateBestiaryBook(journal,shell)
     local label,button,cornerClose,edit=ui.Label,ui.Button,ui.Close,ui.Edit
     local book, selected, offset, abilityOffset = nil, nil, 0, 0
     local creaturePageSize = 18
+    local creatureRows, creatureRowsRevision, creatureCount = {}, nil, 0
     local creatureNotes = ns.CreateCreatureNotesWindow and ns.CreateCreatureNotesWindow(journal,function() return shell:GetFrame() end)
     local creatureLocations = ns.CreateCreatureLocationsWindow and ns.CreateCreatureLocationsWindow(journal,function() return book.detail end)
     local sharingWindow = journal.sharing and ns.CreateSharingWindow and ns.CreateSharingWindow(journal,journal.sharing,function() return shell:GetFrame() end)
@@ -303,6 +310,8 @@ function ns.CreateBestiaryBook(journal,shell)
     local category, initial, reviewOnly = nil, nil, false
     local indexOpen = false
     local locationFilters, rankFilters = {}, {}
+    local lootSearch = {names={}, queue={}, head=1, query=""}
+    local lootDetailsDirty = false
     local typeOrder = { "Beast", "Humanoid", "Dragonkin", "Demon", "Elemental", "Giant", "Undead", "Mechanical", "Critter", "Aberration", "Other" }
     local magicSchools = {
         { name="Arcane", color="d884ff" }, { name="Fire", color="ff7043" },
@@ -590,6 +599,43 @@ local ink = { 0.75, 0.8, 0.8 }
         requestModel()
     end
     local encounterHints={}
+    local function queueLootSearchName(itemID)
+        lootSearch.names[itemID] = true
+        lootSearch.queue[#lootSearch.queue+1] = itemID
+    end
+    local function cachedLootSearchName(_, itemID)
+        local name = lootSearch.names[itemID]
+        if name == nil then queueLootSearchName(itemID) end
+        if type(name) == "string" then return name end
+    end
+    local function loadLootSearchNames()
+        local queue, head, query = lootSearch.queue, lootSearch.head, lootSearch.query
+        if query == "" or head > #queue then return end
+        -- A cold search can touch hundreds of distinct item IDs. Budget native
+        -- lookups across frames, including when the client cache is already warm.
+        local clock = type(debugprofilestop) == "function" and debugprofilestop
+        local deadline = clock and clock() + 1
+        local last = math.min(head+31, #queue)
+        while head <= last do
+            local itemID = queue[head]
+            head = head+1
+            -- True means queued. False waits for a successful item-info event.
+            if lootSearch.names[itemID] == true then
+                lootSearch.names[itemID] = false
+                local name = journal:GetLootSearchName(itemID)
+                if name then
+                    lootSearch.names[itemID] = name
+                    if name:find(query, 1, true) then lootSearch.dirty = true end
+                end
+            end
+            if deadline and clock() >= deadline then break end
+        end
+        if head > #queue then
+            lootSearch.queue, lootSearch.head = {}, 1
+        else
+            lootSearch.head = head
+        end
+    end
     local refresh
     local rumoursWindow = ns.CreateRumoursWindow and ns.CreateRumoursWindow(journal,function()
         if book then refresh() end
@@ -630,8 +676,12 @@ local ink = { 0.75, 0.8, 0.8 }
         message("")
         refresh(true,clearBlockingFilters)
     end
+    local function currentCreatureRows()
+        if creatureRowsRevision ~= journal.revision then refresh() end
+        return creatureRows
+    end
     local function cycleEntry(direction)
-        local rows=journal:List(category,book.search:GetText(),reviewOnly,nil,locationFilters,rankFilters)
+        local rows=currentCreatureRows()
         if #rows==0 then return false end
         local current
         for i,row in ipairs(rows) do if row.id==selected then current=i; break end end
@@ -641,9 +691,136 @@ local ink = { 0.75, 0.8, 0.8 }
         choose(rows[nextIndex].id)
         return true
     end
+    local function clampCreatureOffset(value)
+        return math.max(0, math.min(value, #creatureRows - creaturePageSize))
+    end
+    local function renderCreatureRows(updateRange)
+        local rows = creatureRows
+        book.updatingCreatureScroll=true
+        local scrollable = #rows > creaturePageSize
+        if updateRange then
+            book.creatureScrollBar:SetMinMaxValues(0,math.max(0,#rows-creaturePageSize))
+            book.creatureScrollBar:SetShown(scrollable)
+        end
+        if book.creatureScrollBar:GetValue() ~= offset then book.creatureScrollBar:SetValue(offset) end
+        book.updatingCreatureScroll=false
+        local visibleRumours=false
+        for i, row in ipairs(book.rows) do
+            if updateRange then row:EnableMouseWheel(scrollable) end
+            local data = rows[offset + i]
+            local previous=i>1 and rows[offset+i-1]
+            local groupBoundary=data and previous and data.name:sub(1,1):upper()~=previous.name:sub(1,1):upper()
+            for _,line in ipairs(row.groupDivider) do line:SetShown(groupBoundary==true) end
+            if row.id~=(data and data.id) or (data and row.text:GetText()~=data.name) then row:StopNameScroll() end
+            row.id = data and data.id
+            if data then
+                local entry=journal.entries[data.id]
+                row.reviewMark:SetText(data.review and "*" or "")
+                row.text:SetText(data.name)
+                local _,reward=journal:GetKillReward(data.id)
+                local unknown=entry.personalEncountered~=true
+                local skull=journal:IsSkull(data.id)
+                if unknown or skull then reward=nil end
+                row.killReward:SetReward(reward)
+                row.unknownMark:SetShown(unknown)
+                row.skullMark:SetShown(skull)
+                local hasMarker=unknown or skull or reward~=nil
+                local faction=journal:GetFactionAffiliation(data.id)
+                local hasFaction=faction=="Alliance" or faction=="Horde"
+                row.factionIcon:SetShown(hasFaction)
+                local nameWidth=hasMarker and 184 or 203
+                local markerOffset=hasMarker and 24 or 5
+                if hasFaction then
+                    row.factionIcon:SetTexture("Interface\\PVPFrame\\PVP-Currency-"..faction)
+                    row.factionIcon:SetPoint("RIGHT",row,"RIGHT",-markerOffset,0)
+                    markerOffset=markerOffset+19
+                    nameWidth=nameWidth-19
+                end
+                local rankAtlas=rankIconAtlases[entry.rank]
+                row.rankIcon:SetShown(rankAtlas~=nil)
+                if rankAtlas then
+                    if row.rankAtlas~=rankAtlas then
+                        row.rankIcon:SetAtlas(rankAtlas)
+                        row.rankAtlas=rankAtlas
+                    end
+                    row.rankIcon:SetPoint("RIGHT",row,"RIGHT",-markerOffset,0)
+                    nameWidth=nameWidth-19
+                end
+                if row.text:GetWidth()~=nameWidth then row:StopNameScroll() end
+                row.text:SetWidth(nameWidth)
+                -- Native alpha gradients suppress the font's drop shadow.
+                -- The narrower text width already reserves space for markers.
+                row.text:ClearAlphaGradient()
+                local rowSelected = data.id == selected
+                local hasRumours=journal.GetRumours and #journal:GetRumours(data.id)>0
+                if hasRumours then visibleRumours=true;row.text:SetTextColor(114/255,214/255,91/255)
+                else row.text:SetTextColor(rowSelected and 1.00 or ink[1], rowSelected and 0.82 or ink[2], rowSelected and 0.14 or ink[3]) end
+                row.scrollingName:SetTextColor(row.text:GetTextColor())
+                row:SetSelected(rowSelected)
+                row:Show()
+            else row:Hide() end
+        end
+        book.indexCount:SetText("* Unlocked"..(visibleRumours and "\n|cff72d65bGreen|r: rumours" or ""))
+    end
+    local function scrollCreatureRows(nextOffset)
+        if book.updatingCreatureScroll or (book.deleteForm and book.deleteForm:IsShown()) then return end
+        if creatureRowsRevision ~= journal.revision then
+            offset = nextOffset
+            refresh()
+            return
+        end
+        nextOffset = clampCreatureOffset(nextOffset)
+        if nextOffset == offset then return end
+        offset = nextOffset
+        renderCreatureRows()
+    end
+    local function refreshCreatureIndex(revealSelected,clearBlockingFilters)
+        if lootSearch.entries ~= journal.entries then
+            lootSearch.entries = journal.entries
+            lootSearch.names, lootSearch.queue, lootSearch.head = {}, {}, 1
+        end
+        lootSearch.query, lootSearch.dirty = book.search:GetText():lower(), false
+        local rows = journal:List(category,lootSearch.query,reviewOnly,nil,locationFilters,rankFilters,cachedLootSearchName)
+        local availableLetters = {}
+        for _,row in ipairs(rows) do availableLetters[row.name:sub(1,1):upper()] = true end
+        if initial and not availableLetters[initial] then initial=nil; offset=0 end
+        for _,letterButton in ipairs(book.letterButtons) do
+            letterButton:SetShown(indexOpen)
+            letterButton:SetEnabled(availableLetters[letterButton.letter] == true)
+            letterButton:SetSelected(initial == letterButton.letter)
+        end
+        if revealSelected and selected then
+            local selectedIndex
+            for index,row in ipairs(rows) do
+                if row.id==selected then selectedIndex=index;break end
+            end
+            if selectedIndex then
+                -- Move only far enough to reveal the selected row; ordinary
+                -- refreshes and manual scrolling retain their list position.
+                if selectedIndex<=offset then offset=selectedIndex-1
+                elseif selectedIndex>offset+creaturePageSize then offset=selectedIndex-creaturePageSize end
+            elseif clearBlockingFilters and journal.entries[selected] then
+                book.listFilterButton.ResetFilters()
+                return false
+            end
+        end
+        creatureRows, creatureRowsRevision = rows, journal.revision
+        offset = clampCreatureOffset(offset)
+        renderCreatureRows(true)
+        book.entryCount:SetCounts(creatureCount,#rows)
+        return true
+    end
+    local function refreshSearchResults(revealSelected)
+        if creatureRowsRevision ~= journal.revision or (book.deleteForm and book.deleteForm:IsShown()) then
+            refresh(revealSelected)
+        else
+            refreshCreatureIndex(revealSelected)
+        end
+    end
     refresh = function(revealSelected,clearBlockingFilters)
         if not book then return end
         if selected and journal:IsFactionAffiliated(selected) then choose(nil); return end
+        lootDetailsDirty = false
         local available, observedLocations = {}, {}
         for id in pairs(journal.entries) do
             local e=basicInfo(id)
@@ -672,83 +849,9 @@ local ink = { 0.75, 0.8, 0.8 }
         book.ranksButton:UpdateWindowBorder()
         book.review:SetSelected(reviewOnly)
         if book.RefreshFilters then book.RefreshFilters() end
-        local unletteredRows=journal:List(category,book.search:GetText(),reviewOnly,nil,locationFilters,rankFilters)
-        local availableLetters={}
-        for _,row in ipairs(unletteredRows) do availableLetters[row.name:sub(1,1):upper()]=true end
-        if initial and not availableLetters[initial] then initial=nil; offset=0 end
-        for _,letterButton in ipairs(book.letterButtons) do
-            letterButton:SetShown(indexOpen)
-            letterButton:SetEnabled(availableLetters[letterButton.letter] == true)
-            letterButton:SetSelected(initial == letterButton.letter)
-        end
-        local rows = unletteredRows
-        if revealSelected and selected then
-            local selectedIndex
-            for index,row in ipairs(rows) do
-                if row.id==selected then selectedIndex=index;break end
-            end
-            if selectedIndex then
-                -- Move only far enough to reveal the selected row; ordinary
-                -- refreshes and manual scrolling retain their list position.
-                if selectedIndex<=offset then offset=selectedIndex-1
-                elseif selectedIndex>offset+creaturePageSize then offset=selectedIndex-creaturePageSize end
-            elseif clearBlockingFilters and journal.entries[selected] then
-                book.listFilterButton.ResetFilters()
-                return
-            end
-        end
-        offset = math.max(0, math.min(offset, math.max(0, #rows - creaturePageSize)))
-        book.updatingCreatureScroll=true
-        book.creatureScrollBar:SetMinMaxValues(0,math.max(0,#rows-creaturePageSize))
-        book.creatureScrollBar:SetValue(offset)
-        book.creatureScrollBar:SetShown(#rows>creaturePageSize)
-        book.updatingCreatureScroll=false
-        local visibleRumours=false
-        for i, row in ipairs(book.rows) do
-            row:EnableMouseWheel(#rows>creaturePageSize)
-            local data = rows[offset + i]
-            local previous=i>1 and rows[offset+i-1]
-            local groupBoundary=data and previous and data.name:sub(1,1):upper()~=previous.name:sub(1,1):upper()
-            for _,line in ipairs(row.groupDivider) do line:SetShown(groupBoundary==true) end
-            if row.id~=(data and data.id) or (data and row.text:GetText()~=data.name) then row:StopNameScroll() end
-            row.id = data and data.id
-            if data then
-                row.reviewMark:SetText(data.review and "*" or "")
-                row.text:SetText(data.name)
-                local _,reward=journal:GetKillReward(data.id)
-                local unknown=journal.entries[data.id].personalEncountered~=true
-                local skull=journal:IsSkull(data.id)
-                if unknown or skull then reward=nil end
-                row.killReward:SetReward(reward)
-                row.unknownMark:SetShown(unknown)
-                row.skullMark:SetShown(skull)
-                local hasMarker=unknown or skull or reward~=nil
-                local faction=journal:GetFactionAffiliation(data.id)
-                local hasFaction=faction=="Alliance" or faction=="Horde"
-                row.factionIcon:SetShown(hasFaction)
-                local nameWidth=hasMarker and 184 or 203
-                if hasFaction then
-                    row.factionIcon:SetTexture("Interface\\PVPFrame\\PVP-Currency-"..faction)
-                    row.factionIcon:SetPoint("RIGHT",row,"RIGHT",hasMarker and -24 or -5,0)
-                    nameWidth=nameWidth-19
-                end
-                if row.text:GetWidth()~=nameWidth then row:StopNameScroll() end
-                row.text:SetWidth(nameWidth)
-                -- Native alpha gradients suppress the font's drop shadow.
-                -- The narrower text width already reserves space for markers.
-                row.text:ClearAlphaGradient()
-                local rowSelected = data.id == selected
-                local hasRumours=journal.GetRumours and #journal:GetRumours(data.id)>0
-                if hasRumours then visibleRumours=true;row.text:SetTextColor(114/255,214/255,91/255)
-                else row.text:SetTextColor(rowSelected and 1.00 or ink[1], rowSelected and 0.82 or ink[2], rowSelected and 0.14 or ink[3]) end
-                row.scrollingName:SetTextColor(row.text:GetTextColor())
-                row:SetSelected(rowSelected)
-                row:Show()
-            else row:Hide() end
-        end
-        book.indexCount:SetText("* Unlocked"..(visibleRumours and "\n|cff72d65bGreen|r: rumours" or ""))
         local entryCount, points = journal:GetTotals()
-        book.entryCount:SetCounts(entryCount,#rows)
+        creatureCount = entryCount
+        if not refreshCreatureIndex(revealSelected,clearBlockingFilters) then return end
         book.pointsCount:SetText(points .. " knowledge")
         local e = selected and journal.entries[selected]
         local hasPockets=e and e.pickpocketLoot and ((e.pickpocketLoot.samples or 0)>0 or next(e.pickpocketLoot.items or {})~=nil)
@@ -1256,7 +1359,7 @@ local ink = { 0.75, 0.8, 0.8 }
         book.pointsCount:SetTextColor(0.55,0.58,0.58)
         book.search = ui.Search(book,70,-110,168,100)
         book.searchClear=book.search.clearButton
-        book.search:HookScript("OnTextChanged", function() offset=0;refresh(book.search:GetText()=="") end)
+        book.search:HookScript("OnTextChanged", function() offset=0; refreshSearchResults(book.search:GetText()=="") end)
         -- Keep the popup independent of book focus/strata changes. Its entire
         -- hierarchy must draw above nested row rewards and scrollbar buttons.
         local sortDismiss=CreateFrame("Button","AzerothFieldbookSortMenu",UIParent)
@@ -1456,12 +1559,11 @@ local ink = { 0.75, 0.8, 0.8 }
         book.creatureScrollBar:SetValueStep(1)
         book.creatureScrollBar:SetObeyStepOnDrag(true)
         book.creatureScrollBar:SetScript("OnValueChanged",function(_,value)
-            if book.updatingCreatureScroll then return end
-            local nextOffset=math.floor(value+0.5)
-            if nextOffset~=offset then offset=nextOffset; refresh() end
+            scrollCreatureRows(math.floor(value+0.5))
         end)
+        local function scrollWheel(_,delta) scrollCreatureRows(offset-delta*3) end
         book.creatureScrollBar:EnableMouseWheel(true)
-        book.creatureScrollBar:SetScript("OnMouseWheel",function(_,delta) offset=offset-delta*3; refresh() end)
+        book.creatureScrollBar:SetScript("OnMouseWheel",scrollWheel)
         book.creatureScrollBar:Hide()
         for i = 1, creaturePageSize do
             local row = CreateFrame("Button", nil, book, "BackdropTemplate")
@@ -1477,6 +1579,9 @@ local ink = { 0.75, 0.8, 0.8 }
             row.killReward=createKillReward(row,1)
             row.factionIcon=row:CreateTexture(nil,"OVERLAY")
             row.factionIcon:SetSize(16,16)
+            row.rankIcon=row:CreateTexture(nil,"OVERLAY")
+            row.rankIcon:SetSize(16,16)
+            row.rankIcon:Hide()
             row.killReward:SetPoint("RIGHT",row,"RIGHT",-5,0)
             row.unknownMark=row:CreateFontString(nil,"OVERLAY",textFont("GameFontNormalLarge"))
             row.unknownMark:SetPoint("CENTER",row.killReward,"CENTER",0,0)
@@ -1491,7 +1596,7 @@ local ink = { 0.75, 0.8, 0.8 }
             row.skullMark:Hide()
             row:SetScript("OnClick", function(self) if self.id then choose(self.id) end end)
             row:EnableMouseWheel(true)
-            row:SetScript("OnMouseWheel", function(_, delta) offset=offset-delta*3; refresh() end)
+            row:SetScript("OnMouseWheel", scrollWheel)
             book.rows[i] = row
         end
         local deleteForm=ui.DeletePanel(book,shell,"Delete creature entry",true)
@@ -1580,7 +1685,7 @@ local ink = { 0.75, 0.8, 0.8 }
         for i=1,26 do
             local letter = string.char(64+i)
             local tab = button(book, letter, 3, -139-(i-1)*21, 29, function()
-                local rows=journal:List(category,book.search:GetText(),reviewOnly,nil,locationFilters,rankFilters)
+                local rows=currentCreatureRows()
                 for index,row in ipairs(rows) do
                     if row.name:sub(1,1):upper()==letter then
                         initial=letter;offset=index-1;refresh();break
@@ -1930,8 +2035,16 @@ local ink = { 0.75, 0.8, 0.8 }
         qualityMenu:SetScript("OnHide",function() filter:SetSelected(next(book.lootQualityHidden)~=nil) end)
         qualityMenu:Hide()
         filter:HookScript("OnHide",function() qualityMenu:Hide() end)
-        filter:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-        filter:SetScript("OnEvent",function() if filter:IsShown() and book.lootMode then refresh() end end)
+        book:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+        book:SetScript("OnEvent",function(_,_,itemID,success)
+            if issecretvalue and (issecretvalue(itemID) or issecretvalue(success)) then return end
+            if not success or type(itemID) ~= "number" then return end
+            if lootSearch.names[itemID] == false then queueLootSearchName(itemID) end
+            if not book.lootMode or not book:IsVisible() then return end
+            local e = selected and journal.entries[selected]
+            local loot = e and (book.pickpocketMode and e.pickpocketLoot or e.loot)
+            if loot and loot.items and loot.items[itemID] then lootDetailsDirty = true end
+        end)
 
         damageHeading:SetTextColor(1.00, 0.82, 0.14)
         local damageScroll=CreateFrame("ScrollFrame",nil,detail,"UIPanelScrollFrameTemplate")
@@ -2675,20 +2788,32 @@ local ink = { 0.75, 0.8, 0.8 }
         end
         book:HookScript("OnHide",resetOverlayState)
         book:HookScript("OnShow",resetOverlayState)
-        local elapsed, revision, nameRevision = 0, -1, -1
+        local elapsed, lootSearchElapsed, nameRevision = 0, 0, ns.PlayerNames and ns.PlayerNames.revision or 0
         local difficultyPlayerLevel=playerDifficultyLevel()
         book:SetScript("OnUpdate",function(_,dt)
+            loadLootSearchNames()
             elapsed=elapsed+dt
             if elapsed>=0.5 then
                 elapsed=0
                 local currentNames=ns.PlayerNames and ns.PlayerNames.revision or 0
                 local currentLevel=playerDifficultyLevel()
-                if revision~=journal.revision or nameRevision~=currentNames or difficultyPlayerLevel~=currentLevel then
+                if creatureRowsRevision~=journal.revision or nameRevision~=currentNames or difficultyPlayerLevel~=currentLevel
+                    or lootDetailsDirty then
                     difficultyPlayerLevel=currentLevel
-                    revision,nameRevision=journal.revision,currentNames
+                    nameRevision,lootSearchElapsed=currentNames,0
                     refresh()
+                    return
                 end
             end
+            -- Combine item arrivals into batches so a result never causes a
+            -- redraw for every individual item name that becomes available.
+            if lootSearch.dirty then
+                lootSearchElapsed=lootSearchElapsed+dt
+                if lootSearchElapsed>=0.1 then
+                    lootSearchElapsed=0
+                    refreshSearchResults()
+                end
+            else lootSearchElapsed=0 end
         end)
         if UISpecialFrames then UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryDamageNotes"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryOffenses"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryDefenses"; UISpecialFrames[#UISpecialFrames+1]="AzerothFieldbookBestiaryBehaviour" end
         local bookScale=shell:GetBaseScale()

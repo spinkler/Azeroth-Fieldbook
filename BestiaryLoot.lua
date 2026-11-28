@@ -169,16 +169,13 @@ function ns.StartBestiaryLoot(journal)
         if changed then journal:Touch() end
     end
     frame:RegisterEvent("LOOT_READY");frame:RegisterEvent("LOOT_OPENED")
-    frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
     for _,event in ipairs({"UNIT_SPELLCAST_SENT","UNIT_SPELLCAST_SUCCEEDED","UNIT_SPELLCAST_FAILED",
         "UNIT_SPELLCAST_INTERRUPTED","LOOT_CLOSED","PLAYER_ENTERING_WORLD"}) do frame:RegisterEvent(event) end
     frame:SetScript("OnEvent",function(_,event,unit,a,b,c)
         if paused() then return end
-        if event~="GET_ITEM_INFO_RECEIVED" then
-            diagnostics:Log(event,unit,a,b,c)
-            diagnostics:Log("state: pending/succeeded/guid/context",pending and pending.cast,
-                pending and pending.succeeded,pending and pending.guid,moneyContext and moneyContext.cast)
-        end
+        diagnostics:Log(event,unit,a,b,c)
+        diagnostics:Log("state: pending/succeeded/guid/context",pending and pending.cast,
+            pending and pending.succeeded,pending and pending.guid,moneyContext and moneyContext.cast)
         for _,value in pairs({unit,a,b,c}) do if issecretvalue and issecretvalue(value) then return end end
         if event=="PLAYER_ENTERING_WORLD" then pending=nil;buffered=nil;discardMoney();return end
         if event=="LOOT_CLOSED" then
@@ -234,7 +231,7 @@ function ns.StartBestiaryLoot(journal)
             end
             return
         end
-        if event=="GET_ITEM_INFO_RECEIVED" then journal:Touch() else snapshot() end
+        snapshot()
     end)
     return frame
 end

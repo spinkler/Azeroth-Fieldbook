@@ -1819,10 +1819,27 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         self:Touch()
         return true
     end
-    function journal:List(category, query, reviewOnly, initial, locations, ranks)
+    function journal:GetLootSearchName(itemID)
+        local name = read(C_Item and C_Item.GetItemInfo or GetItemInfo, itemID)
+        if str(name) then return name:lower() end
+    end
+    function journal:List(category, query, reviewOnly, initial, locations, ranks, lootSearchName)
         local sortField,descending=self:GetListSort()
         query = (query or ""):lower()
+        lootSearchName = lootSearchName or self.GetLootSearchName
         local locationFilterActive = type(locations) == "table" and next(locations) ~= nil
+        local itemMatches = {}
+        local function matchesLoot(loot)
+            if not loot or not loot.items then return false end
+            for itemID in pairs(loot.items) do
+                if itemMatches[itemID] == nil then
+                    local itemName = lootSearchName(self, itemID)
+                    itemMatches[itemID] = itemName ~= nil and itemName:find(query, 1, true) ~= nil
+                end
+                if itemMatches[itemID] then return true end
+            end
+            return false
+        end
         local rows = {}
         for id, entry in pairs(self.entries) do
             local name = self:GetCreatureName(id)
@@ -1844,7 +1861,8 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
                     and (not reviewOnly or review)
                     and (not ranks or not next(ranks) or ranks[entry.rank] == true)
                     and locationMatch
-                    and (name:lower():find(query, 1, true) or basic.category:lower():find(query, 1, true)) then
+                    and (name:lower():find(query, 1, true) or basic.category:lower():find(query, 1, true)
+                        or matchesLoot(entry.loot)) then
                     local sortValue=name:lower()
                     if sortField=="kills" then sortValue=entry.kills or 0
                     elseif sortField=="maxLevel" then sortValue=self:IsSkull(id) and math.huge or basic.levelMax

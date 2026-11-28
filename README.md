@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.45.1 (Pre-1.0)
+# Azeroth Fieldbook 0.46.0 (Pre-1.0)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -811,6 +811,9 @@ to the sharing protocol.
 Creature tooltips also show recorded kill counts by default, including on
 unlocked entries. Toggle **Show kill count in creature tooltips** under Options
 → **Tooltips and cast IDs** to hide them; the preference is saved per character.
+
+Search by creature name, creature type, or an item in the observed drop table.
+Full and partial item names match, including items listed under **Skinning**.
 The square arrow beside Search opens **Sort**, with **Name**, **Kills**, **Max
 Level**, **Min Level**, and **First Encountered** and separate **Ascending** / **Descending** choices.
 It defaults to **Name / Ascending** and remembers your character's selection.

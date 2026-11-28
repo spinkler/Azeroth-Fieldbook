@@ -1,4 +1,4 @@
-"""Quality filtering must affect presentation only, including uncached items."""
+"""The Bestiary filters loot quality in the detail view and searches observed drops in the index."""
 from test_locations import LocationsWindowTests, ROOT
 lua = LocationsWindowTests().client(book=True)
 for module in ['SharingReport.lua', 'RumoursWindow.lua']:
@@ -108,7 +108,12 @@ lua.execute(r"""
     end
     toggle('Poor');eq(shown(),2)
     toggle('Unknown');eq(shown(),1)
-    qualities[102]=3;b.lootFilter.scripts.OnEvent();eq(shown(),2)
+    qualities[102]=3
+    b.scripts.OnEvent(b,'GET_ITEM_INFO_RECEIVED',103,true)
+    b.scripts.OnUpdate(b,0.5);eq(shown(),1,'unrelated item info leaves the loot panel alone')
+    b.scripts.OnEvent(b,'GET_ITEM_INFO_RECEIVED',102,true)
+    eq(shown(),1,'item events defer the loot panel refresh')
+    b.scripts.OnUpdate(b,0.5);eq(shown(),2)
     toggle('Rare');eq(shown(),0);eq(b.noDamage.text,'No drops match the quality filter.')
     assert(not b.damageScrollBar:IsShown())
     eq(b.lootFilter.point[4],-6);eq(b.damageHeading:GetWidth(),296)
@@ -147,3 +152,38 @@ lua.execute(r"""
 
 """)
 print('PASS: loot quality filtering, unknown cache refresh, toggling and record preservation')
+
+lua = LocationsWindowTests().client(book=True)
+lua.execute(r"""
+    local function drops(id)
+        return {samples=1,items={[id]={quantity=1,drops=1}}}
+    end
+    local boar=j:Ensure(43,false,'Bristleback Boar');boar.category='Beast';boar.loot=drops(2318)
+    local bear=j:Ensure(44,false,'Young Bear');bear.category='Beast';bear.loot=drops(2318)
+    local bandit=j:Ensure(45,false,'Bandit');bandit.category='Humanoid';bandit.pickpocketLoot=drops(2318)
+    local wolf=j:Ensure(46,false,'Wolf');wolf.category='Beast';wolf.loot=drops(2934)
+    local names={[2318]='Light Leather'}
+    local reads={}
+    C_Item={GetItemInfo=function(id)
+        reads[id]=(reads[id] or 0)+1
+        return names[id]
+    end}
+    book=ns.CreateBestiaryBook(j);book:OpenAtUnit('target')
+    local b=AzerothFieldbookBestiarySection
+    assert(not b.lootFilter:IsShown(),'the selected creature has no drops')
+    b.search:SetText('LiGhT LeA')
+    b.scripts.OnUpdate(b,0.1)
+    eq(b.rows[1].id,43);eq(b.rows[2].id,44);eq(b.rows[3].id,nil)
+    eq(reads[2318],1,'shared drop IDs are looked up once per search')
+    b.typeButtons.Humanoid.scripts.OnClick();eq(b.rows[1].id,nil)
+    b.typeButtons['All creatures'].scripts.OnClick()
+    b.search:SetText('light.leather');eq(b.rows[1].id,nil,'item matching is literal')
+    b.search:SetText('light hide');eq(b.rows[1].id,nil)
+    names[2934]='Light Hide'
+    b.scripts.OnEvent(b,'GET_ITEM_INFO_RECEIVED',2934,true)
+    b.scripts.OnUpdate(b,0.1)
+    eq(b.rows[1].id,46);eq(b.rows[2].id,nil)
+    b.search:SetText('Bristleback');eq(b.rows[1].id,43);eq(b.rows[2].id,nil)
+    b.search:SetText('Beast');eq(b.rows[1].id,43);eq(b.rows[2].id,46);eq(b.rows[3].id,44)
+""")
+print('PASS: observed drop search combines with index filters and refreshes when item names load')
