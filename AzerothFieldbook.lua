@@ -271,22 +271,23 @@ local function watchedEnemy(unit, explicit, sourceGUID, trace)
     if not ok then return nil, reason end
     local id, identityReason, identityGUID = npcID(unit)
     if effectSource and identityGUID ~= sourceGUID then return nil, "Aura source identity changed/unavailable." end
-    local affiliation, questObjective
-    -- Faction alone also describes genuine quest enemies. Only a verified kill
-    -- objective (or its saved personal evidence) overrides the faction filter.
+    local affiliation = id and journal and journal:GetFieldEnemyFaction(id)
     if id and type(UnitFactionGroup) == "function" then
         local success, faction = pcall(UnitFactionGroup, unit)
         if success and public(faction) and (faction == "Alliance" or faction == "Horde") then
             affiliation = faction
-            local service
-            questObjective, service = factionQuestObjective(unit, identityGUID, journal and journal:GetFactionQuestObjective(id), trace)
-            local same, guid = pcall(UnitGUID, unit)
-            if not same or not publicString(guid) or guid ~= identityGUID then return nil, "Faction NPC identity changed/unavailable." end
-            if journal then journal:MarkFactionAffiliation(id, faction, questObjective, service) end
-            if service then return nil, "Faction civilian/service NPC excluded." end
-            if not questObjective and not (journal and journal:IsFactionBountyEnemy(id)) then
-                return nil, "Alliance/Horde-affiliated NPC excluded; no verified kill objective."
-            end
+        end
+    end
+    local questObjective
+    if affiliation then
+        local service
+        questObjective, service = factionQuestObjective(unit, identityGUID, journal and journal:GetFactionQuestObjective(id), trace)
+        local same, guid = pcall(UnitGUID, unit)
+        if not same or not publicString(guid) or guid ~= identityGUID then return nil, "Faction NPC identity changed/unavailable." end
+        if journal then journal:MarkFactionAffiliation(id, affiliation, questObjective, service) end
+        if service then return nil, "Faction civilian/service NPC excluded." end
+        if not questObjective and not (journal and journal:IsFactionEnemyException(id)) then
+            return nil, "Alliance/Horde-affiliated NPC excluded; no verified kill objective."
         end
     end
     if effectSource then

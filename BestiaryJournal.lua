@@ -499,14 +499,26 @@ function ns.CreateBestiaryJournal(db, identify, trackingDB)
         local entry=self.entries[id]
         return entry and number(entry.factionQuestObjective) and entry.factionQuestObjective or nil
     end
-    -- Kaijo's bounty asks for his banner, so it supplies no monster objective.
-    function journal:IsFactionBountyEnemy(id)
-        return id == 263071
+    local fieldEnemyFactions = {
+        [3732] = "Horde", -- Forsaken Seeker
+        [3733] = "Horde", -- Forsaken Herbalist
+        [3734] = "Horde", -- Forsaken Thug
+    }
+    function journal:GetFieldEnemyFaction(id)
+        return fieldEnemyFactions[id]
+    end
+    function journal:GetFactionAffiliation(id)
+        local entry = self.entries[id]
+        return (entry and entry.factionAffiliation) or fieldEnemyFactions[id]
+    end
+    function journal:IsFactionEnemyException(id)
+        -- The Bathran's Haunt enemies and Kaijo's banner bounty do not need an active kill objective.
+        return fieldEnemyFactions[id] ~= nil or id == 263071
     end
     function journal:IsFactionAffiliated(id)
         local entry=self.entries[id]
         return entry~=nil and (entry.factionAffiliation=="Alliance" or entry.factionAffiliation=="Horde")
-            and not self:IsFactionBountyEnemy(id) and not self:GetFactionQuestObjective(id)
+            and not self:IsFactionEnemyException(id) and not self:GetFactionQuestObjective(id)
     end
     function journal:MarkFactionAffiliation(id, faction, questObjective, service)
         if faction~="Alliance" and faction~="Horde" then return end

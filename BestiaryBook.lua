@@ -176,12 +176,12 @@ local function setupSpellLookup(book,journal,message,save)
     book.spellPicker=picker
     picker.heading=ui.Label(picker,"",12,-10,405,"GameFontNormal")
     ui.Close(picker)
-    local matches,page,search,filledName
+    local matches,page,search,filledName,resolvedReference
     local pageSize=6
     local function cancel()
         editor:SetScript("OnUpdate",nil)
         if search or matches then message("") end
-        search,matches=nil,nil
+        search,matches,resolvedReference=nil,nil,nil
         picker:Hide()
     end
     local function selectSpell(reference)
@@ -198,6 +198,7 @@ local function setupSpellLookup(book,journal,message,save)
             book.manualName:SetText(name)
             filledName=name
         end
+        resolvedReference=input:GetText()
         message(name.." (ID "..spellID.."). Confirm this ability to save.")
         return true
     end
@@ -249,7 +250,10 @@ local function setupSpellLookup(book,journal,message,save)
     editor:SetScript("OnEvent",function()
         if search or matches then cancel();message("Spell linking is available outside combat.") end
     end)
-    input:HookScript("OnTextChanged",cancel)
+    input:HookScript("OnTextChanged",function(self)
+        -- The spell link written by selectSpell can report a text change after resolution.
+        if self:GetText()~=resolvedReference then cancel() end
+    end)
     input:HookScript("OnEscapePressed",cancel)
     book.manualName:HookScript("OnTextChanged",function() filledName=nil end)
 
@@ -278,7 +282,9 @@ local function setupSpellLookup(book,journal,message,save)
             end
         end)
     end
-    input:SetScript("OnEnterPressed",function(self) self:ClearFocus();resolve(false) end)
+    input:SetScript("OnEnterPressed",function(self)
+        resolve(resolvedReference~=nil and self:GetText()==resolvedReference)
+    end)
     book.resolveButton=ui.Button(editor,"Resolve",640,-656,92,function() resolve(false) end)
     book.confirmAbilityButton=ui.Button(editor,"Confirm this ability",740,-656,195,function() resolve(true) end)
 end
@@ -717,7 +723,7 @@ local ink = { 0.75, 0.8, 0.8 }
                 row.unknownMark:SetShown(unknown)
                 row.skullMark:SetShown(skull)
                 local hasMarker=unknown or skull or reward~=nil
-                local faction=journal.entries[data.id].factionAffiliation
+                local faction=journal:GetFactionAffiliation(data.id)
                 local hasFaction=faction=="Alliance" or faction=="Horde"
                 row.factionIcon:SetShown(hasFaction)
                 local nameWidth=hasMarker and 184 or 203

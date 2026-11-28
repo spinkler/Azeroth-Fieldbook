@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.45.1 - 2026-11-28
+
+- Forsaken Seekers, Herbalists and Thugs at Bathran’s Haunt appear in the Ashenvale Bestiary with the Horde crest, including entries recorded before their faction was identified.
+- In the Bestiary, press Enter in the spell ID field to resolve an ability, then press Enter again to add it to Recorded Abilities. The field stays focused for the next ID.
+- Lorekeeper’s Chronicle now remembers the item or plaque that opened a reader and retries while item details load. This covers the Manual of Engineering Disciplines, readable bag buttons that bypass the usual use hook, and uncatalogued sources displayed in item, gossip or quest readers. Opening another book starts a fresh capture. The Chronicle explains skipped automatic captures in its status line.
+- Lorekeeper’s Chronicle records world books opened with DialogueUI’s book reader. Whole-book mode also saves additional pages fetched by DialogueUI.
+- Updated the Bestiary and Chronicle documentation and added regression coverage for the Bathran’s Haunt enemies, spell entry, and lore capture.
+
 ## v0.45.0 - 2026-11-24
 
 - At 1,024 interior survey points, each map gets a one-time Atlas notice that recording continues and suggests Clean Redundant Points. Players with discovery chat messages enabled also receive the notice in chat.

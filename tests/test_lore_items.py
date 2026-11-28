@@ -40,6 +40,162 @@ def item_client():
 
 
 class LoreItemTests(unittest.TestCase):
+    def test_manual_right_clicked_without_bag_use_hook_or_reader_guid(self):
+        lua = item_client()
+        lua.execute('''
+            itemID=10789;itemName='Manual of Engineering Disciplines';book.title=itemName;openerGUID=nil
+            local button={GetBagID=function() return 0 end,GetID=function() return 7 end}
+            function GetMouseFoci() return {button} end
+            function C_Container.GetContainerItemInfo(bag,slot)
+                assert(bag==0 and slot==7);return {itemID=itemID,isReadable=true,itemName=itemName}
+            end
+            t:Event('GLOBAL_MOUSE_DOWN','LeftButton');begin();step(4)
+            assert(not writing() and t:GetStatus():find('author check'));close()
+            t:Event('GLOBAL_MOUSE_DOWN','RightButton');assert(not writing())
+            begin();step(1);assert(writing().identity=='item:10789' and writing().pages[1].raw==book.pages[1])
+            close();assert(j:Delete(writing().id))
+            itemID=8383;itemClass=0
+            t:Event('GLOBAL_MOUSE_DOWN','RightButton');begin();step(1);assert(not writing())
+        ''')
+
+    def test_manual_opener_only_available_at_begin(self):
+        lua = item_client()
+        lua.execute('''
+            itemID=10789;itemName='Manual of Engineering Disciplines';book.title=itemName
+            book.pages={'First engineering page','Second engineering page'}
+            function ItemTextHasNextPage() return book.page<#book.pages end
+            local hints=ns.CreateLoreTooltips(j,settings)
+            assert(hints:Status(itemName,itemID,'item'))
+            t:Event('ITEM_TEXT_BEGIN');openerGUID=nil
+            t:Event('ITEM_TEXT_READY');step(1)
+            local e=assert(writing());assert(e.identity=='item:10789' and e.subtype=='Quest item')
+            book.page=2;t:Event('ITEM_TEXT_READY');step(1)
+            assert(e.pages[2].raw==book.pages[2] and j:WritingSummary(e).complete)
+            assert(not hints:Status(itemName,itemID,'item'));close()
+            assert(j:Delete(e.id));begin();step(1);assert(not writing())
+        ''')
+
+    def test_uncatalogued_plaque_correlated_with_native_reader(self):
+        lua = item_client()
+        lua.execute('''
+            openerGUID=nil;book.title='A newly discovered plaque'
+            Enum.TooltipDataType={Object=4}
+            C_TooltipInfo={GetWorldCursor=function()
+                return {type=4,id=900003,lines={{leftText=book.title}}}
+            end}
+            begin();step(1);assert(writing().identity=='gameobject:900003')
+        ''')
+
+    def test_uncatalogued_carried_quest_book_with_late_item_info(self):
+        lua = item_client()
+        lua.execute('''
+            openerGUID=nil;itemID=900002;itemName='An uncatalogued book';book.title=itemName
+            local cached=C_Item.GetItemInfo
+            C_Item.GetItemInfo=function(id) if ticks>=0.55 then return cached(id) end end
+            useBag();begin();step(1)
+            assert(writing().identity=='item:900002' and writing().pages[1].raw==book.pages[1])
+        ''')
+
+    def test_reader_with_initially_missing_source_retries_without_another_ready(self):
+        lua = item_client()
+        lua.execute('''
+            openerGUID=nil;itemID=10789;itemName='Manual of Engineering Disciplines';book.title=itemName
+            C_Item.GetItemInfo=nil
+            begin();step(.5);assert(not writing())
+            openerGUID='Item-0-12345';step(1)
+            assert(writing().identity=='item:10789' and writing().pages[1].raw==book.pages[1])
+        ''')
+
+    def test_uncatalogued_item_with_localized_heading_in_replacement_reader(self):
+        lua = item_client()
+        lua.execute('''
+            function GetLocale() return 'deDE' end
+            itemID=900002;itemName='Handbuch';book.title='Vorwort'
+            ItemTextFrame:Hide();settings.loreOnlyOpenedPages=false
+            begin();step(1);assert(writing().identity=='item:900002' and writing().pages[1].raw==book.pages[1])
+            close();assert(not t:CaptureCurrent())
+        ''')
+
+    def test_dialogueui_prefetch_records_world_book_with_no_fieldbook_page_turns(self):
+        for only_opened in (True, False):
+            with self.subTest(only_opened=only_opened):
+                lua = item_client()
+                lua.globals().settings.loreOnlyOpenedPages = only_opened
+                lua.execute('''
+                    openerGUID='GameObject-0-1-2-3-900003-ABC'
+                    book.title='World book in DialogueUI'
+                    book.pages={'Opening page','Middle page','Final page'}
+                    function ItemTextHasNextPage() return book.page<#book.pages end
+                    local pageRequests=0
+                    function ItemTextNextPage() pageRequests=pageRequests+1 end
+                    function ItemTextPrevPage() pageRequests=pageRequests+1 end
+                    ItemTextFrame:Hide()
+                    function ItemTextFrame:IsEventRegistered(event)
+                        assert(event=='ITEM_TEXT_READY');return false
+                    end
+                    t=ns.CreateLoreTracking(j,settings)
+                    local function prefetch(page)
+                        -- DialogueUI can call a cached native function, bypassing
+                        -- Fieldbook's navigation hook, before any delayed sample.
+                        t:Event('ITEM_TEXT_BEGIN');book.page=page;t:Event('ITEM_TEXT_READY')
+                    end
+                    begin()
+                    later(.02,function() prefetch(2) end)
+                    later(.04,function() prefetch(3) end)
+                    later(.06,function() prefetch(2) end)
+                    later(.08,function() prefetch(1) end)
+                    step(1);close()
+                    local e=assert(writing())
+                    assert(#j:List({kind='writing'})==1 and e.identity=='gameobject:900003')
+                    assert(e.pages[1].raw=='Opening page' and e.pages[1].personallyViewed)
+                    assert(not t:CaptureCurrent())
+                    if settings.loreOnlyOpenedPages then
+                        assert(pageCount(e)==1 and not j:WritingSummary(e).complete)
+                    else
+                        assert(pageCount(e)==3 and j:WritingSummary(e).complete)
+                        assert(e.pages[2].raw=='Middle page' and not e.pages[2].personallyViewed)
+                        assert(e.pages[3].raw=='Final page' and e.pages[3].method=='automatic')
+                    end
+                    begin();step(1);close()
+                    assert(#j:List({kind='writing'})==1 and pageRequests==0)
+                ''')
+
+    def test_uncatalogued_native_object_and_item_quest_panels(self):
+        for guid, identity in [('GameObject-0-1-2-3-900003-ABC','gameobject:900003'),
+                               ('Item-0-12345','item:900003')]:
+            lua = item_client()
+            lua.execute(f'''
+                openerGUID='{guid}';itemID=900003;itemName='New writing'
+                function UnitName() return itemName end
+                function GetQuestText() return 'Displayed text' end
+                t:Event('QUEST_DETAIL');assert(writing().identity=='{identity}')
+            ''')
+
+    def test_uncatalogued_nonquest_parchment_without_creator_api(self):
+        lua = item_client()
+        lua.execute('''
+            itemID=900005;itemClass=15;itemName='An unlisted notebook';book.title=itemName
+            begin();step(1);assert(writing().identity=='item:900005')
+            close();assert(j:Delete(writing().id))
+            function ItemTextGetCreator() return 'Player' end
+            begin();step(1);assert(not writing());close()
+            function ItemTextGetCreator() return secret end
+            begin();step(1);assert(not writing());close()
+            itemID=8383;function ItemTextGetCreator() return nil end
+            begin();step(1);assert(not writing() and t:GetStatus():find('saved mail'))
+        ''')
+
+    def test_native_readable_bag_item_in_dialogue(self):
+        lua = item_client()
+        lua.execute('''
+            openerGUID=nil;itemID=900002;itemClass=15;itemName='An uncatalogued book'
+            function C_Container.GetContainerItemInfo() return {itemID=itemID,isReadable=true} end
+            function UnitName() return itemName end
+            function GetQuestText() return 'Displayed writing' end
+            t:Event('QUEST_DETAIL');useBag();step(1)
+            assert(writing().identity=='item:900002' and writing().pages[1].raw=='Displayed writing')
+        ''')
+
     def test_world_tooltip_dismissed_by_click(self):
         lua = item_client()
         lua.execute('''
@@ -180,6 +336,14 @@ class LoreItemTests(unittest.TestCase):
                 begin();step(1);assert(not writing())
             ''')
 
+    def test_mailbox_state_ends_with_the_world_interaction(self):
+        lua = item_client()
+        lua.execute('''
+            t:Event('MAIL_SHOW');begin();step(1);assert(not writing())
+            t:Event('PLAYER_LEAVING_WORLD');begin();step(1)
+            assert(writing().identity=='item:3248')
+        ''')
+
     def test_unlisted_quest_readables_qualify_but_player_letters_do_not(self):
         lua = item_client()
         lua.execute('''
@@ -216,9 +380,10 @@ class LoreItemTests(unittest.TestCase):
         ''')
 
     def test_mismatched_expired_and_restricted_sources_cannot_authorize_capture(self):
-        for setup in ["itemName='Other item'", 'itemID=secret',
+        for setup in ["openerGUID=nil;itemName='Other item';useBag()", 'itemID=secret',
                       'openerGUID=nil;useBag();step(11)', 'openerGUID=secret',
-                      'function C_Item.GetItemInfo() error("unavailable") end']:
+                      """openerGUID=nil;itemID=900002;useBag()
+                         function C_Item.GetItemInfo() error("unavailable") end"""]:
             lua = item_client()
             lua.execute(setup + ';begin();step(1);assert(not writing())')
 

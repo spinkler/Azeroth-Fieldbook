@@ -3,6 +3,7 @@ local function paused()
     return ns.InitializationBlocked or ns.IsFieldbookSectionEnabled and not ns.IsFieldbookSectionEnabled("lore")
 end
 local L=ns.Lore
+local SAVED_MAIL_ITEM_ID=8383 -- Plain Letter, the carried copy of a mail body
 
 -- This adapter follows the Classic ItemTextFrame contract. Availability checks
 -- are not proof of Forever compatibility: no hidden-page API is assumed.
@@ -36,25 +37,44 @@ end
 local function defaultAdapter()
     local a={}
     function a.Now() return read(GetTime) or L.Now() end
-    -- Item-text events carry no item ID. Prefer the reader's Item GUID on
-    -- Forever; older clients can supply the bag slot that was actually used.
-    -- A hover or a title lookup alone never establishes an item source.
-    local function itemContext(id,title,direct)
-        if not number(id,1,2147483647) then return end
+    local function readerItemID(guid)
+        if type(guid)=="string" and guid:match("^Item%-") then
+            return read(C_Item and C_Item.GetItemIDByGUID or GetItemIDByGUID,guid)
+        end
+    end
+    local function cachedItemInfo(id)
         local fn=C_Item and C_Item.GetItemInfo or GetItemInfo
         if type(fn)~="function" then return end
         local ok,name,link,_,_,_,_,_,_,_,_,_,classID=pcall(fn,id)
-        if not ok or not public(name) or not public(link) then return end
+        if ok then return name,link,classID end
+    end
+    -- Item-text events carry no item ID. Prefer the reader's Item GUID on
+    -- Forever; older clients can supply the bag slot that was actually used.
+    -- A hover or a title lookup alone never establishes an item source.
+    local function itemContext(id,title,direct,bagItem)
+        if not number(id,1,2147483647) then return end
+        local name,link,classID=cachedItemInfo(id)
+        if not public(name) or not public(link) then return end
         local catalog=L.ReadableItemTitle(id)
         local locale=read(GetLocale)
         local englishTitle=(locale=="enUS" or locale=="enGB") and catalog
         local otherOpener=title and (a.cursorObject and a.cursorObject.name==title
             or a.softObject and a.softObject.name==title)
         if otherOpener and name~=title then return end
-        if direct and catalog and name==nil and link==nil and (title or englishTitle) then
-            return {id=id,title=title or englishTitle,loreItem=true}
+        if name==nil and link==nil then
+            local instant=C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
+            local questItem=false
+            if type(instant)=="function" then
+                local loaded,instantID,_,_,_,_,instantClass=pcall(instant,id)
+                questItem=loaded and public(instantID) and instantID==id and public(instantClass) and instantClass==12
+            end
+            local matches=direct or title and (title==englishTitle or bagItem and title==bagItem.name)
+            if matches and (catalog or questItem) and (title or englishTitle) then
+                return {id=id,title=title or englishTitle,questItem=questItem,loreItem=questItem or catalog~=nil}
+            end
+            return nil,true -- a later sample may have the localized name
         end
-        if not label(name) or (name~=title and not (direct and catalog and (not title or name==englishTitle)))
+        if not label(name) or (not direct and name~=title)
             or type(link)~="string"
             or tonumber(link:match('item:(%d+)'))~=id then return end
         local questItem=public(classID) and classID==12
@@ -73,12 +93,19 @@ local function defaultAdapter()
         local lines=cursor.lines
         local first=public(lines) and type(lines)=="table" and lines[1]
         local name=public(first) and type(first)=="table" and label(first.leftText)
-        if name and (L.ReadableObjectTitle(id) or english() and L.IsReadableObjectTitle(name)) then
+        if name and (id or english() and L.IsReadableObjectTitle(name)) then
             return {id=id or nil,name=name}
         end
     end
     function a.BeginSource()
         a.item=nil;a.cursorObject=cursorObject()
+        -- Some interactions expose the opener only at BEGIN. Keep it as a
+        -- candidate and corroborate its name against the eventual ready page.
+        local guid=read(UnitGUID,"npc")
+        a.openingItem=readerItemID(guid)
+        local objectID=L.GameObjectID(guid)
+        a.openingObject=objectID and {id=objectID,name=label(read(UnitName,"npc"))
+            or english() and L.ReadableObjectTitle(objectID)} or nil
         if not a.cursorObject and a.hovered then
             local age=a.Now()-a.hovered.at
             if age>=0 and age<=2 then a.cursorObject=a.hovered end
@@ -86,10 +113,37 @@ local function defaultAdapter()
         a.hovered=nil
         local id=L.GameObjectID(read(UnitGUID,"softinteract"))
         local name=id and (label(read(UnitName,"softinteract")) or english() and L.ReadableObjectTitle(id))
-        a.softObject=id and name and L.ReadableObjectTitle(id) and {id=id,name=name} or nil
+        a.softObject=id and name and {id=id,name=name} or nil
     end
-    function a.EndSource() a.item=nil;a.usedItem=nil;a.cursorObject=nil;a.softObject=nil;a.hovered=nil end
+    function a.EndSource()
+        a.item=nil;a.usedItem=nil;a.openingItem=nil;a.openingObject=nil
+        a.cursorObject=nil;a.softObject=nil;a.hovered=nil
+    end
     function a.EndDialogue() a.usedItem=nil end
+    local function rememberBag(bag,slot,requireReadable)
+        if paused() or not number(bag,-4,255) or not number(slot,1,255) then return end
+        local info=read(C_Container and C_Container.GetContainerItemInfo,bag,slot)
+        local id=type(info)=="table" and info.itemID
+        if not number(id,1,2147483647) then
+            id=read(C_Container and C_Container.GetContainerItemID or GetContainerItemID,bag,slot)
+        end
+        local readable=type(info)=="table" and public(info.isReadable) and info.isReadable==true
+        if requireReadable and not readable then return end
+        a.item=nil;a.hovered=nil;a.openingItem=nil;a.openingObject=nil
+        a.usedItem=number(id,1,2147483647) and {id=id,at=a.Now(),readable=readable,
+            name=type(info)=="table" and label(info.itemName) or nil} or nil
+    end
+    function a.BagClick(button)
+        if not public(button) or button~="RightButton" then return end
+        a.usedItem=nil
+        local foci=read(GetMouseFoci)
+        local focus
+        if type(foci)=="table" then focus=foci[1] else focus=read(GetMouseFocus) end
+        if not public(focus) or not focus or read(focus.IsForbidden,focus) then return end
+        if type(focus.GetBagID)=="function" then
+            rememberBag(read(focus.GetBagID,focus),read(focus.GetID,focus),true)
+        end
+    end
     function a.HookSource()
         local kind=Enum and Enum.TooltipDataType and Enum.TooltipDataType.Object
         if kind and TooltipDataProcessor and type(TooltipDataProcessor.AddTooltipPostCall)=="function" then
@@ -101,34 +155,40 @@ local function defaultAdapter()
         end
         if type(hooksecurefunc)~="function" then return end
         local function used(bag,slot)
-            a.item=nil;a.hovered=nil
-            local id=read(C_Container and C_Container.GetContainerItemID or GetContainerItemID,bag,slot)
-            a.usedItem=number(id,1,2147483647) and {id=id,at=a.Now()} or nil
+            rememberBag(bag,slot,false)
         end
         if C_Container and type(C_Container.UseContainerItem)=="function" then
             pcall(hooksecurefunc,C_Container,"UseContainerItem",used)
-        elseif type(UseContainerItem)=="function" then pcall(hooksecurefunc,"UseContainerItem",used) end
+        end
+        if type(UseContainerItem)=="function" then pcall(hooksecurefunc,"UseContainerItem",used) end
     end
-    local function sourceItem(title,guid)
-        local id=type(guid)=="string" and guid:match('^Item%-')
-            and read(C_Item and C_Item.GetItemIDByGUID or GetItemIDByGUID,guid)
-        local item=itemContext(id,title,true)
-        if number(id,1,2147483647) and not item then return end
+    local function sourceItem(title,guid,guidOK)
+        local id=readerItemID(guid)
+        if not id and (guid~=nil or not guidOK and type(UnitGUID)=="function") then return end
+        local item,pending=itemContext(id,title,true)
+        if number(id,1,2147483647) and not item then return nil,pending end
         if not item and a.item and a.item.title==title then return a.item end
         local used=a.usedItem
         if used then
             local age=a.Now()-used.at
             if age<0 or age>10 then a.usedItem=nil
-            elseif not item then item=itemContext(used.id,title) end
+            elseif not item then item,pending=itemContext(used.id,title,false,used) end
+        end
+        if not item and guidOK and guid==nil and not a.usedItem then
+            item,pending=itemContext(a.openingItem,title)
         end
         if item then a.item=item end
-        return item
+        return item,pending
     end
     function a.After(delay,fn)
         if C_Timer and type(C_Timer.After)=="function" then C_Timer.After(delay,fn);return true end
         return false
     end
     function a.IsOpen() return ItemTextFrame and read(ItemTextFrame.IsShown,ItemTextFrame) end
+    function a.UsesReplacementReader()
+        -- DialogueUI takes over the native events before its reader is visible.
+        return ItemTextFrame and read(ItemTextFrame.IsEventRegistered,ItemTextFrame,"ITEM_TEXT_READY")==false
+    end
     function a.Scroll() return ItemTextScrollFrame and read(ItemTextScrollFrame.GetVerticalScroll,ItemTextScrollFrame) end
     function a.RestoreScroll(n)
         if type(n)=="number" and ItemTextScrollFrame then
@@ -145,21 +205,24 @@ local function defaultAdapter()
         local title=label(read(ItemTextGetItem))
         local guidOK,guid=value(UnitGUID,"npc")
         local objectID=L.GameObjectID(guid)
-        local item,matchedObject
+        local item,matchedObject,pending
         if objectID then
             title=title or label(read(UnitName,"npc"))
             if not title then
                 local locale=read(GetLocale)
                 if locale=="enUS" or locale=="enGB" then title=L.ReadableObjectTitle(objectID) end
             end
+            a.openingItem=nil
+            a.openingObject={id=objectID,name=title}
         else
-            item=sourceItem(title,guid)
+            item,pending=sourceItem(title,guid,guidOK)
             title=title or (item and item.title)
             -- A cursor object is only corroboration for an opened, matching
             -- reader. An item opener or named author overrides that hint.
-            local candidate=a.cursorObject
+            local candidate=a.openingObject
+            if not candidate or candidate.name~=title then candidate=a.cursorObject end
             if not candidate or candidate.name~=title then candidate=a.softObject end
-            if guidOK and guid==nil and not item and not a.usedItem and candidate and candidate.name==title
+            if guidOK and guid==nil and not item and not a.openingItem and not a.usedItem and candidate and candidate.name and candidate.name==title
                 and (creator==nil or creator==false or creator=="") then objectID=candidate.id;matchedObject=true end
         end
         return {title=title,raw=type(raw)=="string" and raw or nil,
@@ -169,11 +232,13 @@ local function defaultAdapter()
             creator=label(creator),creatorKnown=creatorOK and (creator==nil or creator==false or type(creator)=="string"),
             playerAuthored=creatorOK and type(creator)=="string" and creator~="",
             identity=objectID and "gameobject:"..objectID or item and "item:"..item.id,
-            questItem=item and item.questItem,gameWriting=objectID~=nil or matchedObject or item and item.loreItem,
+            questItem=item and item.questItem,savedMail=item and item.id==SAVED_MAIL_ITEM_ID,
+            sourcePending=pending or (guidOK and guid==nil and not item and not matchedObject and not creatorOK),
+            gameWriting=objectID~=nil or matchedObject or item and (item.loreItem or type(ItemTextGetCreator)~="function"),
             sourceKind="readable",material=label(read(ItemTextGetMaterial)),locale=read(GetLocale) or "unknown"}
     end
     function a.CanTraverse()
-        return type(ItemTextNextPage)=="function" and type(ItemTextPrevPage)=="function"
+        return a.IsOpen()==true and type(ItemTextNextPage)=="function" and type(ItemTextPrevPage)=="function"
             and type(hooksecurefunc)=="function" and C_Timer and type(C_Timer.After)=="function"
     end
     function a.Navigate(direction)
@@ -235,20 +300,21 @@ local function defaultAdapter()
             end
             if guidOK and guid==nil and not objectID and a.usedItem and title then
                 local age=a.Now()-a.usedItem.at
-                local item=age>=0 and age<=10 and itemContext(a.usedItem.id,title)
-                if item and L.IsReadableItem(item.id) then
+                local item=age>=0 and age<=10 and itemContext(a.usedItem.id,title,false,a.usedItem)
+                if item and item.id~=SAVED_MAIL_ITEM_ID and (item.loreItem or a.usedItem.readable) then
                     d.writing=true;d.sourceTitle=title;d.identity="item:"..item.id
                     return d
                 end
             end
             title=title or (english() and catalogTitle)
-            if title and (objectID and (catalogTitle or kind=="gossip")
+            if title and (objectID
                 or guidOK and guid==nil and english() and L.IsReadableObjectTitle(title)) then
                 d.writing=true;d.sourceTitle=title
                 d.identity=objectID and "gameobject:"..objectID or "gossip-book:"..title
             elseif type(guid)=="string" and guid:match("^Item%-") then
-                local id=read(C_Item and C_Item.GetItemIDByGUID or GetItemIDByGUID,guid)
-                if number(id,1,2147483647) and L.IsReadableItem(id) then
+                local id=readerItemID(guid)
+                if number(id,1,2147483647) and id~=SAVED_MAIL_ITEM_ID then
+                    -- The panel itself identifies the item that supplied this text.
                     local name=label(read(C_Item and C_Item.GetItemInfo or GetItemInfo,id)) or title
                         or (english() and L.ReadableItemTitle(id))
                     if name then d.writing=true;d.sourceTitle=name;d.identity="item:"..id end
@@ -282,12 +348,13 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     local function alive(s) return not paused() and t.active==s and not s.closed end
     local function release(s)
         s.closed=true
+        if t.active==s then t.active=nil end
         if journal.EndCapture then journal:EndCapture(s.sessionID) end
     end
     if ns.RegisterSectionVisibilityListener then
         ns.RegisterSectionVisibilityListener("lore",function()
             serial=serial+1
-            t.dialogueToken=nil;t.dialogue=nil
+            t.dialogueToken=nil;t.dialogue=nil;t.mailOpen=false
             if t.active then release(t.active);t.active=nil end
             if a.EndSource then a.EndSource() end
             if a.Progress then a.Progress(nil) end
@@ -312,7 +379,11 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     end
     local function snapshot(s)
         if not alive(s) then return end
-        if a.IsOpen and a.IsOpen()==false then finish(s,"Capture interrupted: the reader is no longer available.");release(s);return end
+        -- A replacement reader may hide ItemTextFrame for the entire native
+        -- BEGIN/READY interaction. Only navigation needs the stock controls.
+        if (s.traversing or s.restoring) and a.IsOpen and a.IsOpen()==false then
+            finish(s,"Capture interrupted: the reader is no longer available.");return
+        end
         local v=a.Read and a.Read()
         if not same(s,v) then finish(s,"Capture interrupted: the readable source changed.");release(s);return end
         return v
@@ -326,15 +397,21 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     local function terminal(v)
         return v.nextKnown==true and v.hasNext==false
     end
-    local function private(s,v)
-        return t.mailOpen or (a.IsMail and a.IsMail()) or not v.gameWriting and (v.playerAuthored or not v.creatorKnown)
+    local function exclusionReason(v)
+        if t.mailOpen or (a.IsMail and a.IsMail()) then return "personal mail is open." end
+        if v.savedMail then return "the item is a saved mail message." end
+        if not v.gameWriting then
+            if v.playerAuthored then return "the reader identifies a personal author." end
+            if not v.creatorKnown then return "the client supplied neither a confirmed game writing nor a readable author check." end
+        end
     end
     local advance,ready
     local function request(s,direction,restore)
         if not alive(s) or s.pending or (not s.traversing and not s.restoring) then return end
         if not allowed(s) or settings.loreOnlyOpenedPages~=false then finish(s,"Capture interrupted: automatic traversal was disabled.");return end
         local v=snapshot(s);if not v then return end
-        if private(s,v) then finish(s,"Automatic capture unavailable for player-authored or ambiguous correspondence.","unsupported");return end
+        local reason=exclusionReason(v)
+        if reason then finish(s,"Automatic capture skipped because "..reason,"unsupported");return end
         if v.page~=s.currentPage or not s.ready then finish(s,"Capture interrupted: the reader changed.");return end
         if s.steps>=768 or a.Now()-s.started>180 then finish(s,"Partial archive: automatic navigation limit reached.","partial");return end
         local delta=direction=="next" and 1 or -1
@@ -398,6 +475,8 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     local function consume(s,v,confirmed,explicit)
         if not alive(s) or not s.ready then return end
         if type(v.raw)~="string" then return end
+        local prefetched=s.replacement and s.openedPage~=nil and v.page~=s.openedPage
+        if prefetched and not explicit and settings.loreOnlyOpenedPages~=false then return end
         local p=s.pending
         if p and v.page~=p.expected then
             if v.page==p.from then return end -- a duplicate READY cannot complete a request
@@ -405,12 +484,14 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         end
         if p and p.cancelled then s.pending=nil;s.currentPage=v.page;return end
         if p then s.pending=nil end
-        local method=(p or (s.currentPage==v.page and s.currentMethod=="automatic")) and "automatic" or "displayed"
+        local method=(p or prefetched or (s.currentPage==v.page and s.currentMethod=="automatic")) and "automatic" or "displayed"
         s.currentMethod=method
         if s.restoring or (p and p.restore) then s.currentPage=v.page;advance(s,v);return end
-        s.excluded=private(s,v)
+        s.excluded=exclusionReason(v)
         if not explicit and not allowed(s) then
-            if s.excluded then status("Automatic capture unavailable for player-authored or ambiguous correspondence. Use explicit capture or manual transcription.") end
+            if settings.autoArchiveLore~=true then status("Automatic archiving is turned off.")
+            elseif journal.readOnly then status("The Chronicle archive is read-only.")
+            elseif s.excluded then status("Automatic capture skipped because "..s.excluded.." Use Capture / retry to save this page.") end
             return
         end
         local e=store(s,v,method,terminal(v) and confirmed)
@@ -421,7 +502,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
             status("Archiving… page "..tostring(pageNumber(v) or "unknown").." captured. Keep the reader open.",s,"partial")
             advance(s,v);return
         end
-        if not explicit and allowed(s) and settings.loreOnlyOpenedPages==false and not s.playerControl then
+        if not explicit and allowed(s) and settings.loreOnlyOpenedPages==false and not s.playerControl and not s.replacement then
             if summary and summary.complete then status("Complete archive.",s,"complete");return end
             if not pageNumber(v) or v.page==0 or not s.hooks or not a.CanTraverse or not a.CanTraverse() then
                 status("Automatic full-book capture unavailable; displayed text preserved.",s,"unsupported","Navigation, pagination or takeover hooks are unavailable.");return
@@ -435,10 +516,26 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         if not alive(s) then return end
         local current=a.Read and a.Read();s.readyPage=current and current.page
         s.ready=true;s.generation=s.generation+1
+        if s.replacement and current then
+            s.openedPage=s.openedPage or current.page
+            -- The replacement can request the next page on the next frame.
+            -- Preserve the page delivered by READY while its getters describe it.
+            if not explicit and current.title and pageNumber(current) and type(current.raw)=="string"
+                and current.raw~="" and not current.sourcePending and same(s,current) then
+                s.identity=s.identity or current.identity
+                consume(s,current,true)
+                return
+            end
+        end
         local generation=s.generation;local retries=0
         local function sample()
             if not s.ready or generation~=s.generation then return end
             local v=snapshot(s);if not v then return end
+            if s.replacement and s.readyPage~=nil and v.page~=s.readyPage then return end
+            if not explicit and settings.autoArchiveLore==true and v.sourcePending and retries<12 then
+                retries=retries+1
+                if after(s,0.25,sample) then return end
+            end
             -- Bag-use post-hooks may run after synchronous READY delivery.
             -- Bind their confirmed identity before the second sample too.
             if not s.identity and v.identity then s.identity=v.identity end
@@ -471,6 +568,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         if paused() then return end
         if self.issuing then return end
         local s=self.active;if not s then return end
+        if s.replacement then return end
         if s.traversing or s.restoring or s.pending or s.queue then finish(s,"Capture interrupted: you took control of the reader.") end
         local wasReady=s.ready
         local v=a.Read and a.Read()
@@ -526,7 +624,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
         -- Explicitly requested capture can preserve ambiguous correspondence;
         -- it never enables automatic traversal while the master switch is off.
         ready(s,true)
-        if settings.autoArchiveLore==true and settings.loreOnlyOpenedPages==false and not private(s,v) then
+        if settings.autoArchiveLore==true and settings.loreOnlyOpenedPages==false and not s.replacement and not exclusionReason(v) then
             ready(s,false)
         end
         return true
@@ -588,14 +686,17 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     end
     function t:Event(event,...)
         if paused() then return end
-        if event=="ITEM_TEXT_BEGIN" then
+        if event=="GLOBAL_MOUSE_DOWN" then
+            if a.BagClick then a.BagClick(...) end
+        elseif event=="ITEM_TEXT_BEGIN" then
             self.dialogueToken=nil;self.dialogue=nil
             local active=self.active
             local v=active and a.Read and a.Read() or {}
+            local lastPage=active and (active.replacement and active.readyPage or active.currentPage)
             -- BEGIN also accompanies page loads in clients using the classic
             -- item-text lifecycle. It is not necessarily a new book.
-            if active and same(active,v) and active.currentPage and number(v.page,1,1000000)
-                and (active.pending or math.abs(v.page-active.currentPage)<=1) then
+            if active and same(active,v) and lastPage and number(v.page,1,1000000)
+                and (active.pending or math.abs(v.page-lastPage)<=1) then
                 active.ready=false;active.generation=active.generation+1;return
             end
             if self.active then finish(self.active,"Capture interrupted: another reading interaction began.");release(self.active) end
@@ -622,14 +723,23 @@ function ns.CreateLoreTracking(journal,settings,adapter)
                 if not (a.After and a.After(0,recover)==true) then recover() end
                 return
             end
-            if s then
-                local v=a.Read and a.Read()
-                if v and not s.bound then
-                    s.title=v.title;s.material=v.material;s.locale=v.locale;s.identity=v.identity;s.bound=true
-                end
-                if v and not s.creatorKnown and v.creatorKnown then s.creatorKnown=true;s.creator=v.creator end
-                ready(s)
+            local v=a.Read and a.Read()
+            -- A new BEGIN can still report the previous book and look like a
+            -- page turn. READY supplies the first reliable evidence of the switch.
+            if s.bound and v and ((v.title and s.title and v.title~=s.title)
+                or (v.identity and s.identity and v.identity~=s.identity)) then
+                finish(s,"Capture interrupted: another readable source opened.")
+                release(s)
+                self:Event("ITEM_TEXT_BEGIN")
+                s=self.active
+                v=a.Read and a.Read()
             end
+            if v and not s.bound then
+                s.title=v.title;s.material=v.material;s.locale=v.locale;s.identity=v.identity;s.bound=true
+            end
+            if v and not s.creatorKnown and v.creatorKnown then s.creatorKnown=true;s.creator=v.creator end
+            if a.UsesReplacementReader and a.UsesReplacementReader()==true then s.replacement=true end
+            ready(s)
         elseif event=="ITEM_TEXT_TRANSLATION" then
             local s=self.active
             if s then
@@ -645,7 +755,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
             end
             if a.Progress then a.Progress(nil) end
             if a.EndSource then a.EndSource() end
-            if event=="PLAYER_LEAVING_WORLD" then self.dialogueToken=nil;self.dialogue=nil end
+            if event=="PLAYER_LEAVING_WORLD" then self.dialogueToken=nil;self.dialogue=nil;self.mailOpen=false end
         elseif event=="MAIL_SHOW" then
             self.mailOpen=true
             if self.active and (self.active.traversing or self.active.restoring) then finish(self.active,"Automatic capture unavailable while personal mail is open.","unsupported") end
@@ -665,7 +775,7 @@ function ns.CreateLoreTracking(journal,settings,adapter)
     if a.HookSource then a.HookSource() end
     if type(CreateFrame)=="function" then
         local frame=CreateFrame("Frame");t.frame=frame
-        for _,event in ipairs({"ITEM_TEXT_BEGIN","ITEM_TEXT_READY","ITEM_TEXT_TRANSLATION","ITEM_TEXT_CLOSED","PLAYER_LEAVING_WORLD",
+        for _,event in ipairs({"GLOBAL_MOUSE_DOWN","ITEM_TEXT_BEGIN","ITEM_TEXT_READY","ITEM_TEXT_TRANSLATION","ITEM_TEXT_CLOSED","PLAYER_LEAVING_WORLD",
             "MAIL_SHOW","MAIL_CLOSED","GOSSIP_SHOW","GOSSIP_OPTIONS_REFRESHED","GOSSIP_UPDATE","GOSSIP_CLOSED",
             "QUEST_GREETING","QUEST_DETAIL","QUEST_PROGRESS","QUEST_COMPLETE","QUEST_FINISHED"}) do pcall(frame.RegisterEvent,frame,event) end
         frame:SetScript("OnEvent",function(_,event,...) t:Event(event,...) end)

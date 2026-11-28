@@ -207,6 +207,15 @@ New sessions bind their source metadata at READY because BEGIN may still expose
 the previous source. A READY without an active session can recover capture after
 native event handlers show the reader; a closed/hidden reader or world departure
 prevents that recovery. Opening the Fieldbook alone never captures cached text.
+
+DialogueUI takes over the stock reader's events and can fetch the next page
+before a delayed sample. During a tracked interaction with the stock events
+unregistered, the Chronicle copies usable text at READY. The default saves the
+opening page. Whole-book mode also saves pages fetched by DialogueUI and marks
+them as automatically retrieved. Fieldbook sends no page requests in this mode.
+The regression fixture covers fast forward and return page turns, closure and
+reopening, and both capture settings. Live testing with both addons is pending.
+
 Traversal first moves backward to page 1, then forward one ready page at a
 time. A known beginning, stable terminal indication, and every required captured
 page establish completeness. The native adapter accepts successful Classic
@@ -222,18 +231,28 @@ an announced translation up to 30 seconds. At most 768 navigation requests and
 180 seconds are allowed per traversal. There is one active traversal and no
 per-frame lore scan. Delayed callbacks carry their session/generation identity.
 
-The generic automatic path requires a successfully readable creator accessor
-returning no player creator (nil, false or an empty string). Item sources can
-instead establish game-lore eligibility through a native Item GUID on the reader's
-`npc` unit, resolved with `C_Item.GetItemIDByGUID` / `GetItemIDByGUID`, or a secure
-post-hook on `C_Container.UseContainerItem` / `UseContainerItem`. Bag candidates
-expire after ten seconds. Native item info must confirm both ID and the displayed
-title; neither hover nor a title-only lookup qualifies. Quest-class items and
-the tooltip's predefined lore item IDs qualify even when the creator accessor
-is absent, restricted, fails or provides an author. Mail sessions and visible
-mail readers still exclude every automatic path. Unidentified or player-letter
-item IDs retain the generic creator rule. Explicit capture/transcription remains
-available.
+With the stock reader, every ready page is eligible for capture. A verified item
+GUID can supply the identity even when the localized page heading differs
+from the item name. An opener seen only at BEGIN or a recently used bag slot must
+match the ready heading. Right-clicking a bag button with a client-confirmed
+readable slot also supplies a candidate. Bag candidates expire after ten seconds.
+Cold item data gets up to twelve quarter-second retries. A matching world-object
+ID and name at the cursor or interact key can identify an uncatalogued plaque.
+A replacement reader can hide the stock frame during passive capture. Automatic
+navigation requires visible stock controls.
+
+A public empty creator result permits ordinary reading without a known source ID.
+When the creator API is absent, a verified item can qualify independently of the
+catalogue. A named author or a restricted or failed author check still requires
+positive game-writing evidence, such as a quest item or a known game writing.
+The mailbox and carried Plain Letter exclude automatic capture. The Chronicle
+status gives the reason when it skips a page. Explicit capture remains available.
+
+For live acceptance, reload and open **Manual of Engineering Disciplines** (10789)
+from the bags with automatic archiving enabled. Check the first page, advance a
+page, close and reopen. Verify one writing, the displayed text under the correct
+page numbers and a tooltip reflecting the saved pages. Check an uncatalogued
+plaque and a saved personal letter in the same session.
 
 Quest writings save `subtype = "Quest item"` through the existing entry/report
 field, and item captures save `identity = "item:<id>"`. The overview and page
@@ -328,7 +347,7 @@ never an unrelated target. Missing identity is labelled Unidentified speaker.
 Closing the dialogue invalidates the snapshot. No branches or quest actions are
 selected. Vendor services and combat evidence stay in their original journals.
 
-Recognized readable objects and items opening those quest panels also support
+Objects and items identified as the source of those quest panels also support
 automatic writing capture and Capture Current. The archive records the displayed
 panel only. If the text or source is late, sampling continues briefly until the
 dialogue closes, changes, or yields the writing. Ordinary NPC quest and gossip

@@ -195,6 +195,8 @@ function methods:SetText(text)
     self.text=text
     if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self) end
 end
+function methods:SetFocus() self.focus=true end
+function methods:ClearFocus() self.focus=false end
 function methods:GetText() return rawget(self,'text') or '' end
 function methods:SetSize(w,h) self.width=w;self.height=h end
 function methods:SetWidth(w) self.width=w end
@@ -555,6 +557,31 @@ do
     input:SetText('')
     book.manualName:SetText('')
     journal.entries[42].abilities[names[17]]=nil
+
+    local spellLink='|cff71d5ff|Hspell:17|h[Power Word: Shield]|h|r'
+    C_Spell.GetSpellLink=function(id) if id==17 then return spellLink end end
+    input:SetFocus()
+    input:SetText('17')
+    input.scripts.OnEnterPressed(input)
+    check(input.focus and input:GetText()==spellLink and book.manualName:GetText()==names[17]
+        and not journal.entries[42].abilities[names[17]],'first Enter resolves a spell ID and keeps focus')
+    input.scripts.OnTextChanged(input,false) -- A late notification for the resolved link.
+    input.scripts.OnEnterPressed(input)
+    saved=journal.entries[42].abilities[names[17]]
+    check(saved and saved.spellID==17 and saved.state=='confirmed' and input.focus and input:GetText()=='',
+        'second Enter confirms after a late text-change notification and keeps the field ready')
+    journal.entries[42].abilities[names[17]]=nil
+
+    input:SetText('592')
+    input.scripts.OnEnterPressed(input)
+    input:SetText('600')
+    input.scripts.OnEnterPressed(input)
+    check(not journal.entries[42].abilities[names[600]],'editing a resolved ID requires resolving again')
+    input.scripts.OnEnterPressed(input)
+    saved=journal.entries[42].abilities[names[600]]
+    check(saved and saved.spellID==600,'the next Enter confirms the newly resolved ID')
+    input:ClearFocus()
+    journal.entries[42].abilities[names[600]]=nil
     C_Spell=original
 end
 local resolvedRow=abilityBook.abilities[1]

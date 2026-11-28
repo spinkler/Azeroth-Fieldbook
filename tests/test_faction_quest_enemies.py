@@ -46,6 +46,40 @@ class FactionQuestEnemies(unittest.TestCase):
             assert(not journal:IsFactionAffiliated(263071) and #journal:List()==1)
         """)
 
+    def test_bathrans_haunt_enemies_are_listed_with_horde_affiliation(self):
+        for npc_id, name in ((3732, 'Forsaken Seeker'), (3733, 'Forsaken Herbalist'), (3734, 'Forsaken Thug')):
+            for faction in (None, 'Horde'):
+                with self.subTest(npc_id=npc_id, faction=faction):
+                    lua = quest_client()
+                    lua.globals().npcID = npc_id
+                    lua.globals().npcName = name
+                    lua.globals().faction = faction
+                    lua.execute("""
+                        related=false
+                        units.target.guid='Creature-0-1-2-3-'..npcID..'-forsaken'
+                        units.target.name=npcName
+                        fire('PLAYER_TARGET_CHANGED')
+                        local entry=assert(journal.entries[npcID])
+                        assert(entry.factionAffiliation=='Horde' and not entry.factionQuestObjective)
+                        local rows=journal:List(nil,npcName)
+                        assert(#rows==1 and rows[1].id==npcID)
+                    """)
+
+    def test_saved_bathrans_haunt_page_keeps_its_kills_and_faction_crest(self):
+        lua = quest_client()
+        lua.execute("""
+            local entry=journal:Ensure(3732,false,'Forsaken Seeker')
+            entry.kills=2;entry.locations={Ashenvale=true};entry.notes='Bathran’s Haunt'
+            for _, faction in ipairs({false,'Horde'}) do
+                entry.factionAffiliation=faction or nil
+                fire('ADDON_LOADED','AzerothFieldbook')
+                local rows=journal:List(nil,'Forsaken Seeker',false,nil,{Ashenvale=true})
+                assert(#rows==1 and rows[1].id==3732 and journal:GetTotals()==1)
+                assert(journal:GetFactionAffiliation(3732)=='Horde')
+                assert(journal.entries[3732].kills==2 and journal.entries[3732].notes=='Bathran’s Haunt')
+            end
+        """)
+
     def test_debug_reports_first_failure_only_for_rejected_unit(self):
         lua = quest_client()
         lua.execute("""

@@ -1,4 +1,4 @@
-# Azeroth Fieldbook 0.45.0 (Pre-1.0)
+# Azeroth Fieldbook 0.45.1 (Pre-1.0)
 
 Bestiary Options includes a master AFB tooltip switch (on by default) and separate
 spell observation/ID chat feedback (off by default). Player debuffs and Loss of
@@ -776,6 +776,10 @@ including across reloads, account imports and Bestiary backups. Previously hidde
 pages become visible again when verified, retaining their notes, loot and knowledge.
 Later explicit civilian/service evidence removes the exception and hides the page
 again without deleting its contents.
+The Forsaken Seekers, Herbalists and Thugs at Bathran's Haunt and Blademaster
+Kaijo can be recorded while attackable without an active kill objective. The
+Bestiary shows the Horde crest for the Bathran's Haunt entries even when the
+client omits their faction.
 Other faction entries are hidden from the list and count after live identification;
 older entries without faction evidence remain visible until identified again.
 Neutral or unavailable faction results keep the normal eligibility rules.

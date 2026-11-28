@@ -302,6 +302,18 @@ class LoreTrackingTests(unittest.TestCase):
             assert(found.pages[1].raw=='New first page' and #j:List({kind='writing'})==2)
         ''')
 
+    def test_new_book_after_begin_still_exposed_old_page(self):
+        lua = client()
+        lua.execute('''
+            begin();step(1);local original=writing()
+            t:Event('ITEM_TEXT_BEGIN')
+            book.title='Another book';book.identity='another';book.pages={'Different page'}
+            t:Event('ITEM_TEXT_READY');step(1)
+            assert(#j:List({kind='writing'})==2 and original.pages[1].raw=='First page')
+            local e=j:Get(t.active.entryID)
+            assert(e.title=='Another book' and e.pages[1].raw=='Different page')
+        ''')
+
     def test_deliberate_dialogue_correct_attribution_and_deduplication(self):
         lua = client()
         lua.execute('''
